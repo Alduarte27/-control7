@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type HeaderProps = {
@@ -24,6 +24,12 @@ export default function Header({ onSave }: HeaderProps) {
           <Button variant="outline">
             <History className="mr-2 h-4 w-4" />
             Historial
+          </Button>
+        </Link>
+        <Link href="/admin">
+          <Button variant="outline">
+            <Settings className="mr-2 h-4 w-4" />
+            Administración
           </Button>
         </Link>
         <Button onClick={onSave}>

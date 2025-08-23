@@ -1,10 +1,9 @@
 'use client';
 
 import React from 'react';
-import type { ProductData, DailyProduction, ShiftProduction } from '@/lib/types';
+import type { ProductData, DailyProduction, ShiftProduction, ProductDefinition } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { getISOWeek, startOfISOWeek, endOfISOWeek, format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { getISOWeek } from 'date-fns';
 
 import Header from './header';
 import FilterBar from './filter-bar';
@@ -12,19 +11,32 @@ import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 
-const initialData: ProductData[] = [
-  { id: 'prod-1', productName: 'Azúcar 2kg (50kg)', planned: 5322, actual: { mon: { day: 1521, night: 0 }, tue: { day: 760, night: 0 }, wed: { day: 0, night: 0 }, thu: { day: 1521, night: 0 }, fri: { day: 1521, night: 0 }, sat: { day: 0, night: 0 }, sun: { day: 0, night: 0 } } },
-  { id: 'prod-2', productName: 'Azúcar 1kg (50kg)', planned: 2661, actual: { mon: { day: 760, night: 0 }, tue: { day: 380, night: 0 }, wed: { day: 760, night: 0 }, thu: { day: 760, night: 0 }, fri: { day: 760, night: 0 }, sat: { day: 0, night: 0 }, sun: { day: 0, night: 0 } } },
-  { id: 'prod-3', productName: 'Azúcar 1kg Tuti (50kg)', planned: 2661, actual: { mon: { day: 760, night: 0 }, tue: { day: 760, night: 0 }, wed: { day: 760, night: 0 }, thu: { day: 760, night: 0 }, fri: { day: 760, night: 0 }, sat: { day: 0, night: 0 }, sun: { day: 0, night: 0 } } },
-  { id: 'prod-4', productName: 'Azúcar 0.5kg (25kg)', planned: 1140, actual: { mon: { day: 0, night: 0 }, tue: { day: 380, night: 0 }, wed: { day: 380, night: 0 }, thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, sun: { day: 0, night: 0 } } },
-  { id: 'prod-5', productName: 'Azúcar 5kg (50kg)', planned: 2218, actual: { mon: { day: 739, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 1478, night: 0 }, thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, sun: { day: 0, night: 0 } } },
-  { id: 'prod-6', productName: 'Azúcar Granel A (50kg)', planned: 6000, actual: { mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 3000, night: 0 }, sun: { day: 3000, night: 0 } } },
-  { id: 'prod-7', productName: 'Azúcar Morena 1kg (50kg)', planned: 0, actual: { mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, sun: { day: 0, night: 0 } } },
-  { id: 'prod-8', productName: 'Azúcar Morena 1kg Tuti (50kg)', planned: 0, actual: { mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, sun: { day: 0, night: 0 } } },
-  { id: 'prod-9', productName: 'Azúcar Morena Granel', planned: 0, actual: { mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, sun: { day: 0, night: 0 } } },
+const initialProductDefinitions: ProductDefinition[] = [
+    { id: 'prod-1', productName: 'Azúcar 500g (25 kg) San Juan' },
+    { id: 'prod-2', productName: 'Azúcar 1 kg - Blanca (50 kg) San Juan' },
+    { id: 'prod-3', productName: 'Azúcar 2 kg - Blanca (50 kg) San Juan' },
+    { id: 'prod-4', productName: 'Azúcar 5 kg - Blanca (50 kg) San Juan' },
+    { id: 'prod-5', productName: 'Azúcar 1 kg - Blanca (50 kg) Don Ariel' },
+    { id: 'prod-6', productName: 'Azúcar Granel 50Kg - Blanca' },
+    { id: 'prod-7', productName: 'Azúcar 1 kg - Morena (50 kg) San Juan' },
+    { id: 'prod-8', productName: 'Azúcar 2 kg - Morena (50 kg) San Juan' },
+    { id: 'prod-9', productName: 'Azúcar 1 kg - Morena (50 kg) Don Ariel' },
+    { id: 'prod-10', productName: 'Azúcar Granel 50Kg - Morena' },
 ];
 
 const LOCAL_STORAGE_KEY_PREFIX = 'control7-semana-';
+const PRODUCTS_STORAGE_KEY = 'control7-products-list';
+
+const emptyProductionDay: ShiftProduction = { day: 0, night: 0 };
+const emptyActual: DailyProduction = {
+  mon: { ...emptyProductionDay },
+  tue: { ...emptyProductionDay },
+  wed: { ...emptyProductionDay },
+  thu: { ...emptyProductionDay },
+  fri: { ...emptyProductionDay },
+  sat: { ...emptyProductionDay },
+  sun: { ...emptyProductionDay },
+};
 
 export default function Control7Client() {
   const [data, setData] = React.useState<ProductData[]>([]);
@@ -35,21 +47,46 @@ export default function Control7Client() {
   const currentWeek = getISOWeek(date || new Date());
   const LOCAL_STORAGE_KEY = `${LOCAL_STORAGE_KEY_PREFIX}${currentWeek}`;
 
+  const generateInitialData = (products: ProductDefinition[]): ProductData[] => {
+    return products.map(p => ({
+      ...p,
+      planned: 0,
+      actual: JSON.parse(JSON.stringify(emptyActual)),
+    }));
+  };
+
   React.useEffect(() => {
+    let productDefinitions: ProductDefinition[] = [];
+    try {
+      const savedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+      if (savedProducts) {
+        productDefinitions = JSON.parse(savedProducts);
+      } else {
+        productDefinitions = initialProductDefinitions;
+        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(initialProductDefinitions));
+      }
+    } catch (error) {
+      console.error("Failed to load products from local storage", error);
+      productDefinitions = initialProductDefinitions;
+    }
+    
+    const initialData = generateInitialData(productDefinitions);
+
     try {
       const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (savedData) {
-        const parsedData = JSON.parse(savedData);
-        if (parsedData.length > 0) {
-          setData(parsedData);
-        } else {
-          setData(initialData);
-        }
+        const parsedData: ProductData[] = JSON.parse(savedData);
+        // Sync saved data with current product definitions
+        const syncedData = productDefinitions.map(def => {
+          const found = parsedData.find(d => d.id === def.id);
+          return found || { ...def, planned: 0, actual: JSON.parse(JSON.stringify(emptyActual)) };
+        });
+        setData(syncedData);
       } else {
         setData(initialData);
       }
     } catch (error) {
-      console.error("Failed to load data from local storage", error);
+      console.error("Failed to load week data from local storage", error);
       setData(initialData);
     }
   }, [currentWeek, LOCAL_STORAGE_KEY]);

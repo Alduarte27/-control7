@@ -13,9 +13,12 @@ export type DailyProduction = {
   sun: ShiftProduction;
 };
 
-export type ProductData = {
+export type ProductDefinition = {
   id: string;
   productName: string;
+}
+
+export type ProductData = ProductDefinition & {
   planned: number;
   actual: DailyProduction;
 };
