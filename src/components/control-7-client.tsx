@@ -3,7 +3,7 @@
 import React from 'react';
 import type { ProductData, DailyProduction, ShiftProduction, ProductDefinition } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { getISOWeek } from 'date-fns';
+import { getISOWeek, setISOWeek, startOfISOWeek, parse } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 
@@ -24,16 +24,31 @@ const emptyActual: DailyProduction = {
   sun: { ...emptyProductionDay },
 };
 
-export default function Control7Client() {
+const getDateFromPlanId = (planId: string): Date => {
+    const [year, week] = planId.split('-W');
+    // We parse the date and then get the start of the ISO week to be consistent
+    const date = setISOWeek(new Date(parseInt(year), 0, 4), parseInt(week));
+    return startOfISOWeek(date);
+}
+
+export default function Control7Client({ initialPlanId }: { initialPlanId?: string }) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
-  const [date, setDate] = React.useState<Date | undefined>(new Date());
+  const [date, setDate] = React.useState<Date | undefined>(
+    initialPlanId ? getDateFromPlanId(initialPlanId) : new Date()
+  );
   const [loading, setLoading] = React.useState(true);
   const { toast } = useToast();
 
   const currentYear = (date || new Date()).getFullYear();
   const currentWeek = getISOWeek(date || new Date());
-  const planId = `${currentYear}-W${currentWeek}`;
+  
+  // Use the initialPlanId if provided, otherwise generate it from the current date.
+  const planId = initialPlanId || `${currentYear}-W${currentWeek}`;
+  
+  // A separate ID for saving, which always uses the current date picker's state.
+  const savePlanId = `${currentYear}-W${currentWeek}`;
+
 
   const generateInitialData = (products: ProductDefinition[]): ProductData[] => {
     return products.map(p => ({
@@ -57,7 +72,8 @@ export default function Control7Client() {
                 setLoading(false);
                 return;
             }
-
+            
+            const effectivePlanId = initialPlanId || `${getISOWeek(date || new Date())}-${(date || new Date()).getFullYear()}`;
             // Fetch the production plan for the current week
             const planDocRef = doc(db, "productionPlans", planId);
             const planDocSnap = await getDoc(planDocRef);
@@ -90,11 +106,12 @@ export default function Control7Client() {
     };
 
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planId, toast]);
 
   const handleSave = async () => {
     try {
-      const planDocRef = doc(db, "productionPlans", planId);
+      const planDocRef = doc(db, "productionPlans", savePlanId);
       await setDoc(planDocRef, { products: data, week: currentWeek, year: currentYear });
       toast({
         title: 'Plan Guardado',
@@ -127,6 +144,15 @@ export default function Control7Client() {
         return item;
       })
     );
+  };
+
+  const handleDateChange = (newDate: Date | undefined) => {
+    // When the user changes the date, we clear the initialPlanId by navigating
+    // This ensures the component re-fetches data for the new date
+    if (newDate) {
+        window.location.href = '/';
+        setDate(newDate);
+    }
   };
 
   const filteredData = data.filter(item =>

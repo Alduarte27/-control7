@@ -80,8 +80,7 @@ export default function HistoryClient() {
                   <li key={plan.id} className="border p-4 rounded-md flex justify-between items-center">
                     <span className="font-medium">Semana {plan.week}, {plan.year}</span>
                      <Button asChild variant="secondary">
-                        {/* This link isn't functional yet, as we need a way to pass the week to the main page */}
-                        <span className='cursor-not-allowed'>Ver Plan</span>
+                        <Link href={`/?planId=${plan.id}`}>Ver Plan</Link>
                      </Button>
                   </li>
                 ))}
