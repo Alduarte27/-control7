@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { ProductData, ProductDefinition, ProductCategory } from '@/lib/types';
+import type { ProductData, ProductDefinition, ProductCategory, DailyProduction, ShiftProduction } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
 import { db } from '@/lib/firebase';
@@ -54,6 +54,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   const generateInitialData = (products: ProductDefinition[]): ProductData[] => {
     return products.map(p => ({
       ...p,
+      category: p.category || 'Familiar', // Ensure category default
       planned: 0,
       actual: JSON.parse(JSON.stringify(emptyActual)),
     }));
@@ -85,10 +86,26 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
                 // Sync with latest product definitions and maintain order
                 const syncedData = productDefinitions.map(def => {
-                    const found = weeklyData.find(d => d.id === def.id);
-                    // Ensure new products get a default category if not present
-                    const definitionWithDefaults = { category: 'Familiar' as const, ...def };
-                    return found || { ...definitionWithDefaults, planned: 0, actual: JSON.parse(JSON.stringify(emptyActual)) };
+                    const savedProductData = weeklyData.find(d => d.id === def.id);
+                    const definitionWithDefaults = {
+                        ...def,
+                        category: def.category || 'Familiar', // Assign default for old products
+                    };
+
+                    if (savedProductData) {
+                        // If product exists in plan, merge definition (with default category) and saved data
+                        return {
+                            ...definitionWithDefaults,
+                            ...savedProductData,
+                        };
+                    } else {
+                        // If product is new (not in the saved plan), create its initial structure
+                        return {
+                            ...definitionWithDefaults,
+                            planned: 0,
+                            actual: JSON.parse(JSON.stringify(emptyActual)),
+                        };
+                    }
                 });
                 setData(syncedData);
             } else {
