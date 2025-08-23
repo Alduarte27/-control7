@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Factory, ChevronLeft } from 'lucide-react';
+import { Factory, ChevronLeft, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import type { ProductData, DailyProduction } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 type WeeklySummaryData = {
   week: number;
@@ -79,6 +80,7 @@ export default function DashboardClient() {
   const [loading, setLoading] = React.useState(true);
   const [allPlans, setAllPlans] = React.useState<AllPlansData[]>([]);
   const [selectedWeek, setSelectedWeek] = React.useState('all');
+  const [isFilterOpen, setIsFilterOpen] = React.useState(true);
 
   const weekOptions = React.useMemo(() => {
     return allPlans
@@ -249,24 +251,34 @@ export default function DashboardClient() {
           </CardContent>
         </Card>
         
-        <div className="bg-card p-4 rounded-lg border flex items-center gap-4">
-            <div className="flex flex-col gap-1.5 w-full max-w-xs">
-                <Label htmlFor='week-filter'>Filtrar por Semana</Label>
-                <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-                    <SelectTrigger id="week-filter">
-                        <SelectValue placeholder="Seleccionar semana" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="all">Todas las semanas</SelectItem>
-                        {weekOptions.map(week => (
-                            <SelectItem key={week} value={String(week)}>
-                                Semana {week}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-        </div>
+        <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
+            <CollapsibleTrigger asChild>
+                <Button variant="outline" size="sm">
+                    <Filter className="mr-2 h-4 w-4" />
+                    {isFilterOpen ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+                </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+                <div className="bg-card p-4 rounded-lg border flex items-center gap-4">
+                    <div className="flex flex-col gap-1.5 w-full max-w-xs">
+                        <Label htmlFor='week-filter'>Filtrar por Semana</Label>
+                        <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                            <SelectTrigger id="week-filter">
+                                <SelectValue placeholder="Seleccionar semana" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todas las semanas</SelectItem>
+                                {weekOptions.map(week => (
+                                    <SelectItem key={week} value={String(week)}>
+                                        Semana {week}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+            </CollapsibleContent>
+        </Collapsible>
 
         <div className="grid md:grid-cols-2 gap-6">
             <Card>
