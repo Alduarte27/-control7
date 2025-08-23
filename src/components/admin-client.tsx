@@ -394,7 +394,7 @@ export default function AdminClient() {
                                 id="new-category"
                                 value={newCategoryName}
                                 onChange={(e) => setNewCategoryName(e.target.value)}
-                                placeholder="Ej: Postres"
+                                placeholder="Ej: Familiar"
                             />
                         </div>
                         <Button onClick={handleAddCategory}>
