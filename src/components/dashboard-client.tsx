@@ -13,12 +13,14 @@ import type { ProductData, DailyProduction, ProductCategory } from '@/lib/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
 type WeeklySummaryData = {
   week: number;
   name: string;
   planned: number;
   actual: number;
+  variance: number;
 };
 
 type WeeklyShiftSummaryData = {
@@ -43,6 +45,9 @@ const weeklyChartConfig = {
     label: 'Real',
     color: 'hsl(var(--primary))',
   },
+  variance: {
+      label: 'Varianza',
+  }
 } satisfies ChartConfig;
 
 const shiftChartConfig = {
@@ -71,6 +76,50 @@ type AllPlansData = {
     week: number;
     year: number;
     products: ProductData[];
+};
+
+// Custom Tooltip for Weekly Summary Chart
+const CustomTooltipContent = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="rounded-lg border bg-background p-2 shadow-sm">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col space-y-1">
+              <span className="text-[0.70rem] uppercase text-muted-foreground">
+                {label}
+              </span>
+              <div className="font-bold text-muted-foreground">
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--accent))'}} />
+                    Planificado
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--primary))'}} />
+                    Real
+                </div>
+                <div className="flex items-center gap-2">
+                   <div className="w-2 h-2 rounded-full bg-transparent" />
+                   Varianza
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col space-y-1 text-right">
+                <span className="text-[0.70rem] uppercase text-muted-foreground">&nbsp;</span>
+                <div className="font-bold">
+                    <div>{data.planned.toLocaleString()}</div>
+                    <div>{data.actual.toLocaleString()}</div>
+                    <div className={cn(data.variance >= 0 ? 'text-green-600' : 'text-destructive')}>
+                        {data.variance.toLocaleString()}
+                    </div>
+                </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+  
+    return null;
 };
 
 export default function DashboardClient() {
@@ -119,7 +168,6 @@ export default function DashboardClient() {
   React.useEffect(() => {
     if (allPlans.length === 0) return;
     
-    // Helper function to ensure all products have a category and apply filter
     const getFilteredProducts = (products: ProductData[]): ProductData[] => {
       const productsWithDefaults = products.map(p => ({
         ...p,
@@ -141,49 +189,48 @@ export default function DashboardClient() {
         sun: { day: 0, night: 0 } 
     };
 
-    // Process all plans
-    allPlans.forEach(plan => {
-        const { week } = plan;
+    const plansToProcess = selectedWeek === 'all' 
+      ? allPlans 
+      : allPlans.filter(plan => String(plan.week) === selectedWeek);
 
-        // --- Weekly Planned vs Actual & Weekly Shift Totals ---
-        const filteredProductsForTotals = getFilteredProducts(plan.products);
+    plansToProcess.forEach(plan => {
+      const filteredProducts = getFilteredProducts(plan.products);
+      
+      filteredProducts.forEach(item => {
+        const { week } = plan;
 
         if (!weeklyDataMap[week]) weeklyDataMap[week] = { planned: 0, actual: 0 };
         if (!weeklyShiftTotals[week]) weeklyShiftTotals[week] = { day: 0, night: 0 };
 
-        filteredProductsForTotals.forEach(item => {
-            weeklyDataMap[week].planned += item.planned || 0;
-            const actualTotalForItem = Object.values(item.actual).reduce((sum, shifts) => {
-                const dayVal = shifts.day || 0;
-                const nightVal = shifts.night || 0;
-                weeklyShiftTotals[week].day += dayVal;
-                weeklyShiftTotals[week].night += nightVal;
-                return sum + dayVal + nightVal;
-            }, 0);
-            weeklyDataMap[week].actual += actualTotalForItem;
+        weeklyDataMap[week].planned += item.planned || 0;
+        const actualTotalForItem = Object.values(item.actual).reduce((sum, shifts) => {
+            const dayVal = shifts.day || 0;
+            const nightVal = shifts.night || 0;
+            weeklyShiftTotals[week].day += dayVal;
+            weeklyShiftTotals[week].night += nightVal;
+            return sum + dayVal + nightVal;
+        }, 0);
+        weeklyDataMap[week].actual += actualTotalForItem;
+        
+        Object.entries(item.actual).forEach(([day, shifts]) => {
+            const dayKey = day as keyof DailyProduction;
+            dailyTotals[dayKey].day += shifts.day || 0;
+            dailyTotals[dayKey].night += shifts.night || 0;
         });
-
-        // --- Daily Totals (also respects week filter) ---
-        if (selectedWeek === 'all' || String(plan.week) === selectedWeek) {
-            const filteredProductsForDaily = getFilteredProducts(plan.products);
-            filteredProductsForDaily.forEach(item => {
-                Object.entries(item.actual).forEach(([day, shifts]) => {
-                    const dayKey = day as keyof DailyProduction;
-                    dailyTotals[dayKey].day += shifts.day || 0;
-                    dailyTotals[dayKey].night += shifts.night || 0;
-                });
-            });
-        }
+      });
     });
 
     const weeklyData: WeeklySummaryData[] = Object.keys(weeklyDataMap)
         .map(weekStr => {
             const week = parseInt(weekStr, 10);
+            const planned = weeklyDataMap[week].planned;
+            const actual = weeklyDataMap[week].actual;
             return {
                 week: week,
                 name: `Semana ${week}`,
-                planned: weeklyDataMap[week].planned,
-                actual: weeklyDataMap[week].actual,
+                planned: planned,
+                actual: actual,
+                variance: actual - planned,
             };
         })
         .sort((a, b) => a.week - b.week);
@@ -246,7 +293,7 @@ export default function DashboardClient() {
                     axisLine={false}
                   />
                   <YAxis />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                  <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
                   <ChartLegend content={<ChartLegendContent />} />
                   <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
                   <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
