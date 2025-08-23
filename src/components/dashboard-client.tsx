@@ -36,6 +36,12 @@ type DailySummaryData = {
   night: number;
 }
 
+type ProductSummaryData = {
+  name: string;
+  planned: number;
+  actual: number;
+};
+
 const weeklyChartConfig = {
   planned: {
     label: 'Planificado',
@@ -72,6 +78,18 @@ const dailyChartConfig = {
     }
 } satisfies ChartConfig;
 
+const productChartConfig = {
+  planned: {
+    label: "Planificado",
+    color: "hsl(var(--chart-1))",
+  },
+  actual: {
+    label: "Real",
+    color: "hsl(var(--chart-2))",
+  },
+} satisfies ChartConfig;
+
+
 type AllPlansData = {
     week: number;
     year: number;
@@ -98,10 +116,12 @@ const CustomTooltipContent = ({ active, payload, label }: any) => {
                     <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--primary))'}} />
                     Real
                 </div>
-                <div className="flex items-center gap-2">
-                   <div className="w-2 h-2 rounded-full bg-transparent" />
-                   Varianza
-                </div>
+                {'variance' in data && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-transparent" />
+                    Varianza
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex flex-col space-y-1 text-right">
@@ -109,9 +129,11 @@ const CustomTooltipContent = ({ active, payload, label }: any) => {
                 <div className="font-bold">
                     <div>{data.planned.toLocaleString()}</div>
                     <div>{data.actual.toLocaleString()}</div>
-                    <div className={cn(data.variance >= 0 ? 'text-green-600' : 'text-destructive')}>
-                        {data.variance.toLocaleString()}
-                    </div>
+                    {'variance' in data && (
+                      <div className={cn(data.variance >= 0 ? 'text-green-600' : 'text-destructive')}>
+                          {data.variance.toLocaleString()}
+                      </div>
+                    )}
                 </div>
             </div>
           </div>
@@ -126,6 +148,8 @@ export default function DashboardClient() {
   const [summaryData, setSummaryData] = React.useState<WeeklySummaryData[]>([]);
   const [weeklyShiftData, setWeeklyShiftData] = React.useState<WeeklyShiftSummaryData[]>([]);
   const [dailyData, setDailyData] = React.useState<DailySummaryData[]>([]);
+  const [productData, setProductData] = React.useState<ProductSummaryData[]>([]);
+
   const [loading, setLoading] = React.useState(true);
   const [allPlans, setAllPlans] = React.useState<AllPlansData[]>([]);
   const [selectedWeek, setSelectedWeek] = React.useState('all');
@@ -181,24 +205,15 @@ export default function DashboardClient() {
       return productsWithDefaults.filter(p => p.category === selectedCategory);
     };
 
+    // --- Data for charts that IGNORE week filter ---
     const weeklyDataMap: { [week: number]: { planned: number; actual: number } } = {};
     const weeklyShiftTotals: { [week: number]: { day: number; night: number } } = {};
-    const dailyTotals: { [key in keyof DailyProduction]: { day: number; night: number } } = { 
-        mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
-        thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
-        sun: { day: 0, night: 0 } 
-    };
 
-    const plansToProcess = selectedWeek === 'all' 
-      ? allPlans 
-      : allPlans.filter(plan => String(plan.week) === selectedWeek);
-
-    plansToProcess.forEach(plan => {
+    allPlans.forEach(plan => {
       const filteredProducts = getFilteredProducts(plan.products);
-      
+
       filteredProducts.forEach(item => {
         const { week } = plan;
-
         if (!weeklyDataMap[week]) weeklyDataMap[week] = { planned: 0, actual: 0 };
         if (!weeklyShiftTotals[week]) weeklyShiftTotals[week] = { day: 0, night: 0 };
 
@@ -211,12 +226,6 @@ export default function DashboardClient() {
             return sum + dayVal + nightVal;
         }, 0);
         weeklyDataMap[week].actual += actualTotalForItem;
-        
-        Object.entries(item.actual).forEach(([day, shifts]) => {
-            const dayKey = day as keyof DailyProduction;
-            dailyTotals[dayKey].day += shifts.day || 0;
-            dailyTotals[dayKey].night += shifts.night || 0;
-        });
       });
     });
 
@@ -235,7 +244,7 @@ export default function DashboardClient() {
         })
         .sort((a, b) => a.week - b.week);
     setSummaryData(weeklyData);
-
+    
     const processedWeeklyShiftData = Object.keys(weeklyShiftTotals)
         .map(week => ({
             name: `Semana ${week}`,
@@ -246,6 +255,37 @@ export default function DashboardClient() {
         .sort((a, b) => a.week - b.week);
     setWeeklyShiftData(processedWeeklyShiftData);
 
+
+    // --- Data for charts that RESPECT week filter ---
+    const dailyTotals: { [key in keyof DailyProduction]: { day: number; night: number } } = { 
+        mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
+        thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
+        sun: { day: 0, night: 0 } 
+    };
+    const productTotals: { [productName: string]: { planned: number; actual: number } } = {};
+
+    const plansToProcess = selectedWeek === 'all' 
+      ? allPlans 
+      : allPlans.filter(plan => String(plan.week) === selectedWeek);
+
+    plansToProcess.forEach(plan => {
+      const filteredProducts = getFilteredProducts(plan.products);
+      
+      filteredProducts.forEach(item => {
+        if (!productTotals[item.productName]) productTotals[item.productName] = { planned: 0, actual: 0 };
+        
+        productTotals[item.productName].planned += item.planned || 0;
+        const itemActualTotal = Object.values(item.actual).reduce((sum, shifts) => sum + (shifts.day || 0) + (shifts.night || 0), 0);
+        productTotals[item.productName].actual += itemActualTotal;
+
+        Object.entries(item.actual).forEach(([day, shifts]) => {
+            const dayKey = day as keyof DailyProduction;
+            dailyTotals[dayKey].day += shifts.day || 0;
+            dailyTotals[dayKey].night += shifts.night || 0;
+        });
+      });
+    });
+
     setDailyData([
         { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
         { name: 'Martes', day: dailyTotals.tue.day, night: dailyTotals.tue.night },
@@ -255,6 +295,15 @@ export default function DashboardClient() {
         { name: 'Sábado', day: dailyTotals.sat.day, night: dailyTotals.sat.night },
         { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
     ]);
+
+    const processedProductData = Object.keys(productTotals)
+        .map(name => ({
+            name,
+            planned: productTotals[name].planned,
+            actual: productTotals[name].actual,
+        }))
+        .filter(item => item.planned > 0 || item.actual > 0);
+    setProductData(processedProductData);
 
   }, [allPlans, selectedWeek, selectedCategory]);
 
@@ -274,46 +323,18 @@ export default function DashboardClient() {
         </Link>
       </header>
       <main className="p-4 md:p-8 space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Resumen de Producción por Semana</CardTitle>
-            <CardDescription>Comparación de lo planificado vs. lo ejecutado a lo largo del tiempo.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-                <p className="text-muted-foreground text-center py-8">Cargando datos del dashboard...</p>
-            ) : summaryData.length > 0 ? (
-              <ChartContainer config={weeklyChartConfig} className="w-full h-[350px]">
-                <BarChart accessibilityLayer data={summaryData}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tickLine={false}
-                    tickMargin={10}
-                    axisLine={false}
-                  />
-                  <YAxis />
-                  <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                  <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-                <p className="text-muted-foreground text-center py-8">
-                  No hay suficientes datos guardados para mostrar el dashboard. Guarda al menos un plan semanal.
-                </p>
-            )}
-          </CardContent>
-        </Card>
-        
         <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
-            <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm">
-                    <Filter className="mr-2 h-4 w-4" />
-                    {isFilterOpen ? 'Ocultar Filtros' : 'Mostrar Filtros'}
-                </Button>
-            </CollapsibleTrigger>
+            <div className="flex justify-between items-center">
+                <CollapsibleTrigger asChild>
+                    <Button variant="outline" size="sm">
+                        <Filter className="mr-2 h-4 w-4" />
+                        {isFilterOpen ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+                    </Button>
+                </CollapsibleTrigger>
+                <CardDescription>
+                    El filtro de semana solo aplica a los gráficos de producción por día y por producto.
+                </CardDescription>
+            </div>
             <CollapsibleContent>
                 <div className="bg-card p-4 rounded-lg border flex items-center gap-4">
                     <div className="flex flex-col gap-1.5 w-full max-w-xs">
@@ -348,12 +369,45 @@ export default function DashboardClient() {
                 </div>
             </CollapsibleContent>
         </Collapsible>
-
+        
         <div className="grid md:grid-cols-2 gap-6">
+            <Card className="md:col-span-2">
+              <CardHeader>
+                <CardTitle>Resumen de Producción por Semana</CardTitle>
+                <CardDescription>Comparación de lo planificado vs. ejecutado. Ignora el filtro de semana.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                    <p className="text-muted-foreground text-center py-8">Cargando datos del dashboard...</p>
+                ) : summaryData.length > 0 ? (
+                  <ChartContainer config={weeklyChartConfig} className="w-full h-[350px]">
+                    <BarChart accessibilityLayer data={summaryData}>
+                      <CartesianGrid vertical={false} />
+                      <XAxis
+                        dataKey="name"
+                        tickLine={false}
+                        tickMargin={10}
+                        axisLine={false}
+                      />
+                      <YAxis />
+                      <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
+                      <ChartLegend content={<ChartLegendContent />} />
+                      <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                      <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
+                    </BarChart>
+                  </ChartContainer>
+                ) : (
+                    <p className="text-muted-foreground text-center py-8">
+                      No hay suficientes datos guardados para mostrar el dashboard.
+                    </p>
+                )}
+              </CardContent>
+            </Card>
+            
             <Card>
                 <CardHeader>
                     <CardTitle>Producción por Turno y Semana</CardTitle>
-                    <CardDescription>Producción de turno día vs. noche por semana.</CardDescription>
+                    <CardDescription>Producción por turno. Ignora el filtro de semana.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : weeklyShiftData.length > 0 ? (
@@ -390,6 +444,35 @@ export default function DashboardClient() {
                             </BarChart>
                         </ChartContainer>
                      ) : <p className="text-center text-muted-foreground py-4">No hay datos de producción.</p>}
+                </CardContent>
+            </Card>
+            <Card className="md:col-span-2">
+                <CardHeader>
+                    <CardTitle>Producción por Producto</CardTitle>
+                    <CardDescription>Planificado vs. Real para cada producto en el período seleccionado.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : productData.length > 0 ? (
+                        <ChartContainer config={productChartConfig} className="w-full h-[400px]">
+                            <BarChart accessibilityLayer data={productData} margin={{ top: 20, right: 20, left: 20, bottom: 80 }}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis 
+                                    dataKey="name" 
+                                    tickLine={false} 
+                                    axisLine={false}
+                                    tickMargin={10}
+                                    angle={-45}
+                                    textAnchor="end"
+                                    interval={0}
+                                />
+                                <YAxis />
+                                <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
+                                <ChartLegend content={<ChartLegendContent />} />
+                                <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                                <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
+                            </BarChart>
+                        </ChartContainer>
+                    ) : <p className="text-center text-muted-foreground py-4">No hay datos de producción para los filtros seleccionados.</p>}
                 </CardContent>
             </Card>
         </div>
