@@ -119,14 +119,28 @@ export default function DashboardClient() {
   React.useEffect(() => {
     if (allPlans.length === 0) return;
 
-    // Filter plans based on selected week and category
+    // Helper function to ensure products have a category
+    const assignDefaultCategory = (products: ProductData[]): ProductData[] => {
+        return products.map(p => ({
+            ...p,
+            category: p.category || 'Familiar', // Default to 'Familiar' if undefined
+        }));
+    };
+    
+    // Filter plans based on selected week
     const filteredPlansByWeek = selectedWeek === 'all' 
       ? allPlans 
       : allPlans.filter(p => String(p.week) === selectedWeek);
       
-    const getFilteredProducts = (products: ProductData[]) => 
-      selectedCategory === 'all' ? products : products.filter(p => p.category === selectedCategory);
-
+    // Helper to filter products by selected category
+    const getFilteredProducts = (products: ProductData[]) => {
+        const productsWithCategory = assignDefaultCategory(products);
+        if (selectedCategory === 'all') {
+            return productsWithCategory;
+        }
+        return productsWithCategory.filter(p => p.category === selectedCategory);
+    }
+    
     const weeklyData: WeeklySummaryData[] = [];
     const weeklyShiftTotals: { [week: number]: { day: number, night: number } } = {};
     const dailyTotals: { [key in keyof DailyProduction]: { day: number, night: number } } = { 
