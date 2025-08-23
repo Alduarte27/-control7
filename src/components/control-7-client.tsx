@@ -34,7 +34,6 @@ const getDateFromPlanId = (planId: string): Date => {
 export default function Control7Client({ initialPlanId }: { initialPlanId?: string }) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
-  const [selectedCategory, setSelectedCategory] = React.useState<ProductCategory | 'all'>('all');
   const [date, setDate] = React.useState<Date | undefined>(
     initialPlanId ? getDateFromPlanId(initialPlanId) : new Date()
   );
@@ -279,12 +278,8 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     }
   };
 
-  const filteredDataForTable = data.filter(item =>
+  const filteredData = data.filter(item =>
     item.productName.toLowerCase().includes(productSearch.toLowerCase())
-  );
-
-  const filteredDataForCharts = data.filter(item => 
-    (selectedCategory === 'all' || item.category === selectedCategory)
   );
 
   return (
@@ -297,21 +292,19 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
             date={date}
             onDateChange={handleDateChange}
             onCopyLastWeek={handleCopyLastWeek}
-            selectedCategory={selectedCategory}
-            onCategoryChange={setSelectedCategory}
         />
         {loading ? (
             <p>Cargando datos...</p>
         ) : (
             <>
-                <KpiDashboard data={filteredDataForCharts} />
+                <KpiDashboard data={data} />
                 <div className="space-y-6">
                   <ProductionTable 
-                    data={filteredDataForTable} 
+                    data={filteredData} 
                     onPlannedChange={handlePlannedDataChange} 
                     onActualChange={handleActualDataChange} 
                   />
-                  <WeeklySummary data={filteredDataForCharts} />
+                  <WeeklySummary data={data} />
                 </div>
             </>
         )}

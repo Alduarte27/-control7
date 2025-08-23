@@ -59,7 +59,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
             </ChartContainer>
         ) : (
             <p className="text-center text-muted-foreground py-8">
-                No hay datos de producción para la categoría seleccionada.
+                No hay datos de producción. Introduce un plan para ver el resumen.
             </p>
         )}
       </CardContent>
