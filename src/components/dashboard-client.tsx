@@ -26,7 +26,8 @@ type ShiftSummaryData = {
 
 type DailySummaryData = {
   name: string;
-  total: number;
+  day: number;
+  night: number;
 }
 
 const weeklyChartConfig = {
@@ -48,10 +49,14 @@ const shiftChartConfig = {
 } satisfies ChartConfig;
   
 const dailyChartConfig = {
-    total: {
-      label: 'Total Producido',
+    day: {
+      label: 'Turno Día',
       color: 'hsl(var(--chart-3))',
     },
+    night: {
+        label: 'Turno Noche',
+        color: 'hsl(var(--chart-4))',
+    }
 } satisfies ChartConfig;
 
 export default function DashboardClient() {
@@ -66,7 +71,15 @@ export default function DashboardClient() {
         const weeklyData: WeeklySummaryData[] = [];
         let totalDayShift = 0;
         let totalNightShift = 0;
-        const dailyTotals: { [key in keyof DailyProduction]: number } = { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 };
+        const dailyTotals: { [key in keyof DailyProduction]: { day: number, night: number } } = { 
+            mon: { day: 0, night: 0 }, 
+            tue: { day: 0, night: 0 }, 
+            wed: { day: 0, night: 0 }, 
+            thu: { day: 0, night: 0 }, 
+            fri: { day: 0, night: 0 }, 
+            sat: { day: 0, night: 0 }, 
+            sun: { day: 0, night: 0 } 
+        };
 
         try {
             const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
@@ -82,7 +95,10 @@ export default function DashboardClient() {
                         const dayKey = day as keyof DailyProduction;
                         totalDayShift += shifts.day || 0;
                         totalNightShift += shifts.night || 0;
-                        dailyTotals[dayKey] += (shifts.day || 0) + (shifts.night || 0);
+                        
+                        dailyTotals[dayKey].day += shifts.day || 0;
+                        dailyTotals[dayKey].night += shifts.night || 0;
+
                         weeklyActual += (shifts.day || 0) + (shifts.night || 0);
                     });
                 });
@@ -106,13 +122,13 @@ export default function DashboardClient() {
             ]);
 
             setDailyData([
-                { name: 'Lunes', total: dailyTotals.mon },
-                { name: 'Martes', total: dailyTotals.tue },
-                { name: 'Miércoles', total: dailyTotals.wed },
-                { name: 'Jueves', total: dailyTotals.thu },
-                { name: 'Viernes', total: dailyTotals.fri },
-                { name: 'Sábado', total: dailyTotals.sat },
-                { name: 'Domingo', total: dailyTotals.sun },
+                { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
+                { name: 'Martes', day: dailyTotals.tue.day, night: dailyTotals.tue.night },
+                { name: 'Miércoles', day: dailyTotals.wed.day, night: dailyTotals.wed.night },
+                { name: 'Jueves', day: dailyTotals.thu.day, night: dailyTotals.thu.night },
+                { name: 'Viernes', day: dailyTotals.fri.day, night: dailyTotals.fri.night },
+                { name: 'Sábado', day: dailyTotals.sat.day, night: dailyTotals.sat.night },
+                { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
             ]);
 
         } catch (error) {
@@ -195,18 +211,20 @@ export default function DashboardClient() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle>Producción por Día</CardTitle>
-                    <CardDescription>Total producido cada día de la semana.</CardDescription>
+                    <CardTitle>Producción por Día de la Semana</CardTitle>
+                    <CardDescription>Total producido por turno cada día.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : dailyData.some(d => d.total > 0) ? (
+                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : dailyData.some(d => d.day > 0 || d.night > 0) ? (
                         <ChartContainer config={dailyChartConfig} className="w-full h-[300px]">
                             <BarChart accessibilityLayer data={dailyData}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
                                 <YAxis />
                                 <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                                <Bar dataKey="total" fill="var(--color-total)" radius={4} />
+                                <ChartLegend content={<ChartLegendContent />} />
+                                <Bar dataKey="day" fill="var(--color-day)" radius={4} />
+                                <Bar dataKey="night" fill="var(--color-night)" radius={4} />
                             </BarChart>
                         </ChartContainer>
                      ) : <p className="text-center text-muted-foreground py-4">No hay datos de producción.</p>}
