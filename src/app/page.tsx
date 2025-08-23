@@ -1,3 +1,9 @@
+import Control7Client from '@/components/control-7-client';
+
 export default function Home() {
-  return <></>;
+  return (
+    <main>
+      <Control7Client />
+    </main>
+  );
 }
