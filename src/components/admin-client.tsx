@@ -30,6 +30,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Separator } from './ui/separator';
 
 function EditProductDialog({
     product,
@@ -163,7 +164,7 @@ export default function AdminClient() {
             const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition));
             setCategories(categoriesList);
 
-            if (categoriesList.length > 0) {
+            if (categoriesList.length > 0 && !newProductCategoryId) {
               setNewProductCategoryId(categoriesList[0].id);
             }
 
@@ -180,6 +181,7 @@ export default function AdminClient() {
         }
     };
     fetchInitialData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast]);
 
   const handleAddProduct = async () => {
@@ -207,7 +209,7 @@ export default function AdminClient() {
             ...newProductData
         };
 
-        setProducts(prevProducts => [...prevProducts, newProduct]);
+        setProducts(prevProducts => [...prevProducts, newProduct].sort((a,b) => a.order - b.order));
         setNewProductName('');
         toast({
             title: 'Producto Añadido',
@@ -238,7 +240,6 @@ export default function AdminClient() {
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
-    // Check if any product is using this category
     const isCategoryInUse = products.some(p => p.categoryId === categoryId);
     if (isCategoryInUse) {
         toast({
@@ -252,6 +253,9 @@ export default function AdminClient() {
     try {
         await deleteDoc(doc(db, 'categories', categoryId));
         setCategories(prev => prev.filter(c => c.id !== categoryId));
+        if (newProductCategoryId === categoryId) {
+            setNewProductCategoryId(categories.length > 1 ? categories.find(c => c.id !== categoryId)!.id : '');
+        }
         toast({ title: 'Categoría Eliminada' });
     } catch (error) {
         toast({ title: 'Error al eliminar categoría', variant: 'destructive' });
@@ -341,80 +345,81 @@ export default function AdminClient() {
       </header>
       <main className="p-4 md:p-8 space-y-6">
         <div className="grid md:grid-cols-2 gap-6">
-            <Card>
+            <Card className="md:col-span-2">
               <CardHeader>
-                <CardTitle>Gestionar Categorías</CardTitle>
-                <CardDescription>Añade y elimina categorías de productos.</CardDescription>
+                <CardTitle>Gestionar Productos y Categorías</CardTitle>
+                <CardDescription>Añade, edita y organiza tus productos y categorías en un solo lugar.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                  <div className="flex items-end gap-2">
+              <CardContent className="space-y-6">
+                <div>
+                    <Label className="text-lg font-semibold">Añadir Nuevo Producto</Label>
+                    <div className="flex items-end gap-2 mt-2">
                       <div className="flex-grow">
-                          <Label htmlFor="new-category">Nombre de la Nueva Categoría</Label>
-                          <Input 
-                              id="new-category"
-                              value={newCategoryName}
-                              onChange={(e) => setNewCategoryName(e.target.value)}
-                              placeholder="Ej: Postres"
-                          />
+                        <Label htmlFor="new-product">Nombre del Nuevo Producto</Label>
+                        <Input 
+                          id="new-product"
+                          value={newProductName}
+                          onChange={(e) => setNewProductName(e.target.value)}
+                          placeholder="Ej: Azúcar 1kg San Juan"
+                        />
                       </div>
-                      <Button onClick={handleAddCategory}>
+                      <div className="w-48">
+                        <Label htmlFor="new-product-category">Categoría</Label>
+                        <Select value={newProductCategoryId} onValueChange={setNewProductCategoryId} disabled={categories.length === 0}>
+                            <SelectTrigger id="new-product-category">
+                                <SelectValue placeholder="Seleccionar" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {categories.map(cat => (
+                                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                      </div>
+                       <Button onClick={handleAddProduct}>
                           <PlusCircle className="mr-2 h-4 w-4" />
-                          Añadir
+                          Añadir Producto
                       </Button>
-                  </div>
-                  <div className="space-y-2">
-                      <Label>Categorías existentes</Label>
-                      {categories.length > 0 ? (
-                          <ul className="space-y-2">
-                              {categories.map(cat => (
-                                  <li key={cat.id} className="border p-2 rounded-md flex justify-between items-center text-sm">
-                                      {cat.name}
-                                      <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(cat.id)}>
-                                          <Trash2 className="h-4 w-4 text-destructive" />
-                                      </Button>
-                                  </li>
-                              ))}
-                          </ul>
-                      ) : (
-                          <p className="text-sm text-muted-foreground text-center py-2">No hay categorías.</p>
-                      )}
-                  </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Gestionar Productos</CardTitle>
-                <CardDescription>Añade nuevos productos y asigna una categoría.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-end gap-2">
-                  <div className="flex-grow">
-                    <Label htmlFor="new-product">Nombre del Nuevo Producto</Label>
-                    <Input 
-                      id="new-product"
-                      value={newProductName}
-                      onChange={(e) => setNewProductName(e.target.value)}
-                      placeholder="Ej: Azúcar 1kg San Juan"
-                    />
-                  </div>
-                  <div className="w-48">
-                    <Label htmlFor="new-product-category">Categoría</Label>
-                    <Select value={newProductCategoryId} onValueChange={setNewProductCategoryId}>
-                        <SelectTrigger id="new-product-category">
-                            <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {categories.map(cat => (
-                                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                  </div>
+                    </div>
                 </div>
-                 <Button onClick={handleAddProduct} className="w-full">
-                    <PlusCircle className="mr-2 h-4 w-4" />
-                    Añadir Producto
-                </Button>
+                
+                <Separator />
+
+                <div>
+                    <Label className="text-lg font-semibold">Gestionar Categorías</Label>
+                    <div className="flex items-end gap-2 mt-2">
+                        <div className="flex-grow">
+                            <Label htmlFor="new-category">Nombre de la Nueva Categoría</Label>
+                            <Input 
+                                id="new-category"
+                                value={newCategoryName}
+                                onChange={(e) => setNewCategoryName(e.target.value)}
+                                placeholder="Ej: Postres"
+                            />
+                        </div>
+                        <Button onClick={handleAddCategory}>
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Añadir Categoría
+                        </Button>
+                    </div>
+                    <div className="space-y-2 mt-4">
+                        <Label>Categorías existentes</Label>
+                        {categories.length > 0 ? (
+                            <ul className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                                {categories.map(cat => (
+                                    <li key={cat.id} className="border p-2 rounded-md flex justify-between items-center text-sm">
+                                        {cat.name}
+                                        <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(cat.id)}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center py-2">No hay categorías. Añade una para empezar.</p>
+                        )}
+                    </div>
+                </div>
               </CardContent>
             </Card>
         </div>
@@ -422,7 +427,7 @@ export default function AdminClient() {
         <Card>
           <CardHeader>
             <CardTitle>Lista de Productos Actual</CardTitle>
-            <CardDescription>Arrastra los productos para reordenarlos.</CardDescription>
+            <CardDescription>Arrastra los productos para reordenarlos. Haz clic en el icono de editar para cambiar el nombre, categoría y color.</CardDescription>
           </CardHeader>
           <CardContent>
              {products.length > 0 ? (
@@ -440,7 +445,7 @@ export default function AdminClient() {
                     </SortableContext>
                 </DndContext>
              ) : (
-                <p className="text-muted-foreground text-center py-4">No hay productos definidos. Comienza añadiendo uno.</p>
+                <p className="text-muted-foreground text-center py-4">No hay productos definidos. Comienza añadiendo una categoría y luego un producto.</p>
              )}
           </CardContent>
         </Card>
