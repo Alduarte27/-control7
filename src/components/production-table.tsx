@@ -72,7 +72,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
                   const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
                   return (
                     <TableRow key={item.id}>
-                      <TableCell className="font-medium sticky left-0 bg-card z-10">{item.productName}</TableCell>
+                      <TableCell className="font-medium sticky left-0 bg-card z-10 text-xs">{item.productName}</TableCell>
                       <TableCell>
                         <Input
                           type="number"
