@@ -3,6 +3,8 @@
 import React from 'react';
 import type { ProductData, DailyProduction } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { getISOWeek, startOfISOWeek, endOfISOWeek, format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 import Header from './header';
 import FilterBar from './filter-bar';
@@ -22,12 +24,16 @@ const initialData: ProductData[] = [
   { id: 'prod-9', productName: 'Azúcar Morena Granel', planned: 0, actual: { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 } },
 ];
 
-const LOCAL_STORAGE_KEY = 'control7-data';
+const LOCAL_STORAGE_KEY_PREFIX = 'control7-semana-';
 
 export default function Control7Client() {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
+  const [date, setDate] = React.useState<Date | undefined>(new Date());
   const { toast } = useToast();
+
+  const currentWeek = getISOWeek(date || new Date());
+  const LOCAL_STORAGE_KEY = `${LOCAL_STORAGE_KEY_PREFIX}${currentWeek}`;
 
   React.useEffect(() => {
     try {
@@ -46,14 +52,14 @@ export default function Control7Client() {
       console.error("Failed to load data from local storage", error);
       setData(initialData);
     }
-  }, []);
+  }, [currentWeek, LOCAL_STORAGE_KEY]);
 
   const handleSave = () => {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
       toast({
         title: 'Plan Guardado',
-        description: 'Tus datos de producción han sido guardados exitosamente.',
+        description: `Los datos para la semana ${currentWeek} han sido guardados.`,
       });
     } catch (error) {
       console.error("Failed to save data to local storage", error);
@@ -89,9 +95,14 @@ export default function Control7Client() {
     <div className="bg-background min-h-screen text-foreground">
       <Header onSave={handleSave} />
       <div className="p-4 md:p-8 space-y-6">
+        <FilterBar 
+            productSearch={productSearch} 
+            onProductSearchChange={setProductSearch}
+            date={date}
+            onDateChange={setDate}
+        />
         <KpiDashboard data={filteredData} />
         <div className="space-y-6">
-          <FilterBar productSearch={productSearch} onProductSearchChange={setProductSearch} />
           <ProductionTable data={filteredData} onDataChange={handleDataChange} />
           <WeeklySummary data={filteredData} />
         </div>

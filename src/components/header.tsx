@@ -1,4 +1,5 @@
-import { Factory, Save } from 'lucide-react';
+import Link from 'next/link';
+import { Factory, Save, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type HeaderProps = {
@@ -12,10 +13,18 @@ export default function Header({ onSave }: HeaderProps) {
         <Factory className="h-8 w-8 text-primary" />
         <h1 className="text-2xl font-bold text-foreground">Control 7</h1>
       </div>
-      <Button onClick={onSave}>
-        <Save className="mr-2 h-4 w-4" />
-        Guardar Plan
-      </Button>
+      <div className="flex items-center gap-2">
+        <Link href="/history">
+          <Button variant="outline">
+            <History className="mr-2 h-4 w-4" />
+            Historial
+          </Button>
+        </Link>
+        <Button onClick={onSave}>
+          <Save className="mr-2 h-4 w-4" />
+          Guardar Plan
+        </Button>
+      </div>
     </header>
   );
 }

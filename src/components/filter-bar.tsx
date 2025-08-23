@@ -7,21 +7,43 @@ import { Button } from '@/components/ui/button';
 import { CalendarDays, Search } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getISOWeek, startOfISOWeek, endOfISOWeek, format } from 'date-fns';
+import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Label } from '@/components/ui/label';
 
 type FilterBarProps = {
   productSearch: string;
   onProductSearchChange: (value: string) => void;
+  date: Date | undefined;
+  onDateChange: (date: Date | undefined) => void;
 };
 
-export default function FilterBar({ productSearch, onProductSearchChange }: FilterBarProps) {
-  const [date, setDate] = React.useState<Date | undefined>(new Date());
+export default function FilterBar({ productSearch, onProductSearchChange, date, onDateChange }: FilterBarProps) {
   const currentWeek = getISOWeek(date || new Date());
+  const currentYear = (date || new Date()).getFullYear();
 
   const weekStartDate = startOfISOWeek(date || new Date());
   const weekEndDate = endOfISOWeek(date || new Date());
+
+  const handleWeekChange = (weekNumber: string) => {
+    const newDate = setISOWeek(new Date(currentYear, 0, 1), parseInt(weekNumber, 10));
+    onDateChange(newDate);
+  };
+
+  const getWeekOptions = () => {
+    const weeks = [];
+    for (let i = 1; i <= 53; i++) {
+        const firstDayOfWeek = startOfISOWeek(setISOWeek(new Date(currentYear, 0, 4), i));
+        if (firstDayOfWeek.getFullYear() === currentYear) {
+            const lastDayOfWeek = endOfISOWeek(firstDayOfWeek);
+            weeks.push({
+                value: i,
+                label: `Semana ${i} (${format(firstDayOfWeek, 'MMM d', { locale: es })} - ${format(lastDayOfWeek, 'MMM d', { locale: es })})`
+            });
+        }
+    }
+    return weeks;
+  };
 
   return (
     <div className="p-4 bg-card rounded-lg shadow-sm border">
@@ -55,7 +77,7 @@ export default function FilterBar({ productSearch, onProductSearchChange }: Filt
               <Calendar
                 mode="single"
                 selected={date}
-                onSelect={setDate}
+                onSelect={onDateChange}
                 initialFocus
                 locale={es}
               />
@@ -64,14 +86,16 @@ export default function FilterBar({ productSearch, onProductSearchChange }: Filt
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Semana ISO</Label>
-          <Select defaultValue={String(currentWeek)}>
+          <Select value={String(currentWeek)} onValueChange={handleWeekChange}>
             <SelectTrigger>
               <SelectValue placeholder="Seleccionar semana" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={String(currentWeek)}>
-                Semana {currentWeek} ({format(weekStartDate, 'MMM d', { locale: es })} - {format(weekEndDate, 'MMM d', { locale: es })})
-              </SelectItem>
+              {getWeekOptions().map(week => (
+                <SelectItem key={week.value} value={String(week.value)}>
+                  {week.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
