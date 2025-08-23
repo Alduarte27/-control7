@@ -34,8 +34,8 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         <CardDescription>Producción Planificada vs. Real por Producto</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="w-full h-[350px]">
-          <BarChart accessibilityLayer data={chartData}>
+        <ChartContainer config={chartConfig} className="w-full h-[400px]">
+          <BarChart accessibilityLayer data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
             <CartesianGrid vertical={false} />
             <XAxis
               dataKey="name"
@@ -45,7 +45,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
               tickFormatter={(value) => value.length > 15 ? `${value.slice(0, 12)}...` : value}
               angle={-45}
               textAnchor='end'
-              height={60}
+              height={80}
             />
             <YAxis />
             <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
