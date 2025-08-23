@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { ProductData, ProductDefinition } from '@/lib/types';
+import type { ProductData, ProductDefinition, ProductCategory } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
 import { db } from '@/lib/firebase';
@@ -34,6 +34,7 @@ const getDateFromPlanId = (planId: string): Date => {
 export default function Control7Client({ initialPlanId }: { initialPlanId?: string }) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
+  const [selectedCategory, setSelectedCategory] = React.useState<ProductCategory | 'all'>('all');
   const [date, setDate] = React.useState<Date | undefined>(
     initialPlanId ? getDateFromPlanId(initialPlanId) : new Date()
   );
@@ -278,8 +279,12 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     }
   };
 
-  const filteredData = data.filter(item =>
+  const filteredDataForTable = data.filter(item =>
     item.productName.toLowerCase().includes(productSearch.toLowerCase())
+  );
+
+  const filteredDataForCharts = data.filter(item => 
+    (selectedCategory === 'all' || item.category === selectedCategory)
   );
 
   return (
@@ -292,19 +297,21 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
             date={date}
             onDateChange={handleDateChange}
             onCopyLastWeek={handleCopyLastWeek}
+            selectedCategory={selectedCategory}
+            onCategoryChange={setSelectedCategory}
         />
         {loading ? (
             <p>Cargando datos...</p>
         ) : (
             <>
-                <KpiDashboard data={filteredData} />
+                <KpiDashboard data={filteredDataForCharts} />
                 <div className="space-y-6">
                   <ProductionTable 
-                    data={filteredData} 
+                    data={filteredDataForTable} 
                     onPlannedChange={handlePlannedDataChange} 
                     onActualChange={handleActualDataChange} 
                   />
-                  <WeeklySummary data={filteredData} />
+                  <WeeklySummary data={filteredDataForCharts} />
                 </div>
             </>
         )}

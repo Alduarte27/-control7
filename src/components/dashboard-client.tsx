@@ -9,7 +9,7 @@ import { Factory, ChevronLeft, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
-import type { ProductData, DailyProduction } from '@/lib/types';
+import type { ProductData, DailyProduction, ProductCategory } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -80,6 +80,7 @@ export default function DashboardClient() {
   const [loading, setLoading] = React.useState(true);
   const [allPlans, setAllPlans] = React.useState<AllPlansData[]>([]);
   const [selectedWeek, setSelectedWeek] = React.useState('all');
+  const [selectedCategory, setSelectedCategory] = React.useState<ProductCategory | 'all'>('all');
   const [isFilterOpen, setIsFilterOpen] = React.useState(true);
 
   const weekOptions = React.useMemo(() => {
@@ -118,10 +119,13 @@ export default function DashboardClient() {
   React.useEffect(() => {
     if (allPlans.length === 0) return;
 
-    // Filter plans based on selected week
-    const filteredPlans = selectedWeek === 'all' 
+    // Filter plans based on selected week and category
+    const filteredPlansByWeek = selectedWeek === 'all' 
       ? allPlans 
       : allPlans.filter(p => String(p.week) === selectedWeek);
+      
+    const getFilteredProducts = (products: ProductData[]) => 
+      selectedCategory === 'all' ? products : products.filter(p => p.category === selectedCategory);
 
     const weeklyData: WeeklySummaryData[] = [];
     const weeklyShiftTotals: { [week: number]: { day: number, night: number } } = {};
@@ -136,8 +140,9 @@ export default function DashboardClient() {
     };
 
     // Calculate daily totals for the filtered plans
-    filteredPlans.forEach(plan => {
-        plan.products.forEach(item => {
+    filteredPlansByWeek.forEach(plan => {
+        const productsToProcess = getFilteredProducts(plan.products);
+        productsToProcess.forEach(item => {
             Object.entries(item.actual).forEach(([day, shifts]) => {
                 const dayKey = day as keyof DailyProduction;
                 dailyTotals[dayKey].day += shifts.day || 0;
@@ -146,18 +151,19 @@ export default function DashboardClient() {
         });
     });
 
-    // We calculate weekly totals based on ALL plans, not filtered ones
+    // We calculate weekly totals based on ALL plans, but filtering products by category
     allPlans.forEach(plan => {
-        const { week, products } = plan;
+        const { week } = plan;
+        const productsToProcess = getFilteredProducts(plan.products);
 
         if (!weeklyShiftTotals[week]) {
             weeklyShiftTotals[week] = { day: 0, night: 0 };
         }
 
-        const totalPlanned = products.reduce((sum, item) => sum + (item.planned || 0), 0);
+        const totalPlanned = productsToProcess.reduce((sum, item) => sum + (item.planned || 0), 0);
         let weeklyActual = 0;
 
-        products.forEach(item => {
+        productsToProcess.forEach(item => {
             Object.values(item.actual).forEach(shifts => {
                 weeklyShiftTotals[week].day += shifts.day || 0;
                 weeklyShiftTotals[week].night += shifts.night || 0;
@@ -165,9 +171,12 @@ export default function DashboardClient() {
             });
         });
         
-        // Avoid duplicating weekly summary data
-        if (!weeklyData.some(d => d.week === week)) {
-            weeklyData.push({
+        const existingWeekIndex = weeklyData.findIndex(d => d.week === week);
+        if (existingWeekIndex > -1) {
+            weeklyData[existingWeekIndex].planned += totalPlanned;
+            weeklyData[existingWeekIndex].actual += weeklyActual;
+        } else {
+             weeklyData.push({
                 week: week,
                 name: `Semana ${week}`,
                 planned: totalPlanned,
@@ -200,7 +209,7 @@ export default function DashboardClient() {
         { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
     ]);
 
-  }, [allPlans, selectedWeek]);
+  }, [allPlans, selectedWeek, selectedCategory]);
 
 
   return (
@@ -273,6 +282,19 @@ export default function DashboardClient() {
                                         Semana {week}
                                     </SelectItem>
                                 ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="flex flex-col gap-1.5 w-full max-w-xs">
+                        <Label htmlFor='category-filter'>Filtrar por Categoría</Label>
+                        <Select value={selectedCategory} onValueChange={(value: ProductCategory | 'all') => setSelectedCategory(value)}>
+                            <SelectTrigger id="category-filter">
+                                <SelectValue placeholder="Seleccionar categoría" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todas las categorías</SelectItem>
+                                <SelectItem value="Familiar">Familiar</SelectItem>
+                                <SelectItem value="Granel">Granel</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

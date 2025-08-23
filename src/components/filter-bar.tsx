@@ -4,12 +4,13 @@ import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Search, Copy } from 'lucide-react';
+import { CalendarDays, Search, Copy, Layers } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Label } from '@/components/ui/label';
+import type { ProductCategory } from '@/lib/types';
 
 type FilterBarProps = {
   productSearch: string;
@@ -17,9 +18,19 @@ type FilterBarProps = {
   date: Date | undefined;
   onDateChange: (date: Date | undefined) => void;
   onCopyLastWeek: () => void;
+  selectedCategory: ProductCategory | 'all';
+  onCategoryChange: (value: ProductCategory | 'all') => void;
 };
 
-export default function FilterBar({ productSearch, onProductSearchChange, date, onDateChange, onCopyLastWeek }: FilterBarProps) {
+export default function FilterBar({ 
+    productSearch, 
+    onProductSearchChange, 
+    date, 
+    onDateChange, 
+    onCopyLastWeek,
+    selectedCategory,
+    onCategoryChange 
+}: FilterBarProps) {
   const currentWeek = getISOWeek(date || new Date());
   const currentYear = (date || new Date()).getFullYear();
 
@@ -45,7 +56,7 @@ export default function FilterBar({ productSearch, onProductSearchChange, date, 
 
   return (
     <div className="p-4 bg-card rounded-lg shadow-sm border">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="flex flex-col gap-1.5">
             <Label htmlFor="productSearch">Búsqueda de Producto</Label>
             <div className="relative">
@@ -58,6 +69,19 @@ export default function FilterBar({ productSearch, onProductSearchChange, date, 
                 className="pl-8"
               />
             </div>
+        </div>
+         <div className="flex flex-col gap-1.5">
+          <Label>Categoría (Gráficos)</Label>
+            <Select value={selectedCategory} onValueChange={onCategoryChange}>
+                <SelectTrigger>
+                    <SelectValue placeholder="Seleccionar categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="all">Todas las categorías</SelectItem>
+                    <SelectItem value="Familiar">Familiar</SelectItem>
+                    <SelectItem value="Granel">Granel</SelectItem>
+                </SelectContent>
+            </Select>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Fecha</Label>

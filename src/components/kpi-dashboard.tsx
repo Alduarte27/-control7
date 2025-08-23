@@ -10,9 +10,9 @@ type KpiDashboardProps = {
 };
 
 export default function KpiDashboard({ data }: KpiDashboardProps) {
-  const totalPlanned = data.reduce((sum, item) => sum + item.planned, 0);
+  const totalPlanned = data.reduce((sum, item) => sum + (item.planned || 0), 0);
   const totalActual = data.reduce((sum, item) => 
-    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + dayVal.day + dayVal.night, 0), 0
+    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
   const variance = totalActual - totalPlanned;
   const completion = totalPlanned > 0 ? (totalActual / totalPlanned) * 100 : 0;

@@ -21,39 +21,47 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export default function WeeklySummary({ data }: WeeklySummaryProps) {
-  const chartData = data.map(item => ({
-    name: item.productName,
-    planned: item.planned,
-    actual: Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0),
-  }));
+  const chartData = data
+    .map(item => ({
+      name: item.productName,
+      planned: item.planned,
+      actual: Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0),
+    }))
+    .filter(item => item.planned > 0 || item.actual > 0); // Only show products with data
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Resumen Semanal</CardTitle>
-        <CardDescription>Producción Planificada vs. Real por Producto</CardDescription>
+        <CardTitle>Resumen Semanal por Producto</CardTitle>
+        <CardDescription>Producción Planificada vs. Real (solo productos con actividad).</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="w-full h-[400px]">
-          <BarChart accessibilityLayer data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="name"
-              tickLine={false}
-              tickMargin={10}
-              axisLine={false}
-              tickFormatter={(value) => value.length > 15 ? `${value.slice(0, 12)}...` : value}
-              angle={-45}
-              textAnchor='end'
-              height={80}
-            />
-            <YAxis />
-            <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-            <ChartLegend content={<ChartLegendContent />} />
-            <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-            <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
-          </BarChart>
-        </ChartContainer>
+        {chartData.length > 0 ? (
+            <ChartContainer config={chartConfig} className="w-full h-[400px]">
+            <BarChart accessibilityLayer data={chartData} margin={{ top: 20, right: 20, left: 20, bottom: 20 }}>
+                <CartesianGrid vertical={false} />
+                <XAxis
+                dataKey="name"
+                tickLine={false}
+                tickMargin={10}
+                axisLine={false}
+                tickFormatter={(value) => value.length > 15 ? `${value.slice(0, 12)}...` : value}
+                angle={-45}
+                textAnchor='end'
+                height={80}
+                />
+                <YAxis />
+                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                <ChartLegend content={<ChartLegendContent />} />
+                <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
+            </BarChart>
+            </ChartContainer>
+        ) : (
+            <p className="text-center text-muted-foreground py-8">
+                No hay datos de producción para la categoría seleccionada.
+            </p>
+        )}
       </CardContent>
     </Card>
   );
