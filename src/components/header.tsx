@@ -1,12 +1,13 @@
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type HeaderProps = {
   onSave: () => void;
+  onExport: () => void;
 };
 
-export default function Header({ onSave }: HeaderProps) {
+export default function Header({ onSave, onExport }: HeaderProps) {
   return (
     <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
       <div className="flex items-center gap-3">
@@ -32,6 +33,10 @@ export default function Header({ onSave }: HeaderProps) {
             Administración
           </Button>
         </Link>
+        <Button onClick={onExport} variant="outline">
+          <Download className="mr-2 h-4 w-4" />
+          Exportar CSV
+        </Button>
         <Button onClick={onSave}>
           <Save className="mr-2 h-4 w-4" />
           Guardar Plan
