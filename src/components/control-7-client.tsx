@@ -5,7 +5,7 @@ import type { ProductData, DailyProduction, ShiftProduction, ProductDefinition }
 import { useToast } from '@/hooks/use-toast';
 import { getISOWeek } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 import Header from './header';
 import FilterBar from './filter-bar';
@@ -47,8 +47,9 @@ export default function Control7Client() {
     const fetchData = async () => {
         setLoading(true);
         try {
-            // Fetch product definitions from Firestore
-            const productsSnapshot = await getDocs(collection(db, "products"));
+            // Fetch product definitions from Firestore, ordered by 'order' field
+            const productsQuery = query(collection(db, "products"), orderBy("order"));
+            const productsSnapshot = await getDocs(productsQuery);
             const productDefinitions = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition));
 
             if (productDefinitions.length === 0) {
@@ -65,14 +66,14 @@ export default function Control7Client() {
                 const planData = planDocSnap.data();
                 const weeklyData: ProductData[] = planData.products;
 
-                // Sync with latest product definitions
+                // Sync with latest product definitions and maintain order
                 const syncedData = productDefinitions.map(def => {
                     const found = weeklyData.find(d => d.id === def.id);
                     return found || { ...def, planned: 0, actual: JSON.parse(JSON.stringify(emptyActual)) };
                 });
                 setData(syncedData);
             } else {
-                // If no plan exists, create an initial one
+                // If no plan exists, create an initial one based on ordered products
                 setData(generateInitialData(productDefinitions));
             }
         } catch (error) {
@@ -89,7 +90,7 @@ export default function Control7Client() {
     };
 
     fetchData();
-  }, [planId]);
+  }, [planId, toast]);
 
   const handleSave = async () => {
     try {

@@ -16,6 +16,7 @@ export type DailyProduction = {
 export type ProductDefinition = {
   id: string;
   productName: string;
+  order: number;
 }
 
 export type ProductData = ProductDefinition & {
