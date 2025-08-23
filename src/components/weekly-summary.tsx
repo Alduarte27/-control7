@@ -11,11 +11,11 @@ type WeeklySummaryProps = {
 
 const chartConfig = {
   planned: {
-    label: 'Planned',
+    label: 'Planificado',
     color: 'hsl(var(--accent))',
   },
   actual: {
-    label: 'Actual',
+    label: 'Real',
     color: 'hsl(var(--primary))',
   },
 } satisfies ChartConfig;
@@ -30,8 +30,8 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Weekly Summary</CardTitle>
-        <CardDescription>Planned vs. Actual Production by Product</CardDescription>
+        <CardTitle>Resumen Semanal</CardTitle>
+        <CardDescription>Producción Planificada vs. Real por Producto</CardDescription>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfig} className="min-h-[400px] w-full">

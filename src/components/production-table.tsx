@@ -9,6 +9,15 @@ type ProductionTableProps = {
 };
 
 const days: (keyof DailyProduction)[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const dayNames: { [key in keyof DailyProduction]: string } = {
+  mon: 'Lun',
+  tue: 'Mar',
+  wed: 'Mié',
+  thu: 'Jue',
+  fri: 'Vie',
+  sat: 'Sáb',
+  sun: 'Dom'
+};
 
 export default function ProductionTable({ data, onDataChange }: ProductionTableProps) {
   const handleInputChange = (id: string, field: 'planned' | 'actual', day: keyof DailyProduction | null, value: string) => {
@@ -24,19 +33,19 @@ export default function ProductionTable({ data, onDataChange }: ProductionTableP
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="min-w-[200px] sticky left-0 bg-card z-10">Product</TableHead>
-              <TableHead className="text-right min-w-[120px]">Weekly Plan</TableHead>
-              {days.map(day => <TableHead key={day} className="text-right min-w-[100px] capitalize">{day}</TableHead>)}
-              <TableHead className="text-right min-w-[120px]">Total Actual</TableHead>
-              <TableHead className="text-right min-w-[120px]">Variance</TableHead>
-              <TableHead className="min-w-[150px]">Weekly Compliance</TableHead>
+              <TableHead className="min-w-[200px] sticky left-0 bg-card z-10">Producto</TableHead>
+              <TableHead className="text-right min-w-[120px]">Plan Semanal</TableHead>
+              {days.map(day => <TableHead key={day} className="text-right min-w-[100px] capitalize">{dayNames[day]}</TableHead>)}
+              <TableHead className="text-right min-w-[120px]">Total Real</TableHead>
+              <TableHead className="text-right min-w-[120px]">Varianza</TableHead>
+              <TableHead className="min-w-[150px]">Cumplimiento Semanal</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={11} className="h-24 text-center">
-                  No products match your search.
+                  Ningún producto coincide con tu búsqueda.
                 </TableCell>
               </TableRow>
             ) : (

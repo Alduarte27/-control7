@@ -16,10 +16,10 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <KpiCard title="Total Planned" value={totalPlanned.toLocaleString()} icon={Target} />
-      <KpiCard title="Total Actual" value={totalActual.toLocaleString()} icon={PackageCheck} />
-      <KpiCard title="Variance" value={variance.toLocaleString()} icon={ArrowLeftRight} />
-      <KpiCard title="Completion" value={`${completion.toFixed(1)}%`} icon={Goal} />
+      <KpiCard title="Total Planificado" value={totalPlanned.toLocaleString()} icon={Target} />
+      <KpiCard title="Total Real" value={totalActual.toLocaleString()} icon={PackageCheck} />
+      <KpiCard title="Varianza" value={variance.toLocaleString()} icon={ArrowLeftRight} />
+      <KpiCard title="Cumplimiento" value={`${completion.toFixed(1)}%`} icon={Goal} />
     </div>
   );
 }

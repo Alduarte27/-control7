@@ -11,10 +11,10 @@ import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 
 const initialData: ProductData[] = [
-  { id: 'prod-1', productName: 'Alpha-Widget', planned: 500, actual: { mon: 95, tue: 105, wed: 100, thu: 98, fri: 102, sat: 0, sun: 0 } },
-  { id: 'prod-2', productName: 'Beta-Gadget', planned: 350, actual: { mon: 70, tue: 65, wed: 72, thu: 75, fri: 68, sat: 0, sun: 0 } },
-  { id: 'prod-3', productName: 'Gamma-Gear', planned: 700, actual: { mon: 120, tue: 130, wed: 145, thu: 140, fri: 150, sat: 50, sun: 20 } },
-  { id: 'prod-4', productName: 'Delta-Device', planned: 200, actual: { mon: 40, tue: 45, wed: 38, thu: 42, fri: 41, sat: 0, sun: 0 } },
+  { id: 'prod-1', productName: 'Widget-Alfa', planned: 500, actual: { mon: 95, tue: 105, wed: 100, thu: 98, fri: 102, sat: 0, sun: 0 } },
+  { id: 'prod-2', productName: 'Gadget-Beta', planned: 350, actual: { mon: 70, tue: 65, wed: 72, thu: 75, fri: 68, sat: 0, sun: 0 } },
+  { id: 'prod-3', productName: 'Engranaje-Gamma', planned: 700, actual: { mon: 120, tue: 130, wed: 145, thu: 140, fri: 150, sat: 50, sun: 20 } },
+  { id: 'prod-4', productName: 'Dispositivo-Delta', planned: 200, actual: { mon: 40, tue: 45, wed: 38, thu: 42, fri: 41, sat: 0, sun: 0 } },
 ];
 
 const LOCAL_STORAGE_KEY = 'control7-data';
@@ -42,14 +42,14 @@ export default function Control7Client() {
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
       toast({
-        title: 'Plan Saved',
-        description: 'Your production data has been saved successfully.',
+        title: 'Plan Guardado',
+        description: 'Tus datos de producción han sido guardados exitosamente.',
       });
     } catch (error) {
       console.error("Failed to save data to local storage", error);
       toast({
-        title: 'Save Failed',
-        description: 'There was an error saving your data.',
+        title: 'Error al Guardar',
+        description: 'Ocurrió un error al guardar tus datos.',
         variant: 'destructive',
       });
     }
