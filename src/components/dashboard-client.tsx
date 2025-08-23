@@ -192,6 +192,7 @@ export default function DashboardClient() {
   React.useEffect(() => {
     if (allPlans.length === 0) return;
     
+    // This helper ensures every product has a category (for old data) and then filters
     const getFilteredProducts = (products: ProductData[]): ProductData[] => {
       const productsWithDefaults = products.map(p => ({
         ...p,
@@ -210,6 +211,7 @@ export default function DashboardClient() {
     const weeklyShiftTotals: { [week: number]: { day: number; night: number } } = {};
 
     allPlans.forEach(plan => {
+      // We must apply the category filter to these charts as well
       const filteredProducts = getFilteredProducts(plan.products);
 
       if (!weeklyDataMap[plan.week]) weeklyDataMap[plan.week] = { planned: 0, actual: 0 };
@@ -217,14 +219,16 @@ export default function DashboardClient() {
 
       filteredProducts.forEach(item => {
         weeklyDataMap[plan.week].planned += item.planned || 0;
+        let actualForWeek = 0;
         Object.values(item.actual).forEach(shifts => {
             const dayVal = shifts.day || 0;
             const nightVal = shifts.night || 0;
             weeklyShiftTotals[plan.week].day += dayVal;
             weeklyShiftTotals[plan.week].night += nightVal;
+            actualForWeek += dayVal + nightVal;
         });
+        weeklyDataMap[plan.week].actual += actualForWeek;
       });
-      weeklyDataMap[plan.week].actual = weeklyShiftTotals[plan.week].day + weeklyShiftTotals[plan.week].night
     });
 
     const weeklyData: WeeklySummaryData[] = Object.keys(weeklyDataMap)
@@ -308,10 +312,10 @@ export default function DashboardClient() {
 
   return (
     <div className="bg-background min-h-screen text-foreground">
-      <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
+      <header className="flex items-center justify-between p-2 md:p-4 border-b bg-card sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <Factory className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Dashboard General</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard General</h1>
         </div>
         <Link href="/">
           <Button variant="outline">
@@ -329,8 +333,8 @@ export default function DashboardClient() {
                         {isFilterOpen ? 'Ocultar Filtros' : 'Mostrar Filtros'}
                     </Button>
                 </CollapsibleTrigger>
-                <CardDescription>
-                    El filtro de semana solo aplica a los gráficos de producción por día y por producto.
+                <CardDescription className="text-right">
+                    El filtro de semana solo aplica a los gráficos por día y producto.
                 </CardDescription>
             </div>
             <CollapsibleContent>
