@@ -119,20 +119,17 @@ export default function DashboardClient() {
   React.useEffect(() => {
     if (allPlans.length === 0) return;
 
-    // Helper function to ensure products have a category
     const assignDefaultCategory = (products: ProductData[]): ProductData[] => {
         return products.map(p => ({
             ...p,
-            category: p.category || 'Familiar', // Default to 'Familiar' if undefined
+            category: p.category || 'Familiar',
         }));
     };
     
-    // Filter plans based on selected week
     const filteredPlansByWeek = selectedWeek === 'all' 
       ? allPlans 
       : allPlans.filter(p => String(p.week) === selectedWeek);
       
-    // Helper to filter products by selected category
     const getFilteredProducts = (products: ProductData[]) => {
         const productsWithCategory = assignDefaultCategory(products);
         if (selectedCategory === 'all') {
@@ -141,9 +138,9 @@ export default function DashboardClient() {
         return productsWithCategory.filter(p => p.category === selectedCategory);
     }
     
-    const weeklyData: WeeklySummaryData[] = [];
-    const weeklyShiftTotals: { [week: number]: { day: number, night: number } } = {};
-    const dailyTotals: { [key in keyof DailyProduction]: { day: number, night: number } } = { 
+    const weeklyDataMap: { [week: number]: { planned: number; actual: number } } = {};
+    const weeklyShiftTotals: { [week: number]: { day: number; night: number } } = {};
+    const dailyTotals: { [key in keyof DailyProduction]: { day: number; night: number } } = { 
         mon: { day: 0, night: 0 }, 
         tue: { day: 0, night: 0 }, 
         wed: { day: 0, night: 0 }, 
@@ -153,7 +150,7 @@ export default function DashboardClient() {
         sun: { day: 0, night: 0 } 
     };
 
-    // Calculate daily totals for the filtered plans
+    // Calculate daily totals, applying both week and category filters
     filteredPlansByWeek.forEach(plan => {
         const productsToProcess = getFilteredProducts(plan.products);
         productsToProcess.forEach(item => {
@@ -165,41 +162,47 @@ export default function DashboardClient() {
         });
     });
 
-    // We calculate weekly totals based on ALL plans, but filtering products by category
+    // Calculate weekly totals (planned vs actual) and weekly shift totals, applying only category filter
     allPlans.forEach(plan => {
         const { week } = plan;
         const productsToProcess = getFilteredProducts(plan.products);
 
+        if (!weeklyDataMap[week]) {
+            weeklyDataMap[week] = { planned: 0, actual: 0 };
+        }
         if (!weeklyShiftTotals[week]) {
             weeklyShiftTotals[week] = { day: 0, night: 0 };
         }
 
-        const totalPlanned = productsToProcess.reduce((sum, item) => sum + (item.planned || 0), 0);
-        let weeklyActual = 0;
+        const totalPlannedForWeek = productsToProcess.reduce((sum, item) => sum + (item.planned || 0), 0);
+        let totalActualForWeek = 0;
 
         productsToProcess.forEach(item => {
             Object.values(item.actual).forEach(shifts => {
-                weeklyShiftTotals[week].day += shifts.day || 0;
-                weeklyShiftTotals[week].night += shifts.night || 0;
-                weeklyActual += (shifts.day || 0) + (shifts.night || 0);
+                const dayTotal = (shifts.day || 0);
+                const nightTotal = (shifts.night || 0);
+                weeklyShiftTotals[week].day += dayTotal;
+                weeklyShiftTotals[week].night += nightTotal;
+                totalActualForWeek += dayTotal + nightTotal;
             });
         });
         
-        const existingWeekIndex = weeklyData.findIndex(d => d.week === week);
-        if (existingWeekIndex > -1) {
-            weeklyData[existingWeekIndex].planned += totalPlanned;
-            weeklyData[existingWeekIndex].actual += weeklyActual;
-        } else {
-             weeklyData.push({
-                week: week,
-                name: `Semana ${week}`,
-                planned: totalPlanned,
-                actual: weeklyActual,
-            });
-        }
+        weeklyDataMap[week].planned += totalPlannedForWeek;
+        weeklyDataMap[week].actual += totalActualForWeek;
     });
 
-    weeklyData.sort((a, b) => a.week - b.week);
+    const weeklyData: WeeklySummaryData[] = Object.keys(weeklyDataMap)
+        .map(weekStr => {
+            const week = parseInt(weekStr, 10);
+            return {
+                week: week,
+                name: `Semana ${week}`,
+                planned: weeklyDataMap[week].planned,
+                actual: weeklyDataMap[week].actual,
+            };
+        })
+        .sort((a, b) => a.week - b.week);
+
     setSummaryData(weeklyData);
 
     const processedWeeklyShiftData = Object.keys(weeklyShiftTotals)
