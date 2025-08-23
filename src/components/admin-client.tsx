@@ -2,14 +2,14 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, Trash2 } from 'lucide-react';
+import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, Trash2, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
+import type { ProductDefinition, CategoryDefinition, ProductData } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, writeBatch, doc, query, orderBy, updateDoc, deleteDoc } from 'firebase/firestore';
 import {
@@ -149,6 +149,7 @@ export default function AdminClient() {
   const [newProductCategoryId, setNewProductCategoryId] = React.useState<string>('');
   const [newCategoryName, setNewCategoryName] = React.useState('');
   const [editingProduct, setEditingProduct] = React.useState<ProductDefinition | null>(null);
+  const [isSyncing, setIsSyncing] = React.useState(false);
   const { toast } = useToast();
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -329,6 +330,81 @@ export default function AdminClient() {
     return categories.find(c => c.id === categoryId)?.name || 'Sin categoría';
   };
 
+  const handleSyncHistoricalData = async () => {
+    setIsSyncing(true);
+    toast({
+        title: 'Iniciando Sincronización',
+        description: 'Actualizando los datos de productos en todos los planes guardados. Esto puede tardar unos momentos...',
+    });
+
+    try {
+        const productsSnapshot = await getDocs(query(collection(db, 'products'), orderBy('order')));
+        const latestProducts = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition));
+        const productsMap = new Map(latestProducts.map(p => [p.id, p]));
+
+        const categoriesSnapshot = await getDocs(query(collection(db, 'categories'), orderBy('name')));
+        const latestCategories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition));
+        const categoryMap = new Map(latestCategories.map(c => [c.id, c.name]));
+
+        const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
+        
+        const batch = writeBatch(db);
+        let updatedPlans = 0;
+
+        plansSnapshot.forEach(planDoc => {
+            const planData = planDoc.data();
+            let needsUpdate = false;
+            
+            const updatedProductsList = planData.products.map((product: ProductData) => {
+                const latestProduct = productsMap.get(product.id);
+                if (latestProduct) {
+                    const latestCategoryName = categoryMap.get(latestProduct.categoryId) || 'Sin Categoría';
+                    if (product.productName !== latestProduct.productName || product.categoryId !== latestProduct.categoryId || product.color !== latestProduct.color || product.categoryName !== latestCategoryName) {
+                        needsUpdate = true;
+                        return {
+                            ...product,
+                            productName: latestProduct.productName,
+                            categoryId: latestProduct.categoryId,
+                            color: latestProduct.color,
+                            categoryName: latestCategoryName,
+                        };
+                    }
+                }
+                return product;
+            });
+
+            if (needsUpdate) {
+                const planRef = doc(db, 'productionPlans', planDoc.id);
+                batch.update(planRef, { products: updatedProductsList });
+                updatedPlans++;
+            }
+        });
+
+        if (updatedPlans > 0) {
+            await batch.commit();
+            toast({
+                title: 'Sincronización Completada',
+                description: `Se han actualizado ${updatedPlans} planes con la información más reciente de los productos.`,
+            });
+        } else {
+            toast({
+                title: 'Todo al día',
+                description: 'No se encontraron planes que necesitaran ser actualizados.',
+            });
+        }
+
+    } catch (error) {
+        console.error("Error syncing historical data:", error);
+        toast({
+            title: 'Error de Sincronización',
+            description: 'No se pudo completar la actualización de los datos históricos.',
+            variant: 'destructive',
+        });
+    } finally {
+        setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="bg-background min-h-screen text-foreground">
       <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
@@ -448,6 +524,22 @@ export default function AdminClient() {
                 <p className="text-muted-foreground text-center py-4">No hay productos definidos. Comienza añadiendo una categoría y luego un producto.</p>
              )}
           </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader>
+                <CardTitle>Mantenimiento de Datos</CardTitle>
+                <CardDescription>
+                    Si cambias el nombre, categoría o color de un producto, esta información no se actualiza automáticamente en los planes de producción antiguos. 
+                    Usa este botón para sincronizar todos los planes históricos con los datos más recientes de tus productos.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Button onClick={handleSyncHistoricalData} disabled={isSyncing}>
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                    {isSyncing ? 'Sincronizando...' : 'Sincronizar Datos en Historial'}
+                </Button>
+            </CardContent>
         </Card>
       </main>
       {editingProduct && (
