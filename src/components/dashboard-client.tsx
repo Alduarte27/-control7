@@ -339,7 +339,7 @@ export default function DashboardClient() {
             {loading ? (
                 <p className="text-muted-foreground text-center py-8">Cargando datos del dashboard...</p>
             ) : summaryData.length > 0 ? (
-              <ChartContainer config={weeklyChartConfig} className="w-full h-[350px]">
+              <ChartContainer config={weeklyChartConfig} className="w-full h-[250px] md:h-[350px]">
                 <BarChart accessibilityLayer data={summaryData}>
                   <CartesianGrid vertical={false} />
                   <XAxis
@@ -376,8 +376,8 @@ export default function DashboardClient() {
                 </CardDescription>
             </div>
             <CollapsibleContent>
-                <div className="bg-card p-4 rounded-lg border flex items-center gap-4">
-                    <div className="flex flex-col gap-1.5 w-full max-w-xs">
+                <div className="bg-card p-4 rounded-lg border flex flex-col md:flex-row items-center gap-4">
+                    <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
                         <Label htmlFor='week-filter'>Filtrar por Semana</Label>
                         <Select value={selectedWeek} onValueChange={setSelectedWeek}>
                             <SelectTrigger id="week-filter">
@@ -393,7 +393,7 @@ export default function DashboardClient() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="flex flex-col gap-1.5 w-full max-w-xs">
+                    <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
                         <Label htmlFor='category-filter'>Filtrar por Categoría</Label>
                         <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
                             <SelectTrigger id="category-filter">
@@ -419,7 +419,7 @@ export default function DashboardClient() {
                 </CardHeader>
                 <CardContent>
                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : weeklyShiftData.length > 0 ? (
-                        <ChartContainer config={shiftChartConfig} className="w-full h-[300px]">
+                        <ChartContainer config={shiftChartConfig} className="w-full h-[250px] md:h-[300px]">
                             <BarChart accessibilityLayer data={weeklyShiftData}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
@@ -440,7 +440,7 @@ export default function DashboardClient() {
                 </CardHeader>
                 <CardContent>
                      {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : dailyData.some(d => d.day > 0 || d.night > 0) ? (
-                        <ChartContainer config={dailyChartConfig} className="w-full h-[300px]">
+                        <ChartContainer config={dailyChartConfig} className="w-full h-[250px] md:h-[300px]">
                             <BarChart accessibilityLayer data={dailyData}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
@@ -462,16 +462,20 @@ export default function DashboardClient() {
                 <CardContent>
                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : productData.length > 0 ? (
                         <ChartContainer config={productChartConfig} className="w-full h-[500px]">
-                            <BarChart accessibilityLayer data={productData} margin={{ top: 20, right: 20, left: 20, bottom: 120 }}>
+                            <BarChart accessibilityLayer data={productData} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis 
                                     dataKey="name" 
                                     tickLine={false} 
                                     axisLine={false}
                                     tickMargin={10}
-                                    angle={-45}
+                                    angle={-60}
                                     textAnchor="end"
                                     interval={0}
+                                    height={100}
+                                    style={{
+                                        fontSize: '0.75rem',
+                                    }}
                                 />
                                 <YAxis />
                                 <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
