@@ -2,17 +2,16 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit } from 'lucide-react';
+import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, ProductCategory } from '@/lib/types';
+import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, writeBatch, doc, query, orderBy, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, writeBatch, doc, query, orderBy, updateDoc, deleteDoc } from 'firebase/firestore';
 import {
   DndContext,
   closestCenter,
@@ -32,24 +31,27 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 
-
 function EditProductDialog({
     product,
+    categories,
     onClose,
     onSave,
 }: {
     product: ProductDefinition;
+    categories: CategoryDefinition[];
     onClose: () => void;
     onSave: (updatedProduct: ProductDefinition) => void;
 }) {
     const [productName, setProductName] = React.useState(product.productName);
-    const [category, setCategory] = React.useState<ProductCategory>(product.category || 'Familiar');
+    const [categoryId, setCategoryId] = React.useState<string>(product.categoryId);
+    const [color, setColor] = React.useState(product.color || '#000000');
 
     const handleSave = () => {
         onSave({
             ...product,
             productName,
-            category,
+            categoryId,
+            color,
         });
     };
 
@@ -70,15 +72,26 @@ function EditProductDialog({
                     </div>
                     <div className="space-y-2">
                         <Label htmlFor="edit-product-category">Categoría</Label>
-                        <Select value={category} onValueChange={(value: ProductCategory) => setCategory(value)}>
+                        <Select value={categoryId} onValueChange={(value: string) => setCategoryId(value)}>
                             <SelectTrigger id="edit-product-category">
                                 <SelectValue placeholder="Seleccionar categoría" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="Familiar">Familiar</SelectItem>
-                                <SelectItem value="Granel">Granel</SelectItem>
+                                {categories.map(cat => (
+                                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-product-color">Color del Producto</Label>
+                        <Input
+                            id="edit-product-color"
+                            type="color"
+                            value={color}
+                            onChange={(e) => setColor(e.target.value)}
+                            className="w-24 h-10 p-1"
+                        />
                     </div>
                 </div>
                 <DialogFooter>
@@ -93,7 +106,7 @@ function EditProductDialog({
 }
 
 
-function SortableItem({ product, onEdit }: { product: ProductDefinition, onEdit: (product: ProductDefinition) => void }) {
+function SortableItem({ product, categoryName, onEdit }: { product: ProductDefinition, categoryName: string, onEdit: (product: ProductDefinition) => void }) {
     const {
       attributes,
       listeners,
@@ -113,12 +126,13 @@ function SortableItem({ product, onEdit }: { product: ProductDefinition, onEdit:
             <button {...attributes} {...listeners} className="cursor-grab p-1">
                 <GripVertical className="h-5 w-5 text-muted-foreground" />
             </button>
-            {product.productName}
+            <div className="flex items-center gap-2">
+              <span className="h-4 w-4 rounded-full" style={{ backgroundColor: product.color || '#ccc' }}></span>
+              {product.productName}
+            </div>
         </div>
         <div className="flex items-center gap-2">
-            <Badge variant={product.category === 'Familiar' ? 'secondary' : 'outline'}>
-            {product.category || 'Sin categoría'}
-            </Badge>
+            <span className="text-sm text-muted-foreground">{categoryName}</span>
             <Button variant="ghost" size="icon" onClick={() => onEdit(product)}>
                 <Edit className="h-4 w-4" />
             </Button>
@@ -129,8 +143,10 @@ function SortableItem({ product, onEdit }: { product: ProductDefinition, onEdit:
 
 export default function AdminClient() {
   const [products, setProducts] = React.useState<ProductDefinition[]>([]);
+  const [categories, setCategories] = React.useState<CategoryDefinition[]>([]);
   const [newProductName, setNewProductName] = React.useState('');
-  const [newProductCategory, setNewProductCategory] = React.useState<ProductCategory>('Familiar');
+  const [newProductCategoryId, setNewProductCategoryId] = React.useState<string>('');
+  const [newCategoryName, setNewCategoryName] = React.useState('');
   const [editingProduct, setEditingProduct] = React.useState<ProductDefinition | null>(null);
   const { toast } = useToast();
   const sensors = useSensors(
@@ -141,30 +157,36 @@ export default function AdminClient() {
   );
 
   React.useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchInitialData = async () => {
         try {
-            const productsCollection = collection(db, 'products');
-            const q = query(productsCollection, orderBy('order'));
-            const productsSnapshot = await getDocs(q);
+            const categoriesSnapshot = await getDocs(query(collection(db, 'categories'), orderBy('name')));
+            const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition));
+            setCategories(categoriesList);
+
+            if (categoriesList.length > 0) {
+              setNewProductCategoryId(categoriesList[0].id);
+            }
+
+            const productsSnapshot = await getDocs(query(collection(db, 'products'), orderBy('order')));
             const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition));
             setProducts(productsList);
         } catch (error) {
-            console.error('Error loading products from Firestore', error);
+            console.error('Error loading data from Firestore', error);
             toast({
                 title: 'Error',
-                description: 'No se pudieron cargar los productos.',
+                description: 'No se pudieron cargar los datos iniciales.',
                 variant: 'destructive',
             });
         }
     };
-    fetchProducts();
+    fetchInitialData();
   }, [toast]);
 
   const handleAddProduct = async () => {
-    if (newProductName.trim() === '') {
+    if (newProductName.trim() === '' || !newProductCategoryId) {
       toast({
         title: 'Error',
-        description: 'El nombre del producto no puede estar vacío.',
+        description: 'El nombre y la categoría del producto son obligatorios.',
         variant: 'destructive',
       });
       return;
@@ -175,7 +197,8 @@ export default function AdminClient() {
         const newProductData = {
             productName: newProductName.trim(),
             order: newOrder,
-            category: newProductCategory,
+            categoryId: newProductCategoryId,
+            color: '#cccccc' // Default color
         };
         const docRef = await addDoc(collection(db, 'products'), newProductData);
 
@@ -201,6 +224,40 @@ export default function AdminClient() {
     }
   };
   
+  const handleAddCategory = async () => {
+    if (newCategoryName.trim() === '') return;
+    try {
+      const docRef = await addDoc(collection(db, 'categories'), { name: newCategoryName.trim() });
+      const newCategory: CategoryDefinition = { id: docRef.id, name: newCategoryName.trim() };
+      setCategories(prev => [...prev, newCategory].sort((a,b) => a.name.localeCompare(b.name)));
+      setNewCategoryName('');
+      toast({ title: 'Categoría Añadida' });
+    } catch (error) {
+      toast({ title: 'Error al añadir categoría', variant: 'destructive' });
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    // Check if any product is using this category
+    const isCategoryInUse = products.some(p => p.categoryId === categoryId);
+    if (isCategoryInUse) {
+        toast({
+            title: 'Error',
+            description: 'No se puede eliminar una categoría que está en uso por un producto.',
+            variant: 'destructive',
+        });
+        return;
+    }
+
+    try {
+        await deleteDoc(doc(db, 'categories', categoryId));
+        setCategories(prev => prev.filter(c => c.id !== categoryId));
+        toast({ title: 'Categoría Eliminada' });
+    } catch (error) {
+        toast({ title: 'Error al eliminar categoría', variant: 'destructive' });
+    }
+  }
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
 
@@ -210,9 +267,7 @@ export default function AdminClient() {
         const newIndex = items.findIndex((item) => item.id === over!.id);
         const newItems = arrayMove(items, oldIndex, newIndex);
         
-        // Update order in Firestore
         updateProductOrder(newItems);
-
         return newItems;
       });
     }
@@ -223,7 +278,8 @@ export default function AdminClient() {
           const productRef = doc(db, 'products', updatedProduct.id);
           await updateDoc(productRef, {
               productName: updatedProduct.productName,
-              category: updatedProduct.category,
+              categoryId: updatedProduct.categoryId,
+              color: updatedProduct.color,
           });
           
           setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
@@ -265,6 +321,10 @@ export default function AdminClient() {
       }
   };
 
+  const getCategoryName = (categoryId: string) => {
+    return categories.find(c => c.id === categoryId)?.name || 'Sin categoría';
+  };
+
   return (
     <div className="bg-background min-h-screen text-foreground">
       <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
@@ -280,44 +340,89 @@ export default function AdminClient() {
         </Link>
       </header>
       <main className="p-4 md:p-8 space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Gestionar Productos</CardTitle>
-            <CardDescription>Añade nuevas presentaciones, asigna una categoría y reordénalas.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-end gap-2">
-              <div className="flex-grow">
-                <Label htmlFor="new-product">Nombre del Nuevo Producto</Label>
-                <Input 
-                  id="new-product"
-                  value={newProductName}
-                  onChange={(e) => setNewProductName(e.target.value)}
-                  placeholder="Ej: Azúcar 1kg (50kg) San Juan"
-                />
-              </div>
-              <div className="w-48">
-                <Label htmlFor="new-product-category">Categoría</Label>
-                <Select value={newProductCategory} onValueChange={(value: ProductCategory) => setNewProductCategory(value)}>
-                    <SelectTrigger id="new-product-category">
-                        <SelectValue placeholder="Seleccionar categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="Familiar">Familiar</SelectItem>
-                        <SelectItem value="Granel">Granel</SelectItem>
-                    </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={handleAddProduct}>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Añadir Producto
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Gestionar Categorías</CardTitle>
+                <CardDescription>Añade y elimina categorías de productos.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                  <div className="flex items-end gap-2">
+                      <div className="flex-grow">
+                          <Label htmlFor="new-category">Nombre de la Nueva Categoría</Label>
+                          <Input 
+                              id="new-category"
+                              value={newCategoryName}
+                              onChange={(e) => setNewCategoryName(e.target.value)}
+                              placeholder="Ej: Postres"
+                          />
+                      </div>
+                      <Button onClick={handleAddCategory}>
+                          <PlusCircle className="mr-2 h-4 w-4" />
+                          Añadir
+                      </Button>
+                  </div>
+                  <div className="space-y-2">
+                      <Label>Categorías existentes</Label>
+                      {categories.length > 0 ? (
+                          <ul className="space-y-2">
+                              {categories.map(cat => (
+                                  <li key={cat.id} className="border p-2 rounded-md flex justify-between items-center text-sm">
+                                      {cat.name}
+                                      <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(cat.id)}>
+                                          <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                  </li>
+                              ))}
+                          </ul>
+                      ) : (
+                          <p className="text-sm text-muted-foreground text-center py-2">No hay categorías.</p>
+                      )}
+                  </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Gestionar Productos</CardTitle>
+                <CardDescription>Añade nuevos productos y asigna una categoría.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-end gap-2">
+                  <div className="flex-grow">
+                    <Label htmlFor="new-product">Nombre del Nuevo Producto</Label>
+                    <Input 
+                      id="new-product"
+                      value={newProductName}
+                      onChange={(e) => setNewProductName(e.target.value)}
+                      placeholder="Ej: Azúcar 1kg San Juan"
+                    />
+                  </div>
+                  <div className="w-48">
+                    <Label htmlFor="new-product-category">Categoría</Label>
+                    <Select value={newProductCategoryId} onValueChange={setNewProductCategoryId}>
+                        <SelectTrigger id="new-product-category">
+                            <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {categories.map(cat => (
+                                <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                 <Button onClick={handleAddProduct} className="w-full">
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    Añadir Producto
+                </Button>
+              </CardContent>
+            </Card>
+        </div>
+        
         <Card>
           <CardHeader>
             <CardTitle>Lista de Productos Actual</CardTitle>
+            <CardDescription>Arrastra los productos para reordenarlos.</CardDescription>
           </CardHeader>
           <CardContent>
              {products.length > 0 ? (
@@ -329,7 +434,7 @@ export default function AdminClient() {
                     <SortableContext items={products} strategy={verticalListSortingStrategy}>
                         <ul className="space-y-2">
                             {products.map((product) => (
-                                <SortableItem key={product.id} product={product} onEdit={setEditingProduct} />
+                                <SortableItem key={product.id} product={product} categoryName={getCategoryName(product.categoryId)} onEdit={setEditingProduct} />
                             ))}
                         </ul>
                     </SortableContext>
@@ -343,6 +448,7 @@ export default function AdminClient() {
       {editingProduct && (
           <EditProductDialog 
               product={editingProduct}
+              categories={categories}
               onClose={() => setEditingProduct(null)}
               onSave={handleSaveProduct}
           />

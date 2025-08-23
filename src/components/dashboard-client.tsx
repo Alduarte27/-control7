@@ -8,8 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Factory, ChevronLeft, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
-import type { ProductData, DailyProduction, ProductCategory } from '@/lib/types';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import type { ProductData, DailyProduction, CategoryDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -149,11 +149,12 @@ export default function DashboardClient() {
   const [weeklyShiftData, setWeeklyShiftData] = React.useState<WeeklyShiftSummaryData[]>([]);
   const [dailyData, setDailyData] = React.useState<DailySummaryData[]>([]);
   const [productData, setProductData] = React.useState<ProductSummaryData[]>([]);
-
+  
   const [loading, setLoading] = React.useState(true);
   const [allPlans, setAllPlans] = React.useState<AllPlansData[]>([]);
+  const [categories, setCategories] = React.useState<CategoryDefinition[]>([]);
   const [selectedWeek, setSelectedWeek] = React.useState('all');
-  const [selectedCategory, setSelectedCategory] = React.useState<ProductCategory | 'all'>('all');
+  const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
   const [isFilterOpen, setIsFilterOpen] = React.useState(true);
 
   const weekOptions = React.useMemo(() => {
@@ -168,6 +169,10 @@ export default function DashboardClient() {
         setLoading(true);
         const fetchedPlans: AllPlansData[] = [];
         try {
+            const categoriesSnapshot = await getDocs(query(collection(db, "categories"), orderBy("name")));
+            const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition));
+            setCategories(categoriesList);
+
             const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
             plansSnapshot.forEach((doc) => {
                 const plan = doc.data();
@@ -190,20 +195,15 @@ export default function DashboardClient() {
   }, []);
 
   React.useEffect(() => {
-    if (allPlans.length === 0) return;
-    
-    // This helper ensures every product has a category (for old data) and then filters
-    const getFilteredProducts = (products: ProductData[]): ProductData[] => {
-      const productsWithDefaults = products.map(p => ({
-        ...p,
-        category: p.category || 'Familiar',
-      }));
+    if (allPlans.length === 0 || categories.length === 0) return;
 
-      if (selectedCategory === 'all') {
-        return productsWithDefaults;
-      }
-      
-      return productsWithDefaults.filter(p => p.category === selectedCategory);
+    const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+    
+    const getFilteredProducts = (products: ProductData[]): ProductData[] => {
+        if (selectedCategoryId === 'all') {
+            return products;
+        }
+        return products.filter(p => p.categoryId === selectedCategoryId);
     };
 
     // --- Data for charts that IGNORE week filter ---
@@ -211,7 +211,6 @@ export default function DashboardClient() {
     const weeklyShiftTotals: { [week: number]: { day: number; night: number } } = {};
 
     allPlans.forEach(plan => {
-      // We must apply the category filter to these charts as well
       const filteredProducts = getFilteredProducts(plan.products);
 
       if (!weeklyDataMap[plan.week]) weeklyDataMap[plan.week] = { planned: 0, actual: 0 };
@@ -307,7 +306,7 @@ export default function DashboardClient() {
         .filter(item => item.planned > 0 || item.actual > 0);
     setProductData(processedProductData);
 
-  }, [allPlans, selectedWeek, selectedCategory]);
+  }, [allPlans, selectedWeek, selectedCategoryId, categories]);
 
 
   return (
@@ -357,14 +356,15 @@ export default function DashboardClient() {
                     </div>
                     <div className="flex flex-col gap-1.5 w-full max-w-xs">
                         <Label htmlFor='category-filter'>Filtrar por Categoría</Label>
-                        <Select value={selectedCategory} onValueChange={(value: ProductCategory | 'all') => setSelectedCategory(value)}>
+                        <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
                             <SelectTrigger id="category-filter">
                                 <SelectValue placeholder="Seleccionar categoría" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">Todas las categorías</SelectItem>
-                                <SelectItem value="Familiar">Familiar</SelectItem>
-                                <SelectItem value="Granel">Granel</SelectItem>
+                                {categories.map(cat => (
+                                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>

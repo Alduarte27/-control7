@@ -13,16 +13,21 @@ export type DailyProduction = {
   sun: ShiftProduction;
 };
 
-export type ProductCategory = 'Familiar' | 'Granel';
+export type CategoryDefinition = {
+  id: string;
+  name: string;
+}
 
 export type ProductDefinition = {
   id: string;
   productName: string;
   order: number;
-  category: ProductCategory;
+  categoryId: string;
+  color?: string; // e.g., '#ff0000'
 }
 
 export type ProductData = ProductDefinition & {
+  categoryName: string;
   planned: number;
   actual: DailyProduction;
 };

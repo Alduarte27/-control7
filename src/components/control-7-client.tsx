@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { ProductData, ProductDefinition, ProductCategory, DailyProduction, ShiftProduction } from '@/lib/types';
+import type { ProductData, ProductDefinition, CategoryDefinition, DailyProduction, ShiftProduction } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
 import { db } from '@/lib/firebase';
@@ -26,7 +26,6 @@ const emptyActual: DailyProduction = {
 
 const getDateFromPlanId = (planId: string): Date => {
     const [year, week] = planId.split('-W');
-    // We parse the date and then get the start of the ISO week to be consistent
     const date = setISOWeek(new Date(parseInt(year), 0, 4), parseInt(week));
     return startOfISOWeek(date);
 }
@@ -44,17 +43,15 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   const currentYear = (date || new Date()).getFullYear();
   const currentWeek = getISOWeek(date || new Date());
   
-  // Use the initialPlanId if provided, otherwise generate it from the current date.
   const planId = initialPlanId || `${currentYear}-W${currentWeek}`;
-  
-  // A separate ID for saving, which always uses the current date picker's state.
   const savePlanId = `${currentYear}-W${currentWeek}`;
 
 
-  const generateInitialData = (products: ProductDefinition[]): ProductData[] => {
+  const generateInitialData = (products: ProductDefinition[], categories: CategoryDefinition[]): ProductData[] => {
+    const categoryMap = new Map(categories.map(c => [c.id, c.name]));
     return products.map(p => ({
       ...p,
-      category: p.category || 'Familiar', // Ensure category default
+      categoryName: categoryMap.get(p.categoryId) || 'Sin Categoría',
       planned: 0,
       actual: JSON.parse(JSON.stringify(emptyActual)),
     }));
@@ -63,9 +60,12 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   React.useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
-        setIsDirty(false); // Reset dirty state on new data load
+        setIsDirty(false);
         try {
-            // Fetch product definitions from Firestore, ordered by 'order' field
+            const categoriesSnapshot = await getDocs(query(collection(db, "categories"), orderBy("name")));
+            const categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition));
+            const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+
             const productsQuery = query(collection(db, "products"), orderBy("order"));
             const productsSnapshot = await getDocs(productsQuery);
             const productDefinitions = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition));
@@ -76,7 +76,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 return;
             }
             
-            // Fetch the production plan for the current week
             const planDocRef = doc(db, "productionPlans", planId);
             const planDocSnap = await getDoc(planDocRef);
 
@@ -84,24 +83,19 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 const planData = planDocSnap.data();
                 const weeklyData: ProductData[] = planData.products;
 
-                // Sync with latest product definitions and maintain order
                 const syncedData = productDefinitions.map(def => {
                     const savedProductData = weeklyData.find(d => d.id === def.id);
-                    const definitionWithDefaults = {
-                        ...def,
-                        category: def.category || 'Familiar', // Assign default for old products
-                    };
-
+                    
                     if (savedProductData) {
-                        // If product exists in plan, merge definition (with default category) and saved data
                         return {
-                            ...definitionWithDefaults,
-                            ...savedProductData,
+                            ...savedProductData, // Keep saved data
+                            ...def, // But override with latest definition (name, color, order, etc)
+                            categoryName: categoryMap.get(def.categoryId) || 'Sin Categoría',
                         };
                     } else {
-                        // If product is new (not in the saved plan), create its initial structure
                         return {
-                            ...definitionWithDefaults,
+                            ...def,
+                            categoryName: categoryMap.get(def.categoryId) || 'Sin Categoría',
                             planned: 0,
                             actual: JSON.parse(JSON.stringify(emptyActual)),
                         };
@@ -109,8 +103,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 });
                 setData(syncedData);
             } else {
-                // If no plan exists, create an initial one based on ordered products
-                setData(generateInitialData(productDefinitions));
+                setData(generateInitialData(productDefinitions, categories));
             }
         } catch (error) {
             console.error("Error fetching data from Firestore:", error);
@@ -119,7 +112,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 description: 'No se pudieron cargar los datos desde Firestore.',
                 variant: 'destructive',
             });
-            // Fallback to empty state
             setData([]);
         }
         setLoading(false);
@@ -133,16 +125,16 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     try {
       const planDocRef = doc(db, "productionPlans", savePlanId);
       await setDoc(planDocRef, { products: data, week: currentWeek, year: currentYear });
-      setIsDirty(false); // Reset dirty state after successful save
+      setIsDirty(false);
       toast({
         title: 'Plan Guardado',
-        description: `Los datos para la semana ${currentWeek} han sido guardados en Firestore.`,
+        description: `Los datos para la semana ${currentWeek} han sido guardados.`,
       });
     } catch (error) {
       console.error("Error saving data to Firestore", error);
       toast({
         title: 'Error al Guardar',
-        description: 'Ocurrió un error al guardar tus datos en Firestore.',
+        description: 'Ocurrió un error al guardar tus datos.',
         variant: 'destructive',
       });
     }
@@ -167,7 +159,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 const correspondingLastWeekItem = lastWeekData.find(lw => lw.id === currentItem.id);
                 return {
                     ...currentItem,
-                    // Copy planned value, keep actuals for the new week
                     planned: correspondingLastWeekItem ? correspondingLastWeekItem.planned : currentItem.planned,
                 };
             })
@@ -236,8 +227,8 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
       };
 
       return [
-        `"${item.productName.replace(/"/g, '""')}"`, // Escape double quotes
-        item.category,
+        `"${item.productName.replace(/"/g, '""')}"`,
+        item.categoryName,
         item.planned,
         dailyTotals.mon,
         dailyTotals.tue,
@@ -290,7 +281,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   const handleDateChange = (newDate: Date | undefined) => {
     if (newDate) {
         const newPlanId = `${newDate.getFullYear()}-W${getISOWeek(newDate)}`;
-        // We use window.location to force a full component reload with the new planId
         window.location.href = `/?planId=${newPlanId}`;
     }
   };

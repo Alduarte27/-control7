@@ -30,7 +30,12 @@ const renderProductRow = (item: ProductData, handlePlannedInputChange: (id: stri
     const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
     return (
       <TableRow key={item.id}>
-        <TableCell className="font-medium sticky left-0 bg-card z-10 text-xs">{item.productName}</TableCell>
+        <TableCell className="font-medium sticky left-0 bg-card z-10 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color || '#ccc' }}></span>
+            <span>{item.productName}</span>
+          </div>
+        </TableCell>
         <TableCell>
           <Input
             type="number"
@@ -87,7 +92,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
   };
 
   const groupedData = data.reduce((acc, product) => {
-    const category = product.category || 'Sin Categoría';
+    const category = product.categoryName || 'Sin Categoría';
     if (!acc[category]) {
       acc[category] = [];
     }
@@ -95,7 +100,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
     return acc;
   }, {} as Record<string, ProductData[]>);
 
-  const categories = Object.keys(groupedData);
+  const categories = Object.keys(groupedData).sort();
 
   return (
     <>
