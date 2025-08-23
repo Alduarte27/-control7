@@ -7,8 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition } from '@/lib/types';
+import type { ProductDefinition, ProductCategory } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, getDocs, writeBatch, doc, query, orderBy } from 'firebase/firestore';
 import {
@@ -45,11 +47,16 @@ function SortableItem({ product }: { product: ProductDefinition }) {
     };
   
     return (
-      <li ref={setNodeRef} style={style} className="border p-3 rounded-md bg-muted/50 flex items-center gap-2">
-        <button {...attributes} {...listeners} className="cursor-grab p-1">
-            <GripVertical className="h-5 w-5 text-muted-foreground" />
-        </button>
-        {product.productName}
+      <li ref={setNodeRef} style={style} className="border p-3 rounded-md bg-muted/50 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+            <button {...attributes} {...listeners} className="cursor-grab p-1">
+                <GripVertical className="h-5 w-5 text-muted-foreground" />
+            </button>
+            {product.productName}
+        </div>
+        <Badge variant={product.category === 'Familiar' ? 'secondary' : 'outline'}>
+          {product.category}
+        </Badge>
       </li>
     );
 }
@@ -57,6 +64,7 @@ function SortableItem({ product }: { product: ProductDefinition }) {
 export default function AdminClient() {
   const [products, setProducts] = React.useState<ProductDefinition[]>([]);
   const [newProductName, setNewProductName] = React.useState('');
+  const [newProductCategory, setNewProductCategory] = React.useState<ProductCategory>('Familiar');
   const { toast } = useToast();
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -97,15 +105,16 @@ export default function AdminClient() {
 
     try {
         const newOrder = products.length > 0 ? Math.max(...products.map(p => p.order)) + 1 : 0;
-        const docRef = await addDoc(collection(db, 'products'), {
+        const newProductData = {
             productName: newProductName.trim(),
             order: newOrder,
-        });
+            category: newProductCategory,
+        };
+        const docRef = await addDoc(collection(db, 'products'), newProductData);
 
         const newProduct: ProductDefinition = {
             id: docRef.id,
-            productName: newProductName.trim(),
-            order: newOrder,
+            ...newProductData
         };
 
         setProducts(prevProducts => [...prevProducts, newProduct]);
@@ -183,7 +192,7 @@ export default function AdminClient() {
         <Card>
           <CardHeader>
             <CardTitle>Gestionar Productos</CardTitle>
-            <CardDescription>Añade nuevas presentaciones y reordénalas arrastrando y soltando.</CardDescription>
+            <CardDescription>Añade nuevas presentaciones, asigna una categoría y reordénalas.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-end gap-2">
@@ -195,6 +204,18 @@ export default function AdminClient() {
                   onChange={(e) => setNewProductName(e.target.value)}
                   placeholder="Ej: Azúcar 1kg (50kg) San Juan"
                 />
+              </div>
+              <div className="w-48">
+                <Label htmlFor="new-product-category">Categoría</Label>
+                <Select value={newProductCategory} onValueChange={(value: ProductCategory) => setNewProductCategory(value)}>
+                    <SelectTrigger id="new-product-category">
+                        <SelectValue placeholder="Seleccionar categoría" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Familiar">Familiar</SelectItem>
+                        <SelectItem value="Granel">Granel</SelectItem>
+                    </SelectContent>
+                </Select>
               </div>
               <Button onClick={handleAddProduct}>
                 <PlusCircle className="mr-2 h-4 w-4" />

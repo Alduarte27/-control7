@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { ProductData, DailyProduction, ShiftProduction, ProductDefinition } from '@/lib/types';
+import type { ProductData, ProductDefinition } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
 import { db } from '@/lib/firebase';
@@ -86,7 +86,9 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 // Sync with latest product definitions and maintain order
                 const syncedData = productDefinitions.map(def => {
                     const found = weeklyData.find(d => d.id === def.id);
-                    return found || { ...def, planned: 0, actual: JSON.parse(JSON.stringify(emptyActual)) };
+                    // Ensure new products get a default category if not present
+                    const definitionWithDefaults = { category: 'Familiar' as const, ...def };
+                    return found || { ...definitionWithDefaults, planned: 0, actual: JSON.parse(JSON.stringify(emptyActual)) };
                 });
                 setData(syncedData);
             } else {
@@ -187,6 +189,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
     const headers = [
       'Producto',
+      'Categoría',
       'Plan Semanal',
       'Real Lun',
       'Real Mar',
@@ -217,6 +220,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
       return [
         `"${item.productName.replace(/"/g, '""')}"`, // Escape double quotes
+        item.category,
         item.planned,
         dailyTotals.mon,
         dailyTotals.tue,

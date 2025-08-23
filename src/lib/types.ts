@@ -13,10 +13,13 @@ export type DailyProduction = {
   sun: ShiftProduction;
 };
 
+export type ProductCategory = 'Familiar' | 'Granel';
+
 export type ProductDefinition = {
   id: string;
   productName: string;
   order: number;
+  category: ProductCategory;
 }
 
 export type ProductData = ProductDefinition & {

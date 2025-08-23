@@ -24,6 +24,50 @@ const dayNames: { [key in keyof DailyProduction]: string } = {
   sun: 'Dom'
 };
 
+const renderProductRow = (item: ProductData, handlePlannedInputChange: (id: string, value: string) => void, setSelectedProduct: (product: ProductData) => void) => {
+    const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
+    const variance = totalActual - item.planned;
+    const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
+    return (
+      <TableRow key={item.id}>
+        <TableCell className="font-medium sticky left-0 bg-card z-10 text-xs">{item.productName}</TableCell>
+        <TableCell>
+          <Input
+            type="number"
+            value={item.planned}
+            onChange={(e) => handlePlannedInputChange(item.id, e.target.value)}
+            className="text-right"
+            min="0"
+          />
+        </TableCell>
+        {days.map(day => {
+          const dayTotal = (item.actual[day]?.day || 0) + (item.actual[day]?.night || 0);
+          return (
+            <TableCell key={day} className="text-right">
+             {dayTotal.toLocaleString()}
+            </TableCell>
+          )
+        })}
+        <TableCell className="text-right font-medium">{totalActual.toLocaleString()}</TableCell>
+        <TableCell className={`text-right font-medium ${variance < 0 ? 'text-destructive' : 'text-green-600'}`}>
+          {variance.toLocaleString()}
+        </TableCell>
+        <TableCell>
+          <div className="flex items-center gap-2">
+            <Progress value={compliance > 100 ? 100 : compliance} className="w-[60%]" />
+            <span className="text-xs font-medium w-[45px] text-right">{compliance.toFixed(1)}%</span>
+          </div>
+        </TableCell>
+        <TableCell>
+          <Button variant="outline" size="icon" onClick={() => setSelectedProduct(item)}>
+            <Edit className="h-4 w-4" />
+          </Button>
+        </TableCell>
+      </TableRow>
+    );
+};
+
+
 export default function ProductionTable({ data, onPlannedChange, onActualChange }: ProductionTableProps) {
   const [selectedProduct, setSelectedProduct] = React.useState<ProductData | null>(null);
 
@@ -41,6 +85,17 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
     });
     setSelectedProduct(null);
   };
+
+  const groupedData = data.reduce((acc, product) => {
+    const category = product.category || 'Sin Categoría';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(product);
+    return acc;
+  }, {} as Record<string, ProductData[]>);
+
+  const categories = Object.keys(groupedData);
 
   return (
     <>
@@ -66,48 +121,16 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
                   </TableCell>
                 </TableRow>
               ) : (
-                data.map(item => {
-                  const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
-                  const variance = totalActual - item.planned;
-                  const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
-                  return (
-                    <TableRow key={item.id}>
-                      <TableCell className="font-medium sticky left-0 bg-card z-10 text-xs">{item.productName}</TableCell>
-                      <TableCell>
-                        <Input
-                          type="number"
-                          value={item.planned}
-                          onChange={(e) => handlePlannedInputChange(item.id, e.target.value)}
-                          className="text-right"
-                          min="0"
-                        />
-                      </TableCell>
-                      {days.map(day => {
-                        const dayTotal = (item.actual[day]?.day || 0) + (item.actual[day]?.night || 0);
-                        return (
-                          <TableCell key={day} className="text-right">
-                           {dayTotal.toLocaleString()}
-                          </TableCell>
-                        )
-                      })}
-                      <TableCell className="text-right font-medium">{totalActual.toLocaleString()}</TableCell>
-                      <TableCell className={`text-right font-medium ${variance < 0 ? 'text-destructive' : 'text-green-600'}`}>
-                        {variance.toLocaleString()}
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Progress value={compliance > 100 ? 100 : compliance} className="w-[60%]" />
-                          <span className="text-xs font-medium w-[45px] text-right">{compliance.toFixed(1)}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="outline" size="icon" onClick={() => setSelectedProduct(item)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
+                categories.map(category => (
+                    <React.Fragment key={category}>
+                        <TableRow className="bg-muted/50 hover:bg-muted/50">
+                            <TableCell colSpan={12} className="font-bold text-primary sticky left-0 bg-muted/50 z-10">
+                                {category}
+                            </TableCell>
+                        </TableRow>
+                        {groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProduct))}
+                    </React.Fragment>
+                ))
               )}
             </TableBody>
           </Table>
