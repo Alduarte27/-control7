@@ -82,7 +82,7 @@ const dailyChartConfig = {
 const productChartConfig = {
   planned: {
     label: "Planificado",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(var(--accent))",
   },
   actual: {
     label: "Real",
@@ -178,16 +178,10 @@ export default function DashboardClient() {
             plansSnapshot.forEach((doc) => {
                 const plan = doc.data();
                 if (plan.week && plan.year && plan.products) {
-                    // This is where we ensure old products have a categoryId
-                    const productsWithCategory = plan.products.map((p: ProductData) => ({
-                        ...p,
-                        categoryId: p.categoryId || (categoriesList.length > 0 ? categoriesList[0].id : 'default'),
-                    }));
-
                     fetchedPlans.push({
                         week: plan.week,
                         year: plan.year,
-                        products: productsWithCategory,
+                        products: plan.products,
                     });
                 }
             });
@@ -202,13 +196,13 @@ export default function DashboardClient() {
   }, []);
 
   React.useEffect(() => {
-    if (loading) return;
+    if (loading || categories.length === 0) return;
     
     // Helper function to assign default category and then filter
     const getFilteredProducts = (products: ProductData[]): ProductData[] => {
       const productsWithCategory = products.map(p => ({
         ...p,
-        categoryId: p.categoryId || (categories.length > 0 ? categories[0].id : 'default'),
+        categoryId: p.categoryId || categories[0].id,
       }));
 
       if (selectedCategoryId === 'all') {
@@ -370,7 +364,7 @@ export default function DashboardClient() {
             )}
           </CardContent>
         </Card>
-
+        
         <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
             <div className="flex justify-between items-center">
                 <CollapsibleTrigger asChild>
