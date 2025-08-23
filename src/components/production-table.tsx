@@ -50,12 +50,12 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
             <TableHeader>
               <TableRow>
                 <TableHead className="min-w-[200px] sticky left-0 bg-card z-10">Producto</TableHead>
-                <TableHead className="text-right min-w-[120px]">Plan Semanal</TableHead>
-                {days.map(day => <TableHead key={day} className="text-right min-w-[100px] capitalize">{dayNames[day]}</TableHead>)}
-                <TableHead className="text-right min-w-[120px]">Total Real</TableHead>
-                <TableHead className="text-right min-w-[120px]">Varianza</TableHead>
-                <TableHead className="min-w-[150px]">Cumplimiento Semanal</TableHead>
-                <TableHead className="min-w-[80px]">Turnos</TableHead>
+                <TableHead className="text-right min-w-[110px]">Plan Semanal</TableHead>
+                {days.map(day => <TableHead key={day} className="text-right min-w-[90px] capitalize">{dayNames[day]}</TableHead>)}
+                <TableHead className="text-right min-w-[110px]">Total Real</TableHead>
+                <TableHead className="text-right min-w-[110px]">Varianza</TableHead>
+                <TableHead className="min-w-[120px]">Cumplimiento</TableHead>
+                <TableHead className="min-w-[70px]">Turnos</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -96,8 +96,8 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <Progress value={compliance > 100 ? 100 : compliance} className="w-[70%]" />
-                          <span className="text-sm font-medium w-[50px] text-right">{compliance.toFixed(1)}%</span>
+                          <Progress value={compliance > 100 ? 100 : compliance} className="w-[60%]" />
+                          <span className="text-xs font-medium w-[45px] text-right">{compliance.toFixed(1)}%</span>
                         </div>
                       </TableCell>
                       <TableCell>
