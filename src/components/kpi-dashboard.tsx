@@ -1,6 +1,9 @@
+'use client';
+
 import KpiCard from './kpi-card';
 import { Target, PackageCheck, ArrowLeftRight, Goal } from 'lucide-react';
 import type { ProductData } from '@/lib/types';
+import type { KpiCardProps } from './kpi-card';
 
 type KpiDashboardProps = {
   data: ProductData[];
@@ -13,13 +16,24 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   );
   const variance = totalActual - totalPlanned;
   const completion = totalPlanned > 0 ? (totalActual / totalPlanned) * 100 : 0;
+  
+  const getVarianceColor = (): KpiCardProps['valueColor'] => {
+    if (variance >= 0) return 'text-green-600';
+    return 'text-destructive';
+  };
+  
+  const getCompletionColor = (): KpiCardProps['valueColor'] => {
+    if (completion >= 95) return 'text-green-600';
+    if (completion >= 85) return 'text-yellow-500';
+    return 'text-destructive';
+  }
 
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <KpiCard title="Total Planificado" value={totalPlanned.toLocaleString()} icon={Target} />
       <KpiCard title="Total Real" value={totalActual.toLocaleString()} icon={PackageCheck} />
-      <KpiCard title="Varianza" value={variance.toLocaleString()} icon={ArrowLeftRight} />
-      <KpiCard title="Cumplimiento" value={`${completion.toFixed(1)}%`} icon={Goal} />
+      <KpiCard title="Varianza" value={variance.toLocaleString()} icon={ArrowLeftRight} valueColor={getVarianceColor()} />
+      <KpiCard title="Cumplimiento" value={`${completion.toFixed(1)}%`} icon={Goal} valueColor={getCompletionColor()} />
     </div>
   );
 }
