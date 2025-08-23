@@ -177,10 +177,16 @@ export default function DashboardClient() {
             plansSnapshot.forEach((doc) => {
                 const plan = doc.data();
                 if (plan.week && plan.year && plan.products) {
+                    // This is where we ensure old products have a categoryId
+                    const productsWithCategory = plan.products.map((p: ProductData) => ({
+                        ...p,
+                        categoryId: p.categoryId || (categoriesList.length > 0 ? categoriesList[0].id : 'default'),
+                    }));
+
                     fetchedPlans.push({
                         week: plan.week,
                         year: plan.year,
-                        products: plan.products
+                        products: productsWithCategory,
                     });
                 }
             });
@@ -196,8 +202,6 @@ export default function DashboardClient() {
 
   React.useEffect(() => {
     if (allPlans.length === 0 || categories.length === 0) return;
-
-    const categoryMap = new Map(categories.map(c => [c.id, c.name]));
     
     const getFilteredProducts = (products: ProductData[]): ProductData[] => {
         if (selectedCategoryId === 'all') {
@@ -324,6 +328,39 @@ export default function DashboardClient() {
         </Link>
       </header>
       <main className="p-4 md:p-8 space-y-6">
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Resumen de Producción por Semana</CardTitle>
+            <CardDescription>Comparación de lo planificado vs. ejecutado. Ignora el filtro de semana.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+                <p className="text-muted-foreground text-center py-8">Cargando datos del dashboard...</p>
+            ) : summaryData.length > 0 ? (
+              <ChartContainer config={weeklyChartConfig} className="w-full h-[350px]">
+                <BarChart accessibilityLayer data={summaryData}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    tickMargin={10}
+                    axisLine={false}
+                  />
+                  <YAxis />
+                  <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                  <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
+                </BarChart>
+              </ChartContainer>
+            ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  No hay suficientes datos guardados para mostrar el dashboard.
+                </p>
+            )}
+          </CardContent>
+        </Card>
+
         <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
             <div className="flex justify-between items-center">
                 <CollapsibleTrigger asChild>
@@ -373,39 +410,6 @@ export default function DashboardClient() {
         </Collapsible>
         
         <div className="grid md:grid-cols-2 gap-6">
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>Resumen de Producción por Semana</CardTitle>
-                <CardDescription>Comparación de lo planificado vs. ejecutado. Ignora el filtro de semana.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                    <p className="text-muted-foreground text-center py-8">Cargando datos del dashboard...</p>
-                ) : summaryData.length > 0 ? (
-                  <ChartContainer config={weeklyChartConfig} className="w-full h-[350px]">
-                    <BarChart accessibilityLayer data={summaryData}>
-                      <CartesianGrid vertical={false} />
-                      <XAxis
-                        dataKey="name"
-                        tickLine={false}
-                        tickMargin={10}
-                        axisLine={false}
-                      />
-                      <YAxis />
-                      <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
-                      <ChartLegend content={<ChartLegendContent />} />
-                      <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                      <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
-                    </BarChart>
-                  </ChartContainer>
-                ) : (
-                    <p className="text-muted-foreground text-center py-8">
-                      No hay suficientes datos guardados para mostrar el dashboard.
-                    </p>
-                )}
-              </CardContent>
-            </Card>
-            
             <Card>
                 <CardHeader>
                     <CardTitle>Producción por Turno y Semana</CardTitle>
