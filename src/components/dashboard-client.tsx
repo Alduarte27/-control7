@@ -114,7 +114,7 @@ const CustomTooltipContent = ({ active, payload, label }: any) => {
                     Planificado
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--primary))'}} />
+                    <div className="w-2 h-2 rounded-full" style={{backgroundColor: payload[1]?.color || 'hsl(var(--primary))'}} />
                     Real
                 </div>
                 {'variance' in data && (
