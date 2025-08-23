@@ -3,7 +3,7 @@
 import React from 'react';
 import type { ProductData, DailyProduction, ShiftProduction, ProductDefinition } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { getISOWeek, setISOWeek, startOfISOWeek, parse } from 'date-fns';
+import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
 
@@ -73,7 +73,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 return;
             }
             
-            const effectivePlanId = initialPlanId || `${getISOWeek(date || new Date())}-${(date || new Date()).getFullYear()}`;
             // Fetch the production plan for the current week
             const planDocRef = doc(db, "productionPlans", planId);
             const planDocSnap = await getDoc(planDocRef);
@@ -127,6 +126,51 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     }
   };
 
+  const handleCopyLastWeek = async () => {
+    if (!date) return;
+
+    const lastWeekDate = subWeeks(date, 1);
+    const lastWeekYear = lastWeekDate.getFullYear();
+    const lastWeekNumber = getISOWeek(lastWeekDate);
+    const lastWeekPlanId = `${lastWeekYear}-W${lastWeekNumber}`;
+
+    try {
+      const planDocRef = doc(db, "productionPlans", lastWeekPlanId);
+      const planDocSnap = await getDoc(planDocRef);
+
+      if (planDocSnap.exists()) {
+        const lastWeekData = planDocSnap.data().products as ProductData[];
+        setData(currentData => 
+            currentData.map(currentItem => {
+                const correspondingLastWeekItem = lastWeekData.find(lw => lw.id === currentItem.id);
+                return {
+                    ...currentItem,
+                    // Copy planned value, keep actuals for the new week
+                    planned: correspondingLastWeekItem ? correspondingLastWeekItem.planned : currentItem.planned,
+                };
+            })
+        );
+        toast({
+            title: 'Plan Copiado',
+            description: `Se han copiado los valores planificados de la semana ${lastWeekNumber}.`,
+        });
+      } else {
+        toast({
+            title: 'No se encontró el plan',
+            description: `No hay datos guardados para la semana ${lastWeekNumber}.`,
+            variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error("Error copying last week's plan", error);
+      toast({
+        title: 'Error al Copiar',
+        description: 'No se pudo cargar el plan de la semana anterior.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handlePlannedDataChange = (id: string, value: number) => {
     setData(currentData =>
       currentData.map(item => item.id === id ? { ...item, planned: value } : item)
@@ -147,11 +191,10 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   };
 
   const handleDateChange = (newDate: Date | undefined) => {
-    // When the user changes the date, we clear the initialPlanId by navigating
-    // This ensures the component re-fetches data for the new date
     if (newDate) {
-        window.location.href = '/';
-        setDate(newDate);
+        const newPlanId = `${newDate.getFullYear()}-W${getISOWeek(newDate)}`;
+        // We use window.location to force a full component reload with the new planId
+        window.location.href = `/?planId=${newPlanId}`;
     }
   };
 
@@ -167,7 +210,8 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
             productSearch={productSearch} 
             onProductSearchChange={setProductSearch}
             date={date}
-            onDateChange={setDate}
+            onDateChange={handleDateChange}
+            onCopyLastWeek={handleCopyLastWeek}
         />
         {loading ? (
             <p>Cargando datos...</p>

@@ -4,7 +4,7 @@ import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Search } from 'lucide-react';
+import { CalendarDays, Search, Copy } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek } from 'date-fns';
@@ -16,14 +16,12 @@ type FilterBarProps = {
   onProductSearchChange: (value: string) => void;
   date: Date | undefined;
   onDateChange: (date: Date | undefined) => void;
+  onCopyLastWeek: () => void;
 };
 
-export default function FilterBar({ productSearch, onProductSearchChange, date, onDateChange }: FilterBarProps) {
+export default function FilterBar({ productSearch, onProductSearchChange, date, onDateChange, onCopyLastWeek }: FilterBarProps) {
   const currentWeek = getISOWeek(date || new Date());
   const currentYear = (date || new Date()).getFullYear();
-
-  const weekStartDate = startOfISOWeek(date || new Date());
-  const weekEndDate = endOfISOWeek(date || new Date());
 
   const handleWeekChange = (weekNumber: string) => {
     const newDate = setISOWeek(new Date(currentYear, 0, 1), parseInt(weekNumber, 10));
@@ -47,7 +45,7 @@ export default function FilterBar({ productSearch, onProductSearchChange, date, 
 
   return (
     <div className="p-4 bg-card rounded-lg shadow-sm border">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="flex flex-col gap-1.5">
             <Label htmlFor="productSearch">Búsqueda de Producto</Label>
             <div className="relative">
@@ -98,6 +96,12 @@ export default function FilterBar({ productSearch, onProductSearchChange, date, 
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="flex flex-col gap-1.5 justify-end">
+            <Button onClick={onCopyLastWeek} variant="outline">
+                <Copy className="mr-2 h-4 w-4" />
+                Copiar Plan Anterior
+            </Button>
         </div>
       </div>
     </div>
