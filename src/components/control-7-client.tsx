@@ -38,6 +38,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     initialPlanId ? getDateFromPlanId(initialPlanId) : new Date()
   );
   const [loading, setLoading] = React.useState(true);
+  const [isDirty, setIsDirty] = React.useState(false);
   const { toast } = useToast();
 
   const currentYear = (date || new Date()).getFullYear();
@@ -61,6 +62,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   React.useEffect(() => {
     const fetchData = async () => {
         setLoading(true);
+        setIsDirty(false); // Reset dirty state on new data load
         try {
             // Fetch product definitions from Firestore, ordered by 'order' field
             const productsQuery = query(collection(db, "products"), orderBy("order"));
@@ -112,6 +114,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     try {
       const planDocRef = doc(db, "productionPlans", savePlanId);
       await setDoc(planDocRef, { products: data, week: currentWeek, year: currentYear });
+      setIsDirty(false); // Reset dirty state after successful save
       toast({
         title: 'Plan Guardado',
         description: `Los datos para la semana ${currentWeek} han sido guardados en Firestore.`,
@@ -150,6 +153,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 };
             })
         );
+        setIsDirty(true);
         toast({
             title: 'Plan Copiado',
             description: `Se han copiado los valores planificados de la semana ${lastWeekNumber}.`,
@@ -245,6 +249,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     setData(currentData =>
       currentData.map(item => item.id === id ? { ...item, planned: value } : item)
     );
+    setIsDirty(true);
   };
 
   const handleActualDataChange = (id: string, day: keyof DailyProduction, shift: keyof ShiftProduction, value: number) => {
@@ -258,6 +263,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
         return item;
       })
     );
+    setIsDirty(true);
   };
 
   const handleDateChange = (newDate: Date | undefined) => {
@@ -274,7 +280,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
   return (
     <div className="bg-background min-h-screen text-foreground">
-      <Header onSave={handleSave} onExport={handleExport} />
+      <Header onSave={handleSave} onExport={handleExport} hasUnsavedChanges={isDirty} />
       <div className="p-4 md:p-8 space-y-6">
         <FilterBar 
             productSearch={productSearch} 

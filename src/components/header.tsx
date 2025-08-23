@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 type HeaderProps = {
   onSave: () => void;
   onExport: () => void;
+  hasUnsavedChanges: boolean;
 };
 
-export default function Header({ onSave, onExport }: HeaderProps) {
+export default function Header({ onSave, onExport, hasUnsavedChanges }: HeaderProps) {
   return (
     <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
       <div className="flex items-center gap-3">
@@ -40,6 +41,7 @@ export default function Header({ onSave, onExport }: HeaderProps) {
         <Button onClick={onSave}>
           <Save className="mr-2 h-4 w-4" />
           Guardar Plan
+          {hasUnsavedChanges && <span className="ml-2 h-2 w-2 rounded-full bg-blue-500"></span>}
         </Button>
       </div>
     </header>
