@@ -8,7 +8,7 @@ type HeaderProps = {
 
 export default function Header({ onSave }: HeaderProps) {
   return (
-    <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
+    <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
       <div className="flex items-center gap-3">
         <Factory className="h-8 w-8 text-primary" />
         <h1 className="text-2xl font-bold text-foreground">Control 7</h1>
