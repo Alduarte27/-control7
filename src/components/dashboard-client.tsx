@@ -118,77 +118,62 @@ export default function DashboardClient() {
 
   React.useEffect(() => {
     if (allPlans.length === 0) return;
+    
+    // Helper function to ensure all products have a category and apply filter
+    const getFilteredProducts = (products: ProductData[]): ProductData[] => {
+      const productsWithDefaults = products.map(p => ({
+        ...p,
+        category: p.category || 'Familiar',
+      }));
 
-    const assignDefaultCategory = (products: ProductData[]): ProductData[] => {
-        return products.map(p => ({
-            ...p,
-            category: p.category || 'Familiar',
-        }));
-    };
-    
-    const filteredPlansByWeek = selectedWeek === 'all' 
-      ? allPlans 
-      : allPlans.filter(p => String(p.week) === selectedWeek);
+      if (selectedCategory === 'all') {
+        return productsWithDefaults;
+      }
       
-    const getFilteredProducts = (products: ProductData[]) => {
-        const productsWithCategory = assignDefaultCategory(products);
-        if (selectedCategory === 'all') {
-            return productsWithCategory;
-        }
-        return productsWithCategory.filter(p => p.category === selectedCategory);
-    }
-    
+      return productsWithDefaults.filter(p => p.category === selectedCategory);
+    };
+
     const weeklyDataMap: { [week: number]: { planned: number; actual: number } } = {};
     const weeklyShiftTotals: { [week: number]: { day: number; night: number } } = {};
     const dailyTotals: { [key in keyof DailyProduction]: { day: number; night: number } } = { 
-        mon: { day: 0, night: 0 }, 
-        tue: { day: 0, night: 0 }, 
-        wed: { day: 0, night: 0 }, 
-        thu: { day: 0, night: 0 }, 
-        fri: { day: 0, night: 0 }, 
-        sat: { day: 0, night: 0 }, 
+        mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
+        thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
         sun: { day: 0, night: 0 } 
     };
 
-    // Calculate daily totals, applying both week and category filters
-    filteredPlansByWeek.forEach(plan => {
-        const productsToProcess = getFilteredProducts(plan.products);
-        productsToProcess.forEach(item => {
-            Object.entries(item.actual).forEach(([day, shifts]) => {
-                const dayKey = day as keyof DailyProduction;
-                dailyTotals[dayKey].day += shifts.day || 0;
-                dailyTotals[dayKey].night += shifts.night || 0;
-            });
-        });
-    });
-
-    // Calculate weekly totals (planned vs actual) and weekly shift totals, applying only category filter
+    // Process all plans
     allPlans.forEach(plan => {
         const { week } = plan;
-        const productsToProcess = getFilteredProducts(plan.products);
 
-        if (!weeklyDataMap[week]) {
-            weeklyDataMap[week] = { planned: 0, actual: 0 };
-        }
-        if (!weeklyShiftTotals[week]) {
-            weeklyShiftTotals[week] = { day: 0, night: 0 };
-        }
+        // --- Weekly Planned vs Actual & Weekly Shift Totals ---
+        const filteredProductsForTotals = getFilteredProducts(plan.products);
 
-        const totalPlannedForWeek = productsToProcess.reduce((sum, item) => sum + (item.planned || 0), 0);
-        let totalActualForWeek = 0;
+        if (!weeklyDataMap[week]) weeklyDataMap[week] = { planned: 0, actual: 0 };
+        if (!weeklyShiftTotals[week]) weeklyShiftTotals[week] = { day: 0, night: 0 };
 
-        productsToProcess.forEach(item => {
-            Object.values(item.actual).forEach(shifts => {
-                const dayTotal = (shifts.day || 0);
-                const nightTotal = (shifts.night || 0);
-                weeklyShiftTotals[week].day += dayTotal;
-                weeklyShiftTotals[week].night += nightTotal;
-                totalActualForWeek += dayTotal + nightTotal;
-            });
+        filteredProductsForTotals.forEach(item => {
+            weeklyDataMap[week].planned += item.planned || 0;
+            const actualTotalForItem = Object.values(item.actual).reduce((sum, shifts) => {
+                const dayVal = shifts.day || 0;
+                const nightVal = shifts.night || 0;
+                weeklyShiftTotals[week].day += dayVal;
+                weeklyShiftTotals[week].night += nightVal;
+                return sum + dayVal + nightVal;
+            }, 0);
+            weeklyDataMap[week].actual += actualTotalForItem;
         });
-        
-        weeklyDataMap[week].planned += totalPlannedForWeek;
-        weeklyDataMap[week].actual += totalActualForWeek;
+
+        // --- Daily Totals (also respects week filter) ---
+        if (selectedWeek === 'all' || String(plan.week) === selectedWeek) {
+            const filteredProductsForDaily = getFilteredProducts(plan.products);
+            filteredProductsForDaily.forEach(item => {
+                Object.entries(item.actual).forEach(([day, shifts]) => {
+                    const dayKey = day as keyof DailyProduction;
+                    dailyTotals[dayKey].day += shifts.day || 0;
+                    dailyTotals[dayKey].night += shifts.night || 0;
+                });
+            });
+        }
     });
 
     const weeklyData: WeeklySummaryData[] = Object.keys(weeklyDataMap)
@@ -202,7 +187,6 @@ export default function DashboardClient() {
             };
         })
         .sort((a, b) => a.week - b.week);
-
     setSummaryData(weeklyData);
 
     const processedWeeklyShiftData = Object.keys(weeklyShiftTotals)
@@ -213,7 +197,6 @@ export default function DashboardClient() {
             week: parseInt(week)
         }))
         .sort((a, b) => a.week - b.week);
-
     setWeeklyShiftData(processedWeeklyShiftData);
 
     setDailyData([
