@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Factory, ChevronLeft, Filter } from 'lucide-react';
@@ -481,11 +481,7 @@ export default function DashboardClient() {
                                 <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
                                 <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
                                 <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                                <Bar dataKey="actual" radius={4}>
-                                  {productData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color || 'var(--color-actual)'} />
-                                  ))}
-                                </Bar>
+                                <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
                             </BarChart>
                         </ChartContainer>
                     ) : <p className="text-center text-muted-foreground py-4">No hay datos de producción para los filtros seleccionados.</p>}
