@@ -89,7 +89,7 @@ export default function DashboardClient() {
           </CardHeader>
           <CardContent>
             {summaryData.length > 0 ? (
-              <ChartContainer config={chartConfig} className="w-full" style={{ height: "400px" }}>
+              <ChartContainer config={chartConfig} className="w-full h-[350px]">
                 <BarChart accessibilityLayer data={summaryData}>
                   <CartesianGrid vertical={false} />
                   <XAxis
