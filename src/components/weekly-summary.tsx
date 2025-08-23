@@ -34,7 +34,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         <CardDescription>Producción Planificada vs. Real por Producto</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="min-h-[400px] w-full">
+        <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
           <BarChart accessibilityLayer data={chartData}>
             <CartesianGrid vertical={false} />
             <XAxis
