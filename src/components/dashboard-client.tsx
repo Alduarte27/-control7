@@ -202,7 +202,7 @@ export default function DashboardClient() {
     const getFilteredProducts = (products: ProductData[]): ProductData[] => {
       const productsWithCategory = products.map(p => ({
         ...p,
-        categoryId: p.categoryId || categories[0].id,
+        categoryId: p.categoryId || (categories.find(c => c.name === "Familiar")?.id || categories[0]?.id),
       }));
 
       if (selectedCategoryId === 'all') {
@@ -477,7 +477,7 @@ export default function DashboardClient() {
                                 />
                                 <YAxis />
                                 <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
-                                <ChartLegend content={<ChartLegendContent />} />
+                                <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
                                 <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
                                 <Bar dataKey="actual" radius={4}>
                                   {productData.map((entry, index) => (
