@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, PlusCircle, GripVertical } from 'lucide-react';
+import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, ProductCategory } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, writeBatch, doc, query, orderBy } from 'firebase/firestore';
+import { collection, addDoc, getDocs, writeBatch, doc, query, orderBy, updateDoc } from 'firebase/firestore';
 import {
   DndContext,
   closestCenter,
@@ -30,9 +30,70 @@ import {
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 
 
-function SortableItem({ product }: { product: ProductDefinition }) {
+function EditProductDialog({
+    product,
+    onClose,
+    onSave,
+}: {
+    product: ProductDefinition;
+    onClose: () => void;
+    onSave: (updatedProduct: ProductDefinition) => void;
+}) {
+    const [productName, setProductName] = React.useState(product.productName);
+    const [category, setCategory] = React.useState<ProductCategory>(product.category || 'Familiar');
+
+    const handleSave = () => {
+        onSave({
+            ...product,
+            productName,
+            category,
+        });
+    };
+
+    return (
+        <Dialog open={true} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar Producto</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-product-name">Nombre del Producto</Label>
+                        <Input
+                            id="edit-product-name"
+                            value={productName}
+                            onChange={(e) => setProductName(e.target.value)}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="edit-product-category">Categoría</Label>
+                        <Select value={category} onValueChange={(value: ProductCategory) => setCategory(value)}>
+                            <SelectTrigger id="edit-product-category">
+                                <SelectValue placeholder="Seleccionar categoría" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="Familiar">Familiar</SelectItem>
+                                <SelectItem value="Granel">Granel</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button type="button" variant="secondary">Cancelar</Button>
+                    </DialogClose>
+                    <Button type="button" onClick={handleSave}>Guardar Cambios</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
+function SortableItem({ product, onEdit }: { product: ProductDefinition, onEdit: (product: ProductDefinition) => void }) {
     const {
       attributes,
       listeners,
@@ -54,9 +115,14 @@ function SortableItem({ product }: { product: ProductDefinition }) {
             </button>
             {product.productName}
         </div>
-        <Badge variant={product.category === 'Familiar' ? 'secondary' : 'outline'}>
-          {product.category}
-        </Badge>
+        <div className="flex items-center gap-2">
+            <Badge variant={product.category === 'Familiar' ? 'secondary' : 'outline'}>
+            {product.category || 'Sin categoría'}
+            </Badge>
+            <Button variant="ghost" size="icon" onClick={() => onEdit(product)}>
+                <Edit className="h-4 w-4" />
+            </Button>
+        </div>
       </li>
     );
 }
@@ -65,6 +131,7 @@ export default function AdminClient() {
   const [products, setProducts] = React.useState<ProductDefinition[]>([]);
   const [newProductName, setNewProductName] = React.useState('');
   const [newProductCategory, setNewProductCategory] = React.useState<ProductCategory>('Familiar');
+  const [editingProduct, setEditingProduct] = React.useState<ProductDefinition | null>(null);
   const { toast } = useToast();
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -150,6 +217,31 @@ export default function AdminClient() {
       });
     }
   };
+
+  const handleSaveProduct = async (updatedProduct: ProductDefinition) => {
+      try {
+          const productRef = doc(db, 'products', updatedProduct.id);
+          await updateDoc(productRef, {
+              productName: updatedProduct.productName,
+              category: updatedProduct.category,
+          });
+          
+          setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
+          setEditingProduct(null);
+
+          toast({
+              title: 'Producto Actualizado',
+              description: `Se ha actualizado "${updatedProduct.productName}".`,
+          });
+      } catch (error) {
+          console.error('Error updating product: ', error);
+          toast({
+              title: 'Error',
+              description: 'No se pudo actualizar el producto.',
+              variant: 'destructive',
+          });
+      }
+  };
   
   const updateProductOrder = async (newOrderedProducts: ProductDefinition[]) => {
       try {
@@ -170,7 +262,6 @@ export default function AdminClient() {
               description: 'No se pudo guardar el nuevo orden de los productos.',
               variant: 'destructive',
           });
-          // Optionally revert optimistic UI update
       }
   };
 
@@ -238,7 +329,7 @@ export default function AdminClient() {
                     <SortableContext items={products} strategy={verticalListSortingStrategy}>
                         <ul className="space-y-2">
                             {products.map((product) => (
-                                <SortableItem key={product.id} product={product} />
+                                <SortableItem key={product.id} product={product} onEdit={setEditingProduct} />
                             ))}
                         </ul>
                     </SortableContext>
@@ -249,6 +340,13 @@ export default function AdminClient() {
           </CardContent>
         </Card>
       </main>
+      {editingProduct && (
+          <EditProductDialog 
+              product={editingProduct}
+              onClose={() => setEditingProduct(null)}
+              onSave={handleSaveProduct}
+          />
+      )}
     </div>
   );
 }
