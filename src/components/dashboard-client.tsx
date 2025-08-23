@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, getDocs } from 'firebase/firestore';
 import type { ProductData, DailyProduction } from '@/lib/types';
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Label } from './ui/label';
 
 type WeeklySummaryData = {
   week: number;
@@ -23,6 +24,7 @@ type WeeklyShiftSummaryData = {
     name: string;
     day: number;
     night: number;
+    week: number;
 }
 
 type DailySummaryData = {
@@ -64,92 +66,44 @@ const dailyChartConfig = {
     }
 } satisfies ChartConfig;
 
+type AllPlansData = {
+    week: number;
+    year: number;
+    products: ProductData[];
+};
+
 export default function DashboardClient() {
   const [summaryData, setSummaryData] = React.useState<WeeklySummaryData[]>([]);
   const [weeklyShiftData, setWeeklyShiftData] = React.useState<WeeklyShiftSummaryData[]>([]);
   const [dailyData, setDailyData] = React.useState<DailySummaryData[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [allPlans, setAllPlans] = React.useState<AllPlansData[]>([]);
+  const [selectedWeek, setSelectedWeek] = React.useState('all');
+
+  const weekOptions = React.useMemo(() => {
+    return allPlans
+      .map(plan => plan.week)
+      .filter((value, index, self) => self.indexOf(value) === index) // Unique weeks
+      .sort((a, b) => a - b);
+  }, [allPlans]);
 
   React.useEffect(() => {
     const fetchAllPlans = async () => {
         setLoading(true);
-        const weeklyData: WeeklySummaryData[] = [];
-        const weeklyShiftTotals: { [week: number]: { day: number, night: number } } = {};
-        const dailyTotals: { [key in keyof DailyProduction]: { day: number, night: number } } = { 
-            mon: { day: 0, night: 0 }, 
-            tue: { day: 0, night: 0 }, 
-            wed: { day: 0, night: 0 }, 
-            thu: { day: 0, night: 0 }, 
-            fri: { day: 0, night: 0 }, 
-            sat: { day: 0, night: 0 }, 
-            sun: { day: 0, night: 0 } 
-        };
-
+        const fetchedPlans: AllPlansData[] = [];
         try {
             const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
             plansSnapshot.forEach((doc) => {
                 const plan = doc.data();
-                const products: ProductData[] = plan.products || [];
-                const week = plan.week;
-
-                if (!week || isNaN(week)) {
-                    return;
-                }
-
-                if (!weeklyShiftTotals[week]) {
-                    weeklyShiftTotals[week] = { day: 0, night: 0 };
-                }
-
-                const totalPlanned = products.reduce((sum, item) => sum + (item.planned || 0), 0);
-                
-                let weeklyActual = 0;
-                products.forEach(item => {
-                    Object.entries(item.actual).forEach(([day, shifts]) => {
-                        const dayKey = day as keyof DailyProduction;
-                        
-                        weeklyShiftTotals[week].day += shifts.day || 0;
-                        weeklyShiftTotals[week].night += shifts.night || 0;
-                        
-                        dailyTotals[dayKey].day += shifts.day || 0;
-                        dailyTotals[dayKey].night += shifts.night || 0;
-
-                        weeklyActual += (shifts.day || 0) + (shifts.night || 0);
+                if (plan.week && plan.year && plan.products) {
+                    fetchedPlans.push({
+                        week: plan.week,
+                        year: plan.year,
+                        products: plan.products
                     });
-                });
-
-                weeklyData.push({
-                    week: week,
-                    name: `Semana ${week}`,
-                    planned: totalPlanned,
-                    actual: weeklyActual,
-                });
+                }
             });
-
-            weeklyData.sort((a, b) => a.week - b.week);
-            setSummaryData(weeklyData);
-            
-            const processedWeeklyShiftData = Object.keys(weeklyShiftTotals)
-                .map(week => ({
-                    name: `Semana ${week}`,
-                    day: weeklyShiftTotals[parseInt(week)].day,
-                    night: weeklyShiftTotals[parseInt(week)].night,
-                    week: parseInt(week)
-                }))
-                .sort((a, b) => a.week - b.week);
-
-            setWeeklyShiftData(processedWeeklyShiftData);
-
-
-            setDailyData([
-                { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
-                { name: 'Martes', day: dailyTotals.tue.day, night: dailyTotals.tue.night },
-                { name: 'Miércoles', day: dailyTotals.wed.day, night: dailyTotals.wed.night },
-                { name: 'Jueves', day: dailyTotals.thu.day, night: dailyTotals.thu.night },
-                { name: 'Viernes', day: dailyTotals.fri.day, night: dailyTotals.fri.night },
-                { name: 'Sábado', day: dailyTotals.sat.day, night: dailyTotals.sat.night },
-                { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
-            ]);
-
+            setAllPlans(fetchedPlans);
         } catch (error) {
             console.error('Failed to fetch production plans from Firestore:', error);
         }
@@ -158,6 +112,94 @@ export default function DashboardClient() {
 
     fetchAllPlans();
   }, []);
+
+  React.useEffect(() => {
+    if (allPlans.length === 0) return;
+
+    // Filter plans based on selected week
+    const filteredPlans = selectedWeek === 'all' 
+      ? allPlans 
+      : allPlans.filter(p => String(p.week) === selectedWeek);
+
+    const weeklyData: WeeklySummaryData[] = [];
+    const weeklyShiftTotals: { [week: number]: { day: number, night: number } } = {};
+    const dailyTotals: { [key in keyof DailyProduction]: { day: number, night: number } } = { 
+        mon: { day: 0, night: 0 }, 
+        tue: { day: 0, night: 0 }, 
+        wed: { day: 0, night: 0 }, 
+        thu: { day: 0, night: 0 }, 
+        fri: { day: 0, night: 0 }, 
+        sat: { day: 0, night: 0 }, 
+        sun: { day: 0, night: 0 } 
+    };
+
+    // Calculate daily totals for the filtered plans
+    filteredPlans.forEach(plan => {
+        plan.products.forEach(item => {
+            Object.entries(item.actual).forEach(([day, shifts]) => {
+                const dayKey = day as keyof DailyProduction;
+                dailyTotals[dayKey].day += shifts.day || 0;
+                dailyTotals[dayKey].night += shifts.night || 0;
+            });
+        });
+    });
+
+    // We calculate weekly totals based on ALL plans, not filtered ones
+    allPlans.forEach(plan => {
+        const { week, products } = plan;
+
+        if (!weeklyShiftTotals[week]) {
+            weeklyShiftTotals[week] = { day: 0, night: 0 };
+        }
+
+        const totalPlanned = products.reduce((sum, item) => sum + (item.planned || 0), 0);
+        let weeklyActual = 0;
+
+        products.forEach(item => {
+            Object.values(item.actual).forEach(shifts => {
+                weeklyShiftTotals[week].day += shifts.day || 0;
+                weeklyShiftTotals[week].night += shifts.night || 0;
+                weeklyActual += (shifts.day || 0) + (shifts.night || 0);
+            });
+        });
+        
+        // Avoid duplicating weekly summary data
+        if (!weeklyData.some(d => d.week === week)) {
+            weeklyData.push({
+                week: week,
+                name: `Semana ${week}`,
+                planned: totalPlanned,
+                actual: weeklyActual,
+            });
+        }
+    });
+
+    weeklyData.sort((a, b) => a.week - b.week);
+    setSummaryData(weeklyData);
+
+    const processedWeeklyShiftData = Object.keys(weeklyShiftTotals)
+        .map(week => ({
+            name: `Semana ${week}`,
+            day: weeklyShiftTotals[parseInt(week)].day,
+            night: weeklyShiftTotals[parseInt(week)].night,
+            week: parseInt(week)
+        }))
+        .sort((a, b) => a.week - b.week);
+
+    setWeeklyShiftData(processedWeeklyShiftData);
+
+    setDailyData([
+        { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
+        { name: 'Martes', day: dailyTotals.tue.day, night: dailyTotals.tue.night },
+        { name: 'Miércoles', day: dailyTotals.wed.day, night: dailyTotals.wed.night },
+        { name: 'Jueves', day: dailyTotals.thu.day, night: dailyTotals.thu.night },
+        { name: 'Viernes', day: dailyTotals.fri.day, night: dailyTotals.fri.night },
+        { name: 'Sábado', day: dailyTotals.sat.day, night: dailyTotals.sat.night },
+        { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
+    ]);
+
+  }, [allPlans, selectedWeek]);
+
 
   return (
     <div className="bg-background min-h-screen text-foreground">
@@ -206,6 +248,25 @@ export default function DashboardClient() {
             )}
           </CardContent>
         </Card>
+        
+        <div className="bg-card p-4 rounded-lg border flex items-center gap-4">
+            <div className="flex flex-col gap-1.5 w-full max-w-xs">
+                <Label htmlFor='week-filter'>Filtrar por Semana</Label>
+                <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                    <SelectTrigger id="week-filter">
+                        <SelectValue placeholder="Seleccionar semana" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todas las semanas</SelectItem>
+                        {weekOptions.map(week => (
+                            <SelectItem key={week} value={String(week)}>
+                                Semana {week}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+        </div>
 
         <div className="grid md:grid-cols-2 gap-6">
             <Card>
