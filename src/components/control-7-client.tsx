@@ -11,10 +11,15 @@ import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 
 const initialData: ProductData[] = [
-  { id: 'prod-1', productName: 'Widget-Alfa', planned: 500, actual: { mon: 95, tue: 105, wed: 100, thu: 98, fri: 102, sat: 0, sun: 0 } },
-  { id: 'prod-2', productName: 'Gadget-Beta', planned: 350, actual: { mon: 70, tue: 65, wed: 72, thu: 75, fri: 68, sat: 0, sun: 0 } },
-  { id: 'prod-3', productName: 'Engranaje-Gamma', planned: 700, actual: { mon: 120, tue: 130, wed: 145, thu: 140, fri: 150, sat: 50, sun: 20 } },
-  { id: 'prod-4', productName: 'Dispositivo-Delta', planned: 200, actual: { mon: 40, tue: 45, wed: 38, thu: 42, fri: 41, sat: 0, sun: 0 } },
+  { id: 'prod-1', productName: 'Azúcar 2kg (50kg)', planned: 500, actual: { mon: 95, tue: 105, wed: 100, thu: 98, fri: 102, sat: 0, sun: 0 } },
+  { id: 'prod-2', productName: 'Azúcar 1kg (50kg)', planned: 350, actual: { mon: 70, tue: 65, wed: 72, thu: 75, fri: 68, sat: 0, sun: 0 } },
+  { id: 'prod-3', productName: 'Azúcar 1kg Tuti (50kg)', planned: 700, actual: { mon: 120, tue: 130, wed: 145, thu: 140, fri: 150, sat: 50, sun: 20 } },
+  { id: 'prod-4', productName: 'Azúcar 0.5kg (25kg)', planned: 200, actual: { mon: 40, tue: 45, wed: 38, thu: 42, fri: 41, sat: 0, sun: 0 } },
+  { id: 'prod-5', productName: 'Azúcar 5kg (50kg)', planned: 400, actual: { mon: 80, tue: 85, wed: 78, thu: 82, fri: 81, sat: 0, sun: 0 } },
+  { id: 'prod-6', productName: 'Azúcar Granel A (50kg)', planned: 1000, actual: { mon: 200, tue: 210, wed: 190, thu: 205, fri: 195, sat: 100, sun: 50 } },
+  { id: 'prod-7', productName: 'Azúcar Morena 1kg (50kg)', planned: 250, actual: { mon: 50, tue: 55, wed: 48, thu: 52, fri: 51, sat: 0, sun: 0 } },
+  { id: 'prod-8', productName: 'Azúcar Morena 1kg Tuti (50kg)', planned: 300, actual: { mon: 60, tue: 65, wed: 58, thu: 62, fri: 61, sat: 0, sun: 0 } },
+  { id: 'prod-9', productName: 'Azúcar Morena Granel', planned: 800, actual: { mon: 150, tue: 160, wed: 155, thu: 165, fri: 170, sat: 70, sun: 30 } },
 ];
 
 const LOCAL_STORAGE_KEY = 'control7-data';
@@ -28,7 +33,12 @@ export default function Control7Client() {
     try {
       const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (savedData) {
-        setData(JSON.parse(savedData));
+        const parsedData = JSON.parse(savedData);
+        if (parsedData.length > 0) {
+          setData(parsedData);
+        } else {
+          setData(initialData);
+        }
       } else {
         setData(initialData);
       }
