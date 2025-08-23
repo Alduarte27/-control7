@@ -24,7 +24,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
   const chartData = data.map(item => ({
     name: item.productName,
     planned: item.planned,
-    actual: Object.values(item.actual).reduce((sum, val) => sum + (val || 0), 0),
+    actual: Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0),
   }));
 
   return (
@@ -34,7 +34,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         <CardDescription>Producción Planificada vs. Real por Producto</CardDescription>
       </CardHeader>
       <CardContent>
-        <ChartContainer config={chartConfig} className="w-full h-[400px]">
+        <ChartContainer config={chartConfig} className="w-full" style={{ height: "400px" }}>
           <BarChart accessibilityLayer data={chartData}>
             <CartesianGrid vertical={false} />
             <XAxis

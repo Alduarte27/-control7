@@ -1,11 +1,16 @@
+export type ShiftProduction = {
+  day: number;
+  night: number;
+};
+
 export type DailyProduction = {
-  mon: number;
-  tue: number;
-  wed: number;
-  thu: number;
-  fri: number;
-  sat: number;
-  sun: number;
+  mon: ShiftProduction;
+  tue: ShiftProduction;
+  wed: ShiftProduction;
+  thu: ShiftProduction;
+  fri: ShiftProduction;
+  sat: ShiftProduction;
+  sun: ShiftProduction;
 };
 
 export type ProductData = {
