@@ -90,14 +90,10 @@ export default function Control7Client() {
       <Header onSave={handleSave} />
       <div className="p-4 md:p-8 space-y-6">
         <KpiDashboard data={filteredData} />
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <FilterBar productSearch={productSearch} onProductSearchChange={setProductSearch} />
-            <ProductionTable data={filteredData} onDataChange={handleDataChange} />
-          </div>
-          <div className="lg:col-span-1">
-            <WeeklySummary data={filteredData} />
-          </div>
+        <div className="space-y-6">
+          <FilterBar productSearch={productSearch} onProductSearchChange={setProductSearch} />
+          <ProductionTable data={filteredData} onDataChange={handleDataChange} />
+          <WeeklySummary data={filteredData} />
         </div>
       </div>
     </div>
