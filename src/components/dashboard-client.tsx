@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Factory, ChevronLeft, Filter } from 'lucide-react';
@@ -40,6 +40,7 @@ type ProductSummaryData = {
   name: string;
   planned: number;
   actual: number;
+  color?: string;
 };
 
 const weeklyChartConfig = {
@@ -201,13 +202,19 @@ export default function DashboardClient() {
   }, []);
 
   React.useEffect(() => {
-    if (allPlans.length === 0 || categories.length === 0) return;
+    if (loading) return;
     
+    // Helper function to assign default category and then filter
     const getFilteredProducts = (products: ProductData[]): ProductData[] => {
-        if (selectedCategoryId === 'all') {
-            return products;
-        }
-        return products.filter(p => p.categoryId === selectedCategoryId);
+      const productsWithCategory = products.map(p => ({
+        ...p,
+        categoryId: p.categoryId || (categories.length > 0 ? categories[0].id : 'default'),
+      }));
+
+      if (selectedCategoryId === 'all') {
+        return productsWithCategory;
+      }
+      return productsWithCategory.filter(p => p.categoryId === selectedCategoryId);
     };
 
     // --- Data for charts that IGNORE week filter ---
@@ -267,7 +274,7 @@ export default function DashboardClient() {
         thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
         sun: { day: 0, night: 0 } 
     };
-    const productTotals: { [productName: string]: { planned: number; actual: number } } = {};
+    const productTotals: { [productName: string]: { planned: number; actual: number; color?: string; } } = {};
 
     const plansToProcess = selectedWeek === 'all' 
       ? allPlans 
@@ -277,7 +284,9 @@ export default function DashboardClient() {
       const filteredProducts = getFilteredProducts(plan.products);
       
       filteredProducts.forEach(item => {
-        if (!productTotals[item.productName]) productTotals[item.productName] = { planned: 0, actual: 0 };
+        if (!productTotals[item.productName]) {
+          productTotals[item.productName] = { planned: 0, actual: 0, color: item.color };
+        }
         
         productTotals[item.productName].planned += item.planned || 0;
         const itemActualTotal = Object.values(item.actual).reduce((sum, shifts) => sum + (shifts.day || 0) + (shifts.night || 0), 0);
@@ -306,11 +315,12 @@ export default function DashboardClient() {
             name,
             planned: productTotals[name].planned,
             actual: productTotals[name].actual,
+            color: productTotals[name].color,
         }))
         .filter(item => item.planned > 0 || item.actual > 0);
     setProductData(processedProductData);
 
-  }, [allPlans, selectedWeek, selectedCategoryId, categories]);
+  }, [allPlans, selectedWeek, selectedCategoryId, categories, loading]);
 
 
   return (
@@ -475,7 +485,11 @@ export default function DashboardClient() {
                                 <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
                                 <ChartLegend content={<ChartLegendContent />} />
                                 <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                                <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
+                                <Bar dataKey="actual" radius={4}>
+                                  {productData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color || 'var(--color-actual)'} />
+                                  ))}
+                                </Bar>
                             </BarChart>
                         </ChartContainer>
                     ) : <p className="text-center text-muted-foreground py-4">No hay datos de producción para los filtros seleccionados.</p>}
