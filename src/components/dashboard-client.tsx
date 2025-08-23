@@ -19,10 +19,11 @@ type WeeklySummaryData = {
   actual: number;
 };
 
-type ShiftSummaryData = {
-  name: string;
-  total: number;
-};
+type WeeklyShiftSummaryData = {
+    name: string;
+    day: number;
+    night: number;
+}
 
 type DailySummaryData = {
   name: string;
@@ -42,10 +43,14 @@ const weeklyChartConfig = {
 } satisfies ChartConfig;
 
 const shiftChartConfig = {
-    total: {
-      label: 'Total Producido',
-      color: 'hsl(var(--chart-2))',
+    day: {
+        label: 'Turno Día',
+        color: 'hsl(var(--chart-2))',
     },
+    night: {
+        label: 'Turno Noche',
+        color: 'hsl(var(--chart-3))',
+    }
 } satisfies ChartConfig;
   
 const dailyChartConfig = {
@@ -61,7 +66,7 @@ const dailyChartConfig = {
 
 export default function DashboardClient() {
   const [summaryData, setSummaryData] = React.useState<WeeklySummaryData[]>([]);
-  const [shiftData, setShiftData] = React.useState<ShiftSummaryData[]>([]);
+  const [weeklyShiftData, setWeeklyShiftData] = React.useState<WeeklyShiftSummaryData[]>([]);
   const [dailyData, setDailyData] = React.useState<DailySummaryData[]>([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -69,8 +74,7 @@ export default function DashboardClient() {
     const fetchAllPlans = async () => {
         setLoading(true);
         const weeklyData: WeeklySummaryData[] = [];
-        let totalDayShift = 0;
-        let totalNightShift = 0;
+        const weeklyShiftTotals: { [week: number]: { day: number, night: number } } = {};
         const dailyTotals: { [key in keyof DailyProduction]: { day: number, night: number } } = { 
             mon: { day: 0, night: 0 }, 
             tue: { day: 0, night: 0 }, 
@@ -86,6 +90,15 @@ export default function DashboardClient() {
             plansSnapshot.forEach((doc) => {
                 const plan = doc.data();
                 const products: ProductData[] = plan.products || [];
+                const week = plan.week;
+
+                if (!week || isNaN(week)) {
+                    return;
+                }
+
+                if (!weeklyShiftTotals[week]) {
+                    weeklyShiftTotals[week] = { day: 0, night: 0 };
+                }
 
                 const totalPlanned = products.reduce((sum, item) => sum + (item.planned || 0), 0);
                 
@@ -93,8 +106,9 @@ export default function DashboardClient() {
                 products.forEach(item => {
                     Object.entries(item.actual).forEach(([day, shifts]) => {
                         const dayKey = day as keyof DailyProduction;
-                        totalDayShift += shifts.day || 0;
-                        totalNightShift += shifts.night || 0;
+                        
+                        weeklyShiftTotals[week].day += shifts.day || 0;
+                        weeklyShiftTotals[week].night += shifts.night || 0;
                         
                         dailyTotals[dayKey].day += shifts.day || 0;
                         dailyTotals[dayKey].night += shifts.night || 0;
@@ -103,23 +117,28 @@ export default function DashboardClient() {
                     });
                 });
 
-                if (plan.week && !isNaN(plan.week)) {
-                    weeklyData.push({
-                        week: plan.week,
-                        name: `Semana ${plan.week}`,
-                        planned: totalPlanned,
-                        actual: weeklyActual,
-                    });
-                }
+                weeklyData.push({
+                    week: week,
+                    name: `Semana ${week}`,
+                    planned: totalPlanned,
+                    actual: weeklyActual,
+                });
             });
 
             weeklyData.sort((a, b) => a.week - b.week);
             setSummaryData(weeklyData);
+            
+            const processedWeeklyShiftData = Object.keys(weeklyShiftTotals)
+                .map(week => ({
+                    name: `Semana ${week}`,
+                    day: weeklyShiftTotals[parseInt(week)].day,
+                    night: weeklyShiftTotals[parseInt(week)].night,
+                    week: parseInt(week)
+                }))
+                .sort((a, b) => a.week - b.week);
 
-            setShiftData([
-                { name: 'Turno Día', total: totalDayShift },
-                { name: 'Turno Noche', total: totalNightShift },
-            ]);
+            setWeeklyShiftData(processedWeeklyShiftData);
+
 
             setDailyData([
                 { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
@@ -191,22 +210,23 @@ export default function DashboardClient() {
         <div className="grid md:grid-cols-2 gap-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Producción por Turno</CardTitle>
-                    <CardDescription>Total producido en el turno de día vs. noche.</CardDescription>
+                    <CardTitle>Producción por Turno y Semana</CardTitle>
+                    <CardDescription>Producción de turno día vs. noche por semana.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : shiftData.length > 0 && (shiftData[0].total > 0 || shiftData[1].total > 0) ? (
+                    {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : weeklyShiftData.length > 0 ? (
                         <ChartContainer config={shiftChartConfig} className="w-full h-[300px]">
-                            <BarChart accessibilityLayer data={shiftData} layout="vertical">
-                                <CartesianGrid horizontal={false} />
-                                <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} />
-                                <XAxis type="number" hide />
+                            <BarChart accessibilityLayer data={weeklyShiftData}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
+                                <YAxis />
                                 <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                                <Bar dataKey="total" fill="var(--color-total)" radius={4} layout="vertical">
-                                </Bar>
+                                <ChartLegend content={<ChartLegendContent />} />
+                                <Bar dataKey="day" fill="var(--color-day)" radius={4} />
+                                <Bar dataKey="night" fill="var(--color-night)" radius={4} />
                             </BarChart>
                         </ChartContainer>
-                    ) : <p className="text-center text-muted-foreground py-4">No hay datos de producción.</p>}
+                    ) : <p className="text-center text-muted-foreground py-4">No hay datos de producción por turno.</p>}
                 </CardContent>
             </Card>
             <Card>
