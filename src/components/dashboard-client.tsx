@@ -7,9 +7,10 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Factory, ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 import type { ProductData } from '@/lib/types';
 
-const LOCAL_STORAGE_KEY_PREFIX = 'control7-semana-';
 
 type WeeklySummaryData = {
   week: number;
@@ -31,40 +32,44 @@ const chartConfig = {
 
 export default function DashboardClient() {
   const [summaryData, setSummaryData] = React.useState<WeeklySummaryData[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const weeklyData: WeeklySummaryData[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(LOCAL_STORAGE_KEY_PREFIX)) {
+    const fetchAllPlans = async () => {
+        setLoading(true);
+        const weeklyData: WeeklySummaryData[] = [];
         try {
-          const week = parseInt(key.replace(LOCAL_STORAGE_KEY_PREFIX, ''), 10);
-          const savedData = localStorage.getItem(key);
-          if (savedData) {
-            const parsedData: ProductData[] = JSON.parse(savedData);
-            
-            const totalPlanned = parsedData.reduce((sum, item) => sum + item.planned, 0);
-            const totalActual = parsedData.reduce((sum, item) => 
-              sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + dayVal.day + dayVal.night, 0), 0
-            );
+            const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
+            plansSnapshot.forEach((doc) => {
+                const plan = doc.data();
+                const products: ProductData[] = plan.products || [];
 
-            if (!isNaN(week)) {
-              weeklyData.push({
-                week,
-                name: `Semana ${week}`,
-                planned: totalPlanned,
-                actual: totalActual,
-              });
-            }
-          }
+                const totalPlanned = products.reduce((sum, item) => sum + (item.planned || 0), 0);
+                const totalActual = products.reduce((sum, item) =>
+                    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0),
+                    0
+                );
+
+                if (plan.week && !isNaN(plan.week)) {
+                    weeklyData.push({
+                        week: plan.week,
+                        name: `Semana ${plan.week}`,
+                        planned: totalPlanned,
+                        actual: totalActual,
+                    });
+                }
+            });
+
+            weeklyData.sort((a, b) => a.week - b.week);
+            setSummaryData(weeklyData);
+
         } catch (error) {
-          console.error('Failed to parse data for key:', key, error);
+            console.error('Failed to fetch production plans from Firestore:', error);
         }
-      }
-    }
-    // Sort data by week number
-    weeklyData.sort((a, b) => a.week - b.week);
-    setSummaryData(weeklyData);
+        setLoading(false);
+    };
+
+    fetchAllPlans();
   }, []);
 
   return (
@@ -88,7 +93,9 @@ export default function DashboardClient() {
             <CardDescription>Comparación de lo planificado vs. lo ejecutado a lo largo del tiempo.</CardDescription>
           </CardHeader>
           <CardContent>
-            {summaryData.length > 0 ? (
+            {loading ? (
+                <p className="text-muted-foreground text-center py-8">Cargando datos del dashboard...</p>
+            ) : summaryData.length > 0 ? (
               <ChartContainer config={chartConfig} className="w-full h-[350px]">
                 <BarChart accessibilityLayer data={summaryData}>
                   <CartesianGrid vertical={false} />

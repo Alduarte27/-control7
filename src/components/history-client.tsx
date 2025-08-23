@@ -5,32 +5,50 @@ import Link from 'next/link';
 import { Factory, ChevronLeft } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-
-const LOCAL_STORAGE_KEY_PREFIX = 'control7-semana-';
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
 
 type SavedPlan = {
+  id: string; // Document ID from Firestore
   week: number;
   year: number;
 };
 
 export default function HistoryClient() {
   const [savedPlans, setSavedPlans] = React.useState<SavedPlan[]>([]);
+  const [loading, setLoading] = React.useState(true);
 
   React.useEffect(() => {
-    const plans: SavedPlan[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(LOCAL_STORAGE_KEY_PREFIX)) {
-        const week = parseInt(key.replace(LOCAL_STORAGE_KEY_PREFIX, ''), 10);
-        if (!isNaN(week)) {
-          // Assuming current year for simplicity. A more robust solution might store the year.
-          plans.push({ week, year: new Date().getFullYear() });
+    const fetchPlans = async () => {
+        setLoading(true);
+        const plans: SavedPlan[] = [];
+        try {
+            const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
+            plansSnapshot.forEach((doc) => {
+                const data = doc.data();
+                if (data.week && data.year) {
+                    plans.push({
+                        id: doc.id,
+                        week: data.week,
+                        year: data.year,
+                    });
+                }
+            });
+            // Sort plans by year, then by week number, descending
+            plans.sort((a, b) => {
+                if (a.year !== b.year) {
+                    return b.year - a.year;
+                }
+                return b.week - a.week;
+            });
+            setSavedPlans(plans);
+        } catch (error) {
+            console.error("Error fetching history from Firestore:", error);
         }
-      }
-    }
-    // Sort plans by week number, descending
-    plans.sort((a, b) => b.week - a.week);
-    setSavedPlans(plans);
+        setLoading(false);
+    };
+
+    fetchPlans();
   }, []);
 
   return (
@@ -54,10 +72,12 @@ export default function HistoryClient() {
             <CardDescription>Aquí puedes ver todos los planes de producción que has guardado.</CardDescription>
           </CardHeader>
           <CardContent>
-            {savedPlans.length > 0 ? (
+            {loading ? (
+                <p className="text-muted-foreground">Cargando historial...</p>
+            ) : savedPlans.length > 0 ? (
               <ul className="space-y-2">
                 {savedPlans.map((plan) => (
-                  <li key={plan.week} className="border p-4 rounded-md flex justify-between items-center">
+                  <li key={plan.id} className="border p-4 rounded-md flex justify-between items-center">
                     <span className="font-medium">Semana {plan.week}, {plan.year}</span>
                      <Button asChild variant="secondary">
                         {/* This link isn't functional yet, as we need a way to pass the week to the main page */}

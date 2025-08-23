@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, getDocs } from 'firebase/firestore';
 
-const PRODUCTS_STORAGE_KEY = 'control7-products-list';
 
 export default function AdminClient() {
   const [products, setProducts] = React.useState<ProductDefinition[]>([]);
@@ -18,30 +19,25 @@ export default function AdminClient() {
   const { toast } = useToast();
 
   React.useEffect(() => {
-    try {
-      const savedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
-      if (savedProducts) {
-        setProducts(JSON.parse(savedProducts));
-      }
-    } catch (error) {
-      console.error('Error loading products from localStorage', error);
-    }
-  }, []);
+    const fetchProducts = async () => {
+        try {
+            const productsCollection = collection(db, 'products');
+            const productsSnapshot = await getDocs(productsCollection);
+            const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition));
+            setProducts(productsList);
+        } catch (error) {
+            console.error('Error loading products from Firestore', error);
+            toast({
+                title: 'Error',
+                description: 'No se pudieron cargar los productos.',
+                variant: 'destructive',
+            });
+        }
+    };
+    fetchProducts();
+  }, [toast]);
 
-  const saveProducts = (updatedProducts: ProductDefinition[]) => {
-    try {
-        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(updatedProducts));
-        setProducts(updatedProducts);
-    } catch (error) {
-        toast({
-            title: 'Error',
-            description: 'No se pudieron guardar los productos.',
-            variant: 'destructive',
-        });
-    }
-  };
-
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     if (newProductName.trim() === '') {
       toast({
         title: 'Error',
@@ -51,19 +47,31 @@ export default function AdminClient() {
       return;
     }
 
-    const newProduct: ProductDefinition = {
-      id: `prod-${Date.now()}`,
-      productName: newProductName.trim(),
-    };
-    
-    const updatedProducts = [...products, newProduct];
-    saveProducts(updatedProducts);
-    
-    setNewProductName('');
-    toast({
-      title: 'Producto Añadido',
-      description: `Se ha añadido "${newProduct.productName}".`,
-    });
+    try {
+        const docRef = await addDoc(collection(db, 'products'), {
+            productName: newProductName.trim(),
+        });
+
+        const newProduct: ProductDefinition = {
+            id: docRef.id,
+            productName: newProductName.trim(),
+        };
+
+        setProducts(prevProducts => [...prevProducts, newProduct]);
+        setNewProductName('');
+        toast({
+            title: 'Producto Añadido',
+            description: `Se ha añadido "${newProduct.productName}".`,
+        });
+
+    } catch (error) {
+        console.error('Error adding product to Firestore: ', error);
+        toast({
+            title: 'Error',
+            description: 'No se pudo añadir el producto.',
+            variant: 'destructive',
+        });
+    }
   };
 
   return (

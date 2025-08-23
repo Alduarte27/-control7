@@ -4,28 +4,14 @@ import React from 'react';
 import type { ProductData, DailyProduction, ShiftProduction, ProductDefinition } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { getISOWeek } from 'date-fns';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 
 import Header from './header';
 import FilterBar from './filter-bar';
 import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
-
-const initialProductDefinitions: ProductDefinition[] = [
-    { id: 'prod-1', productName: 'Azúcar 500g (25 kg) San Juan' },
-    { id: 'prod-2', productName: 'Azúcar 1 kg - Blanca (50 kg) San Juan' },
-    { id: 'prod-3', productName: 'Azúcar 2 kg - Blanca (50 kg) San Juan' },
-    { id: 'prod-4', productName: 'Azúcar 5 kg - Blanca (50 kg) San Juan' },
-    { id: 'prod-5', productName: 'Azúcar 1 kg - Blanca (50 kg) Don Ariel' },
-    { id: 'prod-6', productName: 'Azúcar Granel 50Kg - Blanca' },
-    { id: 'prod-7', productName: 'Azúcar 1 kg - Morena (50 kg) San Juan' },
-    { id: 'prod-8', productName: 'Azúcar 2 kg - Morena (50 kg) San Juan' },
-    { id: 'prod-9', productName: 'Azúcar 1 kg - Morena (50 kg) Don Ariel' },
-    { id: 'prod-10', productName: 'Azúcar Granel 50Kg - Morena' },
-];
-
-const LOCAL_STORAGE_KEY_PREFIX = 'control7-semana-';
-const PRODUCTS_STORAGE_KEY = 'control7-products-list';
 
 const emptyProductionDay: ShiftProduction = { day: 0, night: 0 };
 const emptyActual: DailyProduction = {
@@ -42,10 +28,12 @@ export default function Control7Client() {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
   const [date, setDate] = React.useState<Date | undefined>(new Date());
+  const [loading, setLoading] = React.useState(true);
   const { toast } = useToast();
 
+  const currentYear = (date || new Date()).getFullYear();
   const currentWeek = getISOWeek(date || new Date());
-  const LOCAL_STORAGE_KEY = `${LOCAL_STORAGE_KEY_PREFIX}${currentWeek}`;
+  const planId = `${currentYear}-W${currentWeek}`;
 
   const generateInitialData = (products: ProductDefinition[]): ProductData[] => {
     return products.map(p => ({
@@ -56,53 +44,66 @@ export default function Control7Client() {
   };
 
   React.useEffect(() => {
-    let productDefinitions: ProductDefinition[] = [];
-    try {
-      const savedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
-      if (savedProducts) {
-        productDefinitions = JSON.parse(savedProducts);
-      } else {
-        productDefinitions = initialProductDefinitions;
-        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(initialProductDefinitions));
-      }
-    } catch (error) {
-      console.error("Failed to load products from local storage", error);
-      productDefinitions = initialProductDefinitions;
-    }
-    
-    const initialData = generateInitialData(productDefinitions);
+    const fetchData = async () => {
+        setLoading(true);
+        try {
+            // Fetch product definitions from Firestore
+            const productsSnapshot = await getDocs(collection(db, "products"));
+            const productDefinitions = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition));
 
-    try {
-      const savedData = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (savedData) {
-        const parsedData: ProductData[] = JSON.parse(savedData);
-        // Sync saved data with current product definitions
-        const syncedData = productDefinitions.map(def => {
-          const found = parsedData.find(d => d.id === def.id);
-          return found || { ...def, planned: 0, actual: JSON.parse(JSON.stringify(emptyActual)) };
-        });
-        setData(syncedData);
-      } else {
-        setData(initialData);
-      }
-    } catch (error) {
-      console.error("Failed to load week data from local storage", error);
-      setData(initialData);
-    }
-  }, [currentWeek, LOCAL_STORAGE_KEY]);
+            if (productDefinitions.length === 0) {
+                setData([]);
+                setLoading(false);
+                return;
+            }
 
-  const handleSave = () => {
+            // Fetch the production plan for the current week
+            const planDocRef = doc(db, "productionPlans", planId);
+            const planDocSnap = await getDoc(planDocRef);
+
+            if (planDocSnap.exists()) {
+                const planData = planDocSnap.data();
+                const weeklyData: ProductData[] = planData.products;
+
+                // Sync with latest product definitions
+                const syncedData = productDefinitions.map(def => {
+                    const found = weeklyData.find(d => d.id === def.id);
+                    return found || { ...def, planned: 0, actual: JSON.parse(JSON.stringify(emptyActual)) };
+                });
+                setData(syncedData);
+            } else {
+                // If no plan exists, create an initial one
+                setData(generateInitialData(productDefinitions));
+            }
+        } catch (error) {
+            console.error("Error fetching data from Firestore:", error);
+            toast({
+                title: 'Error de Carga',
+                description: 'No se pudieron cargar los datos desde Firestore.',
+                variant: 'destructive',
+            });
+            // Fallback to empty state
+            setData([]);
+        }
+        setLoading(false);
+    };
+
+    fetchData();
+  }, [planId]);
+
+  const handleSave = async () => {
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+      const planDocRef = doc(db, "productionPlans", planId);
+      await setDoc(planDocRef, { products: data, week: currentWeek, year: currentYear });
       toast({
         title: 'Plan Guardado',
-        description: `Los datos para la semana ${currentWeek} han sido guardados.`,
+        description: `Los datos para la semana ${currentWeek} han sido guardados en Firestore.`,
       });
     } catch (error) {
-      console.error("Failed to save data to local storage", error);
+      console.error("Error saving data to Firestore", error);
       toast({
         title: 'Error al Guardar',
-        description: 'Ocurrió un error al guardar tus datos.',
+        description: 'Ocurrió un error al guardar tus datos en Firestore.',
         variant: 'destructive',
       });
     }
@@ -141,15 +142,21 @@ export default function Control7Client() {
             date={date}
             onDateChange={setDate}
         />
-        <KpiDashboard data={filteredData} />
-        <div className="space-y-6">
-          <ProductionTable 
-            data={filteredData} 
-            onPlannedChange={handlePlannedDataChange} 
-            onActualChange={handleActualDataChange} 
-          />
-          <WeeklySummary data={filteredData} />
-        </div>
+        {loading ? (
+            <p>Cargando datos...</p>
+        ) : (
+            <>
+                <KpiDashboard data={filteredData} />
+                <div className="space-y-6">
+                  <ProductionTable 
+                    data={filteredData} 
+                    onPlannedChange={handlePlannedDataChange} 
+                    onActualChange={handleActualDataChange} 
+                  />
+                  <WeeklySummary data={filteredData} />
+                </div>
+            </>
+        )}
       </div>
     </div>
   );
