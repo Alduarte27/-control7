@@ -197,44 +197,44 @@ export default function DashboardClient() {
 
   React.useEffect(() => {
     if (loading || categories.length === 0) return;
-    
-    // Helper function to assign default category and then filter
-    const getFilteredProducts = (products: ProductData[]): ProductData[] => {
-      const productsWithCategory = products.map(p => ({
-        ...p,
-        categoryId: p.categoryId || (categories.find(c => c.name === "Familiar")?.id || categories[0]?.id),
-      }));
 
-      if (selectedCategoryId === 'all') {
-        return productsWithCategory;
-      }
-      return productsWithCategory.filter(p => p.categoryId === selectedCategoryId);
+    const defaultCategoryId = categories.find(c => c.name === "Familiar")?.id || categories[0]?.id;
+
+    const getFilteredProducts = (products: ProductData[]): ProductData[] => {
+        const productsWithCategory = products.map(p => ({
+            ...p,
+            categoryId: p.categoryId || defaultCategoryId,
+        }));
+
+        if (selectedCategoryId === 'all') {
+            return productsWithCategory;
+        }
+        return productsWithCategory.filter(p => p.categoryId === selectedCategoryId);
     };
 
-    // --- Data for charts that IGNORE week filter ---
     const weeklyDataMap: { [week: number]: { planned: number; actual: number } } = {};
     const weeklyShiftTotals: { [week: number]: { day: number; night: number } } = {};
 
     allPlans.forEach(plan => {
-      const filteredProducts = getFilteredProducts(plan.products);
+        const filteredProducts = getFilteredProducts(plan.products);
 
-      if (!weeklyDataMap[plan.week]) weeklyDataMap[plan.week] = { planned: 0, actual: 0 };
-      if (!weeklyShiftTotals[plan.week]) weeklyShiftTotals[plan.week] = { day: 0, night: 0 };
+        if (!weeklyDataMap[plan.week]) weeklyDataMap[plan.week] = { planned: 0, actual: 0 };
+        if (!weeklyShiftTotals[plan.week]) weeklyShiftTotals[plan.week] = { day: 0, night: 0 };
 
-      filteredProducts.forEach(item => {
-        weeklyDataMap[plan.week].planned += item.planned || 0;
-        let actualForWeek = 0;
-        Object.values(item.actual).forEach(shifts => {
-            const dayVal = shifts.day || 0;
-            const nightVal = shifts.night || 0;
-            weeklyShiftTotals[plan.week].day += dayVal;
-            weeklyShiftTotals[plan.week].night += nightVal;
-            actualForWeek += dayVal + nightVal;
+        filteredProducts.forEach(item => {
+            weeklyDataMap[plan.week].planned += item.planned || 0;
+            let actualForWeek = 0;
+            Object.values(item.actual).forEach(shifts => {
+                const dayVal = shifts.day || 0;
+                const nightVal = shifts.night || 0;
+                weeklyShiftTotals[plan.week].day += dayVal;
+                weeklyShiftTotals[plan.week].night += nightVal;
+                actualForWeek += dayVal + nightVal;
+            });
+            weeklyDataMap[plan.week].actual += actualForWeek;
         });
-        weeklyDataMap[plan.week].actual += actualForWeek;
-      });
     });
-
+    
     const weeklyData: WeeklySummaryData[] = Object.keys(weeklyDataMap)
         .map(weekStr => {
             const week = parseInt(weekStr, 10);
@@ -250,7 +250,7 @@ export default function DashboardClient() {
         })
         .sort((a, b) => a.week - b.week);
     setSummaryData(weeklyData);
-    
+
     const processedWeeklyShiftData = Object.keys(weeklyShiftTotals)
         .map(week => ({
             name: `Semana ${week}`,
@@ -261,8 +261,6 @@ export default function DashboardClient() {
         .sort((a, b) => a.week - b.week);
     setWeeklyShiftData(processedWeeklyShiftData);
 
-
-    // --- Data for charts that RESPECT week filter ---
     const dailyTotals: { [key in keyof DailyProduction]: { day: number; night: number } } = { 
         mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
         thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
@@ -463,8 +461,8 @@ export default function DashboardClient() {
                 </CardHeader>
                 <CardContent>
                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : productData.length > 0 ? (
-                        <ChartContainer config={productChartConfig} className="w-full h-[400px]">
-                            <BarChart accessibilityLayer data={productData} margin={{ top: 20, right: 20, left: 20, bottom: 80 }}>
+                        <ChartContainer config={productChartConfig} className="w-full h-[500px]">
+                            <BarChart accessibilityLayer data={productData} margin={{ top: 20, right: 20, left: 20, bottom: 120 }}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis 
                                     dataKey="name" 
