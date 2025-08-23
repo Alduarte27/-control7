@@ -212,21 +212,19 @@ export default function DashboardClient() {
     allPlans.forEach(plan => {
       const filteredProducts = getFilteredProducts(plan.products);
 
-      filteredProducts.forEach(item => {
-        const { week } = plan;
-        if (!weeklyDataMap[week]) weeklyDataMap[week] = { planned: 0, actual: 0 };
-        if (!weeklyShiftTotals[week]) weeklyShiftTotals[week] = { day: 0, night: 0 };
+      if (!weeklyDataMap[plan.week]) weeklyDataMap[plan.week] = { planned: 0, actual: 0 };
+      if (!weeklyShiftTotals[plan.week]) weeklyShiftTotals[plan.week] = { day: 0, night: 0 };
 
-        weeklyDataMap[week].planned += item.planned || 0;
-        const actualTotalForItem = Object.values(item.actual).reduce((sum, shifts) => {
+      filteredProducts.forEach(item => {
+        weeklyDataMap[plan.week].planned += item.planned || 0;
+        Object.values(item.actual).forEach(shifts => {
             const dayVal = shifts.day || 0;
             const nightVal = shifts.night || 0;
-            weeklyShiftTotals[week].day += dayVal;
-            weeklyShiftTotals[week].night += nightVal;
-            return sum + dayVal + nightVal;
-        }, 0);
-        weeklyDataMap[week].actual += actualTotalForItem;
+            weeklyShiftTotals[plan.week].day += dayVal;
+            weeklyShiftTotals[plan.week].night += nightVal;
+        });
       });
+      weeklyDataMap[plan.week].actual = weeklyShiftTotals[plan.week].day + weeklyShiftTotals[plan.week].night
     });
 
     const weeklyData: WeeklySummaryData[] = Object.keys(weeklyDataMap)
