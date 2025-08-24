@@ -35,4 +35,5 @@ export type ProductData = ProductDefinition & {
   categoryIsPlanned: boolean;
   planned: number;
   actual: DailyProduction;
+  isSuggested?: boolean; // To flag if the plan was AI-suggested
 };

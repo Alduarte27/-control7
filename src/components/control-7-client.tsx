@@ -5,7 +5,8 @@ import type { ProductData, ProductDefinition, CategoryDefinition, DailyProductio
 import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { suggestProductionPlan } from '@/ai/flows/suggest-plan-flow';
 
 import Header from './header';
 import FilterBar from './filter-bar';
@@ -38,6 +39,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
+  const [isSuggestingPlan, setIsSuggestingPlan] = React.useState(false);
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -154,8 +156,10 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
   const handleSave = async () => {
     try {
+      // Clean isSuggested flag before saving
+      const dataToSave = data.map(({ isSuggested, ...rest }) => rest);
       const planDocRef = doc(db, "productionPlans", savePlanId);
-      await setDoc(planDocRef, { products: data, week: currentWeek, year: currentYear });
+      await setDoc(planDocRef, { products: dataToSave, week: currentWeek, year: currentYear });
       setIsDirty(false);
       toast({
         title: 'Plan Guardado',
@@ -191,6 +195,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 return {
                     ...currentItem,
                     planned: correspondingLastWeekItem ? correspondingLastWeekItem.planned : currentItem.planned,
+                    isSuggested: false, // Reset suggestion flag
                 };
             })
         );
@@ -215,6 +220,61 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
       });
     }
   };
+
+  const handleSuggestPlan = async () => {
+    setIsSuggestingPlan(true);
+    toast({
+        title: 'Generando Sugerencia',
+        description: 'La IA está analizando el historial de producción. Esto puede tardar un momento...',
+    });
+    try {
+        const plansQuery = query(collection(db, "productionPlans"), orderBy("year", "desc"), orderBy("week", "desc"), limit(8));
+        const plansSnapshot = await getDocs(plansQuery);
+
+        const historicalData = plansSnapshot.docs.map(doc => {
+            const plan = doc.data();
+            return {
+                week: plan.week,
+                year: plan.year,
+                products: plan.products.map((p: ProductData) => ({
+                    id: p.id,
+                    productName: p.productName,
+                    totalActual: Object.values(p.actual).reduce((sum, s: any) => sum + s.day + s.night, 0),
+                }))
+            }
+        }).reverse(); // Reverse to have oldest first
+
+        const allProducts = data.map(p => ({ id: p.id, productName: p.productName }));
+
+        const result = await suggestProductionPlan({ historicalData, allProducts });
+        
+        const suggestionsMap = new Map(result.suggestions.map(s => [s.productId, s.suggestedPlan]));
+
+        setData(currentData => 
+            currentData.map(item => ({
+                ...item,
+                planned: suggestionsMap.get(item.id) ?? item.planned,
+                isSuggested: suggestionsMap.has(item.id),
+            }))
+        );
+        
+        setIsDirty(true);
+        toast({
+            title: 'Sugerencia Aplicada',
+            description: 'Se ha generado un nuevo plan. Revisa los valores y ajústalos si es necesario.',
+        });
+    } catch (error) {
+        console.error("Error suggesting plan:", error);
+        toast({
+            title: 'Error de la IA',
+            description: 'No se pudo generar una sugerencia. Por favor, inténtalo de nuevo.',
+            variant: 'destructive',
+        });
+    } finally {
+        setIsSuggestingPlan(false);
+    }
+  };
+
 
   const handleExport = () => {
     if (data.length === 0) {
@@ -290,7 +350,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
   const handlePlannedDataChange = (id: string, value: number) => {
     setData(currentData =>
-      currentData.map(item => item.id === id ? { ...item, planned: value } : item)
+      currentData.map(item => item.id === id ? { ...item, planned: value, isSuggested: false } : item)
     );
     setIsDirty(true);
   };
@@ -341,6 +401,8 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
             date={date}
             onDateChange={handleDateChange}
             onCopyLastWeek={handleCopyLastWeek}
+            onSuggestPlan={handleSuggestPlan}
+            isSuggestingPlan={isSuggestingPlan}
         />
         {loading || !date ? (
             <p>Cargando datos...</p>

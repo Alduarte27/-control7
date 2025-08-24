@@ -44,7 +44,7 @@ const renderProductRow = (item: ProductData, handlePlannedInputChange: (id: stri
             type="number"
             value={item.planned}
             onChange={(e) => handlePlannedInputChange(item.id, e.target.value)}
-            className="text-right"
+            className={cn("text-right", item.isSuggested && "bg-blue-100 dark:bg-blue-900/50 border-blue-500")}
             min="0"
           />
         </TableCell>
