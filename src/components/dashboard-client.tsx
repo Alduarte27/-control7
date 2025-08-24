@@ -269,7 +269,7 @@ export default function DashboardClient() {
         filteredProducts.forEach(item => {
             const totalActualForItem = calculateTotalActual(item);
             
-            if (item.categoryIsPlanned) {
+            if (item.categoryIsPlanned && item.planned > 0) {
                 weeklyMap[plan.week].planned += item.planned || 0;
             }
             
@@ -277,7 +277,7 @@ export default function DashboardClient() {
 
             if (item.categoryIsPlanned && (item.planned || 0) > 0) {
                 weeklyMap[plan.week].actualForPlanned += totalActualForItem;
-            } else if (item.categoryIsPlanned && totalActualForItem > 0) {
+            } else if (totalActualForItem > 0) {
                 weeklyMap[plan.week].unplannedProduction += totalActualForItem;
             }
             
@@ -519,9 +519,9 @@ export default function DashboardClient() {
                   <YAxis />
                   <ChartTooltip cursor={false} content={<WeeklyTooltipContent />} />
                   <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="planned" fill="hsl(var(--accent))" radius={4} barSize={35} />
-                  <Bar dataKey="actualForPlanned" stackId="a" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} barSize={35} />
-                  <Bar dataKey="unplannedProduction" stackId="a" fill="url(#colorUnplannedProduction)" radius={[4, 4, 0, 0]} barSize={35} />
+                  <Bar dataKey="planned" fill="hsl(var(--accent))" radius={4} barSize={50} />
+                  <Bar dataKey="actualForPlanned" stackId="a" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} barSize={50} />
+                  <Bar dataKey="unplannedProduction" stackId="a" fill="url(#colorUnplannedProduction)" radius={[4, 4, 0, 0]} barSize={50} />
                 </BarChart>
               </ChartContainer>
             ) : (
