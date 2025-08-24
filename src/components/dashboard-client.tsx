@@ -52,13 +52,13 @@ const weeklyChartConfig = {
     label: 'Planificado',
     color: 'hsl(var(--accent))',
   },
-  totalActual: {
-    label: 'Real Total',
-    color: 'hsl(var(--primary))',
-  },
   actualForPlanned: {
     label: 'Ejecutado (s/Plan)',
     color: 'hsl(var(--chart-2))',
+  },
+  unplannedProduction: {
+    label: 'No Programado',
+    color: 'hsl(var(--chart-3))',
   },
 } satisfies ChartConfig;
 
@@ -153,7 +153,7 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
             <span className={cn("text-right font-medium text-xs", varianceColor)}>{variance.toLocaleString()}</span>
             
             <div className="flex items-center gap-2">
-              <div className="w-1 h-1 rounded-full bg-foreground/50 ml-1 mr-1" />
+              <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--chart-3))'}} />
               <span>No Programado:</span>
             </div>
             <span className="text-right font-medium">{data.unplannedProduction.toLocaleString()}</span>
@@ -161,7 +161,7 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
             <div className="col-span-2 border-t my-1"></div>
             
             <div className="flex items-center gap-2 font-bold">
-              <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--primary))'}} />
+              <div className="w-1 h-1 rounded-full bg-foreground/50 ml-1 mr-1" />
               <span>Producción Total:</span>
             </div>
             <span className="text-right font-bold">{data.totalActual.toLocaleString()}</span>
@@ -277,7 +277,7 @@ export default function DashboardClient() {
 
             if (item.categoryIsPlanned && (item.planned || 0) > 0) {
                 weeklyMap[plan.week].actualForPlanned += totalActualForItem;
-            } else if (item.categoryIsPlanned) {
+            } else if (item.categoryIsPlanned && totalActualForItem > 0) {
                 weeklyMap[plan.week].unplannedProduction += totalActualForItem;
             }
             
@@ -494,7 +494,7 @@ export default function DashboardClient() {
           <CardHeader>
             <CardTitle>Resumen de Producción por Semana</CardTitle>
             <CardDescription>
-                Visión general de la producción. Compara el plan total vs. la producción real total. Pasa el cursor sobre las barras para ver el desglose.
+                Compara el plan con la producción real. La barra de producción real muestra el desglose entre lo ejecutado del plan y lo no programado.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -514,8 +514,8 @@ export default function DashboardClient() {
                   <ChartTooltip cursor={false} content={<WeeklyTooltipContent />} />
                   <ChartLegend content={<ChartLegendContent />} />
                   <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                  <Bar dataKey="totalActual" fill="var(--color-totalActual)" radius={4} />
-                  <Bar dataKey="actualForPlanned" fill="var(--color-actualForPlanned)" radius={4} barSize={20} />
+                  <Bar dataKey="actualForPlanned" stackId="a" fill="var(--color-actualForPlanned)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="unplannedProduction" stackId="a" fill="var(--color-unplannedProduction)" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ChartContainer>
             ) : (
