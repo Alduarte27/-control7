@@ -250,6 +250,11 @@ export default function DashboardClient() {
         if (selectedCategoryId === 'all') return products;
         return products.filter(p => p.categoryId === selectedCategoryId);
     };
+    
+    // Function to calculate total actual production for a product
+    const calculateTotalActual = (product: ProductData) =>
+      Object.values(product.actual).reduce((sum, shifts) => sum + (shifts.day || 0) + (shifts.night || 0), 0);
+
 
     const weeklyDataMap: { [week: number]: { planned: number; actual: number } } = {};
     const weeklyShiftTotals: { [week: number]: { day: number; night: number } } = {};
@@ -261,16 +266,23 @@ export default function DashboardClient() {
         if (!weeklyShiftTotals[plan.week]) weeklyShiftTotals[plan.week] = { day: 0, night: 0 };
 
         filteredProducts.forEach(item => {
-            weeklyDataMap[plan.week].planned += item.planned || 0;
-            let actualForWeek = 0;
+            const totalActualForItem = calculateTotalActual(item);
+
+            // Logic for weekly summary chart (Planned vs Real)
+            if (item.categoryIsPlanned && item.planned > 0) {
+              weeklyDataMap[plan.week].planned += item.planned || 0;
+              weeklyDataMap[plan.week].actual += totalActualForItem;
+            } else if (!item.categoryIsPlanned) {
+              // For non-plannable, only add to actual if you want to show them.
+              // Here, we only show actual for plannable with plan > 0, so we can even omit this else if.
+              // Let's keep it clean: if not plannable, it doesn't contribute to the Planned vs Real chart.
+            }
+
+            // Logic for shift totals (includes all production)
             Object.values(item.actual).forEach(shifts => {
-                const dayVal = shifts.day || 0;
-                const nightVal = shifts.night || 0;
-                weeklyShiftTotals[plan.week].day += dayVal;
-                weeklyShiftTotals[plan.week].night += nightVal;
-                actualForWeek += dayVal + nightVal;
+                weeklyShiftTotals[plan.week].day += shifts.day || 0;
+                weeklyShiftTotals[plan.week].night += shifts.night || 0;
             });
-            weeklyDataMap[plan.week].actual += actualForWeek;
         });
     });
     
@@ -319,9 +331,17 @@ export default function DashboardClient() {
           productTotals[item.productName] = { planned: 0, actual: 0, color: item.color };
         }
         
-        productTotals[item.productName].planned += item.planned || 0;
-        const itemActualTotal = Object.values(item.actual).reduce((sum, shifts) => sum + (shifts.day || 0) + (shifts.night || 0), 0);
-        productTotals[item.productName].actual += itemActualTotal;
+        const itemActualTotal = calculateTotalActual(item);
+        
+        if (item.categoryIsPlanned) {
+            productTotals[item.productName].planned += item.planned || 0;
+            if (item.planned > 0) {
+                 productTotals[item.productName].actual += itemActualTotal;
+            }
+        } else {
+            // For non-plannable categories, there's no "planned", but we show their "actual" production
+            productTotals[item.productName].actual += itemActualTotal;
+        }
 
         Object.entries(item.actual).forEach(([day, shifts]) => {
             const dayKey = day as keyof DailyProduction;
@@ -367,22 +387,26 @@ export default function DashboardClient() {
                 const productB = productsB.find(p => p.productName === name);
 
                 const plannedA = productA?.planned || 0;
-                const actualA = productA ? Object.values(productA.actual).reduce((sum, s) => sum + s.day + s.night, 0) : 0;
+                const actualA = productA ? calculateTotalActual(productA) : 0;
                 const plannedB = productB?.planned || 0;
-                const actualB = productB ? Object.values(productB.actual).reduce((sum, s) => sum + s.day + s.night, 0) : 0;
+                const actualB = productB ? calculateTotalActual(productB) : 0;
 
                 return { name, plannedA, actualA, plannedB, actualB };
             }).filter(p => p.plannedA > 0 || p.actualA > 0 || p.plannedB > 0 || p.actualB > 0);
 
             const totalsA = productsA.reduce((acc, p) => {
-                acc.planned += p.planned || 0;
-                acc.actual += Object.values(p.actual).reduce((s, d) => s + d.day + d.night, 0);
+                if (p.categoryIsPlanned && p.planned > 0) {
+                    acc.planned += p.planned || 0;
+                    acc.actual += calculateTotalActual(p);
+                }
                 return acc;
             }, { planned: 0, actual: 0 });
 
             const totalsB = productsB.reduce((acc, p) => {
-                acc.planned += p.planned || 0;
-                acc.actual += Object.values(p.actual).reduce((s, d) => s + d.day + d.night, 0);
+                if (p.categoryIsPlanned && p.planned > 0) {
+                    acc.planned += p.planned || 0;
+                    acc.actual += calculateTotalActual(p);
+                }
                 return acc;
             }, { planned: 0, actual: 0 });
 
@@ -422,8 +446,8 @@ export default function DashboardClient() {
             <CardTitle>Resumen de Producción por Semana</CardTitle>
             <CardDescription>
                 {isCategoryPlannable
-                    ? 'Comparación de lo planificado vs. ejecutado. Ignora el filtro de semana.'
-                    : 'Producción real para la categoría no planificada. Ignora el filtro de semana.'}
+                    ? 'Comparación de lo planificado vs. ejecutado para productos con plan > 0.'
+                    : 'Producción real para la categoría no planificada.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -550,7 +574,7 @@ export default function DashboardClient() {
                     <CardTitle>Producción por Producto</CardTitle>
                     <CardDescription>
                          {isCategoryPlannable
-                            ? 'Planificado vs. Real para cada producto en el período seleccionado.'
+                            ? 'Planificado vs. Real (para productos con plan > 0) en el período seleccionado.'
                             : 'Producción real para cada producto en el período seleccionado.'}
                     </CardDescription>
                 </CardHeader>
@@ -590,7 +614,7 @@ export default function DashboardClient() {
             <CardHeader>
                 <CardTitle>Análisis Comparativo Semanal</CardTitle>
                 <CardDescription>
-                    Compara el rendimiento de dos semanas. El filtro de categoría se aplica aquí también.
+                    Compara el rendimiento de dos semanas (solo productos con plan > 0). El filtro de categoría se aplica aquí también.
                 </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
