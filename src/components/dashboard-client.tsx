@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Factory, ChevronLeft, Filter } from 'lucide-react';
@@ -101,6 +101,7 @@ type AllPlansData = {
 const CustomTooltipContent = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
+      const showPlanned = 'planned' in data && data.planned > 0;
       return (
         <div className="rounded-lg border bg-background p-2 shadow-sm">
           <div className="grid grid-cols-2 gap-2">
@@ -109,15 +110,17 @@ const CustomTooltipContent = ({ active, payload, label }: any) => {
                 {label}
               </span>
               <div className="font-bold text-muted-foreground">
+                {showPlanned && (
+                  <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--accent))'}} />
+                      Planificado
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--accent))'}} />
-                    Planificado
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{backgroundColor: payload[1]?.color || 'hsl(var(--primary))'}} />
+                    <div className="w-2 h-2 rounded-full" style={{backgroundColor: payload.find(p => p.dataKey === 'actual')?.color || 'hsl(var(--primary))'}} />
                     Real
                 </div>
-                {'variance' in data && (
+                {showPlanned && 'variance' in data && (
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-transparent" />
                     Varianza
@@ -128,9 +131,9 @@ const CustomTooltipContent = ({ active, payload, label }: any) => {
             <div className="flex flex-col space-y-1 text-right">
                 <span className="text-[0.70rem] uppercase text-muted-foreground">&nbsp;</span>
                 <div className="font-bold">
-                    <div>{data.planned.toLocaleString()}</div>
+                    {showPlanned && <div>{data.planned.toLocaleString()}</div>}
                     <div>{data.actual.toLocaleString()}</div>
-                    {'variance' in data && (
+                    {showPlanned && 'variance' in data && (
                       <div className={cn(data.variance >= 0 ? 'text-green-600' : 'text-destructive')}>
                           {data.variance.toLocaleString()}
                       </div>
@@ -157,6 +160,7 @@ export default function DashboardClient() {
   const [selectedWeek, setSelectedWeek] = React.useState('all');
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
   const [isFilterOpen, setIsFilterOpen] = React.useState(true);
+  const [isCategoryPlannable, setIsCategoryPlannable] = React.useState(true);
 
   const weekOptions = React.useMemo(() => {
     return allPlans
@@ -171,7 +175,7 @@ export default function DashboardClient() {
         const fetchedPlans: AllPlansData[] = [];
         try {
             const categoriesSnapshot = await getDocs(query(collection(db, "categories"), orderBy("name")));
-            const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition));
+            const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, isPlanned: true, ...doc.data() } as CategoryDefinition));
             setCategories(categoriesList);
 
             const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
@@ -196,20 +200,15 @@ export default function DashboardClient() {
   }, []);
 
   React.useEffect(() => {
-    if (loading || categories.length === 0) return;
+    if (loading) return;
 
-    const defaultCategoryId = categories.find(c => c.name === "Familiar")?.id || categories[0]?.id;
+    const selectedCategory = categories.find(c => c.id === selectedCategoryId);
+    const isPlannable = selectedCategoryId === 'all' || (selectedCategory?.isPlanned ?? true);
+    setIsCategoryPlannable(isPlannable);
 
     const getFilteredProducts = (products: ProductData[]): ProductData[] => {
-        const productsWithCategory = products.map(p => ({
-            ...p,
-            categoryId: p.categoryId || defaultCategoryId,
-        }));
-
-        if (selectedCategoryId === 'all') {
-            return productsWithCategory;
-        }
-        return productsWithCategory.filter(p => p.categoryId === selectedCategoryId);
+        if (selectedCategoryId === 'all') return products;
+        return products.filter(p => p.categoryId === selectedCategoryId);
     };
 
     const weeklyDataMap: { [week: number]: { planned: number; actual: number } } = {};
@@ -333,7 +332,11 @@ export default function DashboardClient() {
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Resumen de Producción por Semana</CardTitle>
-            <CardDescription>Comparación de lo planificado vs. ejecutado. Ignora el filtro de semana.</CardDescription>
+            <CardDescription>
+                {isCategoryPlannable
+                    ? 'Comparación de lo planificado vs. ejecutado. Ignora el filtro de semana.'
+                    : 'Producción real para la categoría no planificada. Ignora el filtro de semana.'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -351,7 +354,7 @@ export default function DashboardClient() {
                   <YAxis />
                   <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
                   <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                  {isCategoryPlannable && <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />}
                   <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
                 </BarChart>
               </ChartContainer>
@@ -457,7 +460,11 @@ export default function DashboardClient() {
             <Card className="md:col-span-2">
                 <CardHeader>
                     <CardTitle>Producción por Producto</CardTitle>
-                    <CardDescription>Planificado vs. Real para cada producto en el período seleccionado.</CardDescription>
+                    <CardDescription>
+                         {isCategoryPlannable
+                            ? 'Planificado vs. Real para cada producto en el período seleccionado.'
+                            : 'Producción real para cada producto en el período seleccionado.'}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : productData.length > 0 ? (
@@ -480,7 +487,7 @@ export default function DashboardClient() {
                                 <YAxis />
                                 <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
                                 <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
-                                <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                                {isCategoryPlannable && <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />}
                                 <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
                             </BarChart>
                         </ChartContainer>
