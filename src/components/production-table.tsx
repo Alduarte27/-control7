@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import type { ProductData, DailyProduction, ShiftProduction } from '@/lib/types';
 import { Input } from '@/components/ui/input';
@@ -77,6 +79,54 @@ const renderProductRow = (item: ProductData, handlePlannedInputChange: (id: stri
 export default function ProductionTable({ data, onPlannedChange, onActualChange }: ProductionTableProps) {
   const [selectedProduct, setSelectedProduct] = React.useState<ProductData | null>(null);
   const [openCategories, setOpenCategories] = React.useState<Record<string, boolean>>({});
+  
+  const groupedData = data.reduce((acc, product) => {
+    const category = product.categoryName || 'Sin Categoría';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(product);
+    return acc;
+  }, {} as Record<string, ProductData[]>);
+
+  const categories = Object.keys(groupedData).sort();
+
+  // Load state from localStorage on initial render
+  React.useEffect(() => {
+    try {
+      const savedState = localStorage.getItem('categoryOpenState');
+      if (savedState) {
+        setOpenCategories(JSON.parse(savedState));
+      } else {
+        // If no saved state, default all to open
+        const initialState = categories.reduce((acc, category) => {
+          acc[category] = true;
+          return acc;
+        }, {} as Record<string, boolean>);
+        setOpenCategories(initialState);
+      }
+    } catch (error) {
+        // In case of any error (e.g. parsing), default to open
+        const initialState = categories.reduce((acc, category) => {
+          acc[category] = true;
+          return acc;
+        }, {} as Record<string, boolean>);
+        setOpenCategories(initialState);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(categories)]); // Rerun if categories change
+
+  // Save state to localStorage whenever it changes
+  React.useEffect(() => {
+    // We don't save the initial empty state
+    if (Object.keys(openCategories).length > 0) {
+      try {
+        localStorage.setItem('categoryOpenState', JSON.stringify(openCategories));
+      } catch (error) {
+        console.error("Failed to save category state to localStorage", error);
+      }
+    }
+  }, [openCategories]);
 
   const handlePlannedInputChange = (id: string, value: string) => {
     const numValue = parseInt(value, 10);
@@ -96,28 +146,6 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
   const toggleCategory = (category: string) => {
     setOpenCategories(prev => ({ ...prev, [category]: !prev[category] }));
   };
-
-  const groupedData = data.reduce((acc, product) => {
-    const category = product.categoryName || 'Sin Categoría';
-    if (!acc[category]) {
-      acc[category] = [];
-    }
-    acc[category].push(product);
-    return acc;
-  }, {} as Record<string, ProductData[]>);
-
-  const categories = Object.keys(groupedData).sort();
-
-  React.useEffect(() => {
-    // Initialize all categories to be open by default
-    const initialOpenState = categories.reduce((acc, category) => {
-      acc[category] = true;
-      return acc;
-    }, {} as Record<string, boolean>);
-    setOpenCategories(initialOpenState);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(categories)]);
-
 
   return (
     <>
