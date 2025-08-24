@@ -1,9 +1,12 @@
 'use client';
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import React from 'react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
 import { Target, PackageCheck, ArrowLeftRight, Goal, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory } from 'lucide-react';
+import { Checkbox } from './ui/checkbox';
+import { Label } from './ui/label';
 
 type InfoDialogProps = {
     open: boolean;
@@ -23,6 +26,20 @@ const FeatureItem = ({ icon: Icon, title, description }: { icon: React.ElementTy
 );
 
 export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
+  const [dontShowAgain, setDontShowAgain] = React.useState(false);
+
+  React.useEffect(() => {
+    if (open) {
+      const storedPreference = localStorage.getItem('showInfoDialogOnStartup');
+      setDontShowAgain(storedPreference === 'false');
+    }
+  }, [open]);
+
+  const handleCheckedChange = (checked: boolean) => {
+    setDontShowAgain(checked);
+    localStorage.setItem('showInfoDialogOnStartup', String(!checked));
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
@@ -35,7 +52,7 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
             Tu centro de mando para la planificación y seguimiento de la producción. Aquí tienes un resumen de lo que puedes hacer:
           </DialogDescription>
         </DialogHeader>
-        <ScrollArea className="max-h-[70vh] pr-6 -mr-6">
+        <ScrollArea className="max-h-[60vh] pr-6 -mr-6">
           <div className="space-y-6 py-4">
             
             <div>
@@ -101,6 +118,12 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
             </div>
           </div>
         </ScrollArea>
+        <DialogFooter className="sm:justify-start">
+          <div className="flex items-center space-x-2">
+            <Checkbox id="dont-show-again" checked={dontShowAgain} onCheckedChange={handleCheckedChange} />
+            <Label htmlFor="dont-show-again" className="text-sm text-muted-foreground">No volver a mostrar este mensaje</Label>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

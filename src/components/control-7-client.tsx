@@ -12,6 +12,7 @@ import FilterBar from './filter-bar';
 import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
+import InfoDialog from './info-dialog';
 
 const emptyProductionDay: ShiftProduction = { day: 0, night: 0 };
 const emptyActual: DailyProduction = {
@@ -33,18 +34,26 @@ const getDateFromPlanId = (planId: string): Date => {
 export default function Control7Client({ initialPlanId }: { initialPlanId?: string }) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
-  const [date, setDate] = React.useState<Date | undefined>(() => 
-    initialPlanId ? getDateFromPlanId(initialPlanId) : undefined
-  );
+  const [date, setDate] = React.useState<Date | undefined>();
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
+  const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
   const { toast } = useToast();
 
   React.useEffect(() => {
-    if (!date && !initialPlanId) {
-      setDate(new Date());
+    const showDialog = localStorage.getItem('showInfoDialogOnStartup');
+    if (showDialog === null || showDialog === 'true') {
+        setIsInfoDialogOpen(true);
     }
-  }, [date, initialPlanId]);
+  }, []);
+  
+  React.useEffect(() => {
+    if (!initialPlanId) {
+      setDate(new Date());
+    } else {
+      setDate(getDateFromPlanId(initialPlanId));
+    }
+  }, [initialPlanId]);
 
 
   const currentYear = (date || new Date()).getFullYear();
@@ -305,7 +314,12 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
   return (
     <div className="bg-background min-h-screen text-foreground">
-      <Header onSave={handleSave} onExport={handleExport} hasUnsavedChanges={isDirty} />
+      <Header 
+        onSave={handleSave} 
+        onExport={handleExport} 
+        hasUnsavedChanges={isDirty}
+        setIsInfoDialogOpen={setIsInfoDialogOpen}
+      />
       <div className="p-4 md:p-8 space-y-6">
         <FilterBar 
             productSearch={productSearch} 
@@ -330,6 +344,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
             </>
         )}
       </div>
+      <InfoDialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen} />
     </div>
   );
 }

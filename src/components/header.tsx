@@ -13,6 +13,7 @@ type HeaderProps = {
   onSave: () => void;
   onExport: () => void;
   hasUnsavedChanges: boolean;
+  setIsInfoDialogOpen: (open: boolean) => void;
 };
 
 const NavButton = ({ href, icon: Icon, label }: { href: string; icon: React.ElementType; label: string; }) => (
@@ -34,9 +35,8 @@ const NavButton = ({ href, icon: Icon, label }: { href: string; icon: React.Elem
 );
 
 
-export default function Header({ onSave, onExport, hasUnsavedChanges }: HeaderProps) {
+export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoDialogOpen }: HeaderProps) {
   const { theme, setTheme } = useTheme();
-  const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
 
   return (
     <header className="flex items-center justify-between p-2 md:p-4 border-b bg-card sticky top-0 z-20">
@@ -115,7 +115,6 @@ export default function Header({ onSave, onExport, hasUnsavedChanges }: HeaderPr
             </Tooltip>
         </TooltipProvider>
       </div>
-      <InfoDialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen} />
     </header>
   );
 }

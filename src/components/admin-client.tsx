@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, Trash2, RefreshCw } from 'lucide-react';
+import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, Trash2, RefreshCw, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +31,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Separator } from './ui/separator';
+import { Switch } from './ui/switch';
 
 function EditProductDialog({
     product,
@@ -150,6 +151,7 @@ export default function AdminClient() {
   const [newCategoryName, setNewCategoryName] = React.useState('');
   const [editingProduct, setEditingProduct] = React.useState<ProductDefinition | null>(null);
   const [isSyncing, setIsSyncing] = React.useState(false);
+  const [showInfoOnStartup, setShowInfoOnStartup] = React.useState(true);
   const { toast } = useToast();
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -181,9 +183,27 @@ export default function AdminClient() {
             });
         }
     };
+
+    const loadStartupPreference = () => {
+        const pref = localStorage.getItem('showInfoDialogOnStartup');
+        setShowInfoOnStartup(pref === null || pref === 'true');
+    };
+    
     fetchInitialData();
+    loadStartupPreference();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast]);
+
+  const handleToggleShowInfoOnStartup = (checked: boolean) => {
+    setShowInfoOnStartup(checked);
+    localStorage.setItem('showInfoDialogOnStartup', String(checked));
+    toast({
+        title: 'Preferencia Guardada',
+        description: checked 
+            ? 'El diálogo de bienvenida se mostrará al iniciar.'
+            : 'El diálogo de bienvenida no se mostrará al iniciar.',
+    });
+  };
 
   const handleAddProduct = async () => {
     if (newProductName.trim() === '' || !newProductCategoryId) {
@@ -525,22 +545,42 @@ export default function AdminClient() {
              )}
           </CardContent>
         </Card>
-
-        <Card>
-            <CardHeader>
-                <CardTitle>Mantenimiento de Datos</CardTitle>
-                <CardDescription>
-                    Si cambias el nombre, categoría o color de un producto, esta información no se actualiza automáticamente en los planes de producción antiguos. 
-                    Usa este botón para sincronizar todos los planes históricos con los datos más recientes de tus productos.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Button onClick={handleSyncHistoricalData} disabled={isSyncing}>
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-                    {isSyncing ? 'Sincronizando...' : 'Sincronizar Datos en Historial'}
-                </Button>
-            </CardContent>
-        </Card>
+        
+        <div className="grid md:grid-cols-2 gap-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Mantenimiento de Datos</CardTitle>
+                    <CardDescription>
+                        Si cambias el nombre, categoría o color de un producto, esta información no se actualiza automáticamente en los planes de producción antiguos. 
+                        Usa este botón para sincronizar todos los planes históricos con los datos más recientes de tus productos.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={handleSyncHistoricalData} disabled={isSyncing}>
+                        <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                        {isSyncing ? 'Sincronizando...' : 'Sincronizar Datos en Historial'}
+                    </Button>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Preferencias de Interfaz</CardTitle>
+                    <CardDescription>
+                        Gestiona cómo se comporta la aplicación.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center space-x-2">
+                        <Switch
+                            id="info-dialog-switch"
+                            checked={showInfoOnStartup}
+                            onCheckedChange={handleToggleShowInfoOnStartup}
+                        />
+                        <Label htmlFor="info-dialog-switch">Mostrar diálogo de bienvenida al iniciar</Label>
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
       </main>
       {editingProduct && (
           <EditProductDialog 
