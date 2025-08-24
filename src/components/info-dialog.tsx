@@ -4,7 +4,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, PackageCheck, Bot, Goal, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory } from 'lucide-react';
+import { Target, PackageCheck, Bot, Goal, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -77,33 +77,38 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
             </div>
 
              <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Asistente con Inteligencia Artificial</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Centro de Análisis con IA</h3>
                 <div className="space-y-4">
                      <FeatureItem 
                         icon={Bot}
-                        title="Sugerencia de Planificación con IA"
-                        description="Usa el botón 'Sugerencia con IA' para que un asistente analice el historial de producción y te proponga un plan optimizado. Reduce el riesgo de sobreproducción y ahorra tiempo."
+                        title="Sugerencia de Planificación Inteligente"
+                        description="En la página 'Análisis IA', el asistente analiza el historial y propone un plan optimizado que ahora se muestra directamente en la página para tu revisión."
                     />
                     <FeatureItem 
-                        icon={CheckCircle2}
-                        title="Análisis y Confirmación"
-                        description="La IA te presentará un análisis detallado de su razonamiento en un diálogo. Tú tienes el control final para revisar, ajustar y aplicar la sugerencia."
+                        icon={TrendingUp}
+                        title="Pronóstico de Demanda"
+                        description="La IA puede generar un pronóstico cualitativo de la demanda futura, acompañado de gráficos históricos para una mejor comprensión de las tendencias."
+                    />
+                     <FeatureItem 
+                        icon={BarChart2}
+                        title="Análisis Comparativo Semanal"
+                        description="Compara el rendimiento detallado entre dos semanas, con KPIs y gráficos producto a producto, todo dentro de la misma sección de análisis."
                     />
                 </div>
             </div>
 
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Análisis y Dashboards</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Dashboard y Visualizaciones</h3>
                 <div className="space-y-4">
                      <FeatureItem 
                         icon={Goal}
-                        title="Indicadores Clave (KPIs) en Tiempo Real"
-                        description="En la parte superior, tienes un dashboard con métricas vitales como 'Cumplimiento' y la nueva métrica de 'No Programado' que se actualizan al instante."
+                        title="Indicadores Clave (KPIs) Precisos"
+                        description="En la parte superior, tienes un dashboard con métricas vitales como 'Cumplimiento', 'Real s/Plan' y 'No Programado' que se actualizan al instante."
                     />
                     <FeatureItem 
                         icon={LayoutDashboard}
-                        title="Dashboard General y Comparativo"
-                        description="Accede a una vista macro de tu producción. Compara el rendimiento entre semanas, turnos y productos con gráficos dinámicos y una nueva sección para análisis comparativo."
+                        title="Gráfico de Resumen Semanal Avanzado"
+                        description="El gráfico principal del Dashboard ahora es una barra apilada que te permite ver la composición de tu producción real (ejecutado vs. no programado) en comparación con tu plan."
                     />
                 </div>
             </div>
