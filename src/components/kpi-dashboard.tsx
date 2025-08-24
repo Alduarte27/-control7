@@ -10,8 +10,8 @@ type KpiDashboardProps = {
 };
 
 export default function KpiDashboard({ data }: KpiDashboardProps) {
-  // Calculate totals for products that were actually planned
-  const plannedProducts = data.filter(item => (item.planned || 0) > 0);
+  // Filter for products that belong to a "planned" category
+  const plannedProducts = data.filter(item => item.categoryIsPlanned);
   
   const totalPlannedForCompliance = plannedProducts.reduce((sum, item) => sum + (item.planned || 0), 0);
   const totalActualForCompliance = plannedProducts.reduce((sum, item) => 
@@ -45,13 +45,13 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         title="Total Planificado" 
         value={totalPlanned.toLocaleString()} 
         icon={Target}
-        description="Suma total de la producción planificada para todos los productos en la semana." 
+        description="Suma total de la producción planificada para todos los productos de categorías 'Planificadas'." 
       />
       <KpiCard 
         title="Real s/Plan" 
         value={totalActualForCompliance.toLocaleString()} 
         icon={CheckCircle2}
-        description="Suma de la producción real, contando únicamente los productos que tenían un plan."
+        description="Suma de la producción real, contando únicamente los productos que pertenecen a categorías 'Planificadas'."
         subValue={`${varianceForCompliance.toLocaleString()} Varianza`}
         subValueColor={getVarianceColor(varianceForCompliance)}
       />
@@ -59,7 +59,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         title="Total Real" 
         value={totalActual.toLocaleString()} 
         icon={PackageCheck}
-        description="Suma total de la producción real de todos los productos, incluyendo los no planificados."
+        description="Suma total de la producción real de todos los productos, incluyendo los de categorías 'No Planificadas'."
       />
       <KpiCard 
         title="Varianza General" 
@@ -73,7 +73,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         value={`${completion.toFixed(1)}%`} 
         icon={Goal} 
         valueColor={getCompletionColor()}
-        description="Porcentaje de la producción real completada en comparación con lo planificado (solo de productos con plan)."
+        description="Porcentaje de producción real vs. planificada, considerando solo productos de categorías 'Planificadas'."
       />
     </div>
   );

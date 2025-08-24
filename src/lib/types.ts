@@ -1,3 +1,5 @@
+'use client';
+
 export type ShiftProduction = {
   day: number;
   night: number;
@@ -16,6 +18,7 @@ export type DailyProduction = {
 export type CategoryDefinition = {
   id: string;
   name: string;
+  isPlanned: boolean;
 }
 
 export type ProductDefinition = {
@@ -28,6 +31,7 @@ export type ProductDefinition = {
 
 export type ProductData = ProductDefinition & {
   categoryName: string;
+  categoryIsPlanned: boolean;
   planned: number;
   actual: DailyProduction;
 };

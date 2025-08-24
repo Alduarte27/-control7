@@ -149,6 +149,7 @@ export default function AdminClient() {
   const [newProductName, setNewProductName] = React.useState('');
   const [newProductCategoryId, setNewProductCategoryId] = React.useState<string>('');
   const [newCategoryName, setNewCategoryName] = React.useState('');
+  const [newCategoryIsPlanned, setNewCategoryIsPlanned] = React.useState(true);
   const [editingProduct, setEditingProduct] = React.useState<ProductDefinition | null>(null);
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [showInfoOnStartup, setShowInfoOnStartup] = React.useState(true);
@@ -164,7 +165,7 @@ export default function AdminClient() {
     const fetchInitialData = async () => {
         try {
             const categoriesSnapshot = await getDocs(query(collection(db, 'categories'), orderBy('name')));
-            const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition));
+            const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, isPlanned: true, ...doc.data() } as CategoryDefinition));
             setCategories(categoriesList);
 
             if (categoriesList.length > 0 && !newProductCategoryId) {
@@ -250,10 +251,15 @@ export default function AdminClient() {
   const handleAddCategory = async () => {
     if (newCategoryName.trim() === '') return;
     try {
-      const docRef = await addDoc(collection(db, 'categories'), { name: newCategoryName.trim() });
-      const newCategory: CategoryDefinition = { id: docRef.id, name: newCategoryName.trim() };
+      const newCategoryData = { 
+          name: newCategoryName.trim(),
+          isPlanned: newCategoryIsPlanned 
+      };
+      const docRef = await addDoc(collection(db, 'categories'), newCategoryData);
+      const newCategory: CategoryDefinition = { id: docRef.id, ...newCategoryData };
       setCategories(prev => [...prev, newCategory].sort((a,b) => a.name.localeCompare(b.name)));
       setNewCategoryName('');
+      setNewCategoryIsPlanned(true);
       toast({ title: 'Categoría Añadida' });
     } catch (error) {
       toast({ title: 'Error al añadir categoría', variant: 'destructive' });
@@ -282,6 +288,20 @@ export default function AdminClient() {
         toast({ title: 'Error al eliminar categoría', variant: 'destructive' });
     }
   }
+
+  const handleToggleCategoryIsPlanned = async (category: CategoryDefinition) => {
+      const updatedCategory = { ...category, isPlanned: !category.isPlanned };
+      try {
+          await updateDoc(doc(db, 'categories', category.id), { isPlanned: updatedCategory.isPlanned });
+          setCategories(prev => prev.map(c => c.id === category.id ? updatedCategory : c));
+          toast({
+              title: `Categoría "${category.name}" actualizada`,
+              description: `Ahora es ${updatedCategory.isPlanned ? 'Planificada' : 'No Planificada'}.`,
+          });
+      } catch (error) {
+          toast({ title: 'Error al actualizar categoría', variant: 'destructive' });
+      }
+  };
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -363,8 +383,8 @@ export default function AdminClient() {
         const productsMap = new Map(latestProducts.map(p => [p.id, p]));
 
         const categoriesSnapshot = await getDocs(query(collection(db, 'categories'), orderBy('name')));
-        const latestCategories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition));
-        const categoryMap = new Map(latestCategories.map(c => [c.id, c.name]));
+        const latestCategories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, isPlanned: true, ...doc.data() } as CategoryDefinition));
+        const categoryMap = new Map(latestCategories.map(c => [c.id, c]));
 
         const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
         
@@ -378,8 +398,15 @@ export default function AdminClient() {
             const updatedProductsList = planData.products.map((product: ProductData) => {
                 const latestProduct = productsMap.get(product.id);
                 if (latestProduct) {
-                    const latestCategoryName = categoryMap.get(latestProduct.categoryId) || 'Sin Categoría';
-                    if (product.productName !== latestProduct.productName || product.categoryId !== latestProduct.categoryId || product.color !== latestProduct.color || product.categoryName !== latestCategoryName) {
+                    const latestCategory = categoryMap.get(latestProduct.categoryId);
+                    const latestCategoryName = latestCategory?.name || 'Sin Categoría';
+                    const latestCategoryIsPlanned = latestCategory?.isPlanned ?? true;
+                    
+                    if (product.productName !== latestProduct.productName || 
+                        product.categoryId !== latestProduct.categoryId || 
+                        product.color !== latestProduct.color || 
+                        product.categoryName !== latestCategoryName ||
+                        product.categoryIsPlanned !== latestCategoryIsPlanned) {
                         needsUpdate = true;
                         return {
                             ...product,
@@ -387,6 +414,7 @@ export default function AdminClient() {
                             categoryId: latestProduct.categoryId,
                             color: latestProduct.color,
                             categoryName: latestCategoryName,
+                            categoryIsPlanned: latestCategoryIsPlanned,
                         };
                     }
                 }
@@ -493,6 +521,14 @@ export default function AdminClient() {
                                 placeholder="Ej: Familiar"
                             />
                         </div>
+                        <div className="flex flex-col items-start gap-1.5">
+                            <Label htmlFor="is-planned-switch">Planificada</Label>
+                            <Switch 
+                                id="is-planned-switch"
+                                checked={newCategoryIsPlanned}
+                                onCheckedChange={setNewCategoryIsPlanned}
+                            />
+                        </div>
                         <Button onClick={handleAddCategory}>
                             <PlusCircle className="mr-2 h-4 w-4" />
                             Añadir Categoría
@@ -504,10 +540,21 @@ export default function AdminClient() {
                             <ul className="space-y-2 max-h-40 overflow-y-auto pr-2">
                                 {categories.map(cat => (
                                     <li key={cat.id} className="border p-2 rounded-md flex justify-between items-center text-sm">
-                                        {cat.name}
-                                        <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(cat.id)}>
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
+                                        <div className="flex items-center gap-2">
+                                            <span>{cat.name}</span>
+                                            <span className={`text-xs px-2 py-0.5 rounded-full ${cat.isPlanned ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                {cat.isPlanned ? 'Planificada' : 'No Planificada'}
+                                            </span>
+                                        </div>
+                                        <div className='flex items-center gap-2'>
+                                            <Switch 
+                                                checked={cat.isPlanned}
+                                                onCheckedChange={() => handleToggleCategoryIsPlanned(cat)}
+                                            />
+                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(cat.id)}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </div>
                                     </li>
                                 ))}
                             </ul>
@@ -551,8 +598,8 @@ export default function AdminClient() {
                 <CardHeader>
                     <CardTitle>Mantenimiento de Datos</CardTitle>
                     <CardDescription>
-                        Si cambias el nombre, categoría o color de un producto, esta información no se actualiza automáticamente en los planes de producción antiguos. 
-                        Usa este botón para sincronizar todos los planes históricos con los datos más recientes de tus productos.
+                        Si cambias un producto, esta información no se actualiza automáticamente en los planes antiguos. 
+                        Usa este botón para sincronizar todos los planes históricos con los datos más recientes de tus productos y categorías.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>

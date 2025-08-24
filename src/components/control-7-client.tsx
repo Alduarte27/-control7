@@ -67,10 +67,11 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
 
   const generateInitialData = (products: ProductDefinition[], categories: CategoryDefinition[]): ProductData[] => {
-    const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+    const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, isPlanned: c.isPlanned }]));
     return products.map(p => ({
       ...p,
-      categoryName: categoryMap.get(p.categoryId) || 'Sin Categoría',
+      categoryName: categoryMap.get(p.categoryId)?.name || 'Sin Categoría',
+      categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
       planned: 0,
       actual: JSON.parse(JSON.stringify(emptyActual)),
     }));
@@ -83,8 +84,8 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
         setIsDirty(false);
         try {
             const categoriesSnapshot = await getDocs(query(collection(db, "categories"), orderBy("name")));
-            const categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition));
-            const categoryMap = new Map(categories.map(c => [c.id, c.name]));
+            const categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), isPlanned: doc.data().isPlanned ?? true } as CategoryDefinition));
+            const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, isPlanned: c.isPlanned }]));
 
             const productsQuery = query(collection(db, "products"), orderBy("order"));
             const productsSnapshot = await getDocs(productsQuery);
@@ -105,17 +106,20 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
                 const syncedData = productDefinitions.map(def => {
                     const savedProductData = weeklyData.find(d => d.id === def.id);
+                    const categoryInfo = categoryMap.get(def.categoryId);
                     
                     if (savedProductData) {
                         return {
                             ...savedProductData, // Keep saved data
                             ...def, // But override with latest definition (name, color, order, etc)
-                            categoryName: categoryMap.get(def.categoryId) || 'Sin Categoría',
+                            categoryName: categoryInfo?.name || 'Sin Categoría',
+                            categoryIsPlanned: categoryInfo?.isPlanned ?? true,
                         };
                     } else {
                         return {
                             ...def,
-                            categoryName: categoryMap.get(def.categoryId) || 'Sin Categoría',
+                            categoryName: categoryInfo?.name || 'Sin Categoría',
+                            categoryIsPlanned: categoryInfo?.isPlanned ?? true,
                             planned: 0,
                             actual: JSON.parse(JSON.stringify(emptyActual)),
                         };
