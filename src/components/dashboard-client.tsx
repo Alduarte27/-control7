@@ -95,32 +95,10 @@ const productChartConfig = {
   },
 } satisfies ChartConfig;
 
-const comparisonChartConfig = {
-  plannedA: { label: 'Plan Semana A', color: 'hsl(var(--chart-1))' },
-  actualA: { label: 'Real Semana A', color: 'hsl(var(--chart-2))' },
-  plannedB: { label: 'Plan Semana B', color: 'hsl(var(--chart-3))' },
-  actualB: { label: 'Real Semana B', color: 'hsl(var(--chart-4))' },
-} satisfies ChartConfig;
-
-
 type AllPlansData = {
     week: number;
     year: number;
     products: ProductData[];
-};
-
-type ComparisonData = {
-  totalPlannedA: number;
-  totalActualA: number;
-  totalPlannedB: number;
-  totalActualB: number;
-  productComparison: {
-    name: string;
-    plannedA: number;
-    actualA: number;
-    plannedB: number;
-    actualB: number;
-  }[];
 };
 
 const WeeklyTooltipContent = ({ active, payload, label }: any) => {
@@ -187,27 +165,12 @@ export default function DashboardClient() {
   const [isFilterOpen, setIsFilterOpen] = React.useState(true);
   const [isCategoryPlannable, setIsCategoryPlannable] = React.useState(true);
 
-  // State for comparison view
-  const [selectedWeekA, setSelectedWeekA] = React.useState<string>('');
-  const [selectedWeekB, setSelectedWeekB] = React.useState<string>('');
-  const [comparisonData, setComparisonData] = React.useState<ComparisonData | null>(null);
-
 
   const weekOptions = React.useMemo(() => {
-    const sortedWeeks = allPlans
+    return allPlans
       .map(plan => plan.week)
       .filter((value, index, self) => self.indexOf(value) === index) // Unique weeks
       .sort((a, b) => a - b);
-      
-    if (sortedWeeks.length >= 2) {
-      if (!selectedWeekA) setSelectedWeekA(String(sortedWeeks[sortedWeeks.length - 2]));
-      if (!selectedWeekB) setSelectedWeekB(String(sortedWeeks[sortedWeeks.length - 1]));
-    } else if (sortedWeeks.length === 1) {
-      if (!selectedWeekA) setSelectedWeekA(String(sortedWeeks[0]));
-      if (!selectedWeekB) setSelectedWeekB(String(sortedWeeks[0]));
-    }
-    return sortedWeeks;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allPlans]);
 
   React.useEffect(() => {
@@ -372,59 +335,7 @@ export default function DashboardClient() {
         .filter(item => item.planned > 0 || item.actual > 0);
     setProductData(processedProductData);
 
-    // Comparison Logic
-    if (selectedWeekA && selectedWeekB) {
-        const planA = allPlans.find(p => String(p.week) === selectedWeekA);
-        const planB = allPlans.find(p => String(p.week) === selectedWeekB);
-
-        if (planA && planB) {
-            const productsA = getFilteredProducts(planA.products);
-            const productsB = getFilteredProducts(planB.products);
-
-            const allProductNames = Array.from(new Set([...productsA.map(p => p.productName), ...productsB.map(p => p.productName)]));
-
-            const productComparison = allProductNames.map(name => {
-                const productA = productsA.find(p => p.productName === name);
-                const productB = productsB.find(p => p.productName === name);
-
-                const plannedA = productA?.planned || 0;
-                const actualA = productA ? calculateTotalActual(productA) : 0;
-                const plannedB = productB?.planned || 0;
-                const actualB = productB ? calculateTotalActual(productB) : 0;
-
-                return { name, plannedA, actualA, plannedB, actualB };
-            }).filter(p => p.plannedA > 0 || p.actualA > 0 || p.plannedB > 0 || p.actualB > 0);
-
-            const totalsA = productsA.reduce((acc, p) => {
-                if (p.categoryIsPlanned && p.planned > 0) {
-                    acc.planned += p.planned || 0;
-                    acc.actual += calculateTotalActual(p);
-                }
-                return acc;
-            }, { planned: 0, actual: 0 });
-
-            const totalsB = productsB.reduce((acc, p) => {
-                if (p.categoryIsPlanned && p.planned > 0) {
-                    acc.planned += p.planned || 0;
-                    acc.actual += calculateTotalActual(p);
-                }
-                return acc;
-            }, { planned: 0, actual: 0 });
-
-            setComparisonData({
-                totalPlannedA: totalsA.planned,
-                totalActualA: totalsA.actual,
-                totalPlannedB: totalsB.planned,
-                totalActualB: totalsB.actual,
-                productComparison,
-            });
-        } else {
-            setComparisonData(null);
-        }
-    }
-
-
-  }, [allPlans, selectedWeek, selectedCategoryId, categories, loading, selectedWeekA, selectedWeekB]);
+  }, [allPlans, selectedWeek, selectedCategoryId, categories, loading]);
 
 
   return (
@@ -519,9 +430,9 @@ export default function DashboardClient() {
                   <YAxis />
                   <ChartTooltip cursor={false} content={<WeeklyTooltipContent />} />
                   <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="planned" fill="hsl(var(--accent))" radius={4} barSize={50} />
-                  <Bar dataKey="actualForPlanned" stackId="a" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} barSize={50} />
-                  <Bar dataKey="unplannedProduction" stackId="a" fill="url(#colorUnplannedProduction)" radius={[4, 4, 0, 0]} barSize={50} />
+                  <Bar dataKey="planned" fill="hsl(var(--accent))" radius={4} barSize={60} />
+                  <Bar dataKey="actualForPlanned" stackId="a" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} barSize={60} />
+                  <Bar dataKey="unplannedProduction" stackId="a" fill="url(#colorUnplannedProduction)" radius={[4, 4, 0, 0]} barSize={60} />
                 </BarChart>
               </ChartContainer>
             ) : (
@@ -613,84 +524,6 @@ export default function DashboardClient() {
                 </CardContent>
             </Card>
         </div>
-        
-        <Separator />
-        
-        <Card className="md:col-span-2">
-            <CardHeader>
-                <CardTitle>Análisis Comparativo Semanal</CardTitle>
-                <CardDescription>
-                    Compara el rendimiento de dos semanas (solo productos con plan > 0). El filtro de categoría se aplica aquí también.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="flex flex-col md:flex-row items-center gap-4">
-                    <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
-                        <Label htmlFor="week-a-filter">Semana A</Label>
-                        <Select value={selectedWeekA} onValueChange={setSelectedWeekA} disabled={weekOptions.length < 1}>
-                            <SelectTrigger id="week-a-filter">
-                                <SelectValue placeholder="Seleccionar" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {weekOptions.map(week => (
-                                    <SelectItem key={`A-${week}`} value={String(week)}>Semana {week}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
-                        <Label htmlFor="week-b-filter">Semana B</Label>
-                        <Select value={selectedWeekB} onValueChange={setSelectedWeekB} disabled={weekOptions.length < 1}>
-                            <SelectTrigger id="week-b-filter">
-                                <SelectValue placeholder="Seleccionar" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {weekOptions.map(week => (
-                                    <SelectItem key={`B-${week}`} value={String(week)}>Semana {week}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : comparisonData ? (
-                    <div className="space-y-6">
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                            <ComparisonCard title="Total Planificado" valueA={comparisonData.totalPlannedA} valueB={comparisonData.totalPlannedB} />
-                            <ComparisonCard title="Total Real" valueA={comparisonData.totalActualA} valueB={comparisonData.totalActualB} />
-                            <ComparisonCard title="Cumplimiento" valueA={comparisonData.totalPlannedA > 0 ? (comparisonData.totalActualA / comparisonData.totalPlannedA) * 100 : 0} valueB={comparisonData.totalPlannedB > 0 ? (comparisonData.totalActualB / comparisonData.totalPlannedB) * 100 : 0} isPercentage />
-                            <ComparisonCard title="Varianza" valueA={comparisonData.totalActualA - comparisonData.totalPlannedA} valueB={comparisonData.totalActualB - comparisonData.totalPlannedB} showPercentage={false} />
-                        </div>
-                        <div>
-                             <ChartContainer config={comparisonChartConfig} className="w-full h-[500px]">
-                                <BarChart accessibilityLayer data={comparisonData.productComparison} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
-                                    <CartesianGrid vertical={false} />
-                                    <XAxis 
-                                        dataKey="name" 
-                                        tickLine={false} 
-                                        axisLine={false}
-                                        tickMargin={10}
-                                        angle={-60}
-                                        textAnchor="end"
-                                        interval={0}
-                                        height={100}
-                                        style={{ fontSize: '0.75rem' }}
-                                    />
-                                    <YAxis />
-                                    <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                                    <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
-                                    <Bar dataKey="plannedA" fill="var(--color-plannedA)" radius={4} />
-                                    <Bar dataKey="actualA" fill="var(--color-actualA)" radius={4} />
-                                    <Bar dataKey="plannedB" fill="var(--color-plannedB)" radius={4} />
-                                    <Bar dataKey="actualB" fill="var(--color-actualB)" radius={4} />
-                                </BarChart>
-                            </ChartContainer>
-                        </div>
-                    </div>
-                ) : (
-                    <p className="text-center text-muted-foreground py-8">Selecciona dos semanas válidas para comparar.</p>
-                )}
-            </CardContent>
-        </Card>
       </main>
     </div>
   );
