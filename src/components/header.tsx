@@ -2,12 +2,11 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import InfoDialog from './info-dialog';
-
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 type HeaderProps = {
   onSave: () => void;
@@ -34,7 +33,6 @@ const NavButton = ({ href, icon: Icon, label }: { href: string; icon: React.Elem
     </TooltipProvider>
 );
 
-
 export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoDialogOpen }: HeaderProps) {
   const { theme, setTheme } = useTheme();
 
@@ -44,7 +42,9 @@ export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoD
         <Factory className="h-7 w-7 md:h-8 md:w-8 text-primary" />
         <h1 className="text-lg md:text-2xl font-bold text-foreground">Control 7</h1>
       </div>
-      <div className="flex items-center gap-1 md:gap-2">
+      
+      {/* Desktop Navigation */}
+      <div className="hidden md:flex items-center gap-1 md:gap-2">
         <TooltipProvider>
             <Tooltip>
                 <TooltipTrigger asChild>
@@ -58,7 +58,7 @@ export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoD
                         <span className="sr-only">Toggle theme</span>
                     </Button>
                 </TooltipTrigger>
-                 <TooltipContent className="md:hidden">
+                 <TooltipContent>
                     <p>Cambiar tema</p>
                 </TooltipContent>
             </Tooltip>
@@ -76,7 +76,7 @@ export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoD
                         <span className="sr-only">Información de la App</span>
                     </Button>
                 </TooltipTrigger>
-                 <TooltipContent className="md:hidden">
+                 <TooltipContent>
                     <p>Información</p>
                 </TooltipContent>
             </Tooltip>
@@ -95,7 +95,7 @@ export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoD
                         <span className="hidden md:inline">Exportar</span>
                     </Button>
                 </TooltipTrigger>
-                <TooltipContent className="md:hidden">
+                <TooltipContent>
                     <p>Exportar CSV</p>
                 </TooltipContent>
             </Tooltip>
@@ -110,11 +110,38 @@ export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoD
                         {hasUnsavedChanges && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-500"></span>}
                     </Button>
                 </TooltipTrigger>
-                <TooltipContent className="md:hidden">
+                <TooltipContent>
                     <p>Guardar Plan</p>
                 </TooltipContent>
             </Tooltip>
         </TooltipProvider>
+      </div>
+
+      {/* Mobile Navigation */}
+      <div className="flex md:hidden items-center gap-1">
+          <Button onClick={onSave} size="icon" className="relative">
+              <Save className="h-4 w-4" />
+              {hasUnsavedChanges && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-500"></span>}
+          </Button>
+          <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                      <MoreVertical className="h-4 w-4" />
+                  </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild><Link href="/ia" className="flex items-center"><Sparkles className="mr-2 h-4 w-4" />Análisis IA</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/dashboard" className="flex items-center"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial</Link></DropdownMenuItem>
+                  <DropdownMenuItem asChild><Link href="/admin" className="flex items-center"><Settings className="mr-2 h-4 w-4" />Admin</Link></DropdownMenuItem>
+                  <DropdownMenuItem onClick={onExport}><Download className="mr-2 h-4 w-4" />Exportar</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsInfoDialogOpen(true)}><Info className="mr-2 h-4 w-4" />Información</DropdownMenuItem>
+                   <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+                        {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
+                        <span>Cambiar Tema</span>
+                    </DropdownMenuItem>
+              </DropdownMenuContent>
+          </DropdownMenu>
       </div>
     </header>
   );
