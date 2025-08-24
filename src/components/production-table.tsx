@@ -109,6 +109,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
   const categories = Object.keys(groupedData).sort();
 
   React.useEffect(() => {
+    // Initialize all categories to be open by default
     const initialOpenState = categories.reduce((acc, category) => {
       acc[category] = true;
       return acc;
