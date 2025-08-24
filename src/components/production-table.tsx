@@ -4,8 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { Button } from './ui/button';
-import { Edit } from 'lucide-react';
+import { Edit, ChevronUp } from 'lucide-react';
 import ProductionShiftTable from './production-shift-table';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 
 type ProductionTableProps = {
   data: ProductData[];
@@ -29,7 +31,7 @@ const renderProductRow = (item: ProductData, handlePlannedInputChange: (id: stri
     const variance = totalActual - item.planned;
     const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
     return (
-      <TableRow key={item.id}>
+      <TableRow key={item.id} className="bg-card hover:bg-muted/50">
         <TableCell className="font-medium sticky left-0 bg-card z-10 text-xs">
           <div className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color || '#ccc' }}></span>
@@ -75,6 +77,7 @@ const renderProductRow = (item: ProductData, handlePlannedInputChange: (id: stri
 
 export default function ProductionTable({ data, onPlannedChange, onActualChange }: ProductionTableProps) {
   const [selectedProduct, setSelectedProduct] = React.useState<ProductData | null>(null);
+  const [openCategories, setOpenCategories] = React.useState<Record<string, boolean>>({});
 
   const handlePlannedInputChange = (id: string, value: string) => {
     const numValue = parseInt(value, 10);
@@ -102,6 +105,16 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
 
   const categories = Object.keys(groupedData).sort();
 
+  React.useEffect(() => {
+    // Initialize all categories to be open by default
+    const initialOpenState = categories.reduce((acc, category) => {
+      acc[category] = true;
+      return acc;
+    }, {} as Record<string, boolean>);
+    setOpenCategories(initialOpenState);
+  }, [JSON.stringify(categories)]);
+
+
   return (
     <>
       <div className="bg-card rounded-lg shadow-sm border overflow-hidden">
@@ -118,26 +131,37 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
                 <TableHead className="min-w-[70px]">Turnos</TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
+            
               {data.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={12} className="h-24 text-center">
-                    Ningún producto coincide con tu búsqueda.
-                  </TableCell>
-                </TableRow>
+                <TableBody>
+                  <TableRow>
+                    <TableCell colSpan={12} className="h-24 text-center">
+                      Ningún producto coincide con tu búsqueda.
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
               ) : (
                 categories.map(category => (
-                    <React.Fragment key={category}>
-                        <TableRow className="bg-muted/50 hover:bg-muted/50">
-                            <TableCell colSpan={12} className="font-bold text-primary sticky left-0 bg-muted/50 z-10">
-                                {category}
-                            </TableCell>
-                        </TableRow>
-                        {groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProduct))}
-                    </React.Fragment>
+                    <Collapsible asChild key={category} open={openCategories[category]} onOpenChange={(isOpen) => setOpenCategories(prev => ({ ...prev, [category]: isOpen }))}>
+                        <TableBody>
+                            <TableRow className="bg-muted/50 hover:bg-muted/50">
+                                <TableCell colSpan={12} className="font-bold text-primary sticky left-0 bg-muted/50 z-10 p-0">
+                                    <CollapsibleTrigger className="flex items-center gap-2 w-full p-2">
+                                        <ChevronUp className={cn("h-4 w-4 transition-transform", !openCategories[category] && "rotate-180")} />
+                                        {category}
+                                    </CollapsibleTrigger>
+                                </TableCell>
+                            </TableRow>
+                            <CollapsibleContent asChild>
+                                <React.Fragment>
+                                    {groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProduct))}
+                                </React.Fragment>
+                            </CollapsibleContent>
+                        </TableBody>
+                    </Collapsible>
                 ))
               )}
-            </TableBody>
+            
           </Table>
         </div>
       </div>
