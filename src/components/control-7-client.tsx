@@ -203,11 +203,15 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
   const handleSave = async () => {
     try {
-      // Clean isSuggested flag before saving
+      // Create a clean version of the data for Firestore, without the isSuggested flag
       const dataToSave = data.map(({ isSuggested, ...rest }) => rest);
       const planDocRef = doc(db, "productionPlans", planId);
       await setDoc(planDocRef, { products: dataToSave, week: currentWeek, year: currentYear });
+      
+      // Update local state to remove the isSuggested flag after saving
+      setData(currentData => currentData.map(item => ({ ...item, isSuggested: false })));
       setIsDirty(false);
+
       toast({
         title: 'Plan Guardado',
         description: `Los datos para la semana ${currentWeek} han sido guardados.`,
