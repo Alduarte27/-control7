@@ -56,6 +56,10 @@ const weeklyChartConfig = {
     label: 'Real Total',
     color: 'hsl(var(--primary))',
   },
+  actualForPlanned: {
+    label: 'Ejecutado (s/Plan)',
+    color: 'hsl(var(--chart-2))',
+  },
 } satisfies ChartConfig;
 
 const shiftChartConfig = {
@@ -136,8 +140,8 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
             </div>
             <span className="text-right font-medium">{data.planned.toLocaleString()}</span>
             
-            <div className="flex items-center gap-2 pl-4">
-              <div className="w-1 h-1 rounded-full bg-foreground" />
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--chart-2))'}} />
               <span>Ejecutado (s/Plan):</span>
             </div>
             <span className="text-right font-medium">{data.actualForPlanned.toLocaleString()}</span>
@@ -148,8 +152,8 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
             </div>
             <span className={cn("text-right font-medium text-xs", varianceColor)}>{variance.toLocaleString()}</span>
             
-            <div className="flex items-center gap-2 pl-4">
-              <div className="w-1 h-1 rounded-full bg-foreground" />
+            <div className="flex items-center gap-2">
+              <div className="w-1 h-1 rounded-full bg-foreground/50 ml-1 mr-1" />
               <span>No Programado:</span>
             </div>
             <span className="text-right font-medium">{data.unplannedProduction.toLocaleString()}</span>
@@ -511,6 +515,7 @@ export default function DashboardClient() {
                   <ChartLegend content={<ChartLegendContent />} />
                   <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
                   <Bar dataKey="totalActual" fill="var(--color-totalActual)" radius={4} />
+                  <Bar dataKey="actualForPlanned" fill="var(--color-actualForPlanned)" radius={4} barSize={20} />
                 </BarChart>
               </ChartContainer>
             ) : (
