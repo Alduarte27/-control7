@@ -173,7 +173,8 @@ const CustomTooltipContent = ({ active, payload, label }: any) => {
 };
 
 export default function DashboardClient() {
-  const [summaryData, setSummaryData] = React.useState<WeeklySummaryData[]>([]);
+  const [complianceSummaryData, setComplianceSummaryData] = React.useState<WeeklySummaryData[]>([]);
+  const [totalProductionSummaryData, setTotalProductionSummaryData] = React.useState<WeeklySummaryData[]>([]);
   const [weeklyShiftData, setWeeklyShiftData] = React.useState<WeeklyShiftSummaryData[]>([]);
   const [dailyData, setDailyData] = React.useState<DailySummaryData[]>([]);
   const [productData, setProductData] = React.useState<ProductSummaryData[]>([]);
@@ -256,26 +257,30 @@ export default function DashboardClient() {
       Object.values(product.actual).reduce((sum, shifts) => sum + (shifts.day || 0) + (shifts.night || 0), 0);
 
 
-    const weeklyDataMap: { [week: number]: { planned: number; actual: number } } = {};
+    const complianceWeeklyMap: { [week: number]: { planned: number; actual: number } } = {};
+    const totalWeeklyMap: { [week: number]: { planned: number; actual: number } } = {};
     const weeklyShiftTotals: { [week: number]: { day: number; night: number } } = {};
 
     allPlans.forEach(plan => {
         const filteredProducts = getFilteredProducts(plan.products);
 
-        if (!weeklyDataMap[plan.week]) weeklyDataMap[plan.week] = { planned: 0, actual: 0 };
+        if (!complianceWeeklyMap[plan.week]) complianceWeeklyMap[plan.week] = { planned: 0, actual: 0 };
+        if (!totalWeeklyMap[plan.week]) totalWeeklyMap[plan.week] = { planned: 0, actual: 0 };
         if (!weeklyShiftTotals[plan.week]) weeklyShiftTotals[plan.week] = { day: 0, night: 0 };
 
         filteredProducts.forEach(item => {
             const totalActualForItem = calculateTotalActual(item);
+            
+            // Logic for TOTAL production chart
+            if (item.categoryIsPlanned) {
+                totalWeeklyMap[plan.week].planned += item.planned || 0;
+            }
+            totalWeeklyMap[plan.week].actual += totalActualForItem;
 
-            // Logic for weekly summary chart (Planned vs Real)
+            // Logic for COMPLIANCE chart
             if (item.categoryIsPlanned && item.planned > 0) {
-              weeklyDataMap[plan.week].planned += item.planned || 0;
-              weeklyDataMap[plan.week].actual += totalActualForItem;
-            } else if (!item.categoryIsPlanned) {
-              // For non-plannable, only add to actual if you want to show them.
-              // Here, we only show actual for plannable with plan > 0, so we can even omit this else if.
-              // Let's keep it clean: if not plannable, it doesn't contribute to the Planned vs Real chart.
+              complianceWeeklyMap[plan.week].planned += item.planned || 0;
+              complianceWeeklyMap[plan.week].actual += totalActualForItem;
             }
 
             // Logic for shift totals (includes all production)
@@ -286,11 +291,11 @@ export default function DashboardClient() {
         });
     });
     
-    const weeklyData: WeeklySummaryData[] = Object.keys(weeklyDataMap)
+    const complianceData: WeeklySummaryData[] = Object.keys(complianceWeeklyMap)
         .map(weekStr => {
             const week = parseInt(weekStr, 10);
-            const planned = weeklyDataMap[week].planned;
-            const actual = weeklyDataMap[week].actual;
+            const planned = complianceWeeklyMap[week].planned;
+            const actual = complianceWeeklyMap[week].actual;
             return {
                 week: week,
                 name: `Semana ${week}`,
@@ -300,7 +305,23 @@ export default function DashboardClient() {
             };
         })
         .sort((a, b) => a.week - b.week);
-    setSummaryData(weeklyData);
+    setComplianceSummaryData(complianceData);
+
+    const totalProductionData: WeeklySummaryData[] = Object.keys(totalWeeklyMap)
+        .map(weekStr => {
+            const week = parseInt(weekStr, 10);
+            const planned = totalWeeklyMap[week].planned;
+            const actual = totalWeeklyMap[week].actual;
+            return {
+                week: week,
+                name: `Semana ${week}`,
+                planned: planned,
+                actual: actual,
+                variance: actual - planned,
+            };
+        })
+        .sort((a, b) => a.week - b.week);
+    setTotalProductionSummaryData(totalProductionData);
 
     const processedWeeklyShiftData = Object.keys(weeklyShiftTotals)
         .map(week => ({
@@ -441,43 +462,6 @@ export default function DashboardClient() {
         </Link>
       </header>
       <main className="p-4 md:p-8 space-y-6">
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <CardTitle>Resumen de Producción por Semana</CardTitle>
-            <CardDescription>
-                {isCategoryPlannable
-                    ? 'Comparación de lo planificado vs. ejecutado para productos con plan > 0.'
-                    : 'Producción real para la categoría no planificada.'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-                <p className="text-muted-foreground text-center py-8">Cargando datos del dashboard...</p>
-            ) : summaryData.length > 0 ? (
-              <ChartContainer config={weeklyChartConfig} className="w-full h-[250px] md:h-[350px]">
-                <BarChart accessibilityLayer data={summaryData}>
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="name"
-                    tickLine={false}
-                    tickMargin={10}
-                    axisLine={false}
-                  />
-                  <YAxis />
-                  <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
-                  <ChartLegend content={<ChartLegendContent />} />
-                  {isCategoryPlannable && <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />}
-                  <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
-                </BarChart>
-              </ChartContainer>
-            ) : (
-                <p className="text-muted-foreground text-center py-8">
-                  No hay suficientes datos guardados para mostrar el dashboard.
-                </p>
-            )}
-          </CardContent>
-        </Card>
-        
         <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
             <div className="flex justify-between items-center">
                 <CollapsibleTrigger asChild>
@@ -525,6 +509,76 @@ export default function DashboardClient() {
                 </div>
             </CollapsibleContent>
         </Collapsible>
+
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Producción Total por Semana</CardTitle>
+            <CardDescription>
+                Visión general de toda la producción. Compara el plan total de categorías planificables vs. la producción real total (incluyendo no programado y no planificado).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+                <p className="text-muted-foreground text-center py-8">Cargando datos del dashboard...</p>
+            ) : totalProductionSummaryData.length > 0 ? (
+              <ChartContainer config={weeklyChartConfig} className="w-full h-[250px] md:h-[350px]">
+                <BarChart accessibilityLayer data={totalProductionSummaryData}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    tickMargin={10}
+                    axisLine={false}
+                  />
+                  <YAxis />
+                  <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                  <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
+                </BarChart>
+              </ChartContainer>
+            ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  No hay suficientes datos guardados para mostrar el dashboard.
+                </p>
+            )}
+          </CardContent>
+        </Card>
+        
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Resumen de Cumplimiento de Plan por Semana</CardTitle>
+            <CardDescription>
+                Análisis de eficiencia: compara lo planificado vs. lo ejecutado solo para productos con un plan asignado (`plan > 0`).
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+                <p className="text-muted-foreground text-center py-8">Cargando datos del dashboard...</p>
+            ) : complianceSummaryData.length > 0 ? (
+              <ChartContainer config={weeklyChartConfig} className="w-full h-[250px] md:h-[350px]">
+                <BarChart accessibilityLayer data={complianceSummaryData}>
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    tickLine={false}
+                    tickMargin={10}
+                    axisLine={false}
+                  />
+                  <YAxis />
+                  <ChartTooltip cursor={false} content={<CustomTooltipContent />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                  <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
+                </BarChart>
+              </ChartContainer>
+            ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  No hay suficientes datos guardados para mostrar el dashboard.
+                </p>
+            )}
+          </CardContent>
+        </Card>
         
         <div className="grid md:grid-cols-2 gap-6">
             <Card>
