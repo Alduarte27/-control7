@@ -278,11 +278,18 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     const suggestionsMap = new Map(suggestion.suggestions.map(s => [s.productId, s.suggestedPlan]));
 
     setData(currentData => 
-        currentData.map(item => ({
-            ...item,
-            planned: suggestionsMap.get(item.id) ?? item.planned,
-            isSuggested: suggestionsMap.has(item.id),
-        }))
+        currentData.map(item => {
+            const suggestedPlan = suggestionsMap.get(item.id);
+            // If a suggestion exists for this product, use it. Otherwise, keep the existing plan.
+            // A suggestion of 0 is valid.
+            const newPlan = suggestedPlan !== undefined ? suggestedPlan : item.planned;
+            
+            return {
+                ...item,
+                planned: newPlan,
+                isSuggested: suggestedPlan !== undefined,
+            };
+        })
     );
     
     setIsDirty(true);

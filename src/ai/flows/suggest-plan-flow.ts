@@ -14,6 +14,7 @@ const ProductHistorySchema = z.object({
   id: z.string(),
   productName: z.string(),
   totalActual: z.number(),
+  categoryIsPlanned: z.boolean(),
 });
 
 const WeeklyHistorySchema = z.object({
@@ -24,7 +25,7 @@ const WeeklyHistorySchema = z.object({
 
 const SuggestPlanInputSchema = z.object({
   historicalData: z.array(WeeklyHistorySchema).describe("An array of past weekly production data. The most recent week is the last element."),
-  allProducts: z.array(z.object({ id: z.string(), productName: z.string()})).describe("A list of all active products to consider for the new plan."),
+  allProducts: z.array(z.object({ id: z.string(), productName: z.string(), categoryIsPlanned: z.boolean() })).describe("A list of all active products to consider for the new plan."),
 });
 export type SuggestPlanInput = z.infer<typeof SuggestPlanInputSchema>;
 
@@ -51,29 +52,34 @@ const prompt = ai.definePrompt({
 
 **Instrucciones Clave:**
 1.  **Idioma**: Tu respuesta y análisis DEBEN estar completamente en español.
-2.  **Análisis de Datos**: Analiza los datos históricos de producción proporcionados para identificar tendencias, estacionalidad y rotación de productos. Los datos están ordenados desde la semana más antigua a la más reciente.
-3.  **Generación del Plan**: Basado en tu análisis, genera un plan de producción para la próxima semana para todos los productos activos listados en 'allProducts'. El objetivo es optimizar la producción para satisfacer la demanda y evitar la sobreproducción.
+2.  **Enfoque**: Tu análisis debe centrarse EXCLUSIVAMENTE en los productos que pertenecen a categorías planificables ('categoryIsPlanned' es true). IGNORA por completo cualquier producto de categorías no planificables.
+3.  **Análisis de Datos**: Analiza los datos históricos de producción proporcionados (solo para productos planificables) para identificar tendencias, estacionalidad y rotación. Los datos están ordenados desde la semana más antigua a la más reciente.
+4.  **Generación del Plan**: Basado en tu análisis, genera un plan de producción para la próxima semana para TODOS los productos activos listados en 'allProducts' que sean planificables. El objetivo es optimizar la producción para satisfacer la demanda y evitar la sobreproducción.
     -   Prioriza productos con tendencias de producción consistentes o crecientes.
-    -   Sé conservador con productos de producción esporádica, decreciente o nula en semanas recientes. Sugiere un plan de 0 para productos sin actividad reciente.
-    -   Debes generar un plan para CADA producto en 'allProducts'. Si un producto no debe producirse, su 'suggestedPlan' debe ser 0.
-4.  **Resumen del Análisis (MUY IMPORTANTE)**:
+    -   Sé conservador con productos de producción esporádica, decreciente o nula en semanas recientes. Sugiere un plan de 0 para productos planificables sin actividad reciente.
+    -   Debes generar un plan para CADA producto planificable en 'allProducts'. Si un producto no debe producirse, su 'suggestedPlan' debe ser 0.
+5.  **Resumen del Análisis (MUY IMPORTANTE)**:
     -   Escribe un resumen de tu análisis. Comienza con un párrafo de resumen general.
     -   Luego, utiliza listas con viñetas (guiones) para explicar las sugerencias clave. Agrupa los productos por categorías como "Aumento/Mantenimiento de Producción" y "Reducción/Cese de Producción".
     -   **NO incluyas los IDs de los productos en tu análisis de texto.** Usa solo los nombres de los productos. El análisis debe ser fácil de entender para un gerente.
 
 **Datos de Entrada:**
 
-**Datos Históricos:**
+**Datos Históricos (Solo productos planificables):**
 {{#each historicalData}}
 Semana {{week}}, Año {{year}}:
   {{#each products}}
+    {{#if categoryIsPlanned}}
   - {{productName}}: Producido {{totalActual}} unidades.
+    {{/if}}
   {{/each}}
 {{/each}}
 
-**Todos los Productos Activos para los que se debe generar un plan:**
+**Todos los Productos Activos Planificables para los que se debe generar un plan:**
 {{#each allProducts}}
+  {{#if categoryIsPlanned}}
 - {{productName}}
+  {{/if}}
 {{/each}}
 `,
 });
@@ -85,14 +91,23 @@ const suggestPlanFlow = ai.defineFlow(
     outputSchema: SuggestPlanOutputSchema,
   },
   async (input) => {
-    if (input.historicalData.length === 0) {
-      // If there's no history, suggest 0 for all products.
+    // Filter historical data and product list to only include plannable items
+    const plannableInput = {
+      ...input,
+      historicalData: input.historicalData.map(week => ({
+        ...week,
+        products: week.products.filter(p => p.categoryIsPlanned),
+      })),
+      allProducts: input.allProducts.filter(p => p.categoryIsPlanned),
+    };
+
+    if (plannableInput.historicalData.length === 0 || plannableInput.allProducts.length === 0) {
       return {
-        analysis: "No hay datos históricos disponibles para analizar. Se ha sugerido un plan de 0 para todos los productos. Por favor, utilice la función 'Copiar Plan Anterior' o introduzca un plan manualmente para empezar.",
-        suggestions: input.allProducts.map(p => ({ productId: p.id, suggestedPlan: 0 })),
+        analysis: "No hay datos históricos o productos planificables disponibles para analizar. Se ha sugerido un plan de 0 para todos los productos planificables. Por favor, utilice la función 'Copiar Plan Anterior' o introduzca un plan manualmente para empezar.",
+        suggestions: plannableInput.allProducts.map(p => ({ productId: p.id, suggestedPlan: 0 })),
       };
     }
-    const { output } = await prompt(input);
+    const { output } = await prompt(plannableInput);
     return output!;
   }
 );
