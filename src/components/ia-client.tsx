@@ -2,18 +2,16 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Sparkles, Bot, LineChart, TrendingUp } from 'lucide-react';
+import { Factory, ChevronLeft, Sparkles, Bot, LineChart, TrendingUp, BarChart2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { suggestProductionPlan, type SuggestPlanOutput, type SuggestPlanInput } from '@/ai/flows/suggest-plan-flow';
 import { forecastDemand, type ForecastDemandOutput, type ForecastDemandInput } from '@/ai/flows/forecast-demand-flow';
-import { collection, getDocs, query, orderBy, limit, doc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
-import { getISOWeek, format, startOfISOWeek, endOfISOWeek } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Tooltip as RechartsTooltip, Line, ComposedChart } from 'recharts';
+import type { ProductData } from '@/lib/types';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Separator } from './ui/separator';
 
@@ -23,18 +21,26 @@ const trendChartConfig = {
     color: 'hsl(var(--chart-2))',
   },
   actual: {
-    label: 'Real',
+    label: 'Real (s/Plan)',
     color: 'hsl(var(--chart-1))',
   },
 } satisfies ChartConfig;
 
+type ForecastChartData = {
+  name: string;
+  [weekKey: string]: string | number;
+};
 
-export default function IAClient({ initialPlanId }: { initialPlanId?: string }) {
+const FORECAST_WEEKS = 4;
+
+export default function IAClient() {
   const [isSuggestingPlan, setIsSuggestingPlan] = React.useState(false);
   const [suggestion, setSuggestion] = React.useState<SuggestPlanOutput | null>(null);
   const [isForecasting, setIsForecasting] = React.useState(false);
   const [forecast, setForecast] = React.useState<ForecastDemandOutput | null>(null);
-  const [historicalData, setHistoricalData] = React.useState<any[]>([]);
+  const [historicalTrendData, setHistoricalTrendData] = React.useState<any[]>([]);
+  const [forecastChartData, setForecastChartData] = React.useState<ForecastChartData[]>([]);
+  const [forecastChartConfig, setForecastChartConfig] = React.useState<ChartConfig>({});
   const [loadingHistory, setLoadingHistory] = React.useState(true);
   const { toast } = useToast();
 
@@ -47,23 +53,20 @@ export default function IAClient({ initialPlanId }: { initialPlanId?: string }) 
 
             const history = plansSnapshot.docs.map(doc => {
                 const plan = doc.data();
-                const totalPlanned = plan.products
-                    .filter((p: ProductData) => p.categoryIsPlanned)
-                    .reduce((sum: number, p: ProductData) => sum + p.planned, 0);
-
-                const totalActual = plan.products
-                    .filter((p: ProductData) => p.categoryIsPlanned)
-                    .reduce((sum: number, p: ProductData) => sum + Object.values(p.actual).reduce((s: any, d: any) => s + d.day + d.night, 0), 0);
+                const plannedProducts = plan.products.filter((p: ProductData) => p.categoryIsPlanned && p.planned > 0);
+                
+                const totalPlanned = plannedProducts.reduce((sum: number, p: ProductData) => sum + p.planned, 0);
+                const totalActualForPlanned = plannedProducts.reduce((sum: number, p: ProductData) => sum + Object.values(p.actual).reduce((s: any, d: any) => s + d.day + d.night, 0), 0);
 
                 return {
                     name: `S${plan.week}`,
                     week: plan.week,
                     year: plan.year,
                     planned: totalPlanned,
-                    actual: totalActual,
+                    actual: totalActualForPlanned,
                 };
-            }).reverse(); // Oldest first
-            setHistoricalData(history);
+            }).reverse();
+            setHistoricalTrendData(history);
         } catch (error) {
             console.error("Error fetching historical data:", error);
             toast({ title: 'Error al cargar historial', variant: 'destructive' });
@@ -101,7 +104,7 @@ export default function IAClient({ initialPlanId }: { initialPlanId?: string }) 
 
         const productsSnapshot = await getDocs(query(collection(db, "products"), orderBy("order")));
         const allProducts = productsSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition))
+            .map(doc => ({ id: doc.id, isActive: true, ...doc.data() } as any))
             .filter(p => p.isActive);
         
         const categoriesSnapshot = await getDocs(query(collection(db, 'categories'), orderBy('name')));
@@ -135,12 +138,13 @@ export default function IAClient({ initialPlanId }: { initialPlanId?: string }) 
   const handleForecastDemand = async () => {
       setIsForecasting(true);
       setForecast(null);
+      setForecastChartData([]);
       toast({
           title: 'Generando Pronóstico',
           description: 'La IA está analizando tendencias para proyectar la demanda futura...',
       });
        try {
-        const plansQuery = query(collection(db, "productionPlans"), orderBy("year", "desc"), orderBy("week", "desc"), limit(8));
+        const plansQuery = query(collection(db, "productionPlans"), orderBy("year", "desc"), orderBy("week", "desc"), limit(FORECAST_WEEKS));
         const plansSnapshot = await getDocs(plansQuery);
 
         const historicalDataForAI = plansSnapshot.docs.map(doc => {
@@ -155,6 +159,43 @@ export default function IAClient({ initialPlanId }: { initialPlanId?: string }) 
                 }))
             }
         }).reverse();
+        
+        // Prepare data for the chart
+        const productMap: { [productName: string]: { [week: number]: number } } = {};
+        const weekLabels: number[] = [];
+
+        historicalDataForAI.forEach(weekData => {
+            if (!weekLabels.includes(weekData.week)) {
+                weekLabels.push(weekData.week);
+            }
+            weekData.products.forEach(p => {
+                if (p.categoryIsPlanned) {
+                    if (!productMap[p.productName]) productMap[p.productName] = {};
+                    productMap[p.productName][weekData.week] = p.totalActual;
+                }
+            });
+        });
+
+        const chartData: ForecastChartData[] = Object.entries(productMap)
+            .map(([productName, weekTotals]) => {
+                const row: ForecastChartData = { name: productName };
+                weekLabels.forEach(week => {
+                    row[`S${week}`] = weekTotals[week] || 0;
+                });
+                return row;
+            })
+            .filter(row => Object.values(row).some(val => typeof val === 'number' && val > 0)); // Filter out products with no production
+        
+        setForecastChartData(chartData);
+
+        const chartConfig: ChartConfig = {};
+        weekLabels.forEach((week, index) => {
+            chartConfig[`S${week}`] = {
+                label: `Semana ${week}`,
+                color: `hsl(var(--chart-${(index % 5) + 1}))`,
+            };
+        });
+        setForecastChartConfig(chartConfig);
         
         const input: ForecastDemandInput = { historicalData: historicalDataForAI };
         const result = await forecastDemand(input);
@@ -205,7 +246,7 @@ export default function IAClient({ initialPlanId }: { initialPlanId?: string }) 
                     Asistente de Planificación de Producción
                 </CardTitle>
                 <CardDescription>
-                    Utiliza el poder de la IA para analizar el historial de producción y generar un plan semanal optimizado. 
+                    Utiliza el poder de la IA para analizar el historial de producción y generar un plan semanal optimizado para los productos planificables. 
                     El asistente identificará tendencias y patrones para ayudarte a minimizar el desperdicio y maximizar la eficiencia.
                 </CardDescription>
               </CardHeader>
@@ -236,12 +277,12 @@ export default function IAClient({ initialPlanId }: { initialPlanId?: string }) 
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2"><LineChart className="h-5 w-5" />Tendencias de Producción</CardTitle>
-                    <CardDescription>Evolución de la producción planificada vs. la producción real en las últimas semanas.</CardDescription>
+                    <CardDescription>Evolución de la producción planificada vs. la producción real (solo de productos planificados) en las últimas semanas.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {loadingHistory ? <p className="text-center text-muted-foreground py-8">Cargando historial...</p> : historicalData.length > 0 ? (
+                    {loadingHistory ? <p className="text-center text-muted-foreground py-8">Cargando historial...</p> : historicalTrendData.length > 0 ? (
                        <ChartContainer config={trendChartConfig} className="w-full h-[300px]">
-                            <ComposedChart data={historicalData}>
+                            <ComposedChart data={historicalTrendData}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
                                 <YAxis stroke="hsl(var(--muted-foreground))" />
@@ -271,12 +312,41 @@ export default function IAClient({ initialPlanId }: { initialPlanId?: string }) 
                 {forecast && (
                      <CardFooter className="flex-col items-start gap-4 pt-6">
                         <Separator />
-                        <h3 className="font-semibold text-lg pt-4">Pronóstico de Demanda</h3>
+                        <h3 className="font-semibold text-lg pt-4">Pronóstico de Demanda (Análisis IA)</h3>
                         <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
                            {forecast.analysis.split('\n').map((paragraph, index) => (
                                <p key={index}>{paragraph}</p>
                            ))}
                         </div>
+                        <h3 className="font-semibold text-lg pt-4">Datos Históricos Analizados</h3>
+                        {forecastChartData.length > 0 ? (
+                             <ChartContainer config={forecastChartConfig} className="w-full h-[400px]">
+                                <BarChart accessibilityLayer data={forecastChartData} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
+                                    <CartesianGrid vertical={false} />
+                                    <XAxis 
+                                        dataKey="name" 
+                                        tickLine={false} 
+                                        axisLine={false}
+                                        tickMargin={10}
+                                        angle={-60}
+                                        textAnchor="end"
+                                        interval={0}
+                                        height={100}
+                                        style={{
+                                            fontSize: '0.75rem',
+                                        }}
+                                    />
+                                    <YAxis />
+                                    <RechartsTooltip content={<ChartTooltipContent />} />
+                                    <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+                                    {Object.keys(forecastChartConfig).map(key => (
+                                        <Bar key={key} dataKey={key} fill={`var(--color-${key})`} radius={4} />
+                                    ))}
+                                </BarChart>
+                            </ChartContainer>
+                        ) : (
+                             <p className="text-muted-foreground text-center py-8">No se encontraron datos de producción para visualizar.</p>
+                        )}
                     </CardFooter>
                 )}
             </Card>

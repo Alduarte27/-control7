@@ -84,7 +84,7 @@ const forecastDemandFlow = ai.defineFlow(
       })),
     };
 
-    if (plannableInput.historicalData.length === 0) {
+    if (plannableInput.historicalData.length === 0 || plannableInput.historicalData.every(w => w.products.length === 0)) {
       return {
         analysis: "No hay suficientes datos históricos de productos planificables para generar un pronóstico de demanda. Por favor, asegúrate de tener varias semanas de producción registradas.",
       };
