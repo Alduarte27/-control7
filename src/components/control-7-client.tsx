@@ -136,7 +136,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 });
                 setData(syncedData);
             } else {
-                setData(generateInitialData(productDefinitions, categories));
+                setData(generateInitialData(productDefinitions.filter(p => p.isActive), categories));
             }
         } catch (error) {
             console.error("Error fetching data from Firestore:", error);
