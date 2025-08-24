@@ -33,17 +33,24 @@ const getDateFromPlanId = (planId: string): Date => {
 export default function Control7Client({ initialPlanId }: { initialPlanId?: string }) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
-  const [date, setDate] = React.useState<Date | undefined>(
-    initialPlanId ? getDateFromPlanId(initialPlanId) : new Date()
+  const [date, setDate] = React.useState<Date | undefined>(() => 
+    initialPlanId ? getDateFromPlanId(initialPlanId) : undefined
   );
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
   const { toast } = useToast();
 
+  React.useEffect(() => {
+    if (!date && !initialPlanId) {
+      setDate(new Date());
+    }
+  }, [date, initialPlanId]);
+
+
   const currentYear = (date || new Date()).getFullYear();
   const currentWeek = getISOWeek(date || new Date());
   
-  const planId = initialPlanId || `${currentYear}-W${currentWeek}`;
+  const planId = `${currentYear}-W${currentWeek}`;
   const savePlanId = `${currentYear}-W${currentWeek}`;
 
 
@@ -59,6 +66,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
   React.useEffect(() => {
     const fetchData = async () => {
+        if (!date) return;
         setLoading(true);
         setIsDirty(false);
         try {
@@ -119,7 +127,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planId, toast]);
+  }, [planId, date, toast]);
 
   const handleSave = async () => {
     try {
@@ -281,7 +289,13 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   const handleDateChange = (newDate: Date | undefined) => {
     if (newDate) {
         const newPlanId = `${newDate.getFullYear()}-W${getISOWeek(newDate)}`;
-        window.location.href = `/?planId=${newPlanId}`;
+        if (isDirty) {
+            if (confirm('Tienes cambios sin guardar. ¿Estás seguro de que quieres cambiar de semana? Se perderán los cambios.')) {
+                 window.location.href = `/?planId=${newPlanId}`;
+            }
+        } else {
+            window.location.href = `/?planId=${newPlanId}`;
+        }
     }
   };
 
@@ -300,7 +314,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
             onDateChange={handleDateChange}
             onCopyLastWeek={handleCopyLastWeek}
         />
-        {loading ? (
+        {loading || !date ? (
             <p>Cargando datos...</p>
         ) : (
             <>
