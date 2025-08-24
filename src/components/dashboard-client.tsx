@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Factory, ChevronLeft, Filter, Percent, TrendingUp, TrendingDown } from 'lucide-react';
@@ -302,7 +302,7 @@ export default function DashboardClient() {
         if (item.categoryIsPlanned && item.planned > 0) {
             productTotals[item.productName].planned += item.planned || 0;
             productTotals[item.productName].actual += itemActualTotal;
-        } else if (!item.categoryIsPlanned) {
+        } else if (!item.categoryIsPlanned && itemActualTotal > 0) {
             productTotals[item.productName].actual += itemActualTotal;
         }
 
@@ -361,8 +361,8 @@ export default function DashboardClient() {
                         {isFilterOpen ? 'Ocultar Filtros' : 'Mostrar Filtros'}
                     </Button>
                 </CollapsibleTrigger>
-                <CardDescription className="text-right">
-                    El filtro de categoría aplica a todos los gráficos. El filtro de semana solo a los gráficos por día y producto.
+                <CardDescription className="text-right text-xs md:text-sm">
+                    El filtro de categoría aplica a todos los gráficos. El de semana solo a los gráficos por día y producto.
                 </CardDescription>
             </div>
             <CollapsibleContent>
@@ -414,7 +414,7 @@ export default function DashboardClient() {
             ) : weeklySummaryData.length > 0 ? (
               <ChartContainer config={weeklyChartConfig} className="w-full h-[250px] md:h-[350px]">
                 <BarChart accessibilityLayer data={weeklySummaryData}>
-                   <defs>
+                  <defs>
                     <linearGradient id="colorUnplannedProduction" x1="0" y1="1" x2="0" y2="0">
                         <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.6}/>
                         <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0.9}/>
@@ -428,11 +428,11 @@ export default function DashboardClient() {
                     axisLine={false}
                   />
                   <YAxis />
-                  <ChartTooltip cursor={false} content={<WeeklyTooltipContent />} />
+                  <RechartsTooltip cursor={false} content={<WeeklyTooltipContent />} />
                   <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="planned" fill="hsl(var(--accent))" radius={4} barSize={60} />
-                  <Bar dataKey="actualForPlanned" stackId="a" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} barSize={60} />
-                  <Bar dataKey="unplannedProduction" stackId="a" fill="url(#colorUnplannedProduction)" radius={[4, 4, 0, 0]} barSize={60} />
+                  <Bar dataKey="planned" fill="hsl(var(--accent))" radius={4} barSize={40} />
+                  <Bar dataKey="actualForPlanned" stackId="a" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} barSize={40} />
+                  <Bar dataKey="unplannedProduction" stackId="a" fill="url(#colorUnplannedProduction)" radius={[4, 4, 0, 0]} barSize={40} />
                 </BarChart>
               </ChartContainer>
             ) : (
@@ -497,7 +497,7 @@ export default function DashboardClient() {
                 </CardHeader>
                 <CardContent>
                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : productData.length > 0 ? (
-                        <ChartContainer config={productChartConfig} className="w-full h-[500px]">
+                        <ChartContainer config={productChartConfig} className="w-full h-[300px] md:h-[500px]">
                             <BarChart accessibilityLayer data={productData} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
                                 <CartesianGrid vertical={false} />
                                 <XAxis 

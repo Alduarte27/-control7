@@ -21,7 +21,7 @@ const NavButton = ({ href, icon: Icon, label }: { href: string; icon: React.Elem
         <Tooltip>
             <TooltipTrigger asChild>
                 <Link href={href}>
-                    <Button variant="outline" className="w-10 h-10 p-0 md:w-auto md:h-auto md:px-4 md:py-2">
+                    <Button variant="outline" className="w-10 h-10 p-0 md:w-auto md:px-4">
                         <Icon className="h-4 w-4 md:mr-2" />
                         <span className="hidden md:inline">{label}</span>
                     </Button>
@@ -40,9 +40,9 @@ export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoD
 
   return (
     <header className="flex items-center justify-between p-2 md:p-4 border-b bg-card sticky top-0 z-20">
-      <div className="flex items-center gap-3">
-        <Factory className="h-8 w-8 text-primary" />
-        <h1 className="text-xl md:text-2xl font-bold text-foreground">Control 7</h1>
+      <div className="flex items-center gap-2 md:gap-3">
+        <Factory className="h-7 w-7 md:h-8 md:w-8 text-primary" />
+        <h1 className="text-lg md:text-2xl font-bold text-foreground">Control 7</h1>
       </div>
       <div className="flex items-center gap-1 md:gap-2">
         <TooltipProvider>
@@ -85,14 +85,14 @@ export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoD
         <NavButton href="/ia" icon={Sparkles} label="Análisis IA" />
         <NavButton href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
         <NavButton href="/history" icon={History} label="Historial" />
-        <NavButton href="/admin" icon={Settings} label="Administración" />
+        <NavButton href="/admin" icon={Settings} label="Admin" />
         
         <TooltipProvider>
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <Button onClick={onExport} variant="outline" className="w-10 h-10 p-0 md:w-auto md:h-auto md:px-4 md:py-2">
+                    <Button onClick={onExport} variant="outline" className="w-10 h-10 p-0 md:w-auto md:px-4">
                         <Download className="h-4 w-4 md:mr-2" />
-                        <span className="hidden md:inline">Exportar CSV</span>
+                        <span className="hidden md:inline">Exportar</span>
                     </Button>
                 </TooltipTrigger>
                 <TooltipContent className="md:hidden">
@@ -104,9 +104,9 @@ export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoD
         <TooltipProvider>
             <Tooltip>
                 <TooltipTrigger asChild>
-                    <Button onClick={onSave} className="w-10 h-10 p-0 md:w-auto md:h-auto md:px-4 md:py-2 relative">
+                    <Button onClick={onSave} className="w-10 h-10 p-0 md:w-auto md:px-4 relative">
                         <Save className="h-4 w-4 md:mr-2" />
-                        <span className="hidden md:inline">Guardar Plan</span>
+                        <span className="hidden md:inline">Guardar</span>
                         {hasUnsavedChanges && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-500"></span>}
                     </Button>
                 </TooltipTrigger>
