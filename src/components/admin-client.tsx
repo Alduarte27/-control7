@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, RefreshCw, Info } from 'lucide-react';
+import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, RefreshCw, Info, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,7 +46,7 @@ function EditProductDialog({
     onSave: (updatedProduct: ProductDefinition) => void;
 }) {
     const [productName, setProductName] = React.useState(product.productName);
-    const [categoryId, setCategoryId] = React.useState<string>(product.categoryId);
+    const [categoryId, setCategoryId]_ = React.useState<string>(product.categoryId);
     const [color, setColor] = React.useState(product.color || '#000000');
 
     const handleSave = () => {
