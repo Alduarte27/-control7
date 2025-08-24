@@ -53,15 +53,19 @@ const prompt = ai.definePrompt({
 **Instrucciones Clave:**
 1.  **Idioma**: Tu respuesta y análisis DEBEN estar completamente en español.
 2.  **Enfoque**: Tu análisis debe centrarse EXCLUSIVAMENTE en los productos que pertenecen a categorías planificables ('categoryIsPlanned' es true). IGNORA por completo cualquier producto de categorías no planificables.
-3.  **Análisis de Datos**: Analiza los datos históricos de producción proporcionados (solo para productos planificables) para identificar tendencias, estacionalidad y rotación. Los datos están ordenados desde la semana más antigua a la más reciente.
-4.  **Generación del Plan**: Basado en tu análisis, genera un plan de producción para la próxima semana para TODOS los productos activos listados en 'allProducts' que sean planificables. El objetivo es optimizar la producción para satisfacer la demanda y evitar la sobreproducción.
-    -   Prioriza productos con tendencias de producción consistentes o crecientes.
-    -   Sé conservador con productos de producción esporádica, decreciente o nula en semanas recientes. Sugiere un plan de 0 para productos planificables sin actividad reciente.
-    -   Debes generar un plan para CADA producto planificable en 'allProducts'. Si un producto no debe producirse, su 'suggestedPlan' debe ser 0.
+3.  **Análisis de Datos y Cálculo de Base**:
+    a. Para cada producto planificable, calcula un **promedio ponderado** de la producción real de las últimas semanas. Dale más peso a las semanas más recientes (ej: 40% a la última semana, 30% a la penúltima, etc.). Este promedio será tu **base de sugerencia**.
+    b. Analiza la tendencia de producción (creciente, decreciente, estable, esporádica).
+4.  **Generación del Plan (Cálculo Numérico)**:
+    a. **Tendencia Creciente**: Si la producción ha aumentado consistentemente, sugiere un valor **ligeramente superior** al promedio ponderado.
+    b. **Tendencia Estable**: Utiliza el promedio ponderado como tu sugerencia principal.
+    c. **Tendencia Decreciente/Esporádica**: Sugiere un valor **inferior** al promedio, o 0 si la producción ha sido nula en las últimas 1-2 semanas.
+    d. Debes generar un plan para CADA producto planificable en 'allProducts'. Si un producto no debe producirse, su 'suggestedPlan' debe ser 0.
 5.  **Resumen del Análisis (MUY IMPORTANTE)**:
     -   Escribe un resumen de tu análisis. Comienza con un párrafo de resumen general.
     -   Luego, utiliza listas con viñetas (guiones) para explicar las sugerencias clave. Agrupa los productos por categorías como "Aumento/Mantenimiento de Producción" y "Reducción/Cese de Producción".
-    -   **NO incluyas los IDs de los productos en tu análisis de texto.** Usa solo los nombres de los productos. El análisis debe ser fácil de entender para un gerente.
+    -   **NO incluyas los IDs de los productos en tu análisis de texto.** Usa solo los nombres de los productos.
+    -   **Asegúrate de que los valores numéricos sugeridos en el array 'suggestions' sean coherentes con tu análisis de texto.**
 
 **Datos de Entrada:**
 
