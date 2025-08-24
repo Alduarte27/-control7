@@ -22,12 +22,12 @@ const WeeklyHistorySchema = z.object({
   products: z.array(ProductHistorySchema),
 });
 
-export const ForecastDemandInputSchema = z.object({
+const ForecastDemandInputSchema = z.object({
   historicalData: z.array(WeeklyHistorySchema).describe("An array of past weekly production data for plannable products. The most recent week is the last element."),
 });
 export type ForecastDemandInput = z.infer<typeof ForecastDemandInputSchema>;
 
-export const ForecastDemandOutputSchema = z.object({
+const ForecastDemandOutputSchema = z.object({
   analysis: z.string().describe("A qualitative forecast of demand for the next 2-4 weeks, written in Spanish. It should identify products with growing, stable, or declining demand."),
 });
 export type ForecastDemandOutput = z.infer<typeof ForecastDemandOutputSchema>;
