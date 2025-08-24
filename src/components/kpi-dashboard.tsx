@@ -29,13 +29,12 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
 
-  // Calculate totals for all products for overall variance and display
+  // Calculate totals for all products for overall display
   const totalPlanned = data.reduce((sum, item) => sum + (item.planned || 0), 0);
   const totalActual = data.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
 
-  const variance = totalActual - totalPlanned;
   const completion = totalPlannedForCompliance > 0 ? (totalActualForCompliance / totalPlannedForCompliance) * 100 : 0;
   
   const getVarianceColor = (value: number): KpiCardProps['valueColor'] => {
@@ -50,19 +49,19 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
       <KpiCard 
         title="Total Planificado" 
         value={totalPlanned.toLocaleString()} 
         icon={Target}
-        description="Suma total de la producción planificada para todos los productos." 
+        description="Suma total de la producción planificada para todos los productos de categorías planificables." 
       />
       <KpiCard 
         title="Real s/Plan" 
         value={totalActualForCompliance.toLocaleString()} 
         icon={CheckCircle2}
         description="Suma de la producción real que responde directamente a un plan (productos de categorías planificables con plan > 0)."
-        subValue={`${varianceForCompliance.toLocaleString()} Varianza`}
+        subValue={`${varianceForCompliance.toLocaleString()} Varianza s/Plan`}
         subValueColor={getVarianceColor(varianceForCompliance)}
       />
       <KpiCard
@@ -72,24 +71,17 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         description="Producción real de productos de categorías planificables que NO tenían un plan para la semana (plan = 0)."
       />
       <KpiCard 
-        title="Total Real" 
+        title="Producción Total Real" 
         value={totalActual.toLocaleString()} 
         icon={PackageCheck}
         description="Suma total de toda la producción real, incluyendo planificada, no programada y de categorías no planificadas."
       />
       <KpiCard 
-        title="Varianza General" 
-        value={variance.toLocaleString()} 
-        icon={ArrowLeftRight} 
-        valueColor={getVarianceColor(variance)}
-        description="Diferencia entre el 'Total Real' y el 'Total Planificado' de todos los productos."
-      />
-      <KpiCard 
-        title="Cumplimiento" 
+        title="Cumplimiento del Plan" 
         value={`${completion.toFixed(1)}%`} 
         icon={Goal} 
         valueColor={getCompletionColor()}
-        description="Porcentaje de producción 'Real s/Plan' vs. 'Planificado', reflejando qué tan bien se siguió el plan."
+        description="Porcentaje de producción 'Real s/Plan' vs. 'Total Planificado s/Plan', reflejando qué tan bien se siguió el plan."
       />
     </div>
   );
