@@ -564,7 +564,10 @@ export default function AdminClient() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle>Preferencias de Interfaz</CardTitle>
+                    <CardTitle className="flex items-center gap-2">
+                        <Info className="h-5 w-5" />
+                        Preferencias de Interfaz
+                    </CardTitle>
                     <CardDescription>
                         Gestiona cómo se comporta la aplicación.
                     </CardDescription>
