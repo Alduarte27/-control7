@@ -2,24 +2,81 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Sparkles, Bot } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Factory, ChevronLeft, Sparkles, Bot, LineChart, TrendingUp } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { suggestProductionPlan, type SuggestPlanOutput, type SuggestPlanInput } from '@/ai/flows/suggest-plan-flow';
-import { collection, getDocs, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { forecastDemand, type ForecastDemandOutput, type ForecastDemandInput } from '@/ai/flows/forecast-demand-flow';
+import { collection, getDocs, query, orderBy, limit, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { ProductData } from '@/lib/types';
-import SuggestionDialog from './suggestion-dialog';
-import { getISOWeek } from 'date-fns';
+import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
+import { getISOWeek, format, startOfISOWeek, endOfISOWeek } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Tooltip as RechartsTooltip, Line, ComposedChart } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
+import { Separator } from './ui/separator';
 
-export default function IAClient() {
+const trendChartConfig = {
+  planned: {
+    label: 'Planificado',
+    color: 'hsl(var(--chart-2))',
+  },
+  actual: {
+    label: 'Real',
+    color: 'hsl(var(--chart-1))',
+  },
+} satisfies ChartConfig;
+
+
+export default function IAClient({ initialPlanId }: { initialPlanId?: string }) {
   const [isSuggestingPlan, setIsSuggestingPlan] = React.useState(false);
   const [suggestion, setSuggestion] = React.useState<SuggestPlanOutput | null>(null);
+  const [isForecasting, setIsForecasting] = React.useState(false);
+  const [forecast, setForecast] = React.useState<ForecastDemandOutput | null>(null);
+  const [historicalData, setHistoricalData] = React.useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = React.useState(true);
   const { toast } = useToast();
+
+  React.useEffect(() => {
+    const fetchHistory = async () => {
+        setLoadingHistory(true);
+        try {
+            const plansQuery = query(collection(db, "productionPlans"), orderBy("year", "desc"), orderBy("week", "desc"), limit(12));
+            const plansSnapshot = await getDocs(plansQuery);
+
+            const history = plansSnapshot.docs.map(doc => {
+                const plan = doc.data();
+                const totalPlanned = plan.products
+                    .filter((p: ProductData) => p.categoryIsPlanned)
+                    .reduce((sum: number, p: ProductData) => sum + p.planned, 0);
+
+                const totalActual = plan.products
+                    .filter((p: ProductData) => p.categoryIsPlanned)
+                    .reduce((sum: number, p: ProductData) => sum + Object.values(p.actual).reduce((s: any, d: any) => s + d.day + d.night, 0), 0);
+
+                return {
+                    name: `S${plan.week}`,
+                    week: plan.week,
+                    year: plan.year,
+                    planned: totalPlanned,
+                    actual: totalActual,
+                };
+            }).reverse(); // Oldest first
+            setHistoricalData(history);
+        } catch (error) {
+            console.error("Error fetching historical data:", error);
+            toast({ title: 'Error al cargar historial', variant: 'destructive' });
+        }
+        setLoadingHistory(false);
+    };
+    fetchHistory();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSuggestPlan = async () => {
     setIsSuggestingPlan(true);
+    setSuggestion(null);
     toast({
         title: 'Generando Sugerencia',
         description: 'La IA está analizando el historial de producción. Esto puede tardar un momento...',
@@ -28,7 +85,7 @@ export default function IAClient() {
         const plansQuery = query(collection(db, "productionPlans"), orderBy("year", "desc"), orderBy("week", "desc"), limit(8));
         const plansSnapshot = await getDocs(plansQuery);
 
-        const historicalData = plansSnapshot.docs.map(doc => {
+        const historicalDataForAI = plansSnapshot.docs.map(doc => {
             const plan = doc.data();
             return {
                 week: plan.week,
@@ -36,18 +93,17 @@ export default function IAClient() {
                 products: plan.products.map((p: ProductData) => ({
                     id: p.id,
                     productName: p.productName,
-                    totalActual: Object.values(p.actual).reduce((sum, s: any) => sum + s.day + s.night, 0),
+                    totalActual: Object.values(p.actual).reduce((sum: any, s: any) => sum + s.day + s.night, 0),
                     categoryIsPlanned: p.categoryIsPlanned ?? true,
                 }))
             }
-        }).reverse(); // Reverse to have oldest first
+        }).reverse();
 
-        // Fetch all products to pass to the AI
         const productsSnapshot = await getDocs(query(collection(db, "products"), orderBy("order")));
         const allProducts = productsSnapshot.docs
-            .map(doc => ({ id: doc.id, ...doc.data() } as ProductData))
+            .map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition))
             .filter(p => p.isActive);
-
+        
         const categoriesSnapshot = await getDocs(query(collection(db, 'categories'), orderBy('name')));
         const categoryMap = new Map(categoriesSnapshot.docs.map(doc => [doc.id, { isPlanned: doc.data().isPlanned ?? true }]));
         
@@ -58,7 +114,7 @@ export default function IAClient() {
         }));
         
         const input: SuggestPlanInput = { 
-            historicalData, 
+            historicalData: historicalDataForAI, 
             allProducts: allProductsWithCategoryInfo
         };
 
@@ -66,44 +122,63 @@ export default function IAClient() {
         setSuggestion(result);
         
     } catch (error: any) {
-        console.error("Error suggesting plan:", error);
-        
         let description = 'No se pudo generar una sugerencia. Por favor, inténtalo de nuevo.';
         if (error.message && (error.message.includes('API key not valid') || error.message.includes('permission denied'))) {
             description = 'La API Key de Gemini no es válida o no ha sido configurada. Revisa el archivo .env.';
-        } else if (error.message && error.message.includes('requires an index')) {
-            description = 'Firestore requiere un índice para esta consulta. Por favor, crea el índice desde el enlace en la consola de errores del navegador.';
         }
-
-        toast({
-            title: 'Error de la IA',
-            description: description,
-            variant: 'destructive',
-        });
+        toast({ title: 'Error de la IA', description, variant: 'destructive' });
     } finally {
         setIsSuggestingPlan(false);
+    }
+  };
+  
+  const handleForecastDemand = async () => {
+      setIsForecasting(true);
+      setForecast(null);
+      toast({
+          title: 'Generando Pronóstico',
+          description: 'La IA está analizando tendencias para proyectar la demanda futura...',
+      });
+       try {
+        const plansQuery = query(collection(db, "productionPlans"), orderBy("year", "desc"), orderBy("week", "desc"), limit(8));
+        const plansSnapshot = await getDocs(plansQuery);
+
+        const historicalDataForAI = plansSnapshot.docs.map(doc => {
+            const plan = doc.data();
+            return {
+                week: plan.week,
+                year: plan.year,
+                products: plan.products.map((p: ProductData) => ({
+                    productName: p.productName,
+                    totalActual: Object.values(p.actual).reduce((sum: any, s: any) => sum + s.day + s.night, 0),
+                    categoryIsPlanned: p.categoryIsPlanned ?? true,
+                }))
+            }
+        }).reverse();
+        
+        const input: ForecastDemandInput = { historicalData: historicalDataForAI };
+        const result = await forecastDemand(input);
+        setForecast(result);
+
+    } catch (error: any) {
+        toast({ title: 'Error de Pronóstico', description: 'No se pudo generar un pronóstico.', variant: 'destructive' });
+    } finally {
+        setIsForecasting(false);
     }
   };
 
   const handleApplySuggestion = async () => {
     if (!suggestion) return;
-
     try {
         const currentWeek = getISOWeek(new Date());
         const currentYear = new Date().getFullYear();
         const planId = `${currentYear}-W${currentWeek}`;
         
-        const planDocRef = doc(db, "productionPlans", planId);
-        // We redirect the user to the main page with the planId, so they can see the applied plan
+        sessionStorage.setItem('aiSuggestion', JSON.stringify(suggestion.suggestions));
         window.location.href = `/?planId=${planId}&applySuggestion=true`;
 
     } catch (error) {
-        toast({
-            title: 'Error al aplicar sugerencia',
-            description: 'No se pudo guardar el plan sugerido.',
-            variant: 'destructive'
-        });
-        console.error("Error applying suggestion:", error);
+        toast({ title: 'Error al aplicar sugerencia', variant: 'destructive' });
     }
   };
 
@@ -140,40 +215,73 @@ export default function IAClient() {
                     {isSuggestingPlan ? 'Generando Plan...' : 'Generar Sugerencia de Plan Semanal'}
                 </Button>
               </CardContent>
+
+              {suggestion && (
+                 <CardFooter className="flex-col items-start gap-4 pt-6">
+                    <Separator />
+                    <h3 className="font-semibold text-lg pt-4">Análisis y Sugerencia de la IA</h3>
+                    <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
+                       {suggestion.analysis.split('\n').map((paragraph, index) => {
+                           if (paragraph.startsWith('-')) {
+                               return <p key={index} className="ml-4">{paragraph}</p>;
+                           }
+                           return <p key={index}>{paragraph}</p>;
+                       })}
+                    </div>
+                    <Button onClick={handleApplySuggestion}>Aplicar Sugerencias al Plan de la Semana Actual</Button>
+                </CardFooter>
+              )}
             </Card>
             
             <Card>
                 <CardHeader>
-                    <CardTitle>Tendencias de Producción</CardTitle>
-                    <CardDescription>Próximamente: Gráficos dinámicos que muestran las tendencias de producción por producto y categoría a lo largo del tiempo.</CardDescription>
+                    <CardTitle className="flex items-center gap-2"><LineChart className="h-5 w-5" />Tendencias de Producción</CardTitle>
+                    <CardDescription>Evolución de la producción planificada vs. la producción real en las últimas semanas.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-muted-foreground text-center py-8">Visualizaciones en desarrollo.</p>
+                    {loadingHistory ? <p className="text-center text-muted-foreground py-8">Cargando historial...</p> : historicalData.length > 0 ? (
+                       <ChartContainer config={trendChartConfig} className="w-full h-[300px]">
+                            <ComposedChart data={historicalData}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
+                                <YAxis stroke="hsl(var(--muted-foreground))" />
+                                <RechartsTooltip content={<ChartTooltipContent />} />
+                                <Legend content={<ChartLegendContent />} />
+                                <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                                <Line type="monotone" dataKey="actual" stroke="var(--color-actual)" strokeWidth={2} dot={false} />
+                            </ComposedChart>
+                        </ChartContainer>
+                    ) : (
+                        <p className="text-muted-foreground text-center py-8">No hay suficientes datos históricos para mostrar tendencias.</p>
+                    )}
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Proyecciones y Pronósticos</CardTitle>
-                    <CardDescription>Próximamente: Modelos predictivos para pronosticar la demanda futura y ayudarte a anticipar las necesidades de producción.</CardDescription>
+                    <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" />Proyecciones y Pronósticos</CardTitle>
+                    <CardDescription>Utiliza la IA para generar un pronóstico cualitativo de la demanda para las próximas semanas basado en las tendencias históricas.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-muted-foreground text-center py-8">Análisis predictivo en desarrollo.</p>
+                    <Button onClick={handleForecastDemand} disabled={isForecasting}>
+                        <TrendingUp className={`mr-2 h-4 w-4 ${isForecasting ? 'animate-spin' : ''}`} />
+                        {isForecasting ? 'Generando Pronóstico...' : 'Generar Pronóstico de Demanda'}
+                    </Button>
                 </CardContent>
+                {forecast && (
+                     <CardFooter className="flex-col items-start gap-4 pt-6">
+                        <Separator />
+                        <h3 className="font-semibold text-lg pt-4">Pronóstico de Demanda</h3>
+                        <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
+                           {forecast.analysis.split('\n').map((paragraph, index) => (
+                               <p key={index}>{paragraph}</p>
+                           ))}
+                        </div>
+                    </CardFooter>
+                )}
             </Card>
         </div>
       </main>
-      {suggestion && (
-        <SuggestionDialog
-          suggestion={suggestion}
-          onClose={() => setSuggestion(null)}
-          onApply={() => {
-              // Store suggestion in sessionStorage to be retrieved by the main page
-              sessionStorage.setItem('aiSuggestion', JSON.stringify(suggestion.suggestions));
-              handleApplySuggestion();
-          }}
-        />
-      )}
     </div>
   );
 }
