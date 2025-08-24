@@ -34,6 +34,7 @@ const SuggestedProductPlanSchema = z.object({
 });
 
 const SuggestPlanOutputSchema = z.object({
+  analysis: z.string().describe("A detailed text analysis explaining the reasoning behind the production plan suggestions."),
   suggestions: z.array(SuggestedProductPlanSchema),
 });
 export type SuggestPlanOutput = z.infer<typeof SuggestPlanOutputSchema>;
@@ -47,19 +48,18 @@ const prompt = ai.definePrompt({
   input: { schema: SuggestPlanInputSchema },
   output: { schema: SuggestPlanOutputSchema },
   prompt: `You are an expert production planner for a food manufacturing company.
-Your task is to create a weekly production plan suggestion.
+Your task is to create a weekly production plan suggestion and provide a clear, concise analysis explaining your reasoning.
 
-Analyze the provided historical production data to identify trends, seasonality, and product rotation.
-The data is ordered from oldest to most recent week.
+First, analyze the provided historical production data to identify trends, seasonality, and product rotation. The data is ordered from oldest to most recent week.
 
-Based on your analysis, generate a production plan for the upcoming week for all active products listed in 'allProducts'.
-
-Your goal is to optimize production to meet demand while avoiding overproduction, which could lead to product spoilage.
-
+Second, based on your analysis, generate a production plan for the upcoming week for all active products listed in 'allProducts'. Your goal is to optimize production to meet demand while avoiding overproduction, which could lead to product spoilage.
 - Prioritize products that show consistent or increasing production trends.
 - Be conservative with products that have sporadic, declining, or zero production in recent weeks. Suggest a plan of 0 for products with no recent activity unless there is a clear cyclical pattern.
 - The output must be a production plan for every product listed in 'allProducts'. If a product should not be produced, its suggestedPlan should be 0.
-- Return the plan in the required JSON format.
+
+Third, write a summary of your analysis. Explain the key trends you noticed and justify your most significant suggestions (e.g., why you are increasing production for Product A, or decreasing it for Product B). This analysis should be clear and easy for a non-technical manager to understand.
+
+Return both the analysis and the plan suggestions in the required JSON format.
 
 Historical Data:
 {{#each historicalData}}
@@ -86,6 +86,7 @@ const suggestPlanFlow = ai.defineFlow(
     if (input.historicalData.length === 0) {
       // If there's no history, suggest 0 for all products.
       return {
+        analysis: "No hay datos históricos disponibles para analizar. Se ha sugerido un plan de 0 para todos los productos. Por favor, utilice la función 'Copiar Plan Anterior' o introduzca un plan manualmente para empezar.",
         suggestions: input.allProducts.map(p => ({ productId: p.id, suggestedPlan: 0 })),
       };
     }

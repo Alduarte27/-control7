@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { suggestProductionPlan } from '@/ai/flows/suggest-plan-flow';
+import { suggestProductionPlan, type SuggestPlanOutput } from '@/ai/flows/suggest-plan-flow';
 
 import Header from './header';
 import FilterBar from './filter-bar';
@@ -14,6 +14,8 @@ import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 import InfoDialog from './info-dialog';
+import SuggestionDialog from './suggestion-dialog';
+
 
 const emptyProductionDay: ShiftProduction = { day: 0, night: 0 };
 const emptyActual: DailyProduction = {
@@ -40,6 +42,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   const [isDirty, setIsDirty] = React.useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
   const [isSuggestingPlan, setIsSuggestingPlan] = React.useState(false);
+  const [suggestion, setSuggestion] = React.useState<SuggestPlanOutput | null>(null);
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -247,22 +250,8 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
         const allProducts = data.map(p => ({ id: p.id, productName: p.productName }));
 
         const result = await suggestProductionPlan({ historicalData, allProducts });
+        setSuggestion(result);
         
-        const suggestionsMap = new Map(result.suggestions.map(s => [s.productId, s.suggestedPlan]));
-
-        setData(currentData => 
-            currentData.map(item => ({
-                ...item,
-                planned: suggestionsMap.get(item.id) ?? item.planned,
-                isSuggested: suggestionsMap.has(item.id),
-            }))
-        );
-        
-        setIsDirty(true);
-        toast({
-            title: 'Sugerencia Aplicada',
-            description: 'Se ha generado un nuevo plan. Revisa los valores y ajústalos si es necesario.',
-        });
     } catch (error: any) {
         console.error("Error suggesting plan:", error);
         
@@ -281,6 +270,27 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     } finally {
         setIsSuggestingPlan(false);
     }
+  };
+  
+  const handleApplySuggestion = () => {
+    if (!suggestion) return;
+
+    const suggestionsMap = new Map(suggestion.suggestions.map(s => [s.productId, s.suggestedPlan]));
+
+    setData(currentData => 
+        currentData.map(item => ({
+            ...item,
+            planned: suggestionsMap.get(item.id) ?? item.planned,
+            isSuggested: suggestionsMap.has(item.id),
+        }))
+    );
+    
+    setIsDirty(true);
+    setSuggestion(null);
+    toast({
+        title: 'Sugerencia Aplicada',
+        description: 'Se ha generado un nuevo plan. Revisa los valores y ajústalos si es necesario.',
+    });
   };
 
 
@@ -429,6 +439,13 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
         )}
       </div>
       <InfoDialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen} />
+      {suggestion && (
+        <SuggestionDialog
+          suggestion={suggestion}
+          onClose={() => setSuggestion(null)}
+          onApply={handleApplySuggestion}
+        />
+      )}
     </div>
   );
 }
