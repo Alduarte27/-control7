@@ -1,8 +1,12 @@
+'use client';
+
+import React from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import InfoDialog from './info-dialog';
 
 
 type HeaderProps = {
@@ -32,6 +36,7 @@ const NavButton = ({ href, icon: Icon, label }: { href: string; icon: React.Elem
 
 export default function Header({ onSave, onExport, hasUnsavedChanges }: HeaderProps) {
   const { theme, setTheme } = useTheme();
+  const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
 
   return (
     <header className="flex items-center justify-between p-2 md:p-4 border-b bg-card sticky top-0 z-20">
@@ -55,6 +60,24 @@ export default function Header({ onSave, onExport, hasUnsavedChanges }: HeaderPr
                 </TooltipTrigger>
                  <TooltipContent className="md:hidden">
                     <p>Cambiar tema</p>
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
+        
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setIsInfoDialogOpen(true)}
+                    >
+                        <Info className="h-[1.2rem] w-[1.2rem]" />
+                        <span className="sr-only">Información de la App</span>
+                    </Button>
+                </TooltipTrigger>
+                 <TooltipContent className="md:hidden">
+                    <p>Información</p>
                 </TooltipContent>
             </Tooltip>
         </TooltipProvider>
@@ -92,6 +115,7 @@ export default function Header({ onSave, onExport, hasUnsavedChanges }: HeaderPr
             </Tooltip>
         </TooltipProvider>
       </div>
+      <InfoDialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen} />
     </header>
   );
 }
