@@ -112,6 +112,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
       return acc;
     }, {} as Record<string, boolean>);
     setOpenCategories(initialOpenState);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(categories)]);
 
 
@@ -142,23 +143,19 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
                 </TableBody>
               ) : (
                 categories.map(category => (
-                    <Collapsible asChild key={category} open={openCategories[category]} onOpenChange={(isOpen) => setOpenCategories(prev => ({ ...prev, [category]: isOpen }))}>
-                        <TableBody>
-                            <TableRow className="bg-muted/50 hover:bg-muted/50">
-                                <TableCell colSpan={12} className="font-bold text-primary sticky left-0 bg-muted/50 z-10 p-0">
-                                    <CollapsibleTrigger className="flex items-center gap-2 w-full p-2">
-                                        <ChevronUp className={cn("h-4 w-4 transition-transform", !openCategories[category] && "rotate-180")} />
-                                        {category}
-                                    </CollapsibleTrigger>
-                                </TableCell>
-                            </TableRow>
-                            <CollapsibleContent asChild>
-                                <React.Fragment>
-                                    {groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProduct))}
-                                </React.Fragment>
-                            </CollapsibleContent>
-                        </TableBody>
-                    </Collapsible>
+                    <TableBody key={category} asChild>
+                      <Collapsible open={openCategories[category]} onOpenChange={(isOpen) => setOpenCategories(prev => ({ ...prev, [category]: isOpen }))}>
+                          <TableRow className="bg-muted/50 hover:bg-muted/50">
+                              <TableCell colSpan={12} className="font-bold text-primary sticky left-0 bg-muted/50 z-10 p-0">
+                                  <CollapsibleTrigger className="flex items-center gap-2 w-full p-2">
+                                      <ChevronUp className={cn("h-4 w-4 transition-transform", !openCategories[category] && "rotate-180")} />
+                                      {category}
+                                  </CollapsibleTrigger>
+                              </TableCell>
+                          </TableRow>
+                          {groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProduct))}
+                      </Collapsible>
+                    </TableBody>
                 ))
               )}
             
