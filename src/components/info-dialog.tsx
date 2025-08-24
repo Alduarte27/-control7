@@ -97,7 +97,7 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
             </div>
 
             <div className="text-center pt-4">
-                <p className="text-sm text-muted-foreground">Desarrollado con ❤️ para optimizar tu producción.</p>
+                <p className="text-sm text-muted-foreground">Desarrollado con ❤️ por Alexander Ayavaca Duarte.</p>
             </div>
           </div>
         </ScrollArea>
