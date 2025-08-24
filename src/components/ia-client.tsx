@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { suggestProductionPlan, type SuggestPlanOutput, type SuggestPlanInput } from '@/ai/flows/suggest-plan-flow';
 import { forecastDemand, type ForecastDemandOutput, type ForecastDemandInput } from '@/ai/flows/forecast-demand-flow';
-import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition } from '@/lib/types';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, BarChart } from 'recharts';
@@ -17,7 +17,9 @@ import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import ComparisonCard from './comparison-card';
-import { addWeeks, getISOWeek } from 'date-fns';
+import { addWeeks, getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek, getDay } from 'date-fns';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
 const trendChartConfig = {
   planned: {
@@ -83,6 +85,10 @@ export default function IAClient() {
   const [selectedWeekB, setSelectedWeekB] = React.useState<string>('');
   const [comparisonData, setComparisonData] = React.useState<ComparisonData | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
+
+  // State for applying suggestion dialog
+  const [isApplyDialogOpen, setIsApplyDialogOpen] = React.useState(false);
+  const [targetWeek, setTargetWeek] = React.useState<'current' | 'next'>('next');
 
 
   const weekOptions = React.useMemo(() => {
@@ -349,241 +355,304 @@ export default function IAClient() {
     }
   };
 
-  const handleApplySuggestion = async () => {
+  const handleOpenApplyDialog = async () => {
+    // getDay: Sunday is 0, Monday is 1...
+    const isMonday = getDay(new Date()) === 1;
+    const currentYear = new Date().getFullYear();
+    const currentWeek = getISOWeek(new Date());
+    const currentPlanId = `${currentYear}-W${currentWeek}`;
+
+    let currentPlanIsEmpty = true;
+    try {
+        const planDoc = await getDoc(doc(db, "productionPlans", currentPlanId));
+        if (planDoc.exists()) {
+            const products = planDoc.data().products as ProductData[];
+            if (products.some(p => p.planned > 0)) {
+                currentPlanIsEmpty = false;
+            }
+        }
+    } catch (error) {
+        console.error("Error checking current week's plan:", error);
+    }
+    
+    // Set default target week based on logic
+    if (isMonday && currentPlanIsEmpty) {
+        setTargetWeek('current');
+    } else {
+        setTargetWeek('next');
+    }
+
+    setIsApplyDialogOpen(true);
+  };
+
+  const executeApplySuggestion = async () => {
     if (!suggestion) return;
     try {
-        const nextWeekDate = addWeeks(new Date(), 1);
-        const nextWeekYear = nextWeekDate.getFullYear();
-        const nextWeekNumber = getISOWeek(nextWeekDate);
-        const planId = `${nextWeekYear}-W${nextWeekNumber}`;
+        const date = targetWeek === 'next' ? addWeeks(new Date(), 1) : new Date();
+        const year = date.getFullYear();
+        const week = getISOWeek(date);
+        const planId = `${year}-W${week}`;
         
         sessionStorage.setItem('aiSuggestion', JSON.stringify(suggestion.suggestions));
         window.location.href = `/?planId=${planId}&applySuggestion=true`;
 
     } catch (error) {
         toast({ title: 'Error al aplicar sugerencia', variant: 'destructive' });
+    } finally {
+        setIsApplyDialogOpen(false);
     }
   };
 
+
   return (
-    <div className="bg-background min-h-screen text-foreground">
-      <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <Sparkles className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Análisis con IA</h1>
-        </div>
-        <Link href="/">
-          <Button variant="outline">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver a la Planificación
-          </Button>
-        </Link>
-      </header>
-      <main className="p-4 md:p-8 space-y-6">
-        <div className="grid md:grid-cols-1 gap-6">
-            <Card className="md:col-span-1">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                    <Bot className="h-6 w-6" />
-                    Asistente de Planificación de Producción
-                </CardTitle>
-                <CardDescription>
-                    Utiliza el poder de la IA para analizar el historial de producción y generar un plan semanal optimizado para los productos planificables. 
-                    El asistente identificará tendencias y patrones para ayudarte a minimizar el desperdicio y maximizar la eficiencia.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                 <Button onClick={handleSuggestPlan} disabled={isSuggestingPlan}>
-                    <Bot className={`mr-2 h-4 w-4 ${isSuggestingPlan ? 'animate-spin' : ''}`} />
-                    {isSuggestingPlan ? 'Generando Plan...' : 'Generar Sugerencia de Plan Semanal'}
-                </Button>
-              </CardContent>
-
-              {suggestion && (
-                 <CardFooter className="flex-col items-start gap-4 pt-6">
-                    <Separator />
-                    <h3 className="font-semibold text-lg pt-4">Análisis y Sugerencia de la IA</h3>
-                    <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
-                       {suggestion.analysis.split('\n').map((paragraph, index) => {
-                           if (paragraph.startsWith('-')) {
-                               return <p key={index} className="ml-4">{paragraph}</p>;
-                           }
-                           return <p key={index}>{paragraph}</p>;
-                       })}
-                    </div>
-                    <Button onClick={handleApplySuggestion}>Aplicar Sugerencias al Plan de la Próxima Semana</Button>
-                </CardFooter>
-              )}
-            </Card>
-            
-            <Card>
+    <>
+      <div className="bg-background min-h-screen text-foreground">
+        <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
+          <div className="flex items-center gap-3">
+            <Sparkles className="h-8 w-8 text-primary" />
+            <h1 className="text-2xl font-bold text-foreground">Análisis con IA</h1>
+          </div>
+          <Link href="/">
+            <Button variant="outline">
+              <ChevronLeft className="mr-2 h-4 w-4" />
+              Volver a la Planificación
+            </Button>
+          </Link>
+        </header>
+        <main className="p-4 md:p-8 space-y-6">
+          <div className="grid md:grid-cols-1 gap-6">
+              <Card className="md:col-span-1">
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><LineChart className="h-5 w-5" />Tendencias de Producción</CardTitle>
-                    <CardDescription>Evolución de la producción planificada vs. la producción real (solo de productos planificados) en las últimas semanas.</CardDescription>
+                  <CardTitle className="flex items-center gap-2">
+                      <Bot className="h-6 w-6" />
+                      Asistente de Planificación de Producción
+                  </CardTitle>
+                  <CardDescription>
+                      Utiliza el poder de la IA para analizar el historial de producción y generar un plan semanal optimizado para los productos planificables. 
+                      El asistente identificará tendencias y patrones para ayudarte a minimizar el desperdicio y maximizar la eficiencia.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    {loadingHistory ? <p className="text-center text-muted-foreground py-8">Cargando historial...</p> : historicalTrendData.length > 0 ? (
-                       <ChartContainer config={trendChartConfig} className="w-full h-[300px]">
-                            <ComposedChart data={historicalTrendData}>
-                                <CartesianGrid vertical={false} />
-                                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-                                <YAxis stroke="hsl(var(--muted-foreground))" />
-                                <RechartsTooltip content={<ChartTooltipContent />} />
-                                <Legend content={<ChartLegendContent />} />
-                                <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                                <Line type="monotone" dataKey="actual" stroke="var(--color-actual)" strokeWidth={2} dot={false} />
-                            </ComposedChart>
-                        </ChartContainer>
-                    ) : (
-                        <p className="text-muted-foreground text-center py-8">No hay suficientes datos históricos para mostrar tendencias.</p>
-                    )}
+                  <Button onClick={handleSuggestPlan} disabled={isSuggestingPlan}>
+                      <Bot className={`mr-2 h-4 w-4 ${isSuggestingPlan ? 'animate-spin' : ''}`} />
+                      {isSuggestingPlan ? 'Generando Plan...' : 'Generar Sugerencia de Plan Semanal'}
+                  </Button>
                 </CardContent>
-            </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" />Proyecciones y Pronósticos</CardTitle>
-                    <CardDescription>Utiliza la IA para generar un pronóstico cualitativo de la demanda para las próximas semanas basado en las tendencias históricas.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <Button onClick={handleForecastDemand} disabled={isForecasting}>
-                        <TrendingUp className={`mr-2 h-4 w-4 ${isForecasting ? 'animate-spin' : ''}`} />
-                        {isForecasting ? 'Generando Pronóstico...' : 'Generar Pronóstico de Demanda'}
-                    </Button>
-                </CardContent>
-                {forecast && (
-                     <CardFooter className="flex-col items-start gap-4 pt-6">
-                        <Separator />
-                        <h3 className="font-semibold text-lg pt-4">Pronóstico de Demanda (Análisis IA)</h3>
-                        <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
-                           {forecast.analysis.split('\n').map((paragraph, index) => (
-                               <p key={index}>{paragraph}</p>
-                           ))}
-                        </div>
-                        <h3 className="font-semibold text-lg pt-4">Datos Históricos Analizados</h3>
-                        {forecastChartData.length > 0 ? (
-                             <ChartContainer config={forecastChartConfig} className="w-full h-[400px]">
-                                <BarChart accessibilityLayer data={forecastChartData} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
-                                    <CartesianGrid vertical={false} />
-                                    <XAxis 
-                                        dataKey="name" 
-                                        tickLine={false} 
-                                        axisLine={false}
-                                        tickMargin={10}
-                                        angle={-60}
-                                        textAnchor="end"
-                                        interval={0}
-                                        height={100}
-                                        style={{
-                                            fontSize: '0.75rem',
-                                        }}
-                                    />
-                                    <YAxis />
-                                    <RechartsTooltip content={<ChartTooltipContent />} />
-                                    <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
-                                    {Object.keys(forecastChartConfig).map(key => (
-                                        <Bar key={key} dataKey={key} fill={`var(--color-${key})`} radius={4} />
-                                    ))}
-                                </BarChart>
-                            </ChartContainer>
-                        ) : (
-                             <p className="text-muted-foreground text-center py-8">No se encontraron datos de producción para visualizar.</p>
-                        )}
-                    </CardFooter>
+                {suggestion && (
+                  <CardFooter className="flex-col items-start gap-4 pt-6">
+                      <Separator />
+                      <h3 className="font-semibold text-lg pt-4">Análisis y Sugerencia de la IA</h3>
+                      <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
+                        {suggestion.analysis.split('\n').map((paragraph, index) => {
+                            if (paragraph.startsWith('-')) {
+                                return <p key={index} className="ml-4">{paragraph}</p>;
+                            }
+                            return <p key={index}>{paragraph}</p>;
+                        })}
+                      </div>
+                      <Button onClick={handleOpenApplyDialog}>Aplicar Sugerencias...</Button>
+                  </CardFooter>
                 )}
-            </Card>
+              </Card>
+              
+              <Card>
+                  <CardHeader>
+                      <CardTitle className="flex items-center gap-2"><LineChart className="h-5 w-5" />Tendencias de Producción</CardTitle>
+                      <CardDescription>Evolución de la producción planificada vs. la producción real (solo de productos planificados) en las últimas semanas.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                      {loadingHistory ? <p className="text-center text-muted-foreground py-8">Cargando historial...</p> : historicalTrendData.length > 0 ? (
+                        <ChartContainer config={trendChartConfig} className="w-full h-[300px]">
+                              <ComposedChart data={historicalTrendData}>
+                                  <CartesianGrid vertical={false} />
+                                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
+                                  <YAxis stroke="hsl(var(--muted-foreground))" />
+                                  <RechartsTooltip content={<ChartTooltipContent />} />
+                                  <Legend content={<ChartLegendContent />} />
+                                  <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                                  <Line type="monotone" dataKey="actual" stroke="var(--color-actual)" strokeWidth={2} dot={false} />
+                              </ComposedChart>
+                          </ChartContainer>
+                      ) : (
+                          <p className="text-muted-foreground text-center py-8">No hay suficientes datos históricos para mostrar tendencias.</p>
+                      )}
+                  </CardContent>
+              </Card>
 
-            <Card className="md:col-span-1">
-                <CardHeader>
-                    <CardTitle>Análisis Comparativo Semanal</CardTitle>
-                    <CardDescription>
-                        Compara el rendimiento de dos semanas (solo productos con plan > 0). El filtro de categoría se aplica aquí también.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    <div className="flex flex-col md:flex-row items-center gap-4">
-                         <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
-                            <Label htmlFor='category-filter-comparison'>Filtrar por Categoría</Label>
-                            <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-                                <SelectTrigger id="category-filter-comparison">
-                                    <SelectValue placeholder="Seleccionar categoría" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">Todas las categorías</SelectItem>
-                                    {categories.map(cat => (
-                                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
-                            <Label htmlFor="week-a-filter">Semana A</Label>
-                            <Select value={selectedWeekA} onValueChange={setSelectedWeekA} disabled={weekOptions.length < 1}>
-                                <SelectTrigger id="week-a-filter">
-                                    <SelectValue placeholder="Seleccionar" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {weekOptions.map(week => (
-                                        <SelectItem key={`A-${week}`} value={String(week)}>Semana {week}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
-                            <Label htmlFor="week-b-filter">Semana B</Label>
-                            <Select value={selectedWeekB} onValueChange={setSelectedWeekB} disabled={weekOptions.length < 1}>
-                                <SelectTrigger id="week-b-filter">
-                                    <SelectValue placeholder="Seleccionar" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {weekOptions.map(week => (
-                                        <SelectItem key={`B-${week}`} value={String(week)}>Semana {week}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    {loadingHistory ? <p className="text-center text-muted-foreground">Cargando...</p> : comparisonData ? (
-                        <div className="space-y-6">
-                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                                <ComparisonCard title="Total Planificado" valueA={comparisonData.totalPlannedA} valueB={comparisonData.totalPlannedB} />
-                                <ComparisonCard title="Total Real" valueA={comparisonData.totalActualA} valueB={comparisonData.totalActualB} />
-                                <ComparisonCard title="Cumplimiento" valueA={comparisonData.totalPlannedA > 0 ? (comparisonData.totalActualA / comparisonData.totalPlannedA) * 100 : 0} valueB={comparisonData.totalPlannedB > 0 ? (comparisonData.totalActualB / comparisonData.totalPlannedB) * 100 : 0} isPercentage />
-                                <ComparisonCard title="Varianza" valueA={comparisonData.totalActualA - comparisonData.totalPlannedA} valueB={comparisonData.totalActualB - comparisonData.totalPlannedB} showPercentage={false} />
-                            </div>
-                            <div>
-                                <ChartContainer config={comparisonChartConfig} className="w-full h-[500px]">
-                                    <BarChart accessibilityLayer data={comparisonData.productComparison} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
-                                        <CartesianGrid vertical={false} />
-                                        <XAxis 
-                                            dataKey="name" 
-                                            tickLine={false} 
-                                            axisLine={false}
-                                            tickMargin={10}
-                                            angle={-60}
-                                            textAnchor="end"
-                                            interval={0}
-                                            height={100}
-                                            style={{ fontSize: '0.75rem' }}
-                                        />
-                                        <YAxis />
-                                        <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                                        <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
-                                        <Bar dataKey="plannedA" fill="var(--color-plannedA)" radius={4} />
-                                        <Bar dataKey="actualA" fill="var(--color-actualA)" radius={4} />
-                                        <Bar dataKey="plannedB" fill="var(--color-plannedB)" radius={4} />
-                                        <Bar dataKey="actualB" fill="var(--color-actualB)" radius={4} />
-                                    </BarChart>
-                                </ChartContainer>
-                            </div>
-                        </div>
-                    ) : (
-                        <p className="text-center text-muted-foreground py-8">Selecciona dos semanas válidas para comparar.</p>
-                    )}
-                </CardContent>
-            </Card>
-        </div>
-      </main>
-    </div>
+              <Card>
+                  <CardHeader>
+                      <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" />Proyecciones y Pronósticos</CardTitle>
+                      <CardDescription>Utiliza la IA para generar un pronóstico cualitativo de la demanda para las próximas semanas basado en las tendencias históricas.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                      <Button onClick={handleForecastDemand} disabled={isForecasting}>
+                          <TrendingUp className={`mr-2 h-4 w-4 ${isForecasting ? 'animate-spin' : ''}`} />
+                          {isForecasting ? 'Generando Pronóstico...' : 'Generar Pronóstico de Demanda'}
+                      </Button>
+                  </CardContent>
+                  {forecast && (
+                      <CardFooter className="flex-col items-start gap-4 pt-6">
+                          <Separator />
+                          <h3 className="font-semibold text-lg pt-4">Pronóstico de Demanda (Análisis IA)</h3>
+                          <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
+                            {forecast.analysis.split('\n').map((paragraph, index) => (
+                                <p key={index}>{paragraph}</p>
+                            ))}
+                          </div>
+                          <h3 className="font-semibold text-lg pt-4">Datos Históricos Analizados</h3>
+                          {forecastChartData.length > 0 ? (
+                              <ChartContainer config={forecastChartConfig} className="w-full h-[400px]">
+                                  <BarChart accessibilityLayer data={forecastChartData} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
+                                      <CartesianGrid vertical={false} />
+                                      <XAxis 
+                                          dataKey="name" 
+                                          tickLine={false} 
+                                          axisLine={false}
+                                          tickMargin={10}
+                                          angle={-60}
+                                          textAnchor="end"
+                                          interval={0}
+                                          height={100}
+                                          style={{
+                                              fontSize: '0.75rem',
+                                          }}
+                                      />
+                                      <YAxis />
+                                      <RechartsTooltip content={<ChartTooltipContent />} />
+                                      <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+                                      {Object.keys(forecastChartConfig).map(key => (
+                                          <Bar key={key} dataKey={key} fill={`var(--color-${key})`} radius={4} />
+                                      ))}
+                                  </BarChart>
+                              </ChartContainer>
+                          ) : (
+                              <p className="text-muted-foreground text-center py-8">No se encontraron datos de producción para visualizar.</p>
+                          )}
+                      </CardFooter>
+                  )}
+              </Card>
+
+              <Card className="md:col-span-1">
+                  <CardHeader>
+                      <CardTitle>Análisis Comparativo Semanal</CardTitle>
+                      <CardDescription>
+                          Compara el rendimiento de dos semanas (solo productos con plan > 0). El filtro de categoría se aplica aquí también.
+                      </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                      <div className="flex flex-col md:flex-row items-center gap-4">
+                          <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
+                              <Label htmlFor='category-filter-comparison'>Filtrar por Categoría</Label>
+                              <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+                                  <SelectTrigger id="category-filter-comparison">
+                                      <SelectValue placeholder="Seleccionar categoría" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                      <SelectItem value="all">Todas las categorías</SelectItem>
+                                      {categories.map(cat => (
+                                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                          </div>
+                          <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
+                              <Label htmlFor="week-a-filter">Semana A</Label>
+                              <Select value={selectedWeekA} onValueChange={setSelectedWeekA} disabled={weekOptions.length < 1}>
+                                  <SelectTrigger id="week-a-filter">
+                                      <SelectValue placeholder="Seleccionar" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                      {weekOptions.map(week => (
+                                          <SelectItem key={`A-${week}`} value={String(week)}>Semana {week}</SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                          </div>
+                          <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
+                              <Label htmlFor="week-b-filter">Semana B</Label>
+                              <Select value={selectedWeekB} onValueChange={setSelectedWeekB} disabled={weekOptions.length < 1}>
+                                  <SelectTrigger id="week-b-filter">
+                                      <SelectValue placeholder="Seleccionar" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                      {weekOptions.map(week => (
+                                          <SelectItem key={`B-${week}`} value={String(week)}>Semana {week}</SelectItem>
+                                      ))}
+                                  </SelectContent>
+                              </Select>
+                          </div>
+                      </div>
+                      {loadingHistory ? <p className="text-center text-muted-foreground">Cargando...</p> : comparisonData ? (
+                          <div className="space-y-6">
+                              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                                  <ComparisonCard title="Total Planificado" valueA={comparisonData.totalPlannedA} valueB={comparisonData.totalPlannedB} />
+                                  <ComparisonCard title="Total Real" valueA={comparisonData.totalActualA} valueB={comparisonData.totalActualB} />
+                                  <ComparisonCard title="Cumplimiento" valueA={comparisonData.totalPlannedA > 0 ? (comparisonData.totalActualA / comparisonData.totalPlannedA) * 100 : 0} valueB={comparisonData.totalPlannedB > 0 ? (comparisonData.totalActualB / comparisonData.totalPlannedB) * 100 : 0} isPercentage />
+                                  <ComparisonCard title="Varianza" valueA={comparisonData.totalActualA - comparisonData.totalPlannedA} valueB={comparisonData.totalActualB - comparisonData.totalPlannedB} showPercentage={false} />
+                              </div>
+                              <div>
+                                  <ChartContainer config={comparisonChartConfig} className="w-full h-[500px]">
+                                      <BarChart accessibilityLayer data={comparisonData.productComparison} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
+                                          <CartesianGrid vertical={false} />
+                                          <XAxis 
+                                              dataKey="name" 
+                                              tickLine={false} 
+                                              axisLine={false}
+                                              tickMargin={10}
+                                              angle={-60}
+                                              textAnchor="end"
+                                              interval={0}
+                                              height={100}
+                                              style={{ fontSize: '0.75rem' }}
+                                          />
+                                          <YAxis />
+                                          <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                                          <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+                                          <Bar dataKey="plannedA" fill="var(--color-plannedA)" radius={4} />
+                                          <Bar dataKey="actualA" fill="var(--color-actualA)" radius={4} />
+                                          <Bar dataKey="plannedB" fill="var(--color-plannedB)" radius={4} />
+                                          <Bar dataKey="actualB" fill="var(--color-actualB)" radius={4} />
+                                      </BarChart>
+                                  </ChartContainer>
+                              </div>
+                          </div>
+                      ) : (
+                          <p className="text-center text-muted-foreground py-8">Selecciona dos semanas válidas para comparar.</p>
+                      )}
+                  </CardContent>
+              </Card>
+          </div>
+        </main>
+      </div>
+
+      <AlertDialog open={isApplyDialogOpen} onOpenChange={setIsApplyDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Dónde aplicar la sugerencia de la IA?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Elige en qué semana quieres aplicar el plan de producción generado por la IA.
+              Te recomendamos la opción preseleccionada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4">
+              <RadioGroup defaultValue={targetWeek} onValueChange={(value: 'current' | 'next') => setTargetWeek(value)}>
+                  <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="current" id="r-current" />
+                      <Label htmlFor="r-current">Semana Actual (S{getISOWeek(new Date())})</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="next" id="r-next" />
+                      <Label htmlFor="r-next">Próxima Semana (S{getISOWeek(addWeeks(new Date(), 1))})</Label>
+                  </div>
+              </RadioGroup>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={executeApplySuggestion}>Aplicar a la Semana Seleccionada</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
