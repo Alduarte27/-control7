@@ -1,7 +1,7 @@
 'use client';
 
 import KpiCard from './kpi-card';
-import { Target, PackageCheck, ArrowLeftRight, Goal } from 'lucide-react';
+import { Target, PackageCheck, ArrowLeftRight, Goal, CheckCircle2 } from 'lucide-react';
 import type { ProductData } from '@/lib/types';
 import type { KpiCardProps } from './kpi-card';
 
@@ -39,8 +39,9 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
       <KpiCard title="Total Planificado" value={totalPlanned.toLocaleString()} icon={Target} />
+      <KpiCard title="Real s/Plan" value={totalActualForCompliance.toLocaleString()} icon={CheckCircle2} />
       <KpiCard title="Total Real" value={totalActual.toLocaleString()} icon={PackageCheck} />
       <KpiCard title="Varianza" value={variance.toLocaleString()} icon={ArrowLeftRight} valueColor={getVarianceColor()} />
       <KpiCard title="Cumplimiento" value={`${completion.toFixed(1)}%`} icon={Goal} valueColor={getCompletionColor()} />
