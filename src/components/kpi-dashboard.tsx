@@ -10,12 +10,22 @@ type KpiDashboardProps = {
 };
 
 export default function KpiDashboard({ data }: KpiDashboardProps) {
+  // Calculate totals for products that were actually planned
+  const plannedProducts = data.filter(item => (item.planned || 0) > 0);
+  
+  const totalPlannedForCompliance = plannedProducts.reduce((sum, item) => sum + (item.planned || 0), 0);
+  const totalActualForCompliance = plannedProducts.reduce((sum, item) => 
+    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
+  );
+
+  // Calculate totals for all products for overall variance and display
   const totalPlanned = data.reduce((sum, item) => sum + (item.planned || 0), 0);
   const totalActual = data.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
+
   const variance = totalActual - totalPlanned;
-  const completion = totalPlanned > 0 ? (totalActual / totalPlanned) * 100 : 0;
+  const completion = totalPlannedForCompliance > 0 ? (totalActualForCompliance / totalPlannedForCompliance) * 100 : 0;
   
   const getVarianceColor = (): KpiCardProps['valueColor'] => {
     if (variance >= 0) return 'text-green-600';
