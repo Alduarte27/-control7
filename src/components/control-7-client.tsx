@@ -6,7 +6,6 @@ import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
-import { suggestProductionPlan, type SuggestPlanOutput } from '@/ai/flows/suggest-plan-flow';
 
 import Header from './header';
 import FilterBar from './filter-bar';
@@ -14,8 +13,6 @@ import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 import InfoDialog from './info-dialog';
-import SuggestionDialog from './suggestion-dialog';
-
 
 const emptyProductionDay: ShiftProduction = { day: 0, night: 0 };
 const emptyActual: DailyProduction = {
@@ -41,8 +38,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
-  const [isSuggestingPlan, setIsSuggestingPlan] = React.useState(false);
-  const [suggestion, setSuggestion] = React.useState<SuggestPlanOutput | null>(null);
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -61,6 +56,47 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     } else {
       setDate(getDateFromPlanId(initialPlanId));
     }
+
+    // Check for AI suggestion in sessionStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('applySuggestion') === 'true') {
+        const suggestionRaw = sessionStorage.getItem('aiSuggestion');
+        if (suggestionRaw) {
+            try {
+                const suggestions = JSON.parse(suggestionRaw);
+                const suggestionsMap = new Map(suggestions.map((s: any) => [s.productId, s.suggestedPlan]));
+                
+                setData(currentData => 
+                    currentData.map(item => {
+                        const suggestedPlan = suggestionsMap.get(item.id);
+                        const newPlan = suggestedPlan !== undefined ? suggestedPlan : item.planned;
+                        return {
+                            ...item,
+                            planned: newPlan,
+                            isSuggested: suggestedPlan !== undefined,
+                        };
+                    })
+                );
+                
+                setIsDirty(true);
+                toast({
+                    title: 'Sugerencia Aplicada',
+                    description: 'Se ha generado un nuevo plan desde la página de IA. Revisa los valores y guárdalos.',
+                });
+
+            } catch (error) {
+                console.error("Failed to parse or apply AI suggestion:", error);
+                toast({ title: 'Error al aplicar sugerencia', variant: 'destructive'});
+            } finally {
+                sessionStorage.removeItem('aiSuggestion');
+                // Clean up URL
+                const newUrl = window.location.pathname + `?planId=${urlParams.get('planId')}`;
+                window.history.replaceState({}, document.title, newUrl);
+            }
+        }
+    }
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPlanId]);
 
 
@@ -155,7 +191,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planId, date, toast]);
+  }, [planId, date]);
 
   const handleSave = async () => {
     try {
@@ -223,88 +259,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
       });
     }
   };
-
-  const handleSuggestPlan = async () => {
-    setIsSuggestingPlan(true);
-    toast({
-        title: 'Generando Sugerencia',
-        description: 'La IA está analizando el historial de producción. Esto puede tardar un momento...',
-    });
-    try {
-        const plansQuery = query(collection(db, "productionPlans"), orderBy("year", "desc"), orderBy("week", "desc"), limit(8));
-        const plansSnapshot = await getDocs(plansQuery);
-
-        const historicalData = plansSnapshot.docs.map(doc => {
-            const plan = doc.data();
-            return {
-                week: plan.week,
-                year: plan.year,
-                products: plan.products.map((p: ProductData) => ({
-                    id: p.id,
-                    productName: p.productName,
-                    totalActual: Object.values(p.actual).reduce((sum, s: any) => sum + s.day + s.night, 0),
-                    categoryIsPlanned: p.categoryIsPlanned,
-                }))
-            }
-        }).reverse(); // Reverse to have oldest first
-
-        const allProducts = data.map(p => ({ 
-          id: p.id, 
-          productName: p.productName, 
-          categoryIsPlanned: p.categoryIsPlanned 
-        }));
-
-        const result = await suggestProductionPlan({ historicalData, allProducts });
-        setSuggestion(result);
-        
-    } catch (error: any) {
-        console.error("Error suggesting plan:", error);
-        
-        let description = 'No se pudo generar una sugerencia. Por favor, inténtalo de nuevo.';
-        if (error.message && (error.message.includes('API key not valid') || error.message.includes('permission denied'))) {
-            description = 'La API Key de Gemini no es válida o no ha sido configurada. Revisa el archivo .env.';
-        } else if (error.message && error.message.includes('requires an index')) {
-            description = 'Firestore requiere un índice para esta consulta. Por favor, crea el índice desde el enlace en la consola de errores del navegador.';
-        }
-
-        toast({
-            title: 'Error de la IA',
-            description: description,
-            variant: 'destructive',
-        });
-    } finally {
-        setIsSuggestingPlan(false);
-    }
-  };
-  
-  const handleApplySuggestion = () => {
-    if (!suggestion) return;
-
-    const suggestionsMap = new Map(suggestion.suggestions.map(s => [s.productId, s.suggestedPlan]));
-
-    setData(currentData => 
-        currentData.map(item => {
-            const suggestedPlan = suggestionsMap.get(item.id);
-            // If a suggestion exists for this product, use it. Otherwise, keep the existing plan.
-            // A suggestion of 0 is valid.
-            const newPlan = suggestedPlan !== undefined ? suggestedPlan : item.planned;
-            
-            return {
-                ...item,
-                planned: newPlan,
-                isSuggested: suggestedPlan !== undefined,
-            };
-        })
-    );
-    
-    setIsDirty(true);
-    setSuggestion(null);
-    toast({
-        title: 'Sugerencia Aplicada',
-        description: 'Se ha generado un nuevo plan. Revisa los valores y ajústalos si es necesario.',
-    });
-  };
-
 
   const handleExport = () => {
     if (data.length === 0) {
@@ -431,8 +385,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
             date={date}
             onDateChange={handleDateChange}
             onCopyLastWeek={handleCopyLastWeek}
-            onSuggestPlan={handleSuggestPlan}
-            isSuggestingPlan={isSuggestingPlan}
         />
         {loading || !date ? (
             <p>Cargando datos...</p>
@@ -451,13 +403,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
         )}
       </div>
       <InfoDialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen} />
-      {suggestion && (
-        <SuggestionDialog
-          suggestion={suggestion}
-          onClose={() => setSuggestion(null)}
-          onApply={handleApplySuggestion}
-        />
-      )}
     </div>
   );
 }

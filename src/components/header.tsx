@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -81,7 +81,8 @@ export default function Header({ onSave, onExport, hasUnsavedChanges, setIsInfoD
                 </TooltipContent>
             </Tooltip>
         </TooltipProvider>
-
+        
+        <NavButton href="/ia" icon={Sparkles} label="Análisis IA" />
         <NavButton href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
         <NavButton href="/history" icon={History} label="Historial" />
         <NavButton href="/admin" icon={Settings} label="Administración" />
