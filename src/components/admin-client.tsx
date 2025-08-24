@@ -46,7 +46,7 @@ function EditProductDialog({
     onSave: (updatedProduct: ProductDefinition) => void;
 }) {
     const [productName, setProductName] = React.useState(product.productName);
-    const [categoryId, setCategoryId]_ = React.useState<string>(product.categoryId);
+    const [categoryId, setCategoryId] = React.useState<string>(product.categoryId);
     const [color, setColor] = React.useState(product.color || '#000000');
 
     const handleSave = () => {
