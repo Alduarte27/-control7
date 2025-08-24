@@ -504,15 +504,7 @@ export default function DashboardClient() {
               <ChartContainer config={weeklyChartConfig} className="w-full h-[250px] md:h-[350px]">
                 <BarChart accessibilityLayer data={weeklySummaryData}>
                    <defs>
-                    <linearGradient id="colorPlanned" x1="0" y1="1" x2="0" y2="0">
-                        <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.6}/>
-                        <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0.9}/>
-                    </linearGradient>
-                    <linearGradient id="colorActualForPlanned" x1="0" y1="1" x2="0" y2="0">
-                        <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.6}/>
-                        <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0.9}/>
-                    </linearGradient>
-                     <linearGradient id="colorUnplannedProduction" x1="0" y1="1" x2="0" y2="0">
+                    <linearGradient id="colorUnplannedProduction" x1="0" y1="1" x2="0" y2="0">
                         <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.6}/>
                         <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0.9}/>
                     </linearGradient>
@@ -527,8 +519,8 @@ export default function DashboardClient() {
                   <YAxis />
                   <ChartTooltip cursor={false} content={<WeeklyTooltipContent />} />
                   <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="planned" fill="url(#colorPlanned)" radius={4} barSize={35} />
-                  <Bar dataKey="actualForPlanned" stackId="a" fill="url(#colorActualForPlanned)" radius={[4, 4, 0, 0]} barSize={35} />
+                  <Bar dataKey="planned" fill="hsl(var(--accent))" radius={4} barSize={35} />
+                  <Bar dataKey="actualForPlanned" stackId="a" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} barSize={35} />
                   <Bar dataKey="unplannedProduction" stackId="a" fill="url(#colorUnplannedProduction)" radius={[4, 4, 0, 0]} barSize={35} />
                 </BarChart>
               </ChartContainer>
@@ -703,5 +695,3 @@ export default function DashboardClient() {
     </div>
   );
 }
-
-    
