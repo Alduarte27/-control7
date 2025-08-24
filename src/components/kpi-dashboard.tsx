@@ -41,17 +41,40 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
 
   return (
     <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-      <KpiCard title="Total Planificado" value={totalPlanned.toLocaleString()} icon={Target} />
+      <KpiCard 
+        title="Total Planificado" 
+        value={totalPlanned.toLocaleString()} 
+        icon={Target}
+        description="Suma total de la producción planificada para todos los productos en la semana." 
+      />
       <KpiCard 
         title="Real s/Plan" 
         value={totalActualForCompliance.toLocaleString()} 
         icon={CheckCircle2}
+        description="Suma de la producción real, contando únicamente los productos que tenían un plan."
         subValue={`${varianceForCompliance.toLocaleString()} Varianza`}
         subValueColor={getVarianceColor(varianceForCompliance)}
       />
-      <KpiCard title="Total Real" value={totalActual.toLocaleString()} icon={PackageCheck} />
-      <KpiCard title="Varianza General" value={variance.toLocaleString()} icon={ArrowLeftRight} valueColor={getVarianceColor(variance)} />
-      <KpiCard title="Cumplimiento" value={`${completion.toFixed(1)}%`} icon={Goal} valueColor={getCompletionColor()} />
+      <KpiCard 
+        title="Total Real" 
+        value={totalActual.toLocaleString()} 
+        icon={PackageCheck}
+        description="Suma total de la producción real de todos los productos, incluyendo los no planificados."
+      />
+      <KpiCard 
+        title="Varianza General" 
+        value={variance.toLocaleString()} 
+        icon={ArrowLeftRight} 
+        valueColor={getVarianceColor(variance)}
+        description="Diferencia entre el 'Total Real' y el 'Total Planificado' de todos los productos."
+      />
+      <KpiCard 
+        title="Cumplimiento" 
+        value={`${completion.toFixed(1)}%`} 
+        icon={Goal} 
+        valueColor={getCompletionColor()}
+        description="Porcentaje de la producción real completada en comparación con lo planificado (solo de productos con plan)."
+      />
     </div>
   );
 }
