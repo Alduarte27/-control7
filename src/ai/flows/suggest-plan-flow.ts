@@ -47,31 +47,33 @@ const prompt = ai.definePrompt({
   name: 'suggestPlanPrompt',
   input: { schema: SuggestPlanInputSchema },
   output: { schema: SuggestPlanOutputSchema },
-  prompt: `You are an expert production planner for a food manufacturing company.
-Your task is to create a weekly production plan suggestion and provide a clear, concise analysis explaining your reasoning.
+  prompt: `Eres un experto planificador de producción en una empresa de alimentos. Tu tarea es crear una sugerencia de plan de producción semanal y proporcionar un análisis claro y conciso en español.
 
-First, analyze the provided historical production data to identify trends, seasonality, and product rotation. The data is ordered from oldest to most recent week.
+**Instrucciones Clave:**
+1.  **Idioma**: Tu respuesta y análisis DEBEN estar completamente en español.
+2.  **Análisis de Datos**: Analiza los datos históricos de producción proporcionados para identificar tendencias, estacionalidad y rotación de productos. Los datos están ordenados desde la semana más antigua a la más reciente.
+3.  **Generación del Plan**: Basado en tu análisis, genera un plan de producción para la próxima semana para todos los productos activos listados en 'allProducts'. El objetivo es optimizar la producción para satisfacer la demanda y evitar la sobreproducción.
+    -   Prioriza productos con tendencias de producción consistentes o crecientes.
+    -   Sé conservador con productos de producción esporádica, decreciente o nula en semanas recientes. Sugiere un plan de 0 para productos sin actividad reciente.
+    -   Debes generar un plan para CADA producto en 'allProducts'. Si un producto no debe producirse, su 'suggestedPlan' debe ser 0.
+4.  **Resumen del Análisis (MUY IMPORTANTE)**:
+    -   Escribe un resumen de tu análisis. Comienza con un párrafo de resumen general.
+    -   Luego, utiliza listas con viñetas (guiones) para explicar las sugerencias clave. Agrupa los productos por categorías como "Aumento/Mantenimiento de Producción" y "Reducción/Cese de Producción".
+    -   **NO incluyas los IDs de los productos en tu análisis de texto.** Usa solo los nombres de los productos. El análisis debe ser fácil de entender para un gerente.
 
-Second, based on your analysis, generate a production plan for the upcoming week for all active products listed in 'allProducts'. Your goal is to optimize production to meet demand while avoiding overproduction, which could lead to product spoilage.
-- Prioritize products that show consistent or increasing production trends.
-- Be conservative with products that have sporadic, declining, or zero production in recent weeks. Suggest a plan of 0 for products with no recent activity unless there is a clear cyclical pattern.
-- The output must be a production plan for every product listed in 'allProducts'. If a product should not be produced, its suggestedPlan should be 0.
+**Datos de Entrada:**
 
-Third, write a summary of your analysis. Explain the key trends you noticed and justify your most significant suggestions (e.g., why you are increasing production for Product A, or decreasing it for Product B). This analysis should be clear and easy for a non-technical manager to understand.
-
-Return both the analysis and the plan suggestions in the required JSON format.
-
-Historical Data:
+**Datos Históricos:**
 {{#each historicalData}}
-Week {{week}}, Year {{year}}:
+Semana {{week}}, Año {{year}}:
   {{#each products}}
-  - {{productName}} (ID: {{id}}): Produced {{totalActual}} units.
+  - {{productName}}: Producido {{totalActual}} unidades.
   {{/each}}
 {{/each}}
 
-All Active Products to generate a plan for:
+**Todos los Productos Activos para los que se debe generar un plan:**
 {{#each allProducts}}
-- {{productName}} (ID: {{id}})
+- {{productName}}
 {{/each}}
 `,
 });
