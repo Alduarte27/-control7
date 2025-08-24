@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Factory, ChevronLeft, Filter, Percent, TrendingUp, TrendingDown } from 'lucide-react';
@@ -503,6 +503,20 @@ export default function DashboardClient() {
             ) : weeklySummaryData.length > 0 ? (
               <ChartContainer config={weeklyChartConfig} className="w-full h-[250px] md:h-[350px]">
                 <BarChart accessibilityLayer data={weeklySummaryData}>
+                   <defs>
+                    <linearGradient id="colorPlanned" x1="0" y1="1" x2="0" y2="0">
+                        <stop offset="5%" stopColor="hsl(var(--accent))" stopOpacity={0.6}/>
+                        <stop offset="95%" stopColor="hsl(var(--accent))" stopOpacity={0.9}/>
+                    </linearGradient>
+                    <linearGradient id="colorActualForPlanned" x1="0" y1="1" x2="0" y2="0">
+                        <stop offset="5%" stopColor="hsl(var(--chart-2))" stopOpacity={0.6}/>
+                        <stop offset="95%" stopColor="hsl(var(--chart-2))" stopOpacity={0.9}/>
+                    </linearGradient>
+                     <linearGradient id="colorUnplannedProduction" x1="0" y1="1" x2="0" y2="0">
+                        <stop offset="5%" stopColor="hsl(var(--chart-3))" stopOpacity={0.6}/>
+                        <stop offset="95%" stopColor="hsl(var(--chart-3))" stopOpacity={0.9}/>
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid vertical={false} />
                   <XAxis
                     dataKey="name"
@@ -513,9 +527,9 @@ export default function DashboardClient() {
                   <YAxis />
                   <ChartTooltip cursor={false} content={<WeeklyTooltipContent />} />
                   <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                  <Bar dataKey="actualForPlanned" stackId="a" fill="var(--color-actualForPlanned)" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="unplannedProduction" stackId="a" fill="var(--color-unplannedProduction)" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="planned" fill="url(#colorPlanned)" radius={4} barSize={35} />
+                  <Bar dataKey="actualForPlanned" stackId="a" fill="url(#colorActualForPlanned)" radius={[4, 4, 0, 0]} barSize={35} />
+                  <Bar dataKey="unplannedProduction" stackId="a" fill="url(#colorUnplannedProduction)" radius={[4, 4, 0, 0]} barSize={35} />
                 </BarChart>
               </ChartContainer>
             ) : (
