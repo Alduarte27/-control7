@@ -267,7 +267,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
         console.error("Error suggesting plan:", error);
         
         let description = 'No se pudo generar una sugerencia. Por favor, inténtalo de nuevo.';
-        if (error.message && error.message.includes('API key not valid')) {
+        if (error.message && (error.message.includes('API key not valid') || error.message.includes('permission denied'))) {
             description = 'La API Key de Gemini no es válida o no ha sido configurada. Revisa el archivo .env.';
         } else if (error.message && error.message.includes('requires an index')) {
             description = 'Firestore requiere un índice para esta consulta. Por favor, crea el índice desde el enlace en la consola de errores del navegador.';
