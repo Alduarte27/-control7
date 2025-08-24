@@ -25,11 +25,9 @@ export default function KpiCard({ title, value, icon: Icon, description, valueCo
             </CardHeader>
             <CardContent>
               <div className={cn("text-2xl font-bold", valueColor)}>{value}</div>
-              {subValue && (
-                  <p className={cn("text-xs font-medium", subValueColor)}>
-                      {subValue}
-                  </p>
-              )}
+              <p className={cn("text-xs font-medium h-[16px]", subValueColor)}>
+                  {subValue || ''}
+              </p>
             </CardContent>
           </Card>
         </TooltipTrigger>
