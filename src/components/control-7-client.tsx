@@ -80,42 +80,44 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
       }));
   };
 
-  const applyAISuggestion = React.useCallback((initialData: ProductData[]) => {
+  const applyAISuggestion = React.useCallback((currentData: ProductData[]): ProductData[] => {
     const suggestionRaw = sessionStorage.getItem('aiSuggestion');
-    if (suggestionRaw) {
-        try {
-            const suggestions = JSON.parse(suggestionRaw);
-            const suggestionsMap = new Map(suggestions.map((s: any) => [s.productId, s.suggestedPlan]));
-            
-            const newData = initialData.map(item => {
-                const suggestedPlan = suggestionsMap.get(item.id);
+    if (!suggestionRaw) return currentData;
+    
+    try {
+        const suggestions = JSON.parse(suggestionRaw);
+        const suggestionsMap = new Map(suggestions.map((s: any) => [s.productId, s.suggestedPlan]));
+        
+        const newData = currentData.map(item => {
+            const suggestedPlan = suggestionsMap.get(item.id);
+            if (suggestedPlan !== undefined) {
                 return {
                     ...item,
-                    planned: suggestedPlan !== undefined ? suggestedPlan : item.planned,
-                    isSuggested: suggestedPlan !== undefined,
+                    planned: suggestedPlan,
+                    isSuggested: true,
                 };
-            });
-            
-            setData(newData);
-            setIsDirty(true);
-            toast({
-                title: 'Sugerencia Aplicada',
-                description: 'Se ha generado un nuevo plan desde la página de IA. Revisa los valores y guárdalos.',
-            });
-        } catch (error) {
-            console.error("Failed to parse or apply AI suggestion:", error);
-            toast({ title: 'Error al aplicar sugerencia', variant: 'destructive'});
-        } finally {
-            sessionStorage.removeItem('aiSuggestion');
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('applySuggestion')) {
-                urlParams.delete('applySuggestion');
-                const newUrl = window.location.pathname + (urlParams.toString() ? `?${urlParams.toString()}` : '');
-                window.history.replaceState({}, document.title, newUrl);
             }
+            return { ...item, isSuggested: false };
+        });
+        
+        setIsDirty(true);
+        toast({
+            title: 'Sugerencia Aplicada',
+            description: 'Se ha generado un nuevo plan desde la página de IA. Revisa los valores y guárdalos.',
+        });
+        return newData;
+    } catch (error) {
+        console.error("Failed to parse or apply AI suggestion:", error);
+        toast({ title: 'Error al aplicar sugerencia', variant: 'destructive'});
+        return currentData;
+    } finally {
+        sessionStorage.removeItem('aiSuggestion');
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('applySuggestion')) {
+            urlParams.delete('applySuggestion');
+            const newUrl = window.location.pathname + (urlParams.toString() ? `?${urlParams.toString()}` : '');
+            window.history.replaceState({}, document.title, newUrl);
         }
-    } else {
-        setData(initialData);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -180,7 +182,8 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('applySuggestion') === 'true') {
-                applyAISuggestion(loadedData);
+                const finalData = applyAISuggestion(loadedData);
+                setData(finalData);
             } else {
                 setData(loadedData);
             }
@@ -199,7 +202,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planId, date, applyAISuggestion]);
+  }, [planId, date]);
 
   const handleSave = async () => {
     try {
