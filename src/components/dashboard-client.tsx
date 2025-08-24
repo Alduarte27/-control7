@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Factory, ChevronLeft, Filter, Percent } from 'lucide-react';
+import { Factory, ChevronLeft, Filter, Percent, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
@@ -122,6 +122,10 @@ type ComparisonData = {
 const WeeklyTooltipContent = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload as WeeklySummaryData;
+      const variance = data.actualForPlanned - data.planned;
+      const varianceColor = variance >= 0 ? 'text-green-600' : 'text-destructive';
+      const VarianceIcon = variance >= 0 ? TrendingUp : TrendingDown;
+
       return (
         <div className="rounded-lg border bg-background p-2 shadow-sm text-sm">
           <p className="font-bold mb-2">{label}</p>
@@ -138,6 +142,12 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
             </div>
             <span className="text-right font-medium">{data.actualForPlanned.toLocaleString()}</span>
 
+            <div className={cn("flex items-center gap-2 pl-4 text-xs", varianceColor)}>
+              <VarianceIcon className="h-3 w-3" />
+              <span>Varianza (s/Plan):</span>
+            </div>
+            <span className={cn("text-right font-medium text-xs", varianceColor)}>{variance.toLocaleString()}</span>
+            
             <div className="flex items-center gap-2 pl-4">
               <div className="w-1 h-1 rounded-full bg-foreground" />
               <span>No Programado:</span>
@@ -254,7 +264,7 @@ export default function DashboardClient() {
 
         filteredProducts.forEach(item => {
             const totalActualForItem = calculateTotalActual(item);
-
+            
             if (item.categoryIsPlanned) {
                 weeklyMap[plan.week].planned += item.planned || 0;
             }
@@ -263,7 +273,7 @@ export default function DashboardClient() {
 
             if (item.categoryIsPlanned && (item.planned || 0) > 0) {
                 weeklyMap[plan.week].actualForPlanned += totalActualForItem;
-            } else {
+            } else if (item.categoryIsPlanned) {
                 weeklyMap[plan.week].unplannedProduction += totalActualForItem;
             }
             
@@ -322,12 +332,13 @@ export default function DashboardClient() {
         
         const itemActualTotal = calculateTotalActual(item);
         
-        if (item.categoryIsPlanned) {
+        if (item.categoryIsPlanned && item.planned > 0) {
             productTotals[item.productName].planned += item.planned || 0;
+            productTotals[item.productName].actual += itemActualTotal;
+        } else if (!item.categoryIsPlanned) {
+            productTotals[item.productName].actual += itemActualTotal;
         }
 
-        // We always sum actual production, regardless of category or plan
-        productTotals[item.productName].actual += itemActualTotal;
 
         Object.entries(item.actual).forEach(([day, shifts]) => {
             const dayKey = day as keyof DailyProduction;
@@ -555,10 +566,10 @@ export default function DashboardClient() {
             </Card>
             <Card className="md:col-span-2">
                 <CardHeader>
-                    <CardTitle>Producción por Producto</CardTitle>
+                    <CardTitle>Producción por Producto (Cumplimiento de Plan)</CardTitle>
                     <CardDescription>
                          {isCategoryPlannable
-                            ? 'Planificado vs. Real para cada producto en el período seleccionado.'
+                            ? 'Planificado vs. Real para cada producto con plan > 0 en el período seleccionado.'
                             : 'Producción real para cada producto en el período seleccionado.'}
                     </CardDescription>
                 </CardHeader>
@@ -673,3 +684,5 @@ export default function DashboardClient() {
     </div>
   );
 }
+
+    
