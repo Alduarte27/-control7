@@ -6,7 +6,6 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from './ui/button';
 import { Edit, ChevronUp } from 'lucide-react';
 import ProductionShiftTable from './production-shift-table';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
 type ProductionTableProps = {
@@ -94,6 +93,10 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
     setSelectedProduct(null);
   };
 
+  const toggleCategory = (category: string) => {
+    setOpenCategories(prev => ({ ...prev, [category]: !prev[category] }));
+  };
+
   const groupedData = data.reduce((acc, product) => {
     const category = product.categoryName || 'Sin Categoría';
     if (!acc[category]) {
@@ -106,7 +109,6 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
   const categories = Object.keys(groupedData).sort();
 
   React.useEffect(() => {
-    // Initialize all categories to be open by default
     const initialOpenState = categories.reduce((acc, category) => {
       acc[category] = true;
       return acc;
@@ -132,33 +134,29 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
                 <TableHead className="min-w-[70px]">Turnos</TableHead>
               </TableRow>
             </TableHeader>
-            
+            <TableBody>
               {data.length === 0 ? (
-                <TableBody>
                   <TableRow>
                     <TableCell colSpan={12} className="h-24 text-center">
                       Ningún producto coincide con tu búsqueda.
                     </TableCell>
                   </TableRow>
-                </TableBody>
               ) : (
                 categories.map(category => (
-                    <TableBody key={category} asChild>
-                      <Collapsible open={openCategories[category]} onOpenChange={(isOpen) => setOpenCategories(prev => ({ ...prev, [category]: isOpen }))}>
-                          <TableRow className="bg-muted/50 hover:bg-muted/50">
-                              <TableCell colSpan={12} className="font-bold text-primary sticky left-0 bg-muted/50 z-10 p-0">
-                                  <CollapsibleTrigger className="flex items-center gap-2 w-full p-2">
-                                      <ChevronUp className={cn("h-4 w-4 transition-transform", !openCategories[category] && "rotate-180")} />
-                                      {category}
-                                  </CollapsibleTrigger>
-                              </TableCell>
-                          </TableRow>
-                          {groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProduct))}
-                      </Collapsible>
-                    </TableBody>
+                    <React.Fragment key={category}>
+                      <TableRow className="bg-muted/50 hover:bg-muted cursor-pointer" onClick={() => toggleCategory(category)}>
+                          <TableCell colSpan={12} className="font-bold text-primary sticky left-0 bg-muted/50 z-10">
+                              <div className="flex items-center gap-2">
+                                  <ChevronUp className={cn("h-4 w-4 transition-transform", !openCategories[category] && "rotate-180")} />
+                                  {category}
+                              </div>
+                          </TableCell>
+                      </TableRow>
+                      {openCategories[category] && groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProduct))}
+                    </React.Fragment>
                 ))
               )}
-            
+            </TableBody>
           </Table>
         </div>
       </div>
