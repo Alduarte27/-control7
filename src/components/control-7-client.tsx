@@ -68,13 +68,15 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
   const generateInitialData = (products: ProductDefinition[], categories: CategoryDefinition[]): ProductData[] => {
     const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, isPlanned: c.isPlanned }]));
-    return products.map(p => ({
-      ...p,
-      categoryName: categoryMap.get(p.categoryId)?.name || 'Sin Categoría',
-      categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
-      planned: 0,
-      actual: JSON.parse(JSON.stringify(emptyActual)),
-    }));
+    return products
+      .filter(p => p.isActive)
+      .map(p => ({
+        ...p,
+        categoryName: categoryMap.get(p.categoryId)?.name || 'Sin Categoría',
+        categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
+        planned: 0,
+        actual: JSON.parse(JSON.stringify(emptyActual)),
+      }));
   };
 
   React.useEffect(() => {
@@ -89,7 +91,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
             const productsQuery = query(collection(db, "products"), orderBy("order"));
             const productsSnapshot = await getDocs(productsQuery);
-            const productDefinitions = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition));
+            const productDefinitions = productsSnapshot.docs.map(doc => ({ id: doc.id, isActive: doc.data().isActive ?? true, ...doc.data() } as ProductDefinition));
 
             if (productDefinitions.length === 0) {
                 setData([]);
@@ -103,15 +105,20 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
             if (planDocSnap.exists()) {
                 const planData = planDocSnap.data();
                 const weeklyData: ProductData[] = planData.products;
+                const weeklyDataProductIds = new Set(weeklyData.map(p => p.id));
 
-                const syncedData = productDefinitions.map(def => {
+                const activeAndRelevantProducts = productDefinitions.filter(
+                    def => def.isActive || weeklyDataProductIds.has(def.id)
+                );
+
+                const syncedData = activeAndRelevantProducts.map(def => {
                     const savedProductData = weeklyData.find(d => d.id === def.id);
                     const categoryInfo = categoryMap.get(def.categoryId);
                     
                     if (savedProductData) {
                         return {
-                            ...savedProductData, // Keep saved data
-                            ...def, // But override with latest definition (name, color, order, etc)
+                            ...savedProductData,
+                            ...def,
                             categoryName: categoryInfo?.name || 'Sin Categoría',
                             categoryIsPlanned: categoryInfo?.isPlanned ?? true,
                         };

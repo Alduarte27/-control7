@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, Trash2, RefreshCw, Info } from 'lucide-react';
+import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, RefreshCw, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Separator } from './ui/separator';
 import { Switch } from './ui/switch';
+import { cn } from '@/lib/utils';
 
 function EditProductDialog({
     product,
@@ -108,7 +109,7 @@ function EditProductDialog({
 }
 
 
-function SortableItem({ product, categoryName, onEdit }: { product: ProductDefinition, categoryName: string, onEdit: (product: ProductDefinition) => void }) {
+function SortableItem({ product, categoryName, onEdit, onToggleStatus }: { product: ProductDefinition, categoryName: string, onEdit: (product: ProductDefinition) => void, onToggleStatus: (product: ProductDefinition) => void }) {
     const {
       attributes,
       listeners,
@@ -123,7 +124,7 @@ function SortableItem({ product, categoryName, onEdit }: { product: ProductDefin
     };
   
     return (
-      <li ref={setNodeRef} style={style} className="border p-3 rounded-md bg-muted/50 flex items-center justify-between">
+      <li ref={setNodeRef} style={style} className={cn("border p-3 rounded-md bg-muted/50 flex items-center justify-between transition-colors", !product.isActive && "bg-slate-100 text-muted-foreground")}>
         <div className="flex items-center gap-2">
             <button {...attributes} {...listeners} className="cursor-grab p-1">
                 <GripVertical className="h-5 w-5 text-muted-foreground" />
@@ -135,6 +136,8 @@ function SortableItem({ product, categoryName, onEdit }: { product: ProductDefin
         </div>
         <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">{categoryName}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full">{product.isActive ? 'Activo' : 'Archivado'}</span>
+            <Switch checked={product.isActive} onCheckedChange={() => onToggleStatus(product)} />
             <Button variant="ghost" size="icon" onClick={() => onEdit(product)}>
                 <Edit className="h-4 w-4" />
             </Button>
@@ -173,7 +176,7 @@ export default function AdminClient() {
             }
 
             const productsSnapshot = await getDocs(query(collection(db, 'products'), orderBy('order')));
-            const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ProductDefinition));
+            const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, isActive: true, ...doc.data() } as ProductDefinition));
             setProducts(productsList);
         } catch (error) {
             console.error('Error loading data from Firestore', error);
@@ -222,7 +225,8 @@ export default function AdminClient() {
             productName: newProductName.trim(),
             order: newOrder,
             categoryId: newProductCategoryId,
-            color: '#cccccc' // Default color
+            color: '#cccccc', // Default color
+            isActive: true
         };
         const docRef = await addDoc(collection(db, 'products'), newProductData);
 
@@ -341,6 +345,20 @@ export default function AdminClient() {
               description: 'No se pudo actualizar el producto.',
               variant: 'destructive',
           });
+      }
+  };
+
+  const handleToggleProductStatus = async (product: ProductDefinition) => {
+      const updatedProduct = { ...product, isActive: !product.isActive };
+      try {
+          await updateDoc(doc(db, 'products', product.id), { isActive: updatedProduct.isActive });
+          setProducts(prev => prev.map(p => p.id === product.id ? updatedProduct : p));
+          toast({
+              title: `Producto "${product.productName}" actualizado`,
+              description: `Ahora está ${updatedProduct.isActive ? 'Activo' : 'Archivado'}.`,
+          });
+      } catch (error) {
+          toast({ title: 'Error al actualizar el estado del producto', variant: 'destructive' });
       }
   };
   
@@ -551,8 +569,8 @@ export default function AdminClient() {
                                                 checked={cat.isPlanned}
                                                 onCheckedChange={() => handleToggleCategoryIsPlanned(cat)}
                                             />
-                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(cat.id)}>
-                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            <Button variant="ghost" size="icon" onClick={() => handleDeleteCategory(cat.id)} className="text-destructive hover:text-destructive">
+                                                <X className="h-4 w-4" />
                                             </Button>
                                         </div>
                                     </li>
@@ -570,7 +588,7 @@ export default function AdminClient() {
         <Card>
           <CardHeader>
             <CardTitle>Lista de Productos Actual</CardTitle>
-            <CardDescription>Arrastra los productos para reordenarlos. Haz clic en el icono de editar para cambiar el nombre, categoría y color.</CardDescription>
+            <CardDescription>Arrastra para reordenar. Usa el interruptor para archivar o activar un producto.</CardDescription>
           </CardHeader>
           <CardContent>
              {products.length > 0 ? (
@@ -582,7 +600,13 @@ export default function AdminClient() {
                     <SortableContext items={products} strategy={verticalListSortingStrategy}>
                         <ul className="space-y-2">
                             {products.map((product) => (
-                                <SortableItem key={product.id} product={product} categoryName={getCategoryName(product.categoryId)} onEdit={setEditingProduct} />
+                                <SortableItem 
+                                    key={product.id} 
+                                    product={product} 
+                                    categoryName={getCategoryName(product.categoryId)} 
+                                    onEdit={setEditingProduct}
+                                    onToggleStatus={handleToggleProductStatus}
+                                />
                             ))}
                         </ul>
                     </SortableContext>
