@@ -8,7 +8,7 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { z } from 'zod';
 
 const ProductHistorySchema = z.object({
   id: z.string(),
@@ -69,16 +69,16 @@ const prompt = ai.definePrompt({
 {{#each historicalData}}
 Semana {{week}}, Año {{year}}:
   {{#each products}}
-    {{#if categoryIsPlanned}}
-  - {{productName}}: Producido {{totalActual}} unidades.
+    {{#if this.categoryIsPlanned}}
+  - {{this.productName}}: Producido {{this.totalActual}} unidades.
     {{/if}}
   {{/each}}
 {{/each}}
 
 **Todos los Productos Activos Planificables para los que se debe generar un plan:**
 {{#each allProducts}}
-  {{#if categoryIsPlanned}}
-- {{productName}}
+  {{#if this.categoryIsPlanned}}
+- {{this.productName}}
   {{/if}}
 {{/each}}
 `,

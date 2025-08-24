@@ -243,11 +243,16 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                     id: p.id,
                     productName: p.productName,
                     totalActual: Object.values(p.actual).reduce((sum, s: any) => sum + s.day + s.night, 0),
+                    categoryIsPlanned: p.categoryIsPlanned,
                 }))
             }
         }).reverse(); // Reverse to have oldest first
 
-        const allProducts = data.map(p => ({ id: p.id, productName: p.productName }));
+        const allProducts = data.map(p => ({ 
+          id: p.id, 
+          productName: p.productName, 
+          categoryIsPlanned: p.categoryIsPlanned 
+        }));
 
         const result = await suggestProductionPlan({ historicalData, allProducts });
         setSuggestion(result);
