@@ -34,6 +34,8 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   const totalActual = data.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
+  
+  const totalVariance = totalActual - totalPlanned;
 
   const completion = totalPlannedForCompliance > 0 ? (totalActualForCompliance / totalPlannedForCompliance) * 100 : 0;
   
@@ -49,7 +51,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
       <KpiCard 
         title="Total Planificado" 
         value={totalPlanned.toLocaleString()} 
@@ -75,6 +77,13 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         value={totalActual.toLocaleString()} 
         icon={PackageCheck}
         description="Suma total de toda la producción real, incluyendo planificada, no programada y de categorías no planificadas."
+      />
+      <KpiCard 
+        title="Varianza vs. Plan Total"
+        value={totalVariance.toLocaleString()}
+        icon={ArrowLeftRight}
+        valueColor={getVarianceColor(totalVariance)}
+        description="Diferencia entre la 'Producción Total Real' y el 'Total Planificado'."
       />
       <KpiCard 
         title="Cumplimiento del Plan" 
