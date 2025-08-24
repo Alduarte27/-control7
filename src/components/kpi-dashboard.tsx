@@ -17,6 +17,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   const totalActualForCompliance = plannedProducts.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
+  const varianceForCompliance = totalActualForCompliance - totalPlannedForCompliance;
 
   // Calculate totals for all products for overall variance and display
   const totalPlanned = data.reduce((sum, item) => sum + (item.planned || 0), 0);
@@ -27,8 +28,8 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   const variance = totalActual - totalPlanned;
   const completion = totalPlannedForCompliance > 0 ? (totalActualForCompliance / totalPlannedForCompliance) * 100 : 0;
   
-  const getVarianceColor = (): KpiCardProps['valueColor'] => {
-    if (variance >= 0) return 'text-green-600';
+  const getVarianceColor = (value: number): KpiCardProps['valueColor'] => {
+    if (value >= 0) return 'text-green-600';
     return 'text-destructive';
   };
   
@@ -41,9 +42,15 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   return (
     <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
       <KpiCard title="Total Planificado" value={totalPlanned.toLocaleString()} icon={Target} />
-      <KpiCard title="Real s/Plan" value={totalActualForCompliance.toLocaleString()} icon={CheckCircle2} />
+      <KpiCard 
+        title="Real s/Plan" 
+        value={totalActualForCompliance.toLocaleString()} 
+        icon={CheckCircle2}
+        subValue={`${varianceForCompliance.toLocaleString()} Varianza`}
+        subValueColor={getVarianceColor(varianceForCompliance)}
+      />
       <KpiCard title="Total Real" value={totalActual.toLocaleString()} icon={PackageCheck} />
-      <KpiCard title="Varianza" value={variance.toLocaleString()} icon={ArrowLeftRight} valueColor={getVarianceColor()} />
+      <KpiCard title="Varianza General" value={variance.toLocaleString()} icon={ArrowLeftRight} valueColor={getVarianceColor(variance)} />
       <KpiCard title="Cumplimiento" value={`${completion.toFixed(1)}%`} icon={Goal} valueColor={getCompletionColor()} />
     </div>
   );

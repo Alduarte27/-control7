@@ -7,9 +7,11 @@ export type KpiCardProps = {
   value: string;
   icon: LucideIcon;
   valueColor?: string;
+  subValue?: string;
+  subValueColor?: string;
 };
 
-export default function KpiCard({ title, value, icon: Icon, valueColor }: KpiCardProps) {
+export default function KpiCard({ title, value, icon: Icon, valueColor, subValue, subValueColor }: KpiCardProps) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -18,6 +20,11 @@ export default function KpiCard({ title, value, icon: Icon, valueColor }: KpiCar
       </CardHeader>
       <CardContent>
         <div className={cn("text-2xl font-bold", valueColor)}>{value}</div>
+        {subValue && (
+            <p className={cn("text-xs font-medium", subValueColor)}>
+                {subValue}
+            </p>
+        )}
       </CardContent>
     </Card>
   );
