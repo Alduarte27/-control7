@@ -41,9 +41,12 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
   const { toast } = useToast();
 
   React.useEffect(() => {
-    const showDialog = localStorage.getItem('showInfoDialogOnStartup');
-    if (showDialog === null || showDialog === 'true') {
+    const showDialogPreference = localStorage.getItem('showInfoDialogOnStartup');
+    const hasBeenShownThisSession = sessionStorage.getItem('infoDialogShownThisSession');
+
+    if ((showDialogPreference === null || showDialogPreference === 'true') && !hasBeenShownThisSession) {
         setIsInfoDialogOpen(true);
+        sessionStorage.setItem('infoDialogShownThisSession', 'true');
     }
   }, []);
   
