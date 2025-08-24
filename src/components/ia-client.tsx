@@ -17,6 +17,7 @@ import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import ComparisonCard from './comparison-card';
+import { addWeeks, getISOWeek } from 'date-fns';
 
 const trendChartConfig = {
   planned: {
@@ -351,8 +352,10 @@ export default function IAClient() {
   const handleApplySuggestion = async () => {
     if (!suggestion) return;
     try {
-        const newPlanDate = new Date();
-        const planId = `${newPlanDate.getFullYear()}-W${getISOWeek(newPlanDate)}`;
+        const nextWeekDate = addWeeks(new Date(), 1);
+        const nextWeekYear = nextWeekDate.getFullYear();
+        const nextWeekNumber = getISOWeek(nextWeekDate);
+        const planId = `${nextWeekYear}-W${nextWeekNumber}`;
         
         sessionStorage.setItem('aiSuggestion', JSON.stringify(suggestion.suggestions));
         window.location.href = `/?planId=${planId}&applySuggestion=true`;
@@ -360,14 +363,6 @@ export default function IAClient() {
     } catch (error) {
         toast({ title: 'Error al aplicar sugerencia', variant: 'destructive' });
     }
-  };
-  
-  const getISOWeek = (date: Date): number => {
-    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const dayNum = d.getUTCDay() || 7;
-    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-    return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
   };
 
   return (
@@ -416,7 +411,7 @@ export default function IAClient() {
                            return <p key={index}>{paragraph}</p>;
                        })}
                     </div>
-                    <Button onClick={handleApplySuggestion}>Aplicar Sugerencias al Plan de la Semana Actual</Button>
+                    <Button onClick={handleApplySuggestion}>Aplicar Sugerencias al Plan de la Próxima Semana</Button>
                 </CardFooter>
               )}
             </Card>

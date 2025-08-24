@@ -51,8 +51,8 @@ export default function FilterBar({
 
   return (
     <div className="p-4 bg-card rounded-lg shadow-sm border">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="flex flex-col gap-1.5 md:col-span-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <div className="flex flex-col gap-1.5">
             <Label htmlFor="productSearch">Búsqueda de Producto</Label>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -103,7 +103,7 @@ export default function FilterBar({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex flex-col gap-1.5 justify-end">
+        <div className="flex flex-col gap-1.5">
             <Button onClick={onCopyLastWeek} variant="outline">
                 <Copy className="mr-2 h-4 w-4" />
                 Copiar Plan Anterior
