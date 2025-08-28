@@ -187,7 +187,7 @@ export default function DashboardClient() {
 
             let plansQuery;
             if (dateRange === 'all') {
-                plansQuery = query(collection(db, 'productionPlans'), orderBy('__name__', 'desc'));
+                plansQuery = query(collection(db, 'productionPlans'), orderBy('__name__', 'asc'));
             } else {
                 const numberOfWeeks = parseInt(dateRange);
                 const startDate = subWeeks(new Date(), numberOfWeeks);
@@ -195,7 +195,7 @@ export default function DashboardClient() {
                 const startWeek = getISOWeek(startDate);
                 const startPlanId = `${startYear}-W${startWeek}`;
                 
-                plansQuery = query(collection(db, 'productionPlans'), where('__name__', '>=', startPlanId), orderBy('__name__', 'desc'));
+                plansQuery = query(collection(db, 'productionPlans'), where('__name__', '>=', startPlanId), orderBy('__name__', 'asc'));
             }
             
             const plansSnapshot = await getDocs(plansQuery);
@@ -210,7 +210,7 @@ export default function DashboardClient() {
                     });
                 }
             });
-            setAllPlans(fetchedPlans);
+            setAllPlans(fetchedPlans.reverse()); // Reverse here to show most recent first
         } catch (error) {
             console.error('Failed to fetch production plans from Firestore:', error);
         }
