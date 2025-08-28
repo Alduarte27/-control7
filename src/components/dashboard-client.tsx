@@ -231,12 +231,9 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         const selectedCategory = categories.find(c => c.id === selectedCategoryId);
         const isPlannable = selectedCategoryId === 'all' || (selectedCategory?.isPlanned ?? true);
         setIsCategoryPlannable(isPlannable);
-
-        const summariesToProcess = selectedWeek === 'all'
-            ? allSummaries
-            : allSummaries.filter(summary => summary.id === selectedWeek);
-
-        const summaryData: WeeklySummaryData[] = summariesToProcess.map(summary => ({
+        
+        // --- Data for Weekly Summary Charts (Unaffected by specific week filter) ---
+        const weeklySummaryForChart: WeeklySummaryData[] = allSummaries.map(summary => ({
             week: summary.week,
             name: `Semana ${summary.week}`,
             planned: summary.totalPlanned,
@@ -244,9 +241,9 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             actualForPlanned: summary.totalActualForPlanned,
             unplannedProduction: summary.totalUnplannedProduction,
         })).sort((a, b) => a.week - b.week);
-        setWeeklySummaryData(summaryData);
+        setWeeklySummaryData(weeklySummaryForChart);
         
-        const processedWeeklyShiftData = summariesToProcess.map(summary => {
+        const weeklyShiftDataForChart = allSummaries.map(summary => {
             const totalDay = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.day, 0);
             const totalNight = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.night, 0);
             return {
@@ -256,7 +253,12 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                 week: summary.week
             };
         }).sort((a,b) => a.week - b.week);
-        setWeeklyShiftData(processedWeeklyShiftData);
+        setWeeklyShiftData(weeklyShiftDataForChart);
+        
+        // --- Data for Detail Charts (Affected by specific week filter) ---
+        const summariesForDetailCharts = selectedWeek === 'all'
+            ? allSummaries
+            : allSummaries.filter(summary => summary.id === selectedWeek);
 
         const dailyTotals = {
             mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
@@ -264,7 +266,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             sun: { day: 0, night: 0 } 
         };
 
-        summariesToProcess.forEach(summary => {
+        summariesForDetailCharts.forEach(summary => {
             for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
                 dailyTotals[day].day += summary.dailyShiftTotals[day]?.day || 0;
                 dailyTotals[day].night += summary.dailyShiftTotals[day]?.night || 0;
@@ -281,7 +283,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
         ]);
         
-        // Product Chart Logic
+        // --- Product Chart Logic (Only runs if a specific week is selected) ---
         if (selectedWeek !== 'all') {
             try {
                 const planDocRef = doc(db, "productionPlans", selectedWeek);
