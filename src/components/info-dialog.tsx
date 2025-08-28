@@ -4,7 +4,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, PackageCheck, Bot, Goal, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp } from 'lucide-react';
+import { Target, PackageCheck, Bot, Goal, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -64,9 +64,9 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                         description="Define tus metas de producción para cada producto en la tabla principal. Simplemente haz clic en la celda 'Plan Semanal' e ingresa el valor."
                     />
                     <FeatureItem 
-                        icon={PackageCheck}
-                        title="Registro de Producción Real por Turno"
-                        description="Haz clic en el icono de lápiz (Editar) al final de cada fila para abrir un detalle y registrar la producción real de los turnos de día y noche para cada día de la semana."
+                        icon={Hash}
+                        title="Registro de Producción y Lotes por Turno"
+                        description="Haz clic en el icono de lápiz (Editar) para registrar la producción por turno y el número de lote de cada día, que se sugiere automáticamente."
                     />
                      <FeatureItem 
                         icon={Copy}
@@ -101,9 +101,9 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                 <h3 className="text-lg font-semibold mb-3 text-primary">Dashboard y Visualizaciones</h3>
                 <div className="space-y-4">
                      <FeatureItem 
-                        icon={Goal}
-                        title="Indicadores Clave (KPIs) Precisos"
-                        description="En la parte superior, tienes un dashboard con métricas vitales como 'Cumplimiento', 'Real s/Plan' y 'No Programado' que se actualizan al instante."
+                        icon={Zap}
+                        title="Dashboard Optimizado y Rápido"
+                        description="Gracias a la nueva arquitectura de datos, el Dashboard General ahora carga de forma casi instantánea, consumiendo muchos menos recursos."
                     />
                     <FeatureItem 
                         icon={LayoutDashboard}
@@ -118,18 +118,18 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                 <div className="space-y-4">
                     <FeatureItem 
                         icon={History}
-                        title="Historial de Planes Confiable"
-                        description="Navega a la sección 'Historial' para ver y cargar cualquier plan guardado. Los datos históricos se conservan incluso si archivas un producto."
+                        title="Historial de Planes Optimizado"
+                        description="La sección 'Historial' ahora carga los planes por páginas, haciendo la navegación mucho más rápida y eficiente a medida que crecen tus datos."
                     />
                     <FeatureItem 
                         icon={Settings}
-                        title="Administración Centralizada"
-                        description="En 'Administración', puedes añadir categorías, productos y archivarlos en lugar de eliminarlos para mantener la integridad de tus datos pasados."
+                        title="Administración Centralizada y con Caché"
+                        description="Gestiona productos y categorías. Los datos se guardan en caché en el servidor para una carga más rápida en toda la aplicación."
                     />
                     <FeatureItem 
                         icon={Download}
-                        title="Exportación a CSV"
-                        description="Con un solo clic en 'Exportar CSV', puedes descargar un reporte completo de la semana actual para analizarlo en Excel u otras herramientas."
+                        title="Exportación a CSV por Rango de Fechas"
+                        description="Usa el botón 'Exportar' para abrir un diálogo donde podrás seleccionar un rango de semanas y generar un reporte CSV personalizado."
                     />
                 </div>
             </div>
