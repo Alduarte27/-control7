@@ -121,6 +121,14 @@ type WeeklySummaryDoc = {
         sat: { day: number; night: number };
         sun: { day: number; night: number };
     };
+    categoryTotals: {
+        [categoryId: string]: {
+            planned: number;
+            actualForPlanned: number;
+            unplannedProduction: number;
+            totalActual: number;
+        }
+    }
 };
 
 const WeeklyTooltipContent = ({ active, payload, label }: any) => {
@@ -185,7 +193,6 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   const [selectedWeek, setSelectedWeek] = React.useState('all');
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
   const [isFilterOpen, setIsFilterOpen] = React.useState(true);
-  const [isCategoryPlannable, setIsCategoryPlannable] = React.useState(true);
   const [dateRange, setDateRange] = React.useState('12');
 
 
@@ -227,23 +234,31 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   React.useEffect(() => {
     const processData = async () => {
         if (loading) return;
-
-        const selectedCategory = categories.find(c => c.id === selectedCategoryId);
-        const isPlannable = selectedCategoryId === 'all' || (selectedCategory?.isPlanned ?? true);
-        setIsCategoryPlannable(isPlannable);
         
         // --- Data for Weekly Summary Charts (Unaffected by specific week filter) ---
-        const weeklySummaryForChart: WeeklySummaryData[] = allSummaries.map(summary => ({
-            week: summary.week,
-            name: `Semana ${summary.week}`,
-            planned: summary.totalPlanned,
-            totalActual: summary.totalActual,
-            actualForPlanned: summary.totalActualForPlanned,
-            unplannedProduction: summary.totalUnplannedProduction,
-        })).sort((a, b) => a.week - b.week);
+        const weeklySummaryForChart: WeeklySummaryData[] = allSummaries.map(summary => {
+            const totals = selectedCategoryId === 'all'
+                ? {
+                    planned: summary.totalPlanned,
+                    totalActual: summary.totalActual,
+                    actualForPlanned: summary.totalActualForPlanned,
+                    unplannedProduction: summary.totalUnplannedProduction,
+                  }
+                : summary.categoryTotals?.[selectedCategoryId] || { planned: 0, totalActual: 0, actualForPlanned: 0, unplannedProduction: 0 };
+            
+            return {
+                week: summary.week,
+                name: `Semana ${summary.week}`,
+                planned: totals.planned,
+                totalActual: totals.totalActual,
+                actualForPlanned: totals.actualForPlanned,
+                unplannedProduction: totals.unplannedProduction,
+            };
+        }).sort((a, b) => a.week - b.week);
         setWeeklySummaryData(weeklySummaryForChart);
         
         const weeklyShiftDataForChart = allSummaries.map(summary => {
+            // NOTE: Per-category shift data is not stored, so this chart is always for all categories.
             const totalDay = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.day, 0);
             const totalNight = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.night, 0);
             return {
@@ -267,6 +282,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         };
 
         summariesForDetailCharts.forEach(summary => {
+             // NOTE: Per-category daily shift data is not stored, so this chart is always for all categories.
             for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
                 dailyTotals[day].day += summary.dailyShiftTotals[day]?.day || 0;
                 dailyTotals[day].night += summary.dailyShiftTotals[day]?.night || 0;
@@ -291,7 +307,12 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                 if (planDocSnap.exists()) {
                     const planData = planDocSnap.data() as { products: ProductData[] };
                     const productChartData = planData.products
-                        .filter(p => p.categoryIsPlanned && (p.planned > 0 || Object.values(p.actual).some(d => d.day > 0 || d.night > 0)))
+                        .filter(p => {
+                            const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
+                            const isPlannable = p.categoryIsPlanned;
+                            const hasActivity = p.planned > 0 || Object.values(p.actual).some(d => d.day > 0 || d.night > 0);
+                            return categoryMatch && isPlannable && hasActivity;
+                        })
                         .map(p => ({
                             name: p.productName,
                             planned: p.planned,
@@ -340,7 +361,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                     </Button>
                 </CollapsibleTrigger>
                 <CardDescription className="text-right text-xs md:text-sm">
-                    Elige el rango de datos a cargar. Filtra por semana específica.
+                    Elige el rango de datos a cargar. Filtra por semana específica o categoría.
                 </CardDescription>
             </div>
             <CollapsibleContent>
@@ -362,7 +383,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                     <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
                         <Label htmlFor='category-filter'>Filtrar por Categoría</Label>
                         <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-                            <SelectTrigger id="category-filter" disabled>
+                            <SelectTrigger id="category-filter">
                                 <SelectValue placeholder="Todas las categorías" />
                             </SelectTrigger>
                             <SelectContent>
@@ -372,7 +393,6 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                                 ))}
                             </SelectContent>
                         </Select>
-                         <p className='text-xs text-muted-foreground mt-1'>Filtrado por producto/categoría no disponible con esta optimización.</p>
                     </div>
                      <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
                         <Label htmlFor='week-filter'>Filtrar por Semana Específica</Label>
@@ -398,7 +418,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
           <CardHeader>
             <CardTitle>Resumen de Producción por Semana</CardTitle>
             <CardDescription>
-                Compara el plan con la producción real. La barra de producción real muestra el desglose entre lo ejecutado del plan y lo no programado.
+                Compara el plan con la producción real para el rango de fechas seleccionado.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -440,7 +460,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             <Card>
                 <CardHeader>
                     <CardTitle>Producción por Turno y Semana</CardTitle>
-                    <CardDescription>Producción por turno para el rango de fechas seleccionado.</CardDescription>
+                    <CardDescription>Producción por turno para el rango de fechas seleccionado (todos los productos).</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : weeklyShiftData.length > 0 ? (
@@ -461,7 +481,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             <Card>
                 <CardHeader>
                     <CardTitle>Producción por Día de la Semana</CardTitle>
-                    <CardDescription>Total producido por turno cada día (considera el filtro de semana específica).</CardDescription>
+                    <CardDescription>Total producido por turno cada día (considera filtro de semana, todos los productos).</CardDescription>
                 </CardHeader>
                 <CardContent>
                      {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : dailyData.some(d => d.day > 0 || d.night > 0) ? (
@@ -521,7 +541,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                             </BarChart>
                         </ChartContainer>
                     ) : (
-                        <p className="text-center text-muted-foreground py-8">No hay datos de productos planificados para esta semana.</p>
+                        <p className="text-center text-muted-foreground py-8">No hay datos de productos planificados para esta semana o categoría.</p>
                     )}
                 </CardContent>
             </Card>

@@ -222,6 +222,8 @@ export default function Control7Client({
       const dataToSave = data.map(({ isSuggested, ...rest }) => rest);
       
       // --- Create Summary Data for Denormalization ---
+      
+      // Overall Totals
       const productsForCompliance = data.filter(item => item.categoryIsPlanned && item.planned > 0);
       const totalPlannedForCompliance = productsForCompliance.reduce((sum, item) => sum + (item.planned || 0), 0);
       const totalActualForCompliance = productsForCompliance.reduce((sum, item) => 
@@ -244,13 +246,40 @@ export default function Control7Client({
         sun: { day: 0, night: 0 }
       };
 
+      // Category-specific Totals
+      const categoryTotals: { [categoryId: string]: any } = {};
+
       data.forEach(product => {
+        // Daily totals (overall)
         for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
             const dayActual = product.actual[day];
             if (dayActual) {
                 dailyTotals[day] += (dayActual.day || 0) + (dayActual.night || 0);
                 dailyShiftTotals[day].day += dayActual.day || 0;
                 dailyShiftTotals[day].night += dayActual.night || 0;
+            }
+        }
+
+        // Category totals
+        const { categoryId } = product;
+        if (!categoryTotals[categoryId]) {
+            categoryTotals[categoryId] = {
+                planned: 0,
+                actualForPlanned: 0,
+                unplannedProduction: 0,
+                totalActual: 0
+            };
+        }
+        
+        const productTotalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+        categoryTotals[categoryId].totalActual += productTotalActual;
+
+        if (product.categoryIsPlanned) {
+            if (product.planned > 0) {
+                categoryTotals[categoryId].planned += product.planned;
+                categoryTotals[categoryId].actualForPlanned += productTotalActual;
+            } else {
+                categoryTotals[categoryId].unplannedProduction += productTotalActual;
             }
         }
       });
@@ -264,6 +293,7 @@ export default function Control7Client({
         totalActual: totalActual,
         dailyTotals,
         dailyShiftTotals,
+        categoryTotals, // Add the new per-category data
       };
       
       // Use a batched write to save both plan and summary atomically
