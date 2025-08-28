@@ -44,8 +44,9 @@ export default function ProductionShiftTable({ product, onClose, onSave, current
         if (!productCopy.actual[day]) {
             productCopy.actual[day] = { day: 0, night: 0, lotNumber: '' };
         }
+        // Set default lot number if it's missing or empty
         if (!productCopy.actual[day].lotNumber) {
-            productCopy.actual[day].lotNumber = `Lote-${dayOfYearMap[day]}`;
+            productCopy.actual[day].lotNumber = `${dayOfYearMap[day]}`;
         }
     });
     return productCopy;
