@@ -13,7 +13,8 @@ import { cn } from '@/lib/utils';
 type ProductionTableProps = {
   data: ProductData[];
   onPlannedChange: (id: string, value: number) => void;
-  onActualChange: (id: string, day: keyof DailyProduction, shift: keyof ShiftProduction, value: number) => void;
+  onActualChange: (id: string, day: keyof DailyProduction, shift: 'day' | 'night' | 'lotNumber', value: number | string) => void;
+  currentDate: Date;
 };
 
 const days: (keyof DailyProduction)[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -27,7 +28,11 @@ const dayNames: { [key in keyof DailyProduction]: string } = {
   sun: 'Dom'
 };
 
-const renderProductRow = (item: ProductData, handlePlannedInputChange: (id: string, value: string) => void, setSelectedProduct: (product: ProductData) => void) => {
+const renderProductRow = (
+    item: ProductData, 
+    handlePlannedInputChange: (id: string, value: string) => void, 
+    setSelectedProduct: (product: ProductData) => void
+) => {
     const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
     const variance = totalActual - item.planned;
     const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
@@ -76,7 +81,7 @@ const renderProductRow = (item: ProductData, handlePlannedInputChange: (id: stri
 };
 
 
-export default function ProductionTable({ data, onPlannedChange, onActualChange }: ProductionTableProps) {
+export default function ProductionTable({ data, onPlannedChange, onActualChange, currentDate }: ProductionTableProps) {
   const [selectedProduct, setSelectedProduct] = React.useState<ProductData | null>(null);
   const [openCategories, setOpenCategories] = React.useState<Record<string, boolean>>({});
   
@@ -137,6 +142,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
   
   const handleShiftDataSave = (updatedProduct: ProductData) => {
     days.forEach(day => {
+      onActualChange(updatedProduct.id, day, 'lotNumber', updatedProduct.actual[day].lotNumber || '');
       onActualChange(updatedProduct.id, day, 'day', updatedProduct.actual[day].day);
       onActualChange(updatedProduct.id, day, 'night', updatedProduct.actual[day].night);
     });
@@ -194,6 +200,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange 
           product={selectedProduct} 
           onClose={() => setSelectedProduct(null)}
           onSave={handleShiftDataSave}
+          currentDate={currentDate}
         />
       )}
     </>

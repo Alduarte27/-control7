@@ -4,13 +4,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from './ui/separator';
+import { getDayOfYear, addDays, startOfISOWeek } from 'date-fns';
 
 type ProductionShiftTableProps = {
   product: ProductData;
   onClose: () => void;
   onSave: (product: ProductData) => void;
+  currentDate: Date;
 };
 
 const days: (keyof DailyProduction)[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -24,16 +24,46 @@ const dayNames: { [key in keyof DailyProduction]: string } = {
   sun: 'Domingo'
 };
 
-export default function ProductionShiftTable({ product, onClose, onSave }: ProductionShiftTableProps) {
-  const [editedProduct, setEditedProduct] = React.useState<ProductData>(JSON.parse(JSON.stringify(product)));
+const getDayOfYearForWeek = (weekDate: Date) => {
+    const startOfWeek = startOfISOWeek(weekDate);
+    const dayOfYearMap: { [key in keyof DailyProduction]: number } = {} as any;
+    days.forEach((day, index) => {
+        const dateOfDay = addDays(startOfWeek, index);
+        dayOfYearMap[day] = getDayOfYear(dateOfDay);
+    });
+    return dayOfYearMap;
+};
 
-  const handleInputChange = (day: keyof DailyProduction, shift: keyof ShiftProduction, value: string) => {
-    const numValue = parseInt(value, 10);
-    const val = isNaN(numValue) ? 0 : numValue;
 
+export default function ProductionShiftTable({ product, onClose, onSave, currentDate }: ProductionShiftTableProps) {
+  const [editedProduct, setEditedProduct] = React.useState<ProductData>(() => {
+    const productCopy = JSON.parse(JSON.stringify(product));
+    const dayOfYearMap = getDayOfYearForWeek(currentDate);
+
+    days.forEach(day => {
+        if (!productCopy.actual[day]) {
+            productCopy.actual[day] = { day: 0, night: 0, lotNumber: '' };
+        }
+        if (!productCopy.actual[day].lotNumber) {
+            productCopy.actual[day].lotNumber = `Lote-${dayOfYearMap[day]}`;
+        }
+    });
+    return productCopy;
+  });
+
+  const handleInputChange = (day: keyof DailyProduction, field: 'day' | 'night' | 'lotNumber', value: string) => {
     setEditedProduct(prev => {
         const newActual = { ...prev.actual };
-        newActual[day] = { ...newActual[day], [shift]: val };
+        const dayData = { ...newActual[day] };
+
+        if (field === 'lotNumber') {
+            dayData.lotNumber = value;
+        } else {
+            const numValue = parseInt(value, 10);
+            dayData[field] = isNaN(numValue) ? 0 : numValue;
+        }
+
+        newActual[day] = dayData;
         return { ...prev, actual: newActual };
     });
   };
@@ -53,7 +83,8 @@ export default function ProductionShiftTable({ product, onClose, onSave }: Produ
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[150px]">Día</TableHead>
+                <TableHead className="w-[120px]">Día</TableHead>
+                <TableHead className="w-[150px]">Nro. de Lote</TableHead>
                 <TableHead className="text-right">Turno Día</TableHead>
                 <TableHead className="text-right">Turno Noche</TableHead>
                 <TableHead className="text-right font-bold">Total Día</TableHead>
@@ -61,15 +92,23 @@ export default function ProductionShiftTable({ product, onClose, onSave }: Produ
             </TableHeader>
             <TableBody>
               {days.map(day => {
-                const dayTotal = (editedProduct.actual[day]?.day || 0) + (editedProduct.actual[day]?.night || 0);
+                const dayData = editedProduct.actual[day] || { day: 0, night: 0, lotNumber: '' };
+                const dayTotal = (dayData.day || 0) + (dayData.night || 0);
                 return (
                   <TableRow key={day}>
                     <TableCell className="font-medium">{dayNames[day]}</TableCell>
                     <TableCell>
+                        <Input
+                            type="text"
+                            value={dayData.lotNumber || ''}
+                            onChange={(e) => handleInputChange(day, 'lotNumber', e.target.value)}
+                        />
+                    </TableCell>
+                    <TableCell>
                       <Input
                         type="number"
                         className="text-right"
-                        value={editedProduct.actual[day]?.day || 0}
+                        value={dayData.day || 0}
                         onChange={(e) => handleInputChange(day, 'day', e.target.value)}
                         min="0"
                       />
@@ -78,7 +117,7 @@ export default function ProductionShiftTable({ product, onClose, onSave }: Produ
                       <Input
                         type="number"
                         className="text-right"
-                        value={editedProduct.actual[day]?.night || 0}
+                        value={dayData.night || 0}
                         onChange={(e) => handleInputChange(day, 'night', e.target.value)}
                         min="0"
                       />

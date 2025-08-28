@@ -14,7 +14,7 @@ import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 import InfoDialog from './info-dialog';
 
-const emptyProductionDay: ShiftProduction = { day: 0, night: 0 };
+const emptyProductionDay: ShiftProduction = { day: 0, night: 0, lotNumber: '' };
 const emptyActual: DailyProduction = {
   mon: { ...emptyProductionDay },
   tue: { ...emptyProductionDay },
@@ -160,9 +160,22 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                     const categoryInfo = categoryMap.get(def.categoryId);
                     
                     if (savedProductData) {
+                         // Ensure 'actual' has all days and lotNumber property
+                        const mergedActual: DailyProduction = { ...emptyActual };
+                        for (const day of Object.keys(mergedActual) as (keyof DailyProduction)[]) {
+                            if (savedProductData.actual && savedProductData.actual[day]) {
+                                mergedActual[day] = {
+                                    day: savedProductData.actual[day].day || 0,
+                                    night: savedProductData.actual[day].night || 0,
+                                    lotNumber: savedProductData.actual[day].lotNumber || '',
+                                };
+                            }
+                        }
+
                         return {
                             ...savedProductData,
                             ...def,
+                            actual: mergedActual,
                             categoryName: categoryInfo?.name || 'Sin Categoría',
                             categoryIsPlanned: categoryInfo?.isPlanned ?? true,
                         };
@@ -206,12 +219,10 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
 
   const handleSave = async () => {
     try {
-      // Create a clean version of the data for Firestore, without the isSuggested flag
       const dataToSave = data.map(({ isSuggested, ...rest }) => rest);
       const planDocRef = doc(db, "productionPlans", planId);
       await setDoc(planDocRef, { products: dataToSave, week: currentWeek, year: currentYear });
       
-      // Update local state to remove the isSuggested flag after saving
       setData(currentData => currentData.map(item => ({ ...item, isSuggested: false })));
       setIsDirty(false);
 
@@ -289,13 +300,13 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
       'Producto',
       'Categoría',
       'Plan Semanal',
-      'Real Lun',
-      'Real Mar',
-      'Real Mié',
-      'Real Jue',
-      'Real Vie',
-      'Real Sáb',
-      'Real Dom',
+      'Lote Lun', 'Real Lun',
+      'Lote Mar', 'Real Mar',
+      'Lote Mié', 'Real Mié',
+      'Lote Jue', 'Real Jue',
+      'Lote Vie', 'Real Vie',
+      'Lote Sáb', 'Real Sáb',
+      'Lote Dom', 'Real Dom',
       'Total Real',
       'Varianza',
       'Cumplimiento (%)',
@@ -316,17 +327,27 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
         sun: (item.actual.sun?.day || 0) + (item.actual.sun?.night || 0),
       };
 
+      const lotNumbers = {
+        mon: item.actual.mon?.lotNumber || '',
+        tue: item.actual.tue?.lotNumber || '',
+        wed: item.actual.wed?.lotNumber || '',
+        thu: item.actual.thu?.lotNumber || '',
+        fri: item.actual.fri?.lotNumber || '',
+        sat: item.actual.sat?.lotNumber || '',
+        sun: item.actual.sun?.lotNumber || '',
+      };
+
       return [
         `"${item.productName.replace(/"/g, '""')}"`,
         item.categoryName,
         item.planned,
-        dailyTotals.mon,
-        dailyTotals.tue,
-        dailyTotals.wed,
-        dailyTotals.thu,
-        dailyTotals.fri,
-        dailyTotals.sat,
-        dailyTotals.sun,
+        lotNumbers.mon, dailyTotals.mon,
+        lotNumbers.tue, dailyTotals.tue,
+        lotNumbers.wed, dailyTotals.wed,
+        lotNumbers.thu, dailyTotals.thu,
+        lotNumbers.fri, dailyTotals.fri,
+        lotNumbers.sat, dailyTotals.sat,
+        lotNumbers.sun, dailyTotals.sun,
         totalActual,
         variance,
         compliance,
@@ -354,12 +375,16 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     setIsDirty(true);
   };
 
-  const handleActualDataChange = (id: string, day: keyof DailyProduction, shift: keyof ShiftProduction, value: number) => {
+  const handleActualDataChange = (id: string, day: keyof DailyProduction, shift: 'day' | 'night' | 'lotNumber', value: number | string) => {
     setData(currentData =>
       currentData.map(item => {
         if (item.id === id) {
           const newActual = { ...item.actual };
-          newActual[day] = { ...newActual[day], [shift]: value };
+          if (shift === 'lotNumber') {
+              newActual[day] = { ...newActual[day], lotNumber: String(value) };
+          } else {
+              newActual[day] = { ...newActual[day], [shift]: value };
+          }
           return { ...item, actual: newActual };
         }
         return item;
@@ -410,7 +435,8 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                   <ProductionTable 
                     data={filteredData} 
                     onPlannedChange={handlePlannedDataChange} 
-                    onActualChange={handleActualDataChange} 
+                    onActualChange={handleActualDataChange}
+                    currentDate={date}
                   />
                   <WeeklySummary data={data} />
                 </div>
