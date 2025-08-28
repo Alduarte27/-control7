@@ -286,88 +286,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     }
   };
 
-  const handleExport = () => {
-    if (data.length === 0) {
-      toast({
-        title: 'No hay datos para exportar',
-        description: 'Añade algunos datos de producción antes de exportar.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    const headers = [
-      'Producto',
-      'Categoría',
-      'Plan Semanal',
-      'Lote Lun', 'Real Lun',
-      'Lote Mar', 'Real Mar',
-      'Lote Mié', 'Real Mié',
-      'Lote Jue', 'Real Jue',
-      'Lote Vie', 'Real Vie',
-      'Lote Sáb', 'Real Sáb',
-      'Lote Dom', 'Real Dom',
-      'Total Real',
-      'Varianza',
-      'Cumplimiento (%)',
-    ];
-
-    const rows = data.map(item => {
-      const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
-      const variance = totalActual - item.planned;
-      const compliance = item.planned > 0 ? ((totalActual / item.planned) * 100).toFixed(1) : '0.0';
-
-      const dailyTotals = {
-        mon: (item.actual.mon?.day || 0) + (item.actual.mon?.night || 0),
-        tue: (item.actual.tue?.day || 0) + (item.actual.tue?.night || 0),
-        wed: (item.actual.wed?.day || 0) + (item.actual.wed?.night || 0),
-        thu: (item.actual.thu?.day || 0) + (item.actual.thu?.night || 0),
-        fri: (item.actual.fri?.day || 0) + (item.actual.fri?.night || 0),
-        sat: (item.actual.sat?.day || 0) + (item.actual.sat?.night || 0),
-        sun: (item.actual.sun?.day || 0) + (item.actual.sun?.night || 0),
-      };
-
-      const lotNumbers = {
-        mon: item.actual.mon?.lotNumber || '',
-        tue: item.actual.tue?.lotNumber || '',
-        wed: item.actual.wed?.lotNumber || '',
-        thu: item.actual.thu?.lotNumber || '',
-        fri: item.actual.fri?.lotNumber || '',
-        sat: item.actual.sat?.lotNumber || '',
-        sun: item.actual.sun?.lotNumber || '',
-      };
-
-      return [
-        `"${item.productName.replace(/"/g, '""')}"`,
-        item.categoryName,
-        item.planned,
-        lotNumbers.mon, dailyTotals.mon,
-        lotNumbers.tue, dailyTotals.tue,
-        lotNumbers.wed, dailyTotals.wed,
-        lotNumbers.thu, dailyTotals.thu,
-        lotNumbers.fri, dailyTotals.fri,
-        lotNumbers.sat, dailyTotals.sat,
-        lotNumbers.sun, dailyTotals.sun,
-        totalActual,
-        variance,
-        compliance,
-      ].join(',');
-    });
-
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    if (link.href) {
-      URL.revokeObjectURL(link.href);
-    }
-    const url = URL.createObjectURL(blob);
-    link.href = url;
-    link.setAttribute('download', `plan-semana-${currentWeek}-${currentYear}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const handlePlannedDataChange = (id: string, value: number) => {
     setData(currentData =>
       currentData.map(item => item.id === id ? { ...item, planned: value, isSuggested: false } : item)
@@ -414,7 +332,6 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     <div className="bg-background min-h-screen text-foreground">
       <Header 
         onSave={handleSave} 
-        onExport={handleExport} 
         hasUnsavedChanges={isDirty}
         setIsInfoDialogOpen={setIsInfoDialogOpen}
       />
