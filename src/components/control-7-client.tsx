@@ -13,6 +13,7 @@ import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 import InfoDialog from './info-dialog';
+import { getCachedCategories, getCachedProducts } from '@/services/data-service';
 
 const emptyProductionDay: ShiftProduction = { day: 0, night: 0, lotNumber: '' };
 const emptyActual: DailyProduction = {
@@ -31,7 +32,16 @@ const getDateFromPlanId = (planId: string): Date => {
     return startOfISOWeek(date);
 }
 
-export default function Control7Client({ initialPlanId }: { initialPlanId?: string }) {
+// We pass the prefetched data as props to avoid hydration issues and waterfalls.
+export default function Control7Client({ 
+    initialPlanId,
+    prefetchedCategories,
+    prefetchedProducts
+}: { 
+    initialPlanId?: string,
+    prefetchedCategories: CategoryDefinition[],
+    prefetchedProducts: ProductDefinition[]
+}) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
   const [date, setDate] = React.useState<Date | undefined>();
@@ -50,14 +60,12 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     }
   }, []);
   
-  // This effect should run only once when the component mounts and initialPlanId is available.
   React.useEffect(() => {
     if (!initialPlanId) {
       setDate(new Date());
     } else {
       setDate(getDateFromPlanId(initialPlanId));
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialPlanId]);
 
 
@@ -119,8 +127,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
             window.history.replaceState({}, document.title, newUrl);
         }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [toast]);
 
   React.useEffect(() => {
     const fetchData = async () => {
@@ -128,13 +135,9 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
         setLoading(true);
         setIsDirty(false);
         try {
-            const categoriesSnapshot = await getDocs(query(collection(db, "categories"), orderBy("name")));
-            const categories = categoriesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), isPlanned: doc.data().isPlanned ?? true } as CategoryDefinition));
+            const categories = prefetchedCategories;
+            const productDefinitions = prefetchedProducts;
             const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, isPlanned: c.isPlanned }]));
-
-            const productsQuery = query(collection(db, "products"), orderBy("order"));
-            const productsSnapshot = await getDocs(productsQuery);
-            const productDefinitions = productsSnapshot.docs.map(doc => ({ id: doc.id, isActive: doc.data().isActive ?? true, ...doc.data() } as ProductDefinition));
 
             if (productDefinitions.length === 0) {
                 setData([]);
@@ -160,8 +163,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                     const categoryInfo = categoryMap.get(def.categoryId);
                     
                     if (savedProductData) {
-                         // Ensure 'actual' has all days and lotNumber property
-                        const mergedActual: DailyProduction = { ...emptyActual };
+                         const mergedActual: DailyProduction = { ...emptyActual };
                         for (const day of Object.keys(mergedActual) as (keyof DailyProduction)[]) {
                             if (savedProductData.actual && savedProductData.actual[day]) {
                                 mergedActual[day] = {
@@ -214,8 +216,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
     };
 
     fetchData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planId, date]);
+  }, [planId, date, prefetchedCategories, prefetchedProducts, applyAISuggestion, toast]);
 
   const handleSave = async () => {
     try {
@@ -260,7 +261,7 @@ export default function Control7Client({ initialPlanId }: { initialPlanId?: stri
                 return {
                     ...currentItem,
                     planned: correspondingLastWeekItem ? correspondingLastWeekItem.planned : currentItem.planned,
-                    isSuggested: false, // Reset suggestion flag
+                    isSuggested: false, 
                 };
             })
         );

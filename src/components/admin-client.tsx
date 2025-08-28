@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, CategoryDefinition, ProductData } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, getDocs, writeBatch, doc, query, orderBy, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, writeBatch, doc, query, orderBy, updateDoc } from 'firebase/firestore';
 import {
   DndContext,
   closestCenter,
@@ -33,6 +33,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { Separator } from './ui/separator';
 import { Switch } from './ui/switch';
 import { cn } from '@/lib/utils';
+import { addCategoryAction, addProductAction, deleteCategoryAction, toggleCategoryIsPlannedAction, toggleProductStatusAction, updateProductAction, updateProductOrderAction } from '@/actions/admin-actions';
 
 function EditProductDialog({
     product,
@@ -228,12 +229,7 @@ export default function AdminClient() {
             color: '#cccccc', // Default color
             isActive: true
         };
-        const docRef = await addDoc(collection(db, 'products'), newProductData);
-
-        const newProduct: ProductDefinition = {
-            id: docRef.id,
-            ...newProductData
-        };
+        const newProduct = await addProductAction(newProductData);
 
         setProducts(prevProducts => [...prevProducts, newProduct].sort((a,b) => a.order - b.order));
         setNewProductName('');
@@ -259,8 +255,7 @@ export default function AdminClient() {
           name: newCategoryName.trim(),
           isPlanned: newCategoryIsPlanned 
       };
-      const docRef = await addDoc(collection(db, 'categories'), newCategoryData);
-      const newCategory: CategoryDefinition = { id: docRef.id, ...newCategoryData };
+      const newCategory = await addCategoryAction(newCategoryData);
       setCategories(prev => [...prev, newCategory].sort((a,b) => a.name.localeCompare(b.name)));
       setNewCategoryName('');
       setNewCategoryIsPlanned(true);
@@ -282,7 +277,7 @@ export default function AdminClient() {
     }
 
     try {
-        await deleteDoc(doc(db, 'categories', categoryId));
+        await deleteCategoryAction(categoryId);
         setCategories(prev => prev.filter(c => c.id !== categoryId));
         if (newProductCategoryId === categoryId) {
             setNewProductCategoryId(categories.length > 1 ? categories.find(c => c.id !== categoryId)!.id : '');
@@ -294,9 +289,9 @@ export default function AdminClient() {
   }
 
   const handleToggleCategoryIsPlanned = async (category: CategoryDefinition) => {
-      const updatedCategory = { ...category, isPlanned: !category.isPlanned };
       try {
-          await updateDoc(doc(db, 'categories', category.id), { isPlanned: updatedCategory.isPlanned });
+          await toggleCategoryIsPlannedAction(category);
+          const updatedCategory = { ...category, isPlanned: !category.isPlanned };
           setCategories(prev => prev.map(c => c.id === category.id ? updatedCategory : c));
           toast({
               title: `Categoría "${category.name}" actualizada`,
@@ -324,12 +319,7 @@ export default function AdminClient() {
 
   const handleSaveProduct = async (updatedProduct: ProductDefinition) => {
       try {
-          const productRef = doc(db, 'products', updatedProduct.id);
-          await updateDoc(productRef, {
-              productName: updatedProduct.productName,
-              categoryId: updatedProduct.categoryId,
-              color: updatedProduct.color,
-          });
+          await updateProductAction(updatedProduct);
           
           setProducts(products.map(p => p.id === updatedProduct.id ? updatedProduct : p));
           setEditingProduct(null);
@@ -349,9 +339,9 @@ export default function AdminClient() {
   };
 
   const handleToggleProductStatus = async (product: ProductDefinition) => {
-      const updatedProduct = { ...product, isActive: !product.isActive };
       try {
-          await updateDoc(doc(db, 'products', product.id), { isActive: updatedProduct.isActive });
+          await toggleProductStatusAction(product);
+          const updatedProduct = { ...product, isActive: !product.isActive };
           setProducts(prev => prev.map(p => p.id === product.id ? updatedProduct : p));
           toast({
               title: `Producto "${product.productName}" actualizado`,
@@ -364,12 +354,7 @@ export default function AdminClient() {
   
   const updateProductOrder = async (newOrderedProducts: ProductDefinition[]) => {
       try {
-          const batch = writeBatch(db);
-          newOrderedProducts.forEach((product, index) => {
-              const productRef = doc(db, 'products', product.id);
-              batch.update(productRef, { order: index });
-          });
-          await batch.commit();
+          await updateProductOrderAction(newOrderedProducts);
           toast({
               title: 'Orden Actualizado',
               description: 'El orden de los productos ha sido guardado.',

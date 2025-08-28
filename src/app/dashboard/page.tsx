@@ -1,5 +1,7 @@
 import DashboardClient from '@/components/dashboard-client';
+import { getCachedCategories } from '@/services/data-service';
 
-export default function DashboardPage() {
-  return <DashboardClient />;
+export default async function DashboardPage() {
+  const categories = await getCachedCategories();
+  return <DashboardClient prefetchedCategories={categories} />;
 }

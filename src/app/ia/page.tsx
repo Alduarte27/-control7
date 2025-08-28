@@ -1,7 +1,10 @@
 import IAClient from '@/components/ia-client';
+import { getCachedCategories } from '@/services/data-service';
 
-export default function IAPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
+export default async function IAPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
   const planId = typeof searchParams?.planId === 'string' ? searchParams.planId : undefined;
   
-  return <IAClient initialPlanId={planId} />;
+  const categories = await getCachedCategories();
+
+  return <IAClient initialPlanId={planId} prefetchedCategories={categories} />;
 }

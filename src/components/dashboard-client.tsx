@@ -153,7 +153,7 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
 };
 
 
-export default function DashboardClient() {
+export default function DashboardClient({ prefetchedCategories }: { prefetchedCategories: CategoryDefinition[] }) {
   const [weeklySummaryData, setWeeklySummaryData] = React.useState<WeeklySummaryData[]>([]);
   const [weeklyShiftData, setWeeklyShiftData] = React.useState<WeeklyShiftSummaryData[]>([]);
   const [dailyData, setDailyData] = React.useState<DailySummaryData[]>([]);
@@ -161,7 +161,7 @@ export default function DashboardClient() {
   
   const [loading, setLoading] = React.useState(true);
   const [allPlans, setAllPlans] = React.useState<AllPlansData[]>([]);
-  const [categories, setCategories] = React.useState<CategoryDefinition[]>([]);
+  const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
   const [selectedWeek, setSelectedWeek] = React.useState('all');
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
   const [isFilterOpen, setIsFilterOpen] = React.useState(true);
@@ -181,10 +181,6 @@ export default function DashboardClient() {
         setLoading(true);
         const fetchedPlans: AllPlansData[] = [];
         try {
-            const categoriesSnapshot = await getDocs(query(collection(db, "categories"), orderBy("name")));
-            const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, isPlanned: true, ...doc.data() } as CategoryDefinition));
-            setCategories(categoriesList);
-
             let plansQuery;
             if (dateRange === 'all') {
                 plansQuery = query(collection(db, 'productionPlans'), orderBy('__name__', 'asc'));
@@ -210,7 +206,7 @@ export default function DashboardClient() {
                     });
                 }
             });
-            setAllPlans(fetchedPlans.reverse()); // Reverse here to show most recent first
+            setAllPlans(fetchedPlans.reverse());
         } catch (error) {
             console.error('Failed to fetch production plans from Firestore:', error);
         }
@@ -232,7 +228,6 @@ export default function DashboardClient() {
         return products.filter(p => p.categoryId === selectedCategoryId);
     };
     
-    // Function to calculate total actual production for a product
     const calculateTotalActual = (product: ProductData) =>
       Object.values(product.actual).reduce((sum, shifts) => sum + (shifts.day || 0) + (shifts.night || 0), 0);
 
@@ -261,7 +256,6 @@ export default function DashboardClient() {
                 weeklyMap[plan.week].unplannedProduction += totalActualForItem;
             }
             
-            // Logic for shift totals (includes all production)
             Object.values(item.actual).forEach(shifts => {
                 weeklyShiftTotals[plan.week].day += shifts.day || 0;
                 weeklyShiftTotals[plan.week].night += shifts.night || 0;

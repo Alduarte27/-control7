@@ -66,7 +66,7 @@ type ForecastChartData = {
 
 const FORECAST_WEEKS = 4;
 
-export default function IAClient() {
+export default function IAClient({ prefetchedCategories }: { prefetchedCategories: CategoryDefinition[], initialPlanId?: string }) {
   const [isSuggestingPlan, setIsSuggestingPlan] = React.useState(false);
   const [suggestion, setSuggestion] = React.useState<SuggestPlanOutput | null>(null);
   const [isForecasting, setIsForecasting] = React.useState(false);
@@ -78,7 +78,7 @@ export default function IAClient() {
   const { toast } = useToast();
   
   const [allPlans, setAllPlans] = React.useState<AllPlansData[]>([]);
-  const [categories, setCategories] = React.useState<CategoryDefinition[]>([]);
+  const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
   
   // State for comparison view
   const [selectedWeekA, setSelectedWeekA] = React.useState<string>('');
@@ -113,10 +113,6 @@ export default function IAClient() {
     const fetchHistory = async () => {
         setLoadingHistory(true);
         try {
-            const categoriesSnapshot = await getDocs(query(collection(db, "categories"), orderBy("name")));
-            const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, isPlanned: true, ...doc.data() } as CategoryDefinition));
-            setCategories(categoriesList);
-
             const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
             const fetchedPlans: AllPlansData[] = [];
             plansSnapshot.forEach((doc) => {
@@ -254,8 +250,7 @@ export default function IAClient() {
             .map(doc => ({ id: doc.id, isActive: true, ...doc.data() } as any))
             .filter(p => p.isActive);
         
-        const categoriesSnapshot = await getDocs(query(collection(db, 'categories'), orderBy('name')));
-        const categoryMap = new Map(categoriesSnapshot.docs.map(doc => [doc.id, { isPlanned: doc.data().isPlanned ?? true }]));
+        const categoryMap = new Map(categories.map(doc => [doc.id, { isPlanned: doc.isPlanned ?? true }]));
         
         const allProductsWithCategoryInfo = allProducts.map(p => ({
             id: p.id,
@@ -307,7 +302,6 @@ export default function IAClient() {
             }
         }).reverse();
         
-        // Prepare data for the chart
         const productMap: { [productName: string]: { [week: number]: number } } = {};
         const weekLabels: number[] = [];
 
@@ -331,7 +325,7 @@ export default function IAClient() {
                 });
                 return row;
             })
-            .filter(row => Object.values(row).some(val => typeof val === 'number' && val > 0)); // Filter out products with no production
+            .filter(row => Object.values(row).some(val => typeof val === 'number' && val > 0)); 
         
         setForecastChartData(chartData);
 
@@ -356,7 +350,6 @@ export default function IAClient() {
   };
 
   const handleOpenApplyDialog = async () => {
-    // getDay: Sunday is 0, Monday is 1...
     const isMonday = getDay(new Date()) === 1;
     const currentYear = new Date().getFullYear();
     const currentWeek = getISOWeek(new Date());
@@ -375,7 +368,6 @@ export default function IAClient() {
         console.error("Error checking current week's plan:", error);
     }
     
-    // Set default target week based on logic
     if (isMonday && currentPlanIsEmpty) {
         setTargetWeek('current');
     } else {
