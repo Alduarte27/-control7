@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Factory, ChevronLeft, Filter, Percent, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
 import type { ProductData, DailyProduction, CategoryDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
@@ -16,6 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import { Separator } from './ui/separator';
 import ComparisonCard from './comparison-card';
+import { subWeeks, getISOWeek, getYear } from 'date-fns';
 
 
 type WeeklySummaryData = {
@@ -96,6 +97,7 @@ const productChartConfig = {
 } satisfies ChartConfig;
 
 type AllPlansData = {
+    id: string; // planId
     week: number;
     year: number;
     products: ProductData[];
@@ -164,13 +166,14 @@ export default function DashboardClient() {
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
   const [isFilterOpen, setIsFilterOpen] = React.useState(true);
   const [isCategoryPlannable, setIsCategoryPlannable] = React.useState(true);
+  const [dateRange, setDateRange] = React.useState('12');
 
 
   const weekOptions = React.useMemo(() => {
     return allPlans
-      .map(plan => plan.week)
-      .filter((value, index, self) => self.indexOf(value) === index) // Unique weeks
-      .sort((a, b) => a - b);
+      .map(plan => ({ week: plan.week, year: plan.year, id: plan.id }))
+      .filter((value, index, self) => self.findIndex(item => item.id === value.id) === index) // Unique plans
+      .sort((a, b) => b.year - a.year || b.week - a.week);
   }, [allPlans]);
 
   React.useEffect(() => {
@@ -182,11 +185,25 @@ export default function DashboardClient() {
             const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, isPlanned: true, ...doc.data() } as CategoryDefinition));
             setCategories(categoriesList);
 
-            const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
+            let plansQuery;
+            if (dateRange === 'all') {
+                plansQuery = query(collection(db, 'productionPlans'), orderBy('__name__', 'desc'));
+            } else {
+                const numberOfWeeks = parseInt(dateRange);
+                const startDate = subWeeks(new Date(), numberOfWeeks);
+                const startYear = getYear(startDate);
+                const startWeek = getISOWeek(startDate);
+                const startPlanId = `${startYear}-W${startWeek}`;
+                
+                plansQuery = query(collection(db, 'productionPlans'), where('__name__', '>=', startPlanId), orderBy('__name__', 'desc'));
+            }
+            
+            const plansSnapshot = await getDocs(plansQuery);
             plansSnapshot.forEach((doc) => {
                 const plan = doc.data();
                 if (plan.week && plan.year && plan.products) {
                     fetchedPlans.push({
+                        id: doc.id,
                         week: plan.week,
                         year: plan.year,
                         products: plan.products,
@@ -201,7 +218,7 @@ export default function DashboardClient() {
     };
 
     fetchAllPlans();
-  }, []);
+  }, [dateRange]);
 
   React.useEffect(() => {
     if (loading) return;
@@ -287,7 +304,7 @@ export default function DashboardClient() {
 
     const plansToProcess = selectedWeek === 'all' 
       ? allPlans 
-      : allPlans.filter(plan => String(plan.week) === selectedWeek);
+      : allPlans.filter(plan => String(plan.id) === selectedWeek);
 
     plansToProcess.forEach(plan => {
       const filteredProducts = getFilteredProducts(plan.products);
@@ -362,24 +379,22 @@ export default function DashboardClient() {
                     </Button>
                 </CollapsibleTrigger>
                 <CardDescription className="text-right text-xs md:text-sm">
-                    El filtro de categoría aplica a todos los gráficos. El de semana solo a los gráficos por día y producto.
+                    Elige el rango de datos a cargar. Filtra por categoría y semana específica.
                 </CardDescription>
             </div>
             <CollapsibleContent>
                 <div className="bg-card p-4 rounded-lg border flex flex-col md:flex-row items-center gap-4">
                     <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
-                        <Label htmlFor='week-filter'>Filtrar por Semana</Label>
-                        <Select value={selectedWeek} onValueChange={setSelectedWeek}>
-                            <SelectTrigger id="week-filter">
-                                <SelectValue placeholder="Seleccionar semana" />
+                        <Label htmlFor='date-range-filter'>Rango de Datos</Label>
+                        <Select value={dateRange} onValueChange={setDateRange}>
+                            <SelectTrigger id="date-range-filter">
+                                <SelectValue placeholder="Seleccionar Rango" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">Todas las semanas</SelectItem>
-                                {weekOptions.map(week => (
-                                    <SelectItem key={week} value={String(week)}>
-                                        Semana {week}
-                                    </SelectItem>
-                                ))}
+                                <SelectItem value="4">Últimas 4 semanas</SelectItem>
+                                <SelectItem value="12">Últimas 12 semanas</SelectItem>
+                                <SelectItem value="26">Últimas 26 semanas (6 meses)</SelectItem>
+                                <SelectItem value="all">Todo el historial</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -393,6 +408,22 @@ export default function DashboardClient() {
                                 <SelectItem value="all">Todas las categorías</SelectItem>
                                 {categories.map(cat => (
                                     <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
+                        <Label htmlFor='week-filter'>Filtrar por Semana Específica</Label>
+                        <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+                            <SelectTrigger id="week-filter">
+                                <SelectValue placeholder="Seleccionar semana" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todas las semanas del rango</SelectItem>
+                                {weekOptions.map(option => (
+                                    <SelectItem key={option.id} value={String(option.id)}>
+                                        Semana {option.week} ({option.year})
+                                    </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
@@ -447,7 +478,7 @@ export default function DashboardClient() {
             <Card>
                 <CardHeader>
                     <CardTitle>Producción por Turno y Semana</CardTitle>
-                    <CardDescription>Producción por turno. Ignora el filtro de semana.</CardDescription>
+                    <CardDescription>Producción por turno para el rango de fechas seleccionado.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : weeklyShiftData.length > 0 ? (
@@ -468,7 +499,7 @@ export default function DashboardClient() {
             <Card>
                 <CardHeader>
                     <CardTitle>Producción por Día de la Semana</CardTitle>
-                    <CardDescription>Total producido por turno cada día.</CardDescription>
+                    <CardDescription>Total producido por turno cada día (considera el filtro de semana específica).</CardDescription>
                 </CardHeader>
                 <CardContent>
                      {loading ? <p className="text-center text-muted-foreground">Cargando...</p> : dailyData.some(d => d.day > 0 || d.night > 0) ? (
