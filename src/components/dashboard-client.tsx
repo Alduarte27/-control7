@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Factory, ChevronLeft, Filter, Percent, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, doc, getDoc } from 'firebase/firestore';
 import type { ProductData, DailyProduction, CategoryDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
@@ -225,77 +225,91 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   }, [dateRange]);
 
   React.useEffect(() => {
-    if (loading) return;
+    const processData = async () => {
+        if (loading) return;
 
-    const selectedCategory = categories.find(c => c.id === selectedCategoryId);
-    const isPlannable = selectedCategoryId === 'all' || (selectedCategory?.isPlanned ?? true);
-    setIsCategoryPlannable(isPlannable);
+        const selectedCategory = categories.find(c => c.id === selectedCategoryId);
+        const isPlannable = selectedCategoryId === 'all' || (selectedCategory?.isPlanned ?? true);
+        setIsCategoryPlannable(isPlannable);
 
-    // This part requires full plan data, which we are trying to avoid loading
-    // For now, product-specific filtering will be disabled when a category is selected.
-    // A more advanced implementation would require another layer of denormalization.
-    if (selectedCategoryId !== 'all') {
-        setWeeklySummaryData([]);
-        setWeeklyShiftData([]);
-        setDailyData([]);
-        setProductData([]);
-        return;
-    }
+        const summariesToProcess = selectedWeek === 'all'
+            ? allSummaries
+            : allSummaries.filter(summary => summary.id === selectedWeek);
 
-    const summariesToProcess = selectedWeek === 'all'
-        ? allSummaries
-        : allSummaries.filter(summary => summary.id === selectedWeek);
-
-    const summaryData: WeeklySummaryData[] = summariesToProcess.map(summary => ({
-        week: summary.week,
-        name: `Semana ${summary.week}`,
-        planned: summary.totalPlanned,
-        totalActual: summary.totalActual,
-        actualForPlanned: summary.totalActualForPlanned,
-        unplannedProduction: summary.totalUnplannedProduction,
-    })).sort((a, b) => a.week - b.week);
-    setWeeklySummaryData(summaryData);
-    
-    const processedWeeklyShiftData = summariesToProcess.map(summary => {
-        const totalDay = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.day, 0);
-        const totalNight = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.night, 0);
-        return {
+        const summaryData: WeeklySummaryData[] = summariesToProcess.map(summary => ({
+            week: summary.week,
             name: `Semana ${summary.week}`,
-            day: totalDay,
-            night: totalNight,
-            week: summary.week
-        };
-    }).sort((a,b) => a.week - b.week);
-    setWeeklyShiftData(processedWeeklyShiftData);
+            planned: summary.totalPlanned,
+            totalActual: summary.totalActual,
+            actualForPlanned: summary.totalActualForPlanned,
+            unplannedProduction: summary.totalUnplannedProduction,
+        })).sort((a, b) => a.week - b.week);
+        setWeeklySummaryData(summaryData);
+        
+        const processedWeeklyShiftData = summariesToProcess.map(summary => {
+            const totalDay = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.day, 0);
+            const totalNight = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.night, 0);
+            return {
+                name: `Semana ${summary.week}`,
+                day: totalDay,
+                night: totalNight,
+                week: summary.week
+            };
+        }).sort((a,b) => a.week - b.week);
+        setWeeklyShiftData(processedWeeklyShiftData);
 
-    const dailyTotals = {
-        mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
-        thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
-        sun: { day: 0, night: 0 } 
+        const dailyTotals = {
+            mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
+            thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
+            sun: { day: 0, night: 0 } 
+        };
+
+        summariesToProcess.forEach(summary => {
+            for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
+                dailyTotals[day].day += summary.dailyShiftTotals[day]?.day || 0;
+                dailyTotals[day].night += summary.dailyShiftTotals[day]?.night || 0;
+            }
+        });
+
+        setDailyData([
+            { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
+            { name: 'Martes', day: dailyTotals.tue.day, night: dailyTotals.tue.night },
+            { name: 'Miércoles', day: dailyTotals.wed.day, night: dailyTotals.wed.night },
+            { name: 'Jueves', day: dailyTotals.thu.day, night: dailyTotals.thu.night },
+            { name: 'Viernes', day: dailyTotals.fri.day, night: dailyTotals.fri.night },
+            { name: 'Sábado', day: dailyTotals.sat.day, night: dailyTotals.sat.night },
+            { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
+        ]);
+        
+        // Product Chart Logic
+        if (selectedWeek !== 'all') {
+            try {
+                const planDocRef = doc(db, "productionPlans", selectedWeek);
+                const planDocSnap = await getDoc(planDocRef);
+                if (planDocSnap.exists()) {
+                    const planData = planDocSnap.data() as { products: ProductData[] };
+                    const productChartData = planData.products
+                        .filter(p => p.categoryIsPlanned && (p.planned > 0 || Object.values(p.actual).some(d => d.day > 0 || d.night > 0)))
+                        .map(p => ({
+                            name: p.productName,
+                            planned: p.planned,
+                            actual: Object.values(p.actual).reduce((sum, dayVal) => sum + dayVal.day + dayVal.night, 0),
+                            color: p.color,
+                        }));
+                    setProductData(productChartData);
+                } else {
+                    setProductData([]);
+                }
+            } catch (error) {
+                console.error("Error fetching single plan for product chart:", error);
+                setProductData([]);
+            }
+        } else {
+            setProductData([]);
+        }
     };
 
-    summariesToProcess.forEach(summary => {
-        for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
-            dailyTotals[day].day += summary.dailyShiftTotals[day]?.day || 0;
-            dailyTotals[day].night += summary.dailyShiftTotals[day]?.night || 0;
-        }
-    });
-
-    setDailyData([
-        { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
-        { name: 'Martes', day: dailyTotals.tue.day, night: dailyTotals.tue.night },
-        { name: 'Miércoles', day: dailyTotals.wed.day, night: dailyTotals.wed.night },
-        { name: 'Jueves', day: dailyTotals.thu.day, night: dailyTotals.thu.night },
-        { name: 'Viernes', day: dailyTotals.fri.day, night: dailyTotals.fri.night },
-        { name: 'Sábado', day: dailyTotals.sat.day, night: dailyTotals.sat.night },
-        { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
-    ]);
-    
-    // Product-specific chart would require fetching full productionPlans,
-    // which defeats the purpose of this optimization. 
-    // This part is disabled for now to maintain low reads.
-    setProductData([]);
-
+    processData();
 
   }, [allSummaries, selectedWeek, selectedCategoryId, categories, loading]);
 
@@ -467,11 +481,46 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                 <CardHeader>
                     <CardTitle>Producción por Producto (Cumplimiento de Plan)</CardTitle>
                     <CardDescription>
-                        El gráfico de producción por producto requiere cargar los datos completos de los planes. Para mantener la optimización de costos, esta visualización ha sido desactivada.
+                        {selectedWeek === 'all'
+                            ? "Selecciona una semana específica en los filtros para ver el detalle de producción por producto."
+                            : `Mostrando datos para la semana ${allSummaries.find(s => s.id === selectedWeek)?.week || ''}`
+                        }
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <p className="text-center text-muted-foreground py-4">Gráfico por producto no disponible para mantener un bajo consumo de lecturas.</p>
+                    {selectedWeek === 'all' ? (
+                         <p className="text-center text-muted-foreground py-8">Selecciona una semana para ver este gráfico y mantener la optimización de costos.</p>
+                    ) : loading ? (
+                        <p className="text-center text-muted-foreground py-8">Cargando datos del producto...</p>
+                    ) : productData.length > 0 ? (
+                        <ChartContainer config={productChartConfig} className="w-full h-[400px]">
+                            <BarChart accessibilityLayer data={productData} margin={{ left: -20 }}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis
+                                    dataKey="name"
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                    tickFormatter={(value) => value.slice(0, 15) + (value.length > 15 ? '...' : '')}
+                                />
+                                <YAxis />
+                                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                                <ChartLegend content={<ChartLegendContent />} />
+                                <Bar dataKey="planned" fill="var(--color-planned)" radius={4}>
+                                    {productData.map((entry, index) => (
+                                        <Cell key={`cell-planned-${index}`} fill={entry.color || 'hsl(var(--accent))'} opacity={0.5} />
+                                    ))}
+                                </Bar>
+                                <Bar dataKey="actual" fill="var(--color-actual)" radius={4}>
+                                    {productData.map((entry, index) => (
+                                        <Cell key={`cell-actual-${index}`} fill={entry.color || 'hsl(var(--primary))'} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ChartContainer>
+                    ) : (
+                        <p className="text-center text-muted-foreground py-8">No hay datos de productos planificados para esta semana.</p>
+                    )}
                 </CardContent>
             </Card>
         </div>
@@ -479,5 +528,3 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     </div>
   );
 }
-
-    
