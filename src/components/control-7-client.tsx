@@ -5,7 +5,7 @@ import type { ProductData, ProductDefinition, CategoryDefinition, DailyProductio
 import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { doc, getDoc, writeBatch } from 'firebase/firestore';
 
 import Header from './header';
 import FilterBar from './filter-bar';
@@ -13,7 +13,6 @@ import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 import InfoDialog from './info-dialog';
-import { getCachedCategories, getCachedProducts } from '@/services/data-service';
 
 const emptyProductionDay: ShiftProduction = { day: 0, night: 0, lotNumber: '' };
 const emptyActual: DailyProduction = {
@@ -221,9 +220,64 @@ export default function Control7Client({
   const handleSave = async () => {
     try {
       const dataToSave = data.map(({ isSuggested, ...rest }) => rest);
-      const planDocRef = doc(db, "productionPlans", planId);
-      await setDoc(planDocRef, { products: dataToSave, week: currentWeek, year: currentYear });
       
+      // --- Create Summary Data for Denormalization ---
+      const productsForCompliance = data.filter(item => item.categoryIsPlanned && item.planned > 0);
+      const totalPlannedForCompliance = productsForCompliance.reduce((sum, item) => sum + (item.planned || 0), 0);
+      const totalActualForCompliance = productsForCompliance.reduce((sum, item) => 
+        sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
+      );
+      
+      const unplannedProductionProducts = data.filter(item => item.categoryIsPlanned && (item.planned || 0) === 0);
+      const totalUnplannedProduction = unplannedProductionProducts.reduce((sum, item) =>
+        sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
+      );
+      
+      const totalActual = data.reduce((sum, item) => 
+        sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
+      );
+       
+      const dailyTotals = { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 };
+      const dailyShiftTotals = {
+        mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 },
+        thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 },
+        sun: { day: 0, night: 0 }
+      };
+
+      data.forEach(product => {
+        for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
+            const dayActual = product.actual[day];
+            if (dayActual) {
+                dailyTotals[day] += (dayActual.day || 0) + (dayActual.night || 0);
+                dailyShiftTotals[day].day += dayActual.day || 0;
+                dailyShiftTotals[day].night += dayActual.night || 0;
+            }
+        }
+      });
+      
+      const summaryData = {
+        week: currentWeek,
+        year: currentYear,
+        totalPlanned: totalPlannedForCompliance,
+        totalActualForPlanned: totalActualForCompliance,
+        totalUnplannedProduction: totalUnplannedProduction,
+        totalActual: totalActual,
+        dailyTotals,
+        dailyShiftTotals,
+      };
+      
+      // Use a batched write to save both plan and summary atomically
+      const batch = writeBatch(db);
+      
+      const planDocRef = doc(db, "productionPlans", planId);
+      batch.set(planDocRef, { products: dataToSave, week: currentWeek, year: currentYear });
+      
+      const summaryDocRef = doc(db, "weeklySummaries", planId);
+      batch.set(summaryDocRef, summaryData);
+      
+      await batch.commit();
+      // --- End of Summary Creation ---
+
       setData(currentData => currentData.map(item => ({ ...item, isSuggested: false })));
       setIsDirty(false);
 
@@ -365,3 +419,5 @@ export default function Control7Client({
     </div>
   );
 }
+
+    
