@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { forecastDemand, type ForecastDemandOutput } from '@/ai/flows/forecast-demand-flow';
 import { simulateProduction, type SimulateProductionInput, type SimulateProductionOutput } from '@/ai/flows/simulate-production-flow';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, BarChart as RechartsBarChart } from 'recharts';
@@ -19,7 +19,9 @@ import ComparisonCard from './comparison-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
-import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
+import { Separator } from './ui/separator';
+import KpiCard from './kpi-card';
+import { Package } from 'lucide-react';
 
 
 // --- Shared Chart Configurations ---
@@ -44,18 +46,6 @@ type WeeklySummaryDoc = {
     totalActualForPlanned: number;
     categoryTotals: { [categoryId: string]: { planned: number; actualForPlanned: number; } }
 };
-
-// Client-side number formatter to prevent hydration errors
-const ClientFormattedNumber = ({ value, maximumFractionDigits = 0 }: { value: number, maximumFractionDigits?: number }) => {
-  const [formattedValue, setFormattedValue] = React.useState(String(value));
-
-  React.useEffect(() => {
-    setFormattedValue(value.toLocaleString(undefined, { maximumFractionDigits }));
-  }, [value, maximumFractionDigits]);
-
-  return <>{formattedValue}</>;
-};
-
 
 // --- Main IA Client Component ---
 
@@ -89,10 +79,13 @@ export default function IAClient({
         ]);
 
         const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
+        fetchedSummaries.sort((a, b) => {
+            if (a.year !== b.year) return a.year - b.year;
+            return a.week - b.week;
+        });
         setAllSummaries(fetchedSummaries);
 
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Sort client-side to avoid index errors
         fetchedPlans.sort((a, b) => b.id.localeCompare(a.id));
         setAllPlans(fetchedPlans);
         
@@ -233,7 +226,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         unitsPerSack: 50,
         hoursPerDayShift: 11,
         hoursPerNightShift: 11,
-        activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: true },
+        activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: false },
     });
 
     const calculatedValues = React.useMemo(() => {
@@ -241,14 +234,8 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         const grossUnitsPerHour = unitsPerMinute * 60;
         const effectiveUnitsPerHour = grossUnitsPerHour * (1 - (simInput.performanceLoss / 100));
         const sacksPerHour = simInput.unitsPerSack > 0 ? effectiveUnitsPerHour / simInput.unitsPerSack : 0;
-        
-        const sacksPerShift = sacksPerHour * simInput.hoursPerDayShift;
-        const sacksPerDay = sacksPerHour * (simInput.hoursPerDayShift + simInput.hoursPerNightShift);
-        const activeDayCount = Object.values(simInput.activeDays).filter(Boolean).length;
-        const weeklyProduction = sacksPerDay * activeDayCount;
-
-        return { grossUnitsPerHour, effectiveUnitsPerHour, sacksPerHour, sacksPerShift, sacksPerDay, weeklyProduction };
-    }, [simInput]);
+        return { sacksPerHour };
+    }, [simInput.machineSpeed, simInput.performanceLoss, simInput.unitsPerSack]);
 
     const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays' | 'productId'>, value: string | number) => {
         setSimInput(prev => ({ ...prev, [field]: Number(value) }));
@@ -259,7 +246,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
     }
 
     const handleDayChange = (day: keyof SimInputState['activeDays'], checked: boolean) => {
-        setSimInput(prev => ({ ...prev, activeDays: { ...prev, activeDays: { ...prev.activeDays, [day]: checked } } }));
+        setSimInput(prev => ({ ...prev, activeDays: { ...prev.activeDays, [day]: checked } }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -274,134 +261,108 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
     };
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2"><HardHat />Simulador de Producción Inteligente</CardTitle>
-                <CardDescription>Estima la producción semanal basándote en parámetros operativos y compárala con proyecciones realistas basadas en el historial.</CardDescription>
-            </CardHeader>
-            <form onSubmit={handleSubmit}>
-                <CardContent>
-                    <div className="grid md:grid-cols-2 gap-x-8 gap-y-4">
-                        {/* Columna de Inputs */}
-                        <div className="space-y-4">
-                             <div className="space-y-2">
-                                <Label htmlFor="product-select">Producto</Label>
-                                <Select value={simInput.productId} onValueChange={handleProductChange}>
-                                    <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {products.filter(p => p.isActive).map(p => (
-                                            <SelectItem key={p.id} value={p.id}>
-                                                {p.productName}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><HardHat />Simulador de Producción Inteligente</CardTitle>
+                    <CardDescription>Estima la producción semanal basándote en parámetros operativos y compárala con proyecciones realistas basadas en el historial.</CardDescription>
+                </CardHeader>
+                <form onSubmit={handleSubmit}>
+                    <CardContent className="space-y-8">
+                        {/* --- Parámetros --- */}
+                        <div className="grid md:grid-cols-3 gap-6">
+                            <div className="space-y-4">
+                                <h3 className="font-semibold text-foreground">1. Parámetros del Producto</h3>
+                                <div className="space-y-2">
+                                    <Label htmlFor="product-select">Producto a Simular</Label>
+                                    <Select value={simInput.productId} onValueChange={handleProductChange}>
+                                        <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
+                                        <SelectContent>
+                                            {products.filter(p => p.isActive).map(p => (
+                                                <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="units-per-sack">Unidades por Saco</Label>
+                                    <Input id="units-per-sack" type="number" value={simInput.unitsPerSack} onChange={e => handleInputChange('unitsPerSack', e.target.value)} required />
+                                </div>
                             </div>
-                            <div className="grid grid-cols-3 gap-4">
-                               <div className="space-y-2">
+
+                             <div className="space-y-4">
+                                <h3 className="font-semibold text-foreground">2. Parámetros de Maquinaria</h3>
+                                <div className="space-y-2">
                                     <Label htmlFor="machine-speed">Velocidad (fundas/min)</Label>
                                     <Input id="machine-speed" type="number" value={simInput.machineSpeed} onChange={e => handleInputChange('machineSpeed', e.target.value)} required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="performance-loss">Pérdida Rendimiento (%)</Label>
+                                    <Label htmlFor="performance-loss">Pérdida de Rendimiento (%)</Label>
                                     <Input id="performance-loss" type="number" value={simInput.performanceLoss} onChange={e => handleInputChange('performanceLoss', e.target.value)} required />
                                 </div>
-                                 <div className="space-y-2">
-                                    <Label htmlFor="units-per-sack">Unidades/Saco</Label>
-                                    <Input id="units-per-sack" type="number" value={simInput.unitsPerSack} onChange={e => handleInputChange('unitsPerSack', e.target.value)} required />
-                                </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <Label htmlFor="day-shift">Horas Turno Día</Label>
-                                    <Input id="day-shift" type="number" value={simInput.hoursPerDayShift} onChange={e => handleInputChange('hoursPerDayShift', e.target.value)} required />
-                                </div>
-                                <div className="space-y-2">
-                                    <Label htmlFor="night-shift">Horas Turno Noche</Label>
-                                    <Input id="night-shift" type="number" value={simInput.hoursPerNightShift} onChange={e => handleInputChange('hoursPerNightShift', e.target.value)} required />
-                                </div>
-                            </div>
-                             <div className="space-y-2">
-                                <Label>Días de Producción Activos</Label>
-                                <div className="flex flex-wrap gap-4 pt-2">
-                                    {Object.keys(simInput.activeDays).map(day => (
-                                        <div key={day} className="flex items-center space-x-2">
-                                            <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
-                                            <Label htmlFor={day} className="capitalize text-sm font-normal">{day}</Label>
-                                        </div>
-                                    ))}
+
+                            <div className="space-y-4">
+                                <h3 className="font-semibold text-foreground">3. Horario de Producción</h3>
+                                 <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <Label htmlFor="day-shift">Horas Turno Día</Label>
+                                        <Input id="day-shift" type="number" value={simInput.hoursPerDayShift} onChange={e => handleInputChange('hoursPerDayShift', e.target.value)} required />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="night-shift">Horas Turno Noche</Label>
+                                        <Input id="night-shift" type="number" value={simInput.hoursPerNightShift} onChange={e => handleInputChange('hoursPerNightShift', e.target.value)} required />
+                                    </div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Columna de Resultados */}
-                        <div className="space-y-4">
-                             <div>
-                                <Label>Resultados del Cálculo (Estimaciones)</Label>
-                                <Table className="mt-2">
-                                    <TableBody>
-                                         <TableRow>
-                                            <TableCell>Fundas por Hora (bruto)</TableCell>
-                                            <TableCell className="text-right font-medium">
-                                                <ClientFormattedNumber value={calculatedValues.grossUnitsPerHour} maximumFractionDigits={0} />
-                                            </TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                            <TableCell>Fundas por Hora (con rendimiento)</TableCell>
-                                            <TableCell className="text-right font-medium">
-                                                <ClientFormattedNumber value={calculatedValues.effectiveUnitsPerHour} maximumFractionDigits={2} />
-                                            </TableCell>
-                                        </TableRow>
-                                        <TableRow className="bg-muted/50">
-                                            <TableCell className="font-bold text-primary">Sacos por Hora (neto)</TableCell>
-                                            <TableCell className="text-right font-bold text-primary text-base">
-                                                <ClientFormattedNumber value={calculatedValues.sacksPerHour} maximumFractionDigits={2} />
-                                            </TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                            <TableCell className="font-medium">Sacos por Turno ({simInput.hoursPerDayShift} hrs)</TableCell>
-                                            <TableCell className="text-right">
-                                                <ClientFormattedNumber value={calculatedValues.sacksPerShift} maximumFractionDigits={0} />
-                                            </TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                            <TableCell className="font-medium">Sacos por Día ({simInput.hoursPerDayShift + simInput.hoursPerNightShift} hrs)</TableCell>
-                                            <TableCell className="text-right">
-                                                <ClientFormattedNumber value={calculatedValues.sacksPerDay} maximumFractionDigits={0} />
-                                            </TableCell>
-                                        </TableRow>
-                                         <TableRow>
-                                            <TableCell className="font-medium">Producción Semanal</TableCell>
-                                            <TableCell className="text-right">
-                                                <ClientFormattedNumber value={calculatedValues.weeklyProduction} maximumFractionDigits={0} />
-                                            </TableCell>
-                                        </TableRow>
-                                    </TableBody>
-                                </Table>
-                             </div>
-                        </div>
-                    </div>
-                     <div className="px-6 pt-4">
-                        {isSimulating &&  <p className="text-center text-muted-foreground pt-4">La IA está calculando la simulación...</p>}
-                        {result && (
-                            <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
-                                <h4 className="font-semibold">Recomendaciones de la IA</h4>
-                                {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
+                        <Separator />
+                        
+                        {/* --- Días Activos y Resultado --- */}
+                         <div className="grid md:grid-cols-2 gap-8 items-start">
+                             <div className="space-y-3">
+                                <Label className="font-semibold">4. Días de Producción Activos</Label>
+                                <div className="flex flex-wrap gap-x-6 gap-y-3 pt-2">
+                                    {Object.keys(simInput.activeDays).map(day => (
+                                        <div key={day} className="flex items-center space-x-2">
+                                            <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
+                                            <Label htmlFor={day} className="capitalize text-sm font-normal">{day.substring(0,3)}</Label>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        )}
-                     </div>
-                </CardContent>
-                <CardFooter>
-                    <Button type="submit" disabled={isSimulating || !simInput.productId}><BrainCircuit className="mr-2" />{isSimulating ? 'Calculando...' : 'Ejecutar Simulación con IA'}</Button>
-                </CardFooter>
-            </form>
-            
+                             <div className="space-y-3">
+                                 <Label className="font-semibold">Resultado Clave del Cálculo</Label>
+                                 <KpiCard
+                                     title="Sacos por Hora (Neto)"
+                                     value={calculatedValues.sacksPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                     icon={Package}
+                                     description="Esta es la tasa de producción neta, considerando la velocidad y la pérdida de rendimiento. Es el valor que se enviará a la IA para la simulación."
+                                 />
+                             </div>
+                         </div>
+                    </CardContent>
+                    <CardFooter>
+                        <Button type="submit" disabled={isSimulating || !simInput.productId} size="lg">
+                            <BrainCircuit className="mr-2" />
+                            {isSimulating ? 'Calculando Simulación...' : 'Ejecutar Simulación con IA'}
+                        </Button>
+                    </CardFooter>
+                </form>
+            </Card>
+
+            {isSimulating &&  <p className="text-center text-muted-foreground pt-8">La IA está calculando la simulación, por favor espera...</p>}
+
             {result && (
-                <CardContent className="mt-6 border-t pt-6">
-                    <div className="space-y-6">
-                        <h3 className="text-lg font-semibold text-center">Resultados de la Simulación Semanal (en Sacos)</h3>
-                        <div className="grid md:grid-cols-2 gap-6 items-center">
-                            <div className="space-y-4">
+                <div className="space-y-6 mt-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Resultados de la Simulación Semanal</CardTitle>
+                            <CardDescription>Comparación entre el potencial teórico y una proyección realista basada en datos históricos.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                             <div className="grid md:grid-cols-2 gap-4">
                                 <ComparisonCard 
                                     title="Producción Óptima Semanal (2 Turnos)" 
                                     valueA={0} 
@@ -417,25 +378,42 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                     description="Estimación ajustada basada en la eficiencia histórica real, ofreciendo un pronóstico más alcanzable."
                                 />
                             </div>
-                            <div>
-                                <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección (1 Turno)</h4>
-                                <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
-                                    <RechartsBarChart data={result.dailyBreakdown}>
-                                        <CartesianGrid vertical={false} />
-                                        <XAxis dataKey="day" />
-                                        <YAxis />
-                                        <RechartsTooltip content={<ChartTooltipContent />} />
-                                        <Legend content={<ChartLegendContent />} />
-                                        <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
-                                        <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
-                                    </RechartsBarChart>
-                                </ChartContainer>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Análisis y Recomendaciones de la IA</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
+                                {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
                             </div>
-                        </div>
-                    </div>
-                </CardContent>
+                        </CardContent>
+                    </Card>
+                    
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Desglose Diario y Proyección (1 Turno)</CardTitle>
+                             <CardDescription>Visualiza la diferencia entre la producción óptima y la realista para cada día activo.</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
+                                <RechartsBarChart data={result.dailyBreakdown}>
+                                    <CartesianGrid vertical={false} />
+                                    <XAxis dataKey="day" />
+                                    <YAxis />
+                                    <RechartsTooltip content={<ChartTooltipContent />} />
+                                    <Legend content={<ChartLegendContent />} />
+                                    <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
+                                    <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
+                                </RechartsBarChart>
+                            </ChartContainer>
+                        </CardContent>
+                    </Card>
+                </div>
             )}
-        </Card>
+        </div>
     );
 }
 
