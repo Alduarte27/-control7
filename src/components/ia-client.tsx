@@ -2,14 +2,13 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Sparkles, Bot, LineChart, TrendingUp, BarChart2, HardHat, BrainCircuit } from 'lucide-react';
+import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, BarChart2, HardHat, BrainCircuit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { suggestProductionPlan, type SuggestPlanOutput } from '@/ai/flows/suggest-plan-flow';
 import { forecastDemand, type ForecastDemandOutput } from '@/ai/flows/forecast-demand-flow';
 import { simulateProduction, type SimulateProductionInput, type SimulateProductionOutput } from '@/ai/flows/simulate-production-flow';
-import { collection, getDocs, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, BarChart } from 'recharts';
@@ -17,13 +16,10 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import ComparisonCard from './comparison-card';
-import { addWeeks, getISOWeek, getDay } from 'date-fns';
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
-import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 
 
 // --- Shared Chart Configurations ---
@@ -92,8 +88,6 @@ export default function IAClient({
   const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
   
   // --- States for each Tab ---
-  const [isSuggestingPlan, setIsSuggestingPlan] = React.useState(false);
-  const [suggestion, setSuggestion] = React.useState<SuggestPlanOutput | null>(null);
   const [isForecasting, setIsForecasting] = React.useState(false);
   const [forecast, setForecast] = React.useState<ForecastDemandOutput | null>(null);
   const [isSimulating, setIsSimulating] = React.useState(false);
@@ -104,9 +98,6 @@ export default function IAClient({
   const [comparisonData, setComparisonData] = React.useState<ComparisonData | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
   
-  const [isApplyDialogOpen, setIsApplyDialogOpen] = React.useState(false);
-  const [targetWeek, setTargetWeek] = React.useState<'current' | 'next'>('next');
-
   // --- Initial Data Fetching ---
   React.useEffect(() => {
     const fetchHistory = async () => {
@@ -204,43 +195,6 @@ export default function IAClient({
   }, [allSummaries, selectedWeekA, selectedWeekB, selectedCategoryId, loading]);
 
   // --- AI Flow Handlers ---
-  const handleSuggestPlan = async () => {
-    setIsSuggestingPlan(true);
-    setSuggestion(null);
-    toast({ title: 'Generando Sugerencia', description: 'La IA está analizando el historial...' });
-    try {
-        const plansQuery = query(collection(db, "productionPlans"), orderBy("__name__", "desc"), limit(8));
-        const plansSnapshot = await getDocs(plansQuery);
-        
-        const historicalDataForAI = plansSnapshot.docs.map(doc => {
-            const plan = doc.data();
-            return {
-                week: plan.week,
-                year: plan.year,
-                products: plan.products.map((p: ProductData) => ({
-                    id: p.id,
-                    productName: p.productName,
-                    totalActual: Object.values(p.actual).reduce((sum: any, s: any) => sum + (s.day || 0) + (s.night || 0), 0),
-                    categoryIsPlanned: p.categoryIsPlanned ?? true,
-                }))
-            };
-        }).reverse();
-
-        const activeProducts = prefetchedProducts.filter(p => p.isActive);
-        const categoryMap = new Map(categories.map(doc => [doc.id, { isPlanned: doc.isPlanned ?? true }]));
-        const allProductsWithCategoryInfo = activeProducts.map(p => ({
-            id: p.id, productName: p.productName, categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
-        }));
-        
-        const result = await suggestProductionPlan({ historicalData: historicalDataForAI, allProducts: allProductsWithCategoryInfo });
-        setSuggestion(result);
-    } catch (error) {
-        toast({ title: 'Error de la IA', description: 'No se pudo generar una sugerencia.', variant: 'destructive' });
-    } finally {
-        setIsSuggestingPlan(false);
-    }
-  };
-
   const handleForecastDemand = async () => {
     setIsForecasting(true);
     setForecast(null);
@@ -302,25 +256,6 @@ export default function IAClient({
     }
   };
   
-  // --- Plan Application Logic ---
-  const handleOpenApplyDialog = () => {
-    const isMonday = getDay(new Date()) === 1; // 1 for Monday
-    const currentPlanId = `${new Date().getFullYear()}-W${getISOWeek(new Date())}`;
-    const currentPlanExistsWithData = allPlans.some(p => p.id === currentPlanId && p.products.some((prod: ProductData) => prod.planned > 0));
-
-    setTargetWeek((isMonday && !currentPlanExistsWithData) ? 'current' : 'next');
-    setIsApplyDialogOpen(true);
-  };
-
-  const executeApplySuggestion = () => {
-    if (!suggestion) return;
-    const date = targetWeek === 'next' ? addWeeks(new Date(), 1) : new Date();
-    const planId = `${date.getFullYear()}-W${getISOWeek(date)}`;
-    sessionStorage.setItem('aiSuggestion', JSON.stringify(suggestion.suggestions));
-    window.location.href = `/?planId=${planId}&applySuggestion=true`;
-    setIsApplyDialogOpen(false);
-  };
-
   return (
     <>
       <div className="bg-background min-h-screen text-foreground">
@@ -334,18 +269,14 @@ export default function IAClient({
         
         <main className="p-4 md:p-8 space-y-6">
             <Tabs defaultValue="simulator" className="w-full">
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="simulator"><HardHat className="mr-2" />Simulador</TabsTrigger>
-                    <TabsTrigger value="suggestion"><Bot className="mr-2" />Sugerencia de Plan</TabsTrigger>
                     <TabsTrigger value="forecast"><TrendingUp className="mr-2" />Pronóstico</TabsTrigger>
                     <TabsTrigger value="comparison"><BarChart2 className="mr-2" />Comparativo</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="simulator" className="mt-6">
                     <SimulatorTab onSimulate={handleSimulation} isSimulating={isSimulating} result={simulationResult} products={prefetchedProducts} />
-                </TabsContent>
-                <TabsContent value="suggestion" className="mt-6">
-                    <SuggestionTab onSuggest={handleSuggestPlan} isSuggesting={isSuggestingPlan} suggestion={suggestion} onApply={handleOpenApplyDialog} />
                 </TabsContent>
                 <TabsContent value="forecast" className="mt-6">
                     <ForecastTab onForecast={handleForecastDemand} isForecasting={isForecasting} forecast={forecast} trendData={historicalTrendData} isLoading={loading} />
@@ -367,29 +298,6 @@ export default function IAClient({
             </Tabs>
         </main>
       </div>
-
-      <AlertDialog open={isApplyDialogOpen} onOpenChange={setIsApplyDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Dónde aplicar la sugerencia?</AlertDialogTitle>
-            <AlertDialogDescription>Elige la semana para el plan de producción sugerido.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4">
-              <RadioGroup defaultValue={targetWeek} onValueChange={(value: 'current' | 'next') => setTargetWeek(value)}>
-                  <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="current" id="r-current" /><Label htmlFor="r-current">Semana Actual (S{getISOWeek(new Date())})</Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="next" id="r-next" /><Label htmlFor="r-next">Próxima Semana (S{getISOWeek(addWeeks(new Date(), 1))})</Label>
-                  </div>
-              </RadioGroup>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={executeApplySuggestion}>Aplicar a Semana Seleccionada</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
@@ -440,8 +348,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         
         const sacksPerShift = sacksPerHour * simInput.hoursPerDayShift;
         
-        const totalHoursPerDay = simInput.hoursPerDayShift + simInput.hoursPerNightShift;
-        const sacksPerDay = sacksPerHour * totalHoursPerDay;
+        const sacksPerDay = sacksPerHour * (simInput.hoursPerDayShift + simInput.hoursPerNightShift);
         
         const activeDayCount = Object.values(simInput.activeDays).filter(Boolean).length;
         const weeklyProduction = sacksPerDay * activeDayCount;
@@ -574,13 +481,15 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                              </div>
                         </div>
                     </div>
-                     {isSimulating &&  <p className="text-center text-muted-foreground pt-4">La IA está calculando la simulación...</p>}
-                     {result && (
-                        <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full mt-4">
-                            <h4 className="font-semibold">Recomendaciones de la IA</h4>
-                            {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
-                        </div>
-                     )}
+                     <div className="px-6 mt-4">
+                        {isSimulating &&  <p className="text-center text-muted-foreground pt-4">La IA está calculando la simulación...</p>}
+                        {result && (
+                            <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
+                                <h4 className="font-semibold">Recomendaciones de la IA</h4>
+                                {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
+                            </div>
+                        )}
+                     </div>
                 </CardContent>
                 <CardFooter>
                     <Button type="submit" disabled={isSimulating || !simInput.productId}><BrainCircuit className="mr-2" />{isSimulating ? 'Calculando...' : 'Ejecutar Simulación con IA'}</Button>
@@ -625,39 +534,6 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                         </div>
                     </div>
                 </CardContent>
-            )}
-        </Card>
-    );
-}
-
-
-function SuggestionTab({ onSuggest, isSuggesting, suggestion, onApply }: {
-    onSuggest: () => void;
-    isSuggesting: boolean;
-    suggestion: SuggestPlanOutput | null;
-    onApply: () => void;
-}) {
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Bot />Asistente de Planificación</CardTitle>
-                <CardDescription>Usa IA para analizar el historial y generar un plan semanal optimizado para productos planificables.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Button onClick={onSuggest} disabled={isSuggesting}><Bot className={`mr-2 ${isSuggesting ? 'animate-spin' : ''}`} />{isSuggesting ? 'Generando...' : 'Generar Sugerencia de Plan'}</Button>
-            </CardContent>
-            {(isSuggesting || suggestion) && (
-              <CardContent className="mt-6 border-t pt-6">
-                {isSuggesting ? (
-                  <p className="text-center text-muted-foreground">La IA está analizando el historial y generando una sugerencia...</p>
-                ) : suggestion && (
-                    <div className="space-y-4">
-                      <h3 className="font-semibold text-lg">Análisis y Sugerencia de la IA</h3>
-                      <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">{suggestion.analysis.split('\n').map((p, i) => <p key={i}>{p}</p>)}</div>
-                      <Button onClick={onApply}>Aplicar Sugerencias...</Button>
-                    </div>
-                )}
-              </CardContent>
             )}
         </Card>
     );
