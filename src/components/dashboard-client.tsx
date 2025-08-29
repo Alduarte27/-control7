@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -198,9 +199,13 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     const fetchAllSummaries = async () => {
         setLoading(true);
         try {
-            const summariesQuery = query(collection(db, 'weeklySummaries'), orderBy('__name__', 'desc'));
+            const summariesQuery = query(collection(db, 'weeklySummaries'));
             const summariesSnapshot = await getDocs(summariesQuery);
             const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
+            
+            // Sort client-side to avoid complex queries
+            fetchedSummaries.sort((a, b) => b.year - a.year || b.week - a.week);
+            
             setAllSummaries(fetchedSummaries);
         } catch (error) {
             console.error('Failed to fetch weekly summaries from Firestore:', error);
