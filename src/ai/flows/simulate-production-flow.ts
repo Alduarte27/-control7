@@ -80,7 +80,8 @@ const prompt = ai.definePrompt({
 **Tus Tareas:**
 
 1.  **Calcular Producción Óptima (en sacos):**
-    -   Calcula la producción diaria y semanal máxima posible basándote estrictamente en la tasa de producción y las horas de trabajo. El resultado debe ser en sacos.
+    -   **Primero, suma las horas del turno de día y del turno de noche** para obtener el total de horas de producción por día.
+    -   Calcula la producción diaria y semanal máxima posible basándote en la tasa de producción y el **total de horas de trabajo diarias**. El resultado debe ser en sacos.
 
 2.  **Calcular Proyección Realista (en sacos):**
     -   Si hay datos históricos, calcula la **eficiencia promedio**.
