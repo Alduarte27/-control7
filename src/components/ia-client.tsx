@@ -421,9 +421,10 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
     }, [simInput.productId, products]);
 
     const calculatedValues = React.useMemo(() => {
-        const unitsPerHour = simInput.machineSpeed * 60;
+        const unitsPerMinute = simInput.machineSpeed;
+        const unitsPerHour = unitsPerMinute * 60;
         const effectiveUnitsPerHour = unitsPerHour * (simInput.efficiency / 100);
-        const sacksPerHour = effectiveUnitsPerHour / simInput.unitsPerSack;
+        const sacksPerHour = simInput.unitsPerSack > 0 ? effectiveUnitsPerHour / simInput.unitsPerSack : 0;
         return { unitsPerHour, effectiveUnitsPerHour, sacksPerHour };
     }, [simInput.machineSpeed, simInput.efficiency, simInput.unitsPerSack]);
 
@@ -548,7 +549,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                         <div className="grid md:grid-cols-2 gap-6 items-center">
                             <div className="space-y-4">
                                 <ComparisonCard title="Producción Óptima Semanal" valueA={0} valueB={result.totalOptimalProduction} showPercentage={false} />
-                                <ComparisonCard title="Proyección Realista Semanal" valueA={result.totalOptimalProduction} valueB={result.totalRealisticProjection} subValue={`Basado en ${result.averageEfficiency.toFixed(1)}% eficiencia hist.`} isPercentage={false}/>
+                                <ComparisonCard title="Proyección Realista Semanal" valueA={result.totalOptimalProduction} valueB={result.totalRealisticProjection} isPercentage={false}/>
                             </div>
                             <div>
                                 <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección</h4>
