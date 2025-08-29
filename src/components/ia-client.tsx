@@ -108,16 +108,16 @@ export default function IAClient({
 
   const weekOptions = React.useMemo(() => {
     const sortedSummaries = [...allSummaries].sort((a, b) => {
-        if (a.year !== b.year) return a.year - b.year;
-        return a.week - b.week;
+        if (a.year !== b.year) return b.year - a.year;
+        return b.week - a.week;
     });
 
-    if (sortedSummaries.length >= 2) {
-      if (!selectedWeekA) setSelectedWeekA(sortedSummaries[sortedSummaries.length - 2].id);
-      if (!selectedWeekB) setSelectedWeekB(sortedSummaries[sortedSummaries.length - 1].id);
-    } else if (sortedSummaries.length === 1) {
-      if (!selectedWeekA) setSelectedWeekA(sortedSummaries[0].id);
-      if (!selectedWeekB) setSelectedWeekB(sortedSummaries[0].id);
+    if (allSummaries.length >= 2) {
+      if (!selectedWeekA) setSelectedWeekA(allSummaries[allSummaries.length - 2].id);
+      if (!selectedWeekB) setSelectedWeekB(allSummaries[allSummaries.length - 1].id);
+    } else if (allSummaries.length === 1) {
+      if (!selectedWeekA) setSelectedWeekA(allSummaries[0].id);
+      if (!selectedWeekB) setSelectedWeekB(allSummaries[0].id);
     }
     return sortedSummaries;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -199,11 +199,11 @@ export default function IAClient({
 
             // Get total from summaries for cards
             const totalsA = selectedCategoryId === 'all'
-                ? { planned: summaryA.totalPlanned, actual: summaryA.totalActualForPlanned }
+                ? { planned: summaryA.totalPlanned, actualForPlanned: summaryA.totalActualForPlanned }
                 : summaryA.categoryTotals?.[selectedCategoryId] || { planned: 0, actualForPlanned: 0 };
             
             const totalsB = selectedCategoryId === 'all'
-                ? { planned: summaryB.totalPlanned, actual: summaryB.totalActualForPlanned }
+                ? { planned: summaryB.totalPlanned, actualForPlanned: summaryB.totalActualForPlanned }
                 : summaryB.categoryTotals?.[selectedCategoryId] || { planned: 0, actualForPlanned: 0 };
 
             setComparisonData({
