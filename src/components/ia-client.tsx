@@ -439,14 +439,14 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         const sacksPerHour = simInput.unitsPerSack > 0 ? effectiveUnitsPerHour / simInput.unitsPerSack : 0;
         
         const sacksPerShift = sacksPerHour * simInput.hoursPerDayShift;
-        const sacksPerDay = sacksPerShift * 2;
-        const activeDayCount = Object.values(simInput.activeDays).filter(Boolean).length;
         
         let totalHoursPerDay = 0;
         if (simInput.hoursPerDayShift > 0) totalHoursPerDay += simInput.hoursPerDayShift;
         if (simInput.hoursPerNightShift > 0) totalHoursPerDay += simInput.hoursPerNightShift;
+        const sacksPerDay = sacksPerHour * totalHoursPerDay;
         
-        const weeklyProduction = sacksPerHour * totalHoursPerDay * activeDayCount;
+        const activeDayCount = Object.values(simInput.activeDays).filter(Boolean).length;
+        const weeklyProduction = sacksPerDay * activeDayCount;
 
         return { grossUnitsPerHour, effectiveUnitsPerHour, sacksPerHour, sacksPerShift, sacksPerDay, weeklyProduction };
     }, [simInput]);
