@@ -23,7 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '@/components/ui/table';
 
 
 // --- Shared Chart Configurations ---
@@ -405,7 +405,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
     type SimInputState = {
         productId: string;
         machineSpeed: number; // fundas/min
-        efficiency: number; // percentage
+        performanceLoss: number; // percentage
         unitsPerSack: number;
         hoursPerDayShift: number;
         hoursPerNightShift: number;
@@ -415,11 +415,11 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
     const [simInput, setSimInput] = React.useState<SimInputState>({
         productId: products.find(p => p.isActive)?.id || '',
         machineSpeed: 40,
-        efficiency: 8,
+        performanceLoss: 8,
         unitsPerSack: products.find(p => p.isActive)?.unitsPerSack || 50,
-        hoursPerDayShift: 8,
-        hoursPerNightShift: 8,
-        activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false },
+        hoursPerDayShift: 11,
+        hoursPerNightShift: 11,
+        activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: true },
     });
 
     React.useEffect(() => {
@@ -434,11 +434,17 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
 
     const calculatedValues = React.useMemo(() => {
         const unitsPerMinute = simInput.machineSpeed;
-        const unitsPerHour = unitsPerMinute * 60;
-        const effectiveUnitsPerHour = unitsPerHour * (1 - (simInput.efficiency / 100));
+        const grossUnitsPerHour = unitsPerMinute * 60;
+        const effectiveUnitsPerHour = grossUnitsPerHour * (1 - (simInput.performanceLoss / 100));
         const sacksPerHour = simInput.unitsPerSack > 0 ? effectiveUnitsPerHour / simInput.unitsPerSack : 0;
-        return { unitsPerHour, effectiveUnitsPerHour, sacksPerHour };
-    }, [simInput.machineSpeed, simInput.efficiency, simInput.unitsPerSack]);
+        
+        const sacksPerShift = sacksPerHour * simInput.hoursPerDayShift; // Assuming day and night shifts have same hours for this summary
+        const sacksPerDay = sacksPerShift * 2;
+        const activeDayCount = Object.values(simInput.activeDays).filter(Boolean).length;
+        const weeklyProduction = sacksPerDay * activeDayCount;
+
+        return { sacksPerHour, sacksPerShift, sacksPerDay, weeklyProduction };
+    }, [simInput]);
 
     const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays' | 'productId'>, value: string | number) => {
         setSimInput(prev => ({ ...prev, [field]: Number(value) }));
@@ -487,8 +493,8 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                     <Input id="machine-speed" type="number" value={simInput.machineSpeed} onChange={e => handleInputChange('machineSpeed', e.target.value)} required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="efficiency">Pérdida por Rendimiento (%)</Label>
-                                    <Input id="efficiency" type="number" value={simInput.efficiency} onChange={e => handleInputChange('efficiency', e.target.value)} required />
+                                    <Label htmlFor="performance-loss">Pérdida Rendimiento (%)</Label>
+                                    <Input id="performance-loss" type="number" value={simInput.performanceLoss} onChange={e => handleInputChange('performanceLoss', e.target.value)} required />
                                 </div>
                                  <div className="space-y-2">
                                     <Label htmlFor="units-per-sack">Unidades/Saco</Label>
@@ -521,25 +527,37 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                         {/* Columna de Resultados */}
                         <div className="space-y-4">
                              <div>
-                                <Label>Resultados del Cálculo</Label>
+                                <Label>Resultados del Cálculo (Estimaciones)</Label>
                                 <Table className="mt-2">
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Métrica</TableHead>
+                                            <TableHead className="text-right">Valor</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
                                     <TableBody>
-                                        <TableRow>
-                                            <TableCell className="font-medium">Fundas por Hora (bruto)</TableCell>
-                                            <TableCell className="text-right">
-                                                <ClientFormattedNumber value={calculatedValues.unitsPerHour} />
-                                            </TableCell>
-                                        </TableRow>
-                                        <TableRow>
-                                            <TableCell className="font-medium">Fundas por Hora (con rendimiento)</TableCell>
-                                            <TableCell className="text-right">
-                                                <ClientFormattedNumber value={calculatedValues.effectiveUnitsPerHour} maximumFractionDigits={2} />
-                                            </TableCell>
-                                        </TableRow>
                                         <TableRow className="bg-muted/50">
                                             <TableCell className="font-bold text-primary">Sacos por Hora (neto)</TableCell>
                                             <TableCell className="text-right font-bold text-primary text-base">
                                                 <ClientFormattedNumber value={calculatedValues.sacksPerHour} maximumFractionDigits={2} />
+                                            </TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                            <TableCell className="font-medium">Sacos por Turno (11 hrs)</TableCell>
+                                            <TableCell className="text-right">
+                                                <ClientFormattedNumber value={calculatedValues.sacksPerShift} maximumFractionDigits={0} />
+                                            </TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                            <TableCell className="font-medium">Sacos por Día (2 turnos)</TableCell>
+                                            <TableCell className="text-right">
+                                                <ClientFormattedNumber value={calculatedValues.sacksPerDay} maximumFractionDigits={0} />
+                                            </TableCell>
+                                        </TableRow>
+                                         <TableRow>
+                                            <TableCell className="font-medium">Producción Semanal</TableCell>
+                                            <TableCell className="text-right">
+                                                <ClientFormattedNumber value={calculatedValues.weeklyProduction} maximumFractionDigits={0} />
                                             </TableCell>
                                         </TableRow>
                                     </TableBody>
