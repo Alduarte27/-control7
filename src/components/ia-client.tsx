@@ -2,12 +2,13 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Sparkles, Bot, LineChart, TrendingUp, BarChart2 } from 'lucide-react';
+import { Factory, ChevronLeft, Sparkles, Bot, LineChart, TrendingUp, BarChart2, HardHat, BrainCircuit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { suggestProductionPlan, type SuggestPlanOutput, type SuggestPlanInput } from '@/ai/flows/suggest-plan-flow';
 import { forecastDemand, type ForecastDemandOutput, type ForecastDemandInput } from '@/ai/flows/forecast-demand-flow';
+import { simulateProduction, type SimulateProductionInput, type SimulateProductionOutput } from '@/ai/flows/simulate-production-flow';
 import { collection, getDocs, query, orderBy, limit, doc, getDoc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
@@ -17,19 +18,20 @@ import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import ComparisonCard from './comparison-card';
-import { addWeeks, getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek, getDay } from 'date-fns';
+import { addWeeks, getISOWeek, getDay } from 'date-fns';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from './ui/input';
+import { Checkbox } from './ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+
+// --- Shared Chart Configurations ---
 
 const trendChartConfig = {
-  planned: {
-    label: 'Planificado',
-    color: 'hsl(var(--chart-2))',
-  },
-  actual: {
-    label: 'Real (s/Plan)',
-    color: 'hsl(var(--chart-1))',
-  },
+  planned: { label: 'Planificado', color: 'hsl(var(--chart-2))' },
+  actual: { label: 'Real (s/Plan)', color: 'hsl(var(--chart-1))' },
 } satisfies ChartConfig;
 
 const comparisonChartConfig = {
@@ -39,18 +41,20 @@ const comparisonChartConfig = {
   actualB: { label: 'Real Semana B', color: 'hsl(var(--chart-4))' },
 } satisfies ChartConfig;
 
+const simulationChartConfig = {
+    optimalProduction: { label: 'Producción Óptima', color: 'hsl(var(--chart-2))' },
+    realisticProjection: { label: 'Proyección Realista', color: 'hsl(var(--chart-1))' },
+} satisfies ChartConfig;
+
+// --- Type Definitions ---
+
 type WeeklySummaryDoc = {
-    id: string; // planId e.g., "2024-W35"
+    id: string;
     week: number;
     year: number;
     totalPlanned: number;
     totalActualForPlanned: number;
-    categoryTotals: {
-        [categoryId: string]: {
-            planned: number;
-            actualForPlanned: number;
-        }
-    }
+    categoryTotals: { [categoryId: string]: { planned: number; actualForPlanned: number; } }
 };
 
 type ComparisonData = {
@@ -58,181 +62,145 @@ type ComparisonData = {
   totalActualA: number;
   totalPlannedB: number;
   totalActualB: number;
-  productComparison: {
-    name: string;
-    plannedA: number;
-    actualA: number;
-    plannedB: number;
-    actualB: number;
-  }[];
+  productComparison: { name: string; plannedA: number; actualA: number; plannedB: number; actualB: number; }[];
 };
 
-type ForecastChartData = {
-  name: string;
-  [weekKey: string]: string | number;
-};
-
-const FORECAST_WEEKS = 4;
+// --- Main IA Client Component ---
 
 export default function IAClient({ 
   prefetchedCategories, 
-  prefetchedProducts,
-  initialPlanId 
+  prefetchedProducts 
 }: { 
   prefetchedCategories: CategoryDefinition[], 
-  prefetchedProducts: ProductDefinition[],
-  initialPlanId?: string 
+  prefetchedProducts: ProductDefinition[]
 }) {
+  const { toast } = useToast();
+  const [loading, setLoading] = React.useState(true);
+  const [allSummaries, setAllSummaries] = React.useState<WeeklySummaryDoc[]>([]);
+  const [allPlans, setAllPlans] = React.useState<any[]>([]);
+  const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
+  
+  // --- States for each Tab ---
   const [isSuggestingPlan, setIsSuggestingPlan] = React.useState(false);
   const [suggestion, setSuggestion] = React.useState<SuggestPlanOutput | null>(null);
   const [isForecasting, setIsForecasting] = React.useState(false);
   const [forecast, setForecast] = React.useState<ForecastDemandOutput | null>(null);
-  const [historicalTrendData, setHistoricalTrendData] = React.useState<any[]>([]);
-  const [forecastChartData, setForecastChartData] = React.useState<ForecastChartData[]>([]);
-  const [forecastChartConfig, setForecastChartConfig] = React.useState<ChartConfig>({});
-  const [loadingHistory, setLoadingHistory] = React.useState(true);
-  const { toast } = useToast();
-  
-  const [allSummaries, setAllSummaries] = React.useState<WeeklySummaryDoc[]>([]);
-  const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
-  
-  // State for comparison view
+  const [isSimulating, setIsSimulating] = React.useState(false);
+  const [simulationResult, setSimulationResult] = React.useState<SimulateProductionOutput | null>(null);
+
   const [selectedWeekA, setSelectedWeekA] = React.useState<string>('');
   const [selectedWeekB, setSelectedWeekB] = React.useState<string>('');
   const [comparisonData, setComparisonData] = React.useState<ComparisonData | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
-
-  // State for applying suggestion dialog
+  
   const [isApplyDialogOpen, setIsApplyDialogOpen] = React.useState(false);
   const [targetWeek, setTargetWeek] = React.useState<'current' | 'next'>('next');
 
-  const weekOptions = React.useMemo(() => {
-    const sortedSummaries = [...allSummaries].sort((a, b) => {
-        if (a.year !== b.year) return b.year - a.year;
-        return b.week - a.week;
-    });
-
-    if (allSummaries.length >= 2) {
-      if (!selectedWeekA) setSelectedWeekA(allSummaries[allSummaries.length - 2].id);
-      if (!selectedWeekB) setSelectedWeekB(allSummaries[allSummaries.length - 1].id);
-    } else if (allSummaries.length === 1) {
-      if (!selectedWeekA) setSelectedWeekA(allSummaries[0].id);
-      if (!selectedWeekB) setSelectedWeekB(allSummaries[0].id);
-    }
-    return sortedSummaries;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allSummaries]);
-
-
+  // --- Initial Data Fetching ---
   React.useEffect(() => {
     const fetchHistory = async () => {
-        setLoadingHistory(true);
-        try {
-            const summariesSnapshot = await getDocs(query(collection(db, 'weeklySummaries'), orderBy('__name__')));
-            const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
-            setAllSummaries(fetchedSummaries);
+      setLoading(true);
+      try {
+        const [summariesSnapshot, plansSnapshot] = await Promise.all([
+            getDocs(query(collection(db, 'weeklySummaries'), orderBy('__name__'))),
+            getDocs(query(collection(db, "productionPlans"), orderBy("__name__", "desc")))
+        ]);
 
-            const limitedHistory = fetchedSummaries
-                .slice(-12) // Get last 12 summaries for the trend
-                .map(summary => ({
-                    name: `S${summary.week}`,
-                    week: summary.week,
-                    year: summary.year,
-                    planned: summary.totalPlanned,
-                    actual: summary.totalActualForPlanned,
-                }));
-            setHistoricalTrendData(limitedHistory);
-        } catch (error) {
-            console.error("Error fetching historical summaries:", error);
-            toast({ title: 'Error al cargar historial', variant: 'destructive' });
+        const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
+        setAllSummaries(fetchedSummaries);
+
+        const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setAllPlans(fetchedPlans);
+        
+        if (fetchedSummaries.length >= 2) {
+          setSelectedWeekA(fetchedSummaries[fetchedSummaries.length - 2].id);
+          setSelectedWeekB(fetchedSummaries[fetchedSummaries.length - 1].id);
+        } else if (fetchedSummaries.length === 1) {
+          setSelectedWeekA(fetchedSummaries[0].id);
+          setSelectedWeekB(fetchedSummaries[0].id);
         }
-        setLoadingHistory(false);
+
+      } catch (error) {
+        console.error("Error fetching historical data:", error);
+        toast({ title: 'Error al cargar historial', variant: 'destructive' });
+      }
+      setLoading(false);
     };
     fetchHistory();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  
+  // --- Memoized Derived Data ---
+  const weekOptions = React.useMemo(() => {
+    return [...allSummaries].sort((a, b) => b.year - a.year || b.week - a.week);
+  }, [allSummaries]);
+  
+  const historicalTrendData = React.useMemo(() => {
+    return allSummaries.slice(-12).map(summary => ({
+        name: `S${summary.week}`,
+        planned: summary.totalPlanned,
+        actual: summary.totalActualForPlanned,
+    }));
+  }, [allSummaries]);
 
-   React.useEffect(() => {
+  // --- Logic for Comparison Tab ---
+  React.useEffect(() => {
     const generateComparison = async () => {
-        if (loadingHistory || !selectedWeekA || !selectedWeekB) return;
+      if (loading || !selectedWeekA || !selectedWeekB) return;
+      const summaryA = allSummaries.find(s => s.id === selectedWeekA);
+      const summaryB = allSummaries.find(s => s.id === selectedWeekB);
+      if (!summaryA || !summaryB) return;
 
-        const summaryA = allSummaries.find(s => s.id === selectedWeekA);
-        const summaryB = allSummaries.find(s => s.id === selectedWeekB);
+      try {
+        const [planADoc, planBDoc] = await Promise.all([
+          getDoc(doc(db, "productionPlans", selectedWeekA)),
+          getDoc(doc(db, "productionPlans", selectedWeekB))
+        ]);
 
-        if (!summaryA || !summaryB) {
-            setComparisonData(null);
-            return;
-        }
+        const productsA = planADoc.exists() ? (planADoc.data().products as ProductData[]) : [];
+        const productsB = planBDoc.exists() ? (planBDoc.data().products as ProductData[]) : [];
 
-        try {
-            // Fetch detailed plan data only for the two selected weeks
-            const [planADoc, planBDoc] = await Promise.all([
-                getDoc(doc(db, "productionPlans", selectedWeekA)),
-                getDoc(doc(db, "productionPlans", selectedWeekB))
-            ]);
+        const filterProducts = (p: ProductData) => selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
+        
+        const allProductNames = Array.from(new Set([
+          ...productsA.filter(filterProducts).map(p => p.productName), 
+          ...productsB.filter(filterProducts).map(p => p.productName)
+        ]));
 
-            const productsA = planADoc.exists() ? (planADoc.data().products as ProductData[]) : [];
-            const productsB = planBDoc.exists() ? (planBDoc.data().products as ProductData[]) : [];
+        const calculateTotalActual = (p: ProductData) => Object.values(p.actual).reduce((sum, s) => sum + (s.day || 0) + (s.night || 0), 0);
 
-            const getFilteredProducts = (products: ProductData[]): ProductData[] => {
-                if (selectedCategoryId === 'all') return products;
-                return products.filter(p => p.categoryId === selectedCategoryId);
-            };
-            
-            const filteredProductsA = getFilteredProducts(productsA);
-            const filteredProductsB = getFilteredProducts(productsB);
+        const productComparison = allProductNames.map(name => {
+          const productA = productsA.find(p => p.productName === name);
+          const productB = productsB.find(p => p.productName === name);
+          return {
+            name,
+            plannedA: productA?.planned || 0,
+            actualA: productA ? calculateTotalActual(productA) : 0,
+            plannedB: productB?.planned || 0,
+            actualB: productB ? calculateTotalActual(productB) : 0,
+          };
+        }).filter(p => p.plannedA > 0 || p.actualA > 0 || p.plannedB > 0 || p.actualB > 0);
 
-            const allProductNames = Array.from(new Set([...filteredProductsA.map(p => p.productName), ...filteredProductsB.map(p => p.productName)]));
-            
-            const calculateTotalActual = (product: ProductData) =>
-                Object.values(product.actual).reduce((sum, shifts) => sum + (shifts.day || 0) + (shifts.night || 0), 0);
-            
-            const productComparison = allProductNames.map(name => {
-                const productA = filteredProductsA.find(p => p.productName === name);
-                const productB = filteredProductsB.find(p => p.productName === name);
-                const plannedA = productA?.planned || 0;
-                const actualA = productA ? calculateTotalActual(productA) : 0;
-                const plannedB = productB?.planned || 0;
-                const actualB = productB ? calculateTotalActual(productB) : 0;
-                return { name, plannedA, actualA, plannedB, actualB };
-            }).filter(p => p.plannedA > 0 || p.actualA > 0 || p.plannedB > 0 || p.actualB > 0);
+        const totalsA = selectedCategoryId === 'all' ? { p: summaryA.totalPlanned, a: summaryA.totalActualForPlanned } : { p: summaryA.categoryTotals?.[selectedCategoryId]?.planned || 0, a: summaryA.categoryTotals?.[selectedCategoryId]?.actualForPlanned || 0 };
+        const totalsB = selectedCategoryId === 'all' ? { p: summaryB.totalPlanned, a: summaryB.totalActualForPlanned } : { p: summaryB.categoryTotals?.[selectedCategoryId]?.planned || 0, a: summaryB.categoryTotals?.[selectedCategoryId]?.actualForPlanned || 0 };
 
-            // Get total from summaries for cards
-            const totalsA = selectedCategoryId === 'all'
-                ? { planned: summaryA.totalPlanned, actualForPlanned: summaryA.totalActualForPlanned }
-                : summaryA.categoryTotals?.[selectedCategoryId] || { planned: 0, actualForPlanned: 0 };
-            
-            const totalsB = selectedCategoryId === 'all'
-                ? { planned: summaryB.totalPlanned, actualForPlanned: summaryB.totalActualForPlanned }
-                : summaryB.categoryTotals?.[selectedCategoryId] || { planned: 0, actualForPlanned: 0 };
-
-            setComparisonData({
-                totalPlannedA: totalsA.planned,
-                totalActualA: totalsA.actualForPlanned,
-                totalPlannedB: totalsB.planned,
-                totalActualB: totalsB.actualForPlanned,
-                productComparison,
-            });
-
-        } catch (error) {
-            console.error("Error fetching comparison data:", error);
-            setComparisonData(null);
-        }
+        setComparisonData({ totalPlannedA: totalsA.p, totalActualA: totalsA.a, totalPlannedB: totalsB.p, totalActualB: totalsB.a, productComparison });
+      } catch (error) {
+        console.error("Error fetching comparison data:", error);
+      }
     };
     generateComparison();
-  }, [allSummaries, selectedWeekA, selectedWeekB, selectedCategoryId, loadingHistory]);
+  }, [allSummaries, selectedWeekA, selectedWeekB, selectedCategoryId, loading]);
 
+  // --- AI Flow Handlers ---
   const handleSuggestPlan = async () => {
     setIsSuggestingPlan(true);
     setSuggestion(null);
-    toast({
-        title: 'Generando Sugerencia',
-        description: 'La IA está analizando el historial de producción. Esto puede tardar un momento...',
-    });
+    toast({ title: 'Generando Sugerencia', description: 'La IA está analizando el historial...' });
     try {
         const plansQuery = query(collection(db, "productionPlans"), orderBy("__name__", "desc"), limit(8));
         const plansSnapshot = await getDocs(plansQuery);
-
+        
         const historicalDataForAI = plansSnapshot.docs.map(doc => {
             const plan = doc.data();
             return {
@@ -241,159 +209,106 @@ export default function IAClient({
                 products: plan.products.map((p: ProductData) => ({
                     id: p.id,
                     productName: p.productName,
-                    totalActual: Object.values(p.actual).reduce((sum: any, s: any) => sum + s.day + s.night, 0),
+                    totalActual: Object.values(p.actual).reduce((sum: any, s: any) => sum + (s.day || 0) + (s.night || 0), 0),
                     categoryIsPlanned: p.categoryIsPlanned ?? true,
                 }))
-            }
+            };
         }).reverse();
 
         const activeProducts = prefetchedProducts.filter(p => p.isActive);
-        
         const categoryMap = new Map(categories.map(doc => [doc.id, { isPlanned: doc.isPlanned ?? true }]));
-        
         const allProductsWithCategoryInfo = activeProducts.map(p => ({
-            id: p.id,
-            productName: p.productName,
-            categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
+            id: p.id, productName: p.productName, categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
         }));
         
-        const input: SuggestPlanInput = { 
-            historicalData: historicalDataForAI, 
-            allProducts: allProductsWithCategoryInfo
-        };
-
-        const result = await suggestProductionPlan(input);
+        const result = await suggestProductionPlan({ historicalData: historicalDataForAI, allProducts: allProductsWithCategoryInfo });
         setSuggestion(result);
-        
-    } catch (error: any) {
-        let description = 'No se pudo generar una sugerencia. Por favor, inténtalo de nuevo.';
-        if (error.message && (error.message.includes('API key not valid') || error.message.includes('permission denied'))) {
-            description = 'La API Key de Gemini no es válida o no ha sido configurada. Revisa el archivo .env.';
-        }
-        toast({ title: 'Error de la IA', description, variant: 'destructive' });
+    } catch (error) {
+        toast({ title: 'Error de la IA', description: 'No se pudo generar una sugerencia.', variant: 'destructive' });
     } finally {
         setIsSuggestingPlan(false);
     }
   };
-  
+
   const handleForecastDemand = async () => {
-      setIsForecasting(true);
-      setForecast(null);
-      setForecastChartData([]);
-      toast({
-          title: 'Generando Pronóstico',
-          description: 'La IA está analizando tendencias para proyectar la demanda futura...',
-      });
-       try {
-        const plansQuery = query(collection(db, "productionPlans"), orderBy("__name__", "desc"), limit(FORECAST_WEEKS));
-        const plansSnapshot = await getDocs(plansQuery);
-
-        const historicalDataForAI = plansSnapshot.docs.map(doc => {
-            const plan = doc.data();
-            return {
-                week: plan.week,
-                year: plan.year,
-                products: plan.products.map((p: ProductData) => ({
-                    productName: p.productName,
-                    totalActual: Object.values(p.actual).reduce((sum: any, s: any) => sum + s.day + s.night, 0),
-                    categoryIsPlanned: p.categoryIsPlanned ?? true,
-                }))
-            }
-        }).reverse();
-        
-        const productMap: { [productName: string]: { [week: number]: number } } = {};
-        const weekLabels: number[] = [];
-
-        historicalDataForAI.forEach(weekData => {
-            if (!weekLabels.includes(weekData.week)) {
-                weekLabels.push(weekData.week);
-            }
-            weekData.products.forEach(p => {
-                if (p.categoryIsPlanned) {
-                    if (!productMap[p.productName]) productMap[p.productName] = {};
-                    productMap[p.productName][weekData.week] = p.totalActual;
-                }
-            });
-        });
-
-        const chartData: ForecastChartData[] = Object.entries(productMap)
-            .map(([productName, weekTotals]) => {
-                const row: ForecastChartData = { name: productName };
-                weekLabels.forEach(week => {
-                    row[`S${week}`] = weekTotals[week] || 0;
-                });
-                return row;
-            })
-            .filter(row => Object.values(row).some(val => typeof val === 'number' && val > 0)); 
-        
-        setForecastChartData(chartData);
-
-        const chartConfig: ChartConfig = {};
-        weekLabels.forEach((week, index) => {
-            chartConfig[`S${week}`] = {
-                label: `Semana ${week}`,
-                color: `hsl(var(--chart-${(index % 5) + 1}))`,
-            };
-        });
-        setForecastChartConfig(chartConfig);
-        
-        const input: ForecastDemandInput = { historicalData: historicalDataForAI };
-        const result = await forecastDemand(input);
-        setForecast(result);
-
-    } catch (error: any) {
-        toast({ title: 'Error de Pronóstico', description: 'No se pudo generar un pronóstico.', variant: 'destructive' });
+    setIsForecasting(true);
+    setForecast(null);
+    toast({ title: 'Generando Pronóstico', description: 'La IA está analizando tendencias...' });
+    try {
+      const historicalDataForAI = allPlans.slice(0, 4).map(plan => ({
+          week: plan.week,
+          year: plan.year,
+          products: plan.products.map((p: ProductData) => ({
+              productName: p.productName,
+              totalActual: Object.values(p.actual).reduce((sum: any, s: any) => sum + (s.day || 0) + (s.night || 0), 0),
+              categoryIsPlanned: p.categoryIsPlanned ?? true,
+          }))
+      })).reverse();
+      
+      const result = await forecastDemand({ historicalData: historicalDataForAI });
+      setForecast(result);
+    } catch (error) {
+      toast({ title: 'Error de Pronóstico', description: 'No se pudo generar el pronóstico.', variant: 'destructive' });
     } finally {
-        setIsForecasting(false);
+      setIsForecasting(false);
     }
   };
 
-  const handleOpenApplyDialog = async () => {
-    const isMonday = getDay(new Date()) === 1;
-    const currentYear = new Date().getFullYear();
-    const currentWeek = getISOWeek(new Date());
-    const currentPlanId = `${currentYear}-W${currentWeek}`;
-
-    let currentPlanIsEmpty = true;
+  const handleSimulation = async (input: SimulateProductionInput) => {
+    setIsSimulating(true);
+    setSimulationResult(null);
+    toast({ title: 'Ejecutando Simulación', description: 'La IA está procesando los parámetros...' });
     try {
-        const planDoc = await getDoc(doc(db, "productionPlans", currentPlanId));
-        if (planDoc.exists()) {
-            const products = planDoc.data().products as ProductData[];
-            if (products.some(p => p.planned > 0)) {
-                currentPlanIsEmpty = false;
-            }
-        }
-    } catch (error) {
-        console.error("Error checking current week's plan:", error);
-    }
-    
-    if (isMonday && currentPlanIsEmpty) {
-        setTargetWeek('current');
-    } else {
-        setTargetWeek('next');
-    }
+        const selectedProduct = prefetchedProducts.find(p => p.id === input.productName); // It's the ID
+        if (!selectedProduct) throw new Error("Producto no encontrado");
 
+        const productPlans = allPlans
+            .map(plan => ({
+                ...plan,
+                productData: plan.products.find((p: ProductData) => p.id === selectedProduct.id)
+            }))
+            .filter(plan => plan.productData && plan.productData.planned > 0);
+
+        const historicalPerformance = productPlans.slice(0, 5).map(plan => {
+            const totalActual = Object.values(plan.productData.actual).reduce((sum: number, day: any) => sum + (day.day || 0) + (day.night || 0), 0);
+            return {
+                totalPlanned: plan.productData.planned,
+                totalActual: totalActual,
+                efficiency: (totalActual / plan.productData.planned) * 100
+            };
+        });
+
+        const result = await simulateProduction({
+            ...input,
+            productName: selectedProduct.productName,
+            historicalPerformance: historicalPerformance.length > 0 ? historicalPerformance : undefined
+        });
+        setSimulationResult(result);
+    } catch (error) {
+        toast({ title: 'Error de Simulación', description: 'No se pudo completar la simulación.', variant: 'destructive' });
+    } finally {
+        setIsSimulating(false);
+    }
+  };
+  
+  // --- Plan Application Logic ---
+  const handleOpenApplyDialog = () => {
+    const isMonday = getDay(new Date()) === 1; // 1 for Monday
+    const currentPlanId = `${new Date().getFullYear()}-W${getISOWeek(new Date())}`;
+    const currentPlanExistsWithData = allPlans.some(p => p.id === currentPlanId && p.products.some((prod: ProductData) => prod.planned > 0));
+
+    setTargetWeek((isMonday && !currentPlanExistsWithData) ? 'current' : 'next');
     setIsApplyDialogOpen(true);
   };
 
-  const executeApplySuggestion = async () => {
+  const executeApplySuggestion = () => {
     if (!suggestion) return;
-    try {
-        const date = targetWeek === 'next' ? addWeeks(new Date(), 1) : new Date();
-        const year = date.getFullYear();
-        const week = getISOWeek(date);
-        const planId = `${year}-W${week}`;
-        
-        sessionStorage.setItem('aiSuggestion', JSON.stringify(suggestion.suggestions));
-        window.location.href = `/?planId=${planId}&applySuggestion=true`;
-
-    } catch (error) {
-        toast({ title: 'Error al aplicar sugerencia', variant: 'destructive' });
-    } finally {
-        setIsApplyDialogOpen(false);
-    }
+    const date = targetWeek === 'next' ? addWeeks(new Date(), 1) : new Date();
+    const planId = `${date.getFullYear()}-W${getISOWeek(date)}`;
+    sessionStorage.setItem('aiSuggestion', JSON.stringify(suggestion.suggestions));
+    window.location.href = `/?planId=${planId}&applySuggestion=true`;
+    setIsApplyDialogOpen(false);
   };
-
 
   return (
     <>
@@ -403,247 +318,309 @@ export default function IAClient({
             <Sparkles className="h-8 w-8 text-primary" />
             <h1 className="text-2xl font-bold text-foreground">Análisis con IA</h1>
           </div>
-          <Link href="/">
-            <Button variant="outline">
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Volver a la Planificación
-            </Button>
-          </Link>
+          <Link href="/"><Button variant="outline"><ChevronLeft />Volver</Button></Link>
         </header>
+        
         <main className="p-4 md:p-8 space-y-6">
-          <div className="grid md:grid-cols-1 gap-6">
-              <Card className="md:col-span-1">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                      <Bot className="h-6 w-6" />
-                      Asistente de Planificación de Producción
-                  </CardTitle>
-                  <CardDescription>
-                      Utiliza el poder de la IA para analizar el historial de producción y generar un plan semanal optimizado para los productos planificables. 
-                      El asistente identificará tendencias y patrones para ayudarte a minimizar el desperdicio y maximizar la eficiencia.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <Button onClick={handleSuggestPlan} disabled={isSuggestingPlan}>
-                      <Bot className={`mr-2 h-4 w-4 ${isSuggestingPlan ? 'animate-spin' : ''}`} />
-                      {isSuggestingPlan ? 'Generando Plan...' : 'Generar Sugerencia de Plan Semanal'}
-                  </Button>
-                </CardContent>
-
-                {suggestion && (
-                  <CardFooter className="flex-col items-start gap-4 pt-6">
-                      <Separator />
-                      <h3 className="font-semibold text-lg pt-4">Análisis y Sugerencia de la IA</h3>
-                      <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
-                        {suggestion.analysis.split('\n').map((paragraph, index) => {
-                            if (paragraph.startsWith('-')) {
-                                return <p key={index} className="ml-4">{paragraph}</p>;
-                            }
-                            return <p key={index}>{paragraph}</p>;
-                        })}
-                      </div>
-                      <Button onClick={handleOpenApplyDialog}>Aplicar Sugerencias...</Button>
-                  </CardFooter>
-                )}
-              </Card>
-              
-              <Card>
-                  <CardHeader>
-                      <CardTitle className="flex items-center gap-2"><LineChart className="h-5 w-5" />Tendencias de Producción</CardTitle>
-                      <CardDescription>Evolución de la producción planificada vs. la producción real (solo de productos planificados) en las últimas semanas.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                      {loadingHistory ? <p className="text-center text-muted-foreground py-8">Cargando historial...</p> : historicalTrendData.length > 0 ? (
-                        <ChartContainer config={trendChartConfig} className="w-full h-[300px]">
-                              <ComposedChart data={historicalTrendData}>
-                                  <CartesianGrid vertical={false} />
-                                  <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" />
-                                  <YAxis stroke="hsl(var(--muted-foreground))" />
-                                  <RechartsTooltip content={<ChartTooltipContent />} />
-                                  <Legend content={<ChartLegendContent />} />
-                                  <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                                  <Line type="monotone" dataKey="actual" stroke="var(--color-actual)" strokeWidth={2} dot={false} />
-                              </ComposedChart>
-                          </ChartContainer>
-                      ) : (
-                          <p className="text-muted-foreground text-center py-8">No hay suficientes datos históricos para mostrar tendencias.</p>
-                      )}
-                  </CardContent>
-              </Card>
-
-              <Card>
-                  <CardHeader>
-                      <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5" />Proyecciones y Pronósticos</CardTitle>
-                      <CardDescription>Utiliza la IA para generar un pronóstico cualitativo de la demanda para las próximas semanas basado en las tendencias históricas.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                      <Button onClick={handleForecastDemand} disabled={isForecasting}>
-                          <TrendingUp className={`mr-2 h-4 w-4 ${isForecasting ? 'animate-spin' : ''}`} />
-                          {isForecasting ? 'Generando Pronóstico...' : 'Generar Pronóstico de Demanda'}
-                      </Button>
-                  </CardContent>
-                  {forecast && (
-                      <CardFooter className="flex-col items-start gap-4 pt-6">
-                          <Separator />
-                          <h3 className="font-semibold text-lg pt-4">Pronóstico de Demanda (Análisis IA)</h3>
-                          <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
-                            {forecast.analysis.split('\n').map((paragraph, index) => (
-                                <p key={index}>{paragraph}</p>
-                            ))}
-                          </div>
-                          <h3 className="font-semibold text-lg pt-4">Datos Históricos Analizados</h3>
-                          {forecastChartData.length > 0 ? (
-                              <ChartContainer config={forecastChartConfig} className="w-full h-[400px]">
-                                  <BarChart accessibilityLayer data={forecastChartData} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
-                                      <CartesianGrid vertical={false} />
-                                      <XAxis 
-                                          dataKey="name" 
-                                          tickLine={false} 
-                                          axisLine={false}
-                                          tickMargin={10}
-                                          angle={-60}
-                                          textAnchor="end"
-                                          interval={0}
-                                          height={100}
-                                          style={{
-                                              fontSize: '0.75rem',
-                                          }}
-                                      />
-                                      <YAxis />
-                                      <RechartsTooltip content={<ChartTooltipContent />} />
-                                      <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
-                                      {Object.keys(forecastChartConfig).map(key => (
-                                          <Bar key={key} dataKey={key} fill={`var(--color-${key})`} radius={4} />
-                                      ))}
-                                  </BarChart>
-                              </ChartContainer>
-                          ) : (
-                              <p className="text-muted-foreground text-center py-8">No se encontraron datos de producción para visualizar.</p>
-                          )}
-                      </CardFooter>
-                  )}
-              </Card>
-
-              <Card className="md:col-span-1">
-                  <CardHeader>
-                      <CardTitle>Análisis Comparativo Semanal</CardTitle>
-                      <CardDescription>
-                          Compara el rendimiento de dos semanas (solo productos con plan > 0). El filtro de categoría se aplica aquí también.
-                      </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                      <div className="flex flex-col md:flex-row items-center gap-4">
-                          <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
-                              <Label htmlFor='category-filter-comparison'>Filtrar por Categoría</Label>
-                              <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-                                  <SelectTrigger id="category-filter-comparison">
-                                      <SelectValue placeholder="Seleccionar categoría" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                      <SelectItem value="all">Todas las categorías</SelectItem>
-                                      {categories.map(cat => (
-                                          <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                                      ))}
-                                  </SelectContent>
-                              </Select>
-                          </div>
-                          <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
-                              <Label htmlFor="week-a-filter">Semana A</Label>
-                              <Select value={selectedWeekA} onValueChange={setSelectedWeekA} disabled={weekOptions.length < 1}>
-                                  <SelectTrigger id="week-a-filter">
-                                      <SelectValue placeholder="Seleccionar" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                      {weekOptions.map(week => (
-                                          <SelectItem key={`A-${week.id}`} value={String(week.id)}>Semana {week.week} ({week.year})</SelectItem>
-                                      ))}
-                                  </SelectContent>
-                              </Select>
-                          </div>
-                          <div className="flex flex-col gap-1.5 w-full md:max-w-xs">
-                              <Label htmlFor="week-b-filter">Semana B</Label>
-                              <Select value={selectedWeekB} onValueChange={setSelectedWeekB} disabled={weekOptions.length < 1}>
-                                  <SelectTrigger id="week-b-filter">
-                                      <SelectValue placeholder="Seleccionar" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                      {weekOptions.map(week => (
-                                          <SelectItem key={`B-${week.id}`} value={String(week.id)}>Semana {week.week} ({week.year})</SelectItem>
-                                      ))}
-                                  </SelectContent>
-                              </Select>
-                          </div>
-                      </div>
-                      {loadingHistory ? <p className="text-center text-muted-foreground">Cargando...</p> : comparisonData ? (
-                          <div className="space-y-6">
-                              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                                  <ComparisonCard title="Total Planificado" valueA={comparisonData.totalPlannedA} valueB={comparisonData.totalPlannedB} />
-                                  <ComparisonCard title="Total Real" valueA={comparisonData.totalActualA} valueB={comparisonData.totalActualB} />
-                                  <ComparisonCard title="Cumplimiento" valueA={comparisonData.totalPlannedA > 0 ? (comparisonData.totalActualA / comparisonData.totalPlannedA) * 100 : 0} valueB={comparisonData.totalPlannedB > 0 ? (comparisonData.totalActualB / comparisonData.totalPlannedB) * 100 : 0} isPercentage />
-                                  <ComparisonCard title="Varianza" valueA={comparisonData.totalActualA - comparisonData.totalPlannedA} valueB={comparisonData.totalActualB - comparisonData.totalPlannedB} showPercentage={false} />
-                              </div>
-                              <div>
-                                  <ChartContainer config={comparisonChartConfig} className="w-full h-[500px]">
-                                      <BarChart accessibilityLayer data={comparisonData.productComparison} margin={{ top: 20, right: 20, left: 0, bottom: 120 }}>
-                                          <CartesianGrid vertical={false} />
-                                          <XAxis 
-                                              dataKey="name" 
-                                              tickLine={false} 
-                                              axisLine={false}
-                                              tickMargin={10}
-                                              angle={-60}
-                                              textAnchor="end"
-                                              interval={0}
-                                              height={100}
-                                              style={{ fontSize: '0.75rem' }}
-                                          />
-                                          <YAxis />
-                                          <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
-                                          <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
-                                          <Bar dataKey="plannedA" fill="var(--color-plannedA)" radius={4} />
-                                          <Bar dataKey="actualA" fill="var(--color-actualA)" radius={4} />
-                                          <Bar dataKey="plannedB" fill="var(--color-plannedB)" radius={4} />
-                                          <Bar dataKey="actualB" fill="var(--color-actualB)" radius={4} />
-                                      </BarChart>
-                                  </ChartContainer>
-                              </div>
-                          </div>
-                      ) : (
-                          <p className="text-center text-muted-foreground py-8">Selecciona dos semanas válidas para comparar.</p>
-                      )}
-                  </CardContent>
-              </Card>
-          </div>
+            <Tabs defaultValue="simulator" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="simulator"><HardHat className="mr-2" />Simulador</TabsTrigger>
+                    <TabsTrigger value="suggestion"><Bot className="mr-2" />Sugerencia de Plan</TabsTrigger>
+                    <TabsTrigger value="forecast"><TrendingUp className="mr-2" />Pronóstico</TabsTrigger>
+                    <TabsTrigger value="comparison"><BarChart2 className="mr-2" />Comparativo</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="simulator" className="mt-6">
+                    <SimulatorTab onSimulate={handleSimulation} isSimulating={isSimulating} result={simulationResult} products={prefetchedProducts} />
+                </TabsContent>
+                <TabsContent value="suggestion" className="mt-6">
+                    <SuggestionTab onSuggest={handleSuggestPlan} isSuggesting={isSuggestingPlan} suggestion={suggestion} onApply={handleOpenApplyDialog} />
+                </TabsContent>
+                <TabsContent value="forecast" className="mt-6">
+                    <ForecastTab onForecast={handleForecastDemand} isForecasting={isForecasting} forecast={forecast} trendData={historicalTrendData} isLoading={loading} />
+                </TabsContent>
+                <TabsContent value="comparison" className="mt-6">
+                    <ComparisonTab 
+                        weekOptions={weekOptions} 
+                        categories={categories}
+                        selectedWeekA={selectedWeekA}
+                        setSelectedWeekA={setSelectedWeekA}
+                        selectedWeekB={selectedWeekB}
+                        setSelectedWeekB={setSelectedWeekB}
+                        selectedCategoryId={selectedCategoryId}
+                        setSelectedCategoryId={setSelectedCategoryId}
+                        comparisonData={comparisonData}
+                        isLoading={loading}
+                    />
+                </TabsContent>
+            </Tabs>
         </main>
       </div>
 
       <AlertDialog open={isApplyDialogOpen} onOpenChange={setIsApplyDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>¿Dónde aplicar la sugerencia de la IA?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Elige en qué semana quieres aplicar el plan de producción generado por la IA.
-              Te recomendamos la opción preseleccionada.
-            </AlertDialogDescription>
+            <AlertDialogTitle>¿Dónde aplicar la sugerencia?</AlertDialogTitle>
+            <AlertDialogDescription>Elige la semana para el plan de producción sugerido.</AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-4">
               <RadioGroup defaultValue={targetWeek} onValueChange={(value: 'current' | 'next') => setTargetWeek(value)}>
                   <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="current" id="r-current" />
-                      <Label htmlFor="r-current">Semana Actual (S{getISOWeek(new Date())})</Label>
+                      <RadioGroupItem value="current" id="r-current" /><Label htmlFor="r-current">Semana Actual (S{getISOWeek(new Date())})</Label>
                   </div>
                   <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="next" id="r-next" />
-                      <Label htmlFor="r-next">Próxima Semana (S{getISOWeek(addWeeks(new Date(), 1))})</Label>
+                      <RadioGroupItem value="next" id="r-next" /><Label htmlFor="r-next">Próxima Semana (S{getISOWeek(addWeeks(new Date(), 1))})</Label>
                   </div>
               </RadioGroup>
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={executeApplySuggestion}>Aplicar a la Semana Seleccionada</AlertDialogAction>
+            <AlertDialogAction onClick={executeApplySuggestion}>Aplicar a Semana Seleccionada</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
   );
+}
+
+// --- Tab Components ---
+
+function SimulatorTab({ onSimulate, isSimulating, result, products }: {
+    onSimulate: (input: SimulateProductionInput) => void;
+    isSimulating: boolean;
+    result: SimulateProductionOutput | null;
+    products: ProductDefinition[];
+}) {
+    const [simInput, setSimInput] = React.useState<SimulateProductionInput>({
+        productName: products.find(p => p.isActive)?.id || '',
+        productionRate: 100,
+        hoursPerDayShift: 8,
+        hoursPerNightShift: 8,
+        activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false },
+    });
+
+    const handleInputChange = (field: keyof Omit<SimulateProductionInput, 'activeDays'>, value: string | number) => {
+        setSimInput(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleDayChange = (day: keyof SimulateProductionInput['activeDays'], checked: boolean) => {
+        setSimInput(prev => ({ ...prev, activeDays: { ...prev.activeDays, [day]: checked } }));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        onSimulate(simInput);
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><HardHat />Simulador de Producción Inteligente</CardTitle>
+                <CardDescription>Estima la producción semanal basándote en parámetros operativos y compárala con proyecciones realistas basadas en el historial.</CardDescription>
+            </CardHeader>
+            <form onSubmit={handleSubmit}>
+                <CardContent>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="product-select">Producto</Label>
+                            <Select value={simInput.productName} onValueChange={(val) => handleInputChange('productName', val)}>
+                                <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
+                                <SelectContent>{products.filter(p=>p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}</SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="rate">Tasa de Producción (unidades/hora)</Label>
+                            <Input id="rate" type="number" value={simInput.productionRate} onChange={e => handleInputChange('productionRate', Number(e.target.value))} required />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="day-shift">Horas Turno Día</Label>
+                                <Input id="day-shift" type="number" value={simInput.hoursPerDayShift} onChange={e => handleInputChange('hoursPerDayShift', Number(e.target.value))} required />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="night-shift">Horas Turno Noche</Label>
+                                <Input id="night-shift" type="number" value={simInput.hoursPerNightShift} onChange={e => handleInputChange('hoursPerNightShift', Number(e.target.value))} required />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Días de Producción Activos</Label>
+                            <div className="flex flex-wrap gap-4">
+                                {Object.keys(simInput.activeDays).map(day => (
+                                    <div key={day} className="flex items-center space-x-2">
+                                        <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
+                                        <Label htmlFor={day} className="capitalize">{day}</Label>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </CardContent>
+                <CardFooter>
+                    <Button type="submit" disabled={isSimulating}><BrainCircuit className="mr-2" />{isSimulating ? 'Calculando...' : 'Ejecutar Simulación'}</Button>
+                </CardFooter>
+            </form>
+            
+            {(isSimulating || result) && (
+                <CardContent className="mt-6 border-t pt-6">
+                    {isSimulating ? (
+                        <p className="text-center text-muted-foreground">La IA está calculando la simulación...</p>
+                    ) : result && (
+                        <div className="space-y-6">
+                            <h3 className="text-lg font-semibold">Resultados de la Simulación</h3>
+                            <div className="grid md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <div className="grid gap-4 grid-cols-2">
+                                        <ComparisonCard title="Producción Óptima Semanal" valueA={0} valueB={result.totalOptimalProduction} showPercentage={false} />
+                                        <ComparisonCard title="Proyección Realista Semanal" valueA={0} valueB={result.totalRealisticProjection} subValue={`Basado en ${result.averageEfficiency.toFixed(1)}% eficiencia hist.`} showPercentage={false} />
+                                    </div>
+                                    <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
+                                        <h4 className="font-semibold">Recomendaciones de la IA</h4>
+                                        {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección</h4>
+                                    <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
+                                        <BarChart data={result.dailyBreakdown}>
+                                            <CartesianGrid vertical={false} />
+                                            <XAxis dataKey="day" />
+                                            <YAxis />
+                                            <RechartsTooltip content={<ChartTooltipContent />} />
+                                            <Legend content={<ChartLegendContent />} />
+                                            <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
+                                            <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
+                                        </BarChart>
+                                    </ChartContainer>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </CardContent>
+            )}
+        </Card>
+    );
+}
+
+
+function SuggestionTab({ onSuggest, isSuggesting, suggestion, onApply }: {
+    onSuggest: () => void;
+    isSuggesting: boolean;
+    suggestion: SuggestPlanOutput | null;
+    onApply: () => void;
+}) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Bot />Asistente de Planificación</CardTitle>
+                <CardDescription>Usa IA para analizar el historial y generar un plan semanal optimizado para productos planificables.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <Button onClick={onSuggest} disabled={isSuggesting}><Bot className={`mr-2 ${isSuggesting ? 'animate-spin' : ''}`} />{isSuggesting ? 'Generando...' : 'Generar Sugerencia de Plan'}</Button>
+            </CardContent>
+            {suggestion && (
+                <CardFooter className="flex-col items-start gap-4 pt-6">
+                    <Separator />
+                    <h3 className="font-semibold text-lg pt-4">Análisis y Sugerencia de la IA</h3>
+                    <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">{suggestion.analysis.split('\n').map((p, i) => <p key={i}>{p}</p>)}</div>
+                    <Button onClick={onApply}>Aplicar Sugerencias...</Button>
+                </CardFooter>
+            )}
+        </Card>
+    );
+}
+
+function ForecastTab({ onForecast, isForecasting, forecast, trendData, isLoading }: {
+    onForecast: () => void;
+    isForecasting: boolean;
+    forecast: ForecastDemandOutput | null;
+    trendData: any[];
+    isLoading: boolean;
+}) {
+    return (
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><TrendingUp />Proyecciones y Pronósticos</CardTitle>
+                    <CardDescription>Usa IA para generar un pronóstico cualitativo de la demanda para las próximas semanas basado en tendencias históricas.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button onClick={onForecast} disabled={isForecasting}><TrendingUp className={`mr-2 ${isForecasting ? 'animate-spin' : ''}`} />{isForecasting ? 'Generando...' : 'Generar Pronóstico de Demanda'}</Button>
+                </CardContent>
+                {forecast && (
+                    <CardFooter className="flex-col items-start gap-4 pt-6">
+                        <Separator />
+                        <h3 className="font-semibold text-lg pt-4">Pronóstico de Demanda (Análisis IA)</h3>
+                        <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">{forecast.analysis.split('\n').map((p, i) => <p key={i}>{p}</p>)}</div>
+                    </CardFooter>
+                )}
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><LineChart />Tendencias de Producción</CardTitle>
+                    <CardDescription>Evolución de la producción planificada vs. la real en las últimas semanas.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isLoading ? <p>Cargando...</p> : trendData.length > 0 ? (
+                        <ChartContainer config={trendChartConfig} className="w-full h-[300px]">
+                            <ComposedChart data={trendData}>
+                                <CartesianGrid vertical={false} /><XAxis dataKey="name" /><YAxis />
+                                <RechartsTooltip content={<ChartTooltipContent />} /><Legend content={<ChartLegendContent />} />
+                                <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
+                                <Line type="monotone" dataKey="actual" stroke="var(--color-actual)" strokeWidth={2} dot={false} />
+                            </ComposedChart>
+                        </ChartContainer>
+                    ) : <p>No hay datos históricos.</p>}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+function ComparisonTab({ weekOptions, categories, selectedWeekA, setSelectedWeekA, selectedWeekB, setSelectedWeekB, selectedCategoryId, setSelectedCategoryId, comparisonData, isLoading }: {
+    weekOptions: any[], categories: CategoryDefinition[], selectedWeekA: string, setSelectedWeekA: (v: string) => void, selectedWeekB: string, setSelectedWeekB: (v: string) => void, selectedCategoryId: string, setSelectedCategoryId: (v: string) => void, comparisonData: ComparisonData | null, isLoading: boolean
+}) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Análisis Comparativo Semanal</CardTitle>
+                <CardDescription>Compara el rendimiento de dos semanas (solo productos con plan > 0). El filtro de categoría se aplica aquí también.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                <div className="flex flex-col md:flex-row items-center gap-4">
+                    <div className="flex-grow space-y-2"><Label>Filtrar por Categoría</Label>
+                        <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{categories.map(c=><SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    <div className="flex-grow space-y-2"><Label>Semana A</Label>
+                        <Select value={selectedWeekA} onValueChange={setSelectedWeekA}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{weekOptions.map(w=><SelectItem key={`A-${w.id}`} value={w.id}>S{w.week} ({w.year})</SelectItem>)}</SelectContent></Select>
+                    </div>
+                    <div className="flex-grow space-y-2"><Label>Semana B</Label>
+                        <Select value={selectedWeekB} onValueChange={setSelectedWeekB}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{weekOptions.map(w=><SelectItem key={`B-${w.id}`} value={w.id}>S{w.week} ({w.year})</SelectItem>)}</SelectContent></Select>
+                    </div>
+                </div>
+                {isLoading ? <p>Cargando...</p> : comparisonData ? (
+                    <div className="space-y-6">
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            <ComparisonCard title="Total Planificado" valueA={comparisonData.totalPlannedA} valueB={comparisonData.totalPlannedB} />
+                            <ComparisonCard title="Total Real" valueA={comparisonData.totalActualA} valueB={comparisonData.totalActualB} />
+                            <ComparisonCard title="Cumplimiento" valueA={comparisonData.totalPlannedA > 0 ? (comparisonData.totalActualA / comparisonData.totalPlannedA) * 100 : 0} valueB={comparisonData.totalPlannedB > 0 ? (comparisonData.totalActualB / comparisonData.totalPlannedB) * 100 : 0} isPercentage />
+                            <ComparisonCard title="Varianza" valueA={comparisonData.totalActualA - comparisonData.totalPlannedA} valueB={comparisonData.totalActualB - comparisonData.totalPlannedB} showPercentage={false} />
+                        </div>
+                        <ChartContainer config={comparisonChartConfig} className="w-full h-[500px]">
+                            <BarChart data={comparisonData.productComparison} margin={{bottom: 120}}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis dataKey="name" angle={-60} textAnchor="end" interval={0} height={100} style={{fontSize:'0.75rem'}}/>
+                                <YAxis />
+                                <ChartTooltip content={<ChartTooltipContent />} />
+                                <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
+                                <Bar dataKey="plannedA" fill="var(--color-plannedA)" radius={4} />
+                                <Bar dataKey="actualA" fill="var(--color-actualA)" radius={4} />
+                                <Bar dataKey="plannedB" fill="var(--color-plannedB)" radius={4} />
+                                <Bar dataKey="actualB" fill="var(--color-actualB)" radius={4} />
+                            </BarChart>
+                        </ChartContainer>
+                    </div>
+                ) : <p>Selecciona dos semanas para comparar.</p>}
+            </CardContent>
+        </Card>
+    );
 }
