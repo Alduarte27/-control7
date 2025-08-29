@@ -423,7 +423,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
     const calculatedValues = React.useMemo(() => {
         const unitsPerMinute = simInput.machineSpeed;
         const unitsPerHour = unitsPerMinute * 60;
-        const effectiveUnitsPerHour = unitsPerHour * (simInput.efficiency / 100);
+        const effectiveUnitsPerHour = unitsPerHour * (1 - (simInput.efficiency / 100));
         const sacksPerHour = simInput.unitsPerSack > 0 ? effectiveUnitsPerHour / simInput.unitsPerSack : 0;
         return { unitsPerHour, effectiveUnitsPerHour, sacksPerHour };
     }, [simInput.machineSpeed, simInput.efficiency, simInput.unitsPerSack]);
@@ -475,7 +475,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                     <Input id="machine-speed" type="number" value={simInput.machineSpeed} onChange={e => handleInputChange('machineSpeed', e.target.value)} required />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="efficiency">Rendimiento (%)</Label>
+                                    <Label htmlFor="efficiency">Pérdida por Rendimiento (%)</Label>
                                     <Input id="efficiency" type="number" value={simInput.efficiency} onChange={e => handleInputChange('efficiency', e.target.value)} required />
                                 </div>
                                  <div className="space-y-2">
@@ -514,7 +514,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                     <TableBody>
                                         <TableRow>
                                             <TableCell className="font-medium">Fundas por Hora (bruto)</TableCell>
-                                            <TableCell className="text-right">{calculatedValues.unitsPerHour.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right">{calculatedValues.unitsPerHour.toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
                                         </TableRow>
                                         <TableRow>
                                             <TableCell className="font-medium">Fundas por Hora (con rendimiento)</TableCell>
