@@ -104,12 +104,12 @@ export default function IAClient({
       setLoading(true);
       try {
         const [summariesSnapshot, plansSnapshot] = await Promise.all([
-            getDocs(query(collection(db, 'weeklySummaries'), orderBy('__name__', 'asc'))),
+            getDocs(query(collection(db, 'weeklySummaries'), orderBy('__name__', 'desc'))),
             getDocs(query(collection(db, "productionPlans"), orderBy("__name__", "desc")))
         ]);
 
         const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
-        setAllSummaries(fetchedSummaries.reverse());
+        setAllSummaries(fetchedSummaries);
 
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAllPlans(fetchedPlans);
@@ -138,7 +138,7 @@ export default function IAClient({
   }, [allSummaries]);
   
   const historicalTrendData = React.useMemo(() => {
-    return allSummaries.slice(-12).map(summary => ({
+    return allSummaries.slice(0, 12).reverse().map(summary => ({
         name: `S${summary.week}`,
         planned: summary.totalPlanned,
         actual: summary.totalActualForPlanned,
@@ -347,9 +347,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         const sacksPerHour = simInput.unitsPerSack > 0 ? effectiveUnitsPerHour / simInput.unitsPerSack : 0;
         
         const sacksPerShift = sacksPerHour * simInput.hoursPerDayShift;
-        
         const sacksPerDay = sacksPerHour * (simInput.hoursPerDayShift + simInput.hoursPerNightShift);
-        
         const activeDayCount = Object.values(simInput.activeDays).filter(Boolean).length;
         const weeklyProduction = sacksPerDay * activeDayCount;
 
@@ -394,7 +392,13 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                 <Label htmlFor="product-select">Producto</Label>
                                 <Select value={simInput.productId} onValueChange={handleProductChange}>
                                     <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
-                                    <SelectContent>{products.filter(p=>p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}</SelectContent>
+                                    <SelectContent>
+                                        {products.filter(p => p.isActive).map(p => (
+                                            <SelectItem key={p.id} value={p.id}>
+                                                {p.productName} ({p.unitsPerSack || 0} unidades)
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
                                 </Select>
                             </div>
                             <div className="grid grid-cols-3 gap-4">
@@ -408,7 +412,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                 </div>
                                  <div className="space-y-2">
                                     <Label htmlFor="units-per-sack">Unidades/Saco</Label>
-                                    <Input id="units-per-sack" type="number" value={simInput.unitsPerSack} onChange={e => handleInputChange('unitsPerSack', e.target.value)} required />
+                                    <Input id="units-per-sack" type="number" value={simInput.unitsPerSack} onChange={e => handleInputChange('unitsPerSack', e.target.value)} required readOnly />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -440,7 +444,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                 <Label>Resultados del Cálculo (Estimaciones)</Label>
                                 <Table className="mt-2">
                                     <TableBody>
-                                        <TableRow>
+                                         <TableRow>
                                             <TableCell>Fundas por Hora (bruto)</TableCell>
                                             <TableCell className="text-right font-medium">
                                                 <ClientFormattedNumber value={calculatedValues.grossUnitsPerHour} maximumFractionDigits={0} />
