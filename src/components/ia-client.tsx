@@ -10,7 +10,7 @@ import { suggestProductionPlan, type SuggestPlanOutput, type SuggestPlanInput } 
 import { forecastDemand, type ForecastDemandOutput, type ForecastDemandInput } from '@/ai/flows/forecast-demand-flow';
 import { collection, getDocs, query, orderBy, limit, doc, getDoc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { ProductData, CategoryDefinition } from '@/lib/types';
+import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, BarChart } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Separator } from './ui/separator';
@@ -20,7 +20,6 @@ import ComparisonCard from './comparison-card';
 import { addWeeks, getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek, getDay } from 'date-fns';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { getCachedProducts } from '@/services/data-service';
 
 const trendChartConfig = {
   planned: {
@@ -75,7 +74,15 @@ type ForecastChartData = {
 
 const FORECAST_WEEKS = 4;
 
-export default function IAClient({ prefetchedCategories }: { prefetchedCategories: CategoryDefinition[], initialPlanId?: string }) {
+export default function IAClient({ 
+  prefetchedCategories, 
+  prefetchedProducts,
+  initialPlanId 
+}: { 
+  prefetchedCategories: CategoryDefinition[], 
+  prefetchedProducts: ProductDefinition[],
+  initialPlanId?: string 
+}) {
   const [isSuggestingPlan, setIsSuggestingPlan] = React.useState(false);
   const [suggestion, setSuggestion] = React.useState<SuggestPlanOutput | null>(null);
   const [isForecasting, setIsForecasting] = React.useState(false);
@@ -236,8 +243,7 @@ export default function IAClient({ prefetchedCategories }: { prefetchedCategorie
             }
         }).reverse();
 
-        const allProducts = await getCachedProducts();
-        const activeProducts = allProducts.filter(p => p.isActive);
+        const activeProducts = prefetchedProducts.filter(p => p.isActive);
         
         const categoryMap = new Map(categories.map(doc => [doc.id, { isPlanned: doc.isPlanned ?? true }]));
         
