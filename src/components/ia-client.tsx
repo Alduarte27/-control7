@@ -84,14 +84,16 @@ export default function IAClient({
       setLoading(true);
       try {
         const [summariesSnapshot, plansSnapshot] = await Promise.all([
-            getDocs(query(collection(db, 'weeklySummaries'), orderBy('__name__', 'desc'))),
-            getDocs(query(collection(db, "productionPlans"), orderBy("__name__", "desc")))
+            getDocs(query(collection(db, 'weeklySummaries'))),
+            getDocs(query(collection(db, "productionPlans")))
         ]);
 
         const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
         setAllSummaries(fetchedSummaries);
 
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Sort client-side to avoid index errors
+        fetchedPlans.sort((a, b) => b.id.localeCompare(a.id));
         setAllPlans(fetchedPlans);
         
       } catch (error) {
@@ -403,14 +405,14 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                 <ComparisonCard 
                                     title="Producción Óptima Semanal (2 Turnos)" 
                                     valueA={0} 
-                                    valueB={result.totalOptimalProduction} 
+                                    valueB={result.totalOptimalProduction * 2} 
                                     showPercentage={false} 
                                     description="Cálculo teórico máximo basado en los parámetros de entrada, sin considerar paradas o ineficiencias."
                                 />
                                 <ComparisonCard 
                                     title="Proyección Realista Semanal (2 Turnos)" 
-                                    valueA={result.totalOptimalProduction} 
-                                    valueB={result.totalRealisticProjection} 
+                                    valueA={result.totalOptimalProduction * 2} 
+                                    valueB={result.totalRealisticProjection * 2} 
                                     isPercentage={false}
                                     description="Estimación ajustada basada en la eficiencia histórica real, ofreciendo un pronóstico más alcanzable."
                                 />
@@ -488,3 +490,5 @@ function ForecastTab({ onForecast, isForecasting, forecast, trendData, isLoading
         </div>
     );
 }
+
+    
