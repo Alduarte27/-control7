@@ -18,11 +18,9 @@ export async function addProductAction(newProductData: Omit<ProductDefinition, '
 
 export async function updateProductAction(updatedProduct: ProductDefinition) {
     const productRef = doc(db, 'products', updatedProduct.id);
-    await updateDoc(productRef, {
-        productName: updatedProduct.productName,
-        categoryId: updatedProduct.categoryId,
-        color: updatedProduct.color,
-    });
+    // Make sure to only update fields that exist in the form
+    const { id, ...dataToUpdate } = updatedProduct;
+    await updateDoc(productRef, dataToUpdate);
     revalidateTag(CACHE_TAG_PRODUCTS);
 }
 

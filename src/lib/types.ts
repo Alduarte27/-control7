@@ -29,6 +29,7 @@ export type ProductDefinition = {
   categoryId: string;
   color?: string; // e.g., '#ff0000'
   isActive: boolean;
+  unitsPerSack?: number;
 }
 
 export type ProductData = ProductDefinition & {

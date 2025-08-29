@@ -6,15 +6,14 @@ import { Factory, ChevronLeft, Sparkles, Bot, LineChart, TrendingUp, BarChart2, 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { suggestProductionPlan, type SuggestPlanOutput, type SuggestPlanInput } from '@/ai/flows/suggest-plan-flow';
-import { forecastDemand, type ForecastDemandOutput, type ForecastDemandInput } from '@/ai/flows/forecast-demand-flow';
+import { suggestProductionPlan, type SuggestPlanOutput } from '@/ai/flows/suggest-plan-flow';
+import { forecastDemand, type ForecastDemandOutput } from '@/ai/flows/forecast-demand-flow';
 import { simulateProduction, type SimulateProductionInput, type SimulateProductionOutput } from '@/ai/flows/simulate-production-flow';
-import { collection, getDocs, query, orderBy, limit, doc, getDoc, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, BarChart } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
-import { Separator } from './ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import ComparisonCard from './comparison-card';
@@ -24,7 +23,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
 
 
 // --- Shared Chart Configurations ---
@@ -392,7 +391,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
     products: ProductDefinition[];
 }) {
     type SimInputState = {
-        productName: string;
+        productId: string;
         machineSpeed: number; // fundas/min
         efficiency: number; // percentage
         unitsPerSack: number;
@@ -402,14 +401,24 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
     }
 
     const [simInput, setSimInput] = React.useState<SimInputState>({
-        productName: products.find(p => p.isActive)?.id || '',
+        productId: products.find(p => p.isActive)?.id || '',
         machineSpeed: 40,
         efficiency: 8,
-        unitsPerSack: 50,
+        unitsPerSack: products.find(p => p.isActive)?.unitsPerSack || 50,
         hoursPerDayShift: 8,
         hoursPerNightShift: 8,
         activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false },
     });
+
+    React.useEffect(() => {
+        const selectedProduct = products.find(p => p.id === simInput.productId);
+        if (selectedProduct) {
+            setSimInput(prev => ({
+                ...prev,
+                unitsPerSack: selectedProduct.unitsPerSack || 50
+            }));
+        }
+    }, [simInput.productId, products]);
 
     const calculatedValues = React.useMemo(() => {
         const unitsPerHour = simInput.machineSpeed * 60;
@@ -418,9 +427,13 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         return { unitsPerHour, effectiveUnitsPerHour, sacksPerHour };
     }, [simInput.machineSpeed, simInput.efficiency, simInput.unitsPerSack]);
 
-    const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays'>, value: string | number) => {
+    const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays' | 'productId'>, value: string | number) => {
         setSimInput(prev => ({ ...prev, [field]: Number(value) }));
     };
+    
+    const handleProductChange = (productId: string) => {
+        setSimInput(p => ({...p, productId}));
+    }
 
     const handleDayChange = (day: keyof SimInputState['activeDays'], checked: boolean) => {
         setSimInput(prev => ({ ...prev, activeDays: { ...prev.activeDays, [day]: checked } }));
@@ -429,7 +442,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         onSimulate({
-            productName: simInput.productName,
+            productName: simInput.productId, // Pass the ID, flow will get the name
             productionRate: calculatedValues.sacksPerHour,
             hoursPerDayShift: simInput.hoursPerDayShift,
             hoursPerNightShift: simInput.hoursPerNightShift,
@@ -450,7 +463,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                         <div className="space-y-4">
                              <div className="space-y-2">
                                 <Label htmlFor="product-select">Producto</Label>
-                                <Select value={simInput.productName} onValueChange={(val) => setSimInput(p => ({...p, productName: val}))}>
+                                <Select value={simInput.productId} onValueChange={handleProductChange}>
                                     <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
                                     <SelectContent>{products.filter(p=>p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}</SelectContent>
                                 </Select>
@@ -524,7 +537,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button type="submit" disabled={isSimulating || !simInput.productName}><BrainCircuit className="mr-2" />{isSimulating ? 'Calculando...' : 'Ejecutar Simulación con IA'}</Button>
+                    <Button type="submit" disabled={isSimulating || !simInput.productId}><BrainCircuit className="mr-2" />{isSimulating ? 'Calculando...' : 'Ejecutar Simulación con IA'}</Button>
                 </CardFooter>
             </form>
             
@@ -535,7 +548,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                         <div className="grid md:grid-cols-2 gap-6 items-center">
                             <div className="space-y-4">
                                 <ComparisonCard title="Producción Óptima Semanal" valueA={0} valueB={result.totalOptimalProduction} showPercentage={false} />
-                                <ComparisonCard title="Proyección Realista Semanal" valueA={result.totalOptimalProduction} valueB={result.totalRealisticProjection} subValue={`Basado en ${result.averageEfficiency.toFixed(1)}% eficiencia hist.`} />
+                                <ComparisonCard title="Proyección Realista Semanal" valueA={result.totalOptimalProduction} valueB={result.totalRealisticProjection} subValue={`Basado en ${result.averageEfficiency.toFixed(1)}% eficiencia hist.`} isPercentage={false}/>
                             </div>
                             <div>
                                 <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección</h4>
