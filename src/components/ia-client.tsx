@@ -64,6 +64,18 @@ type ComparisonData = {
   productComparison: { name: string; plannedA: number; actualA: number; plannedB: number; actualB: number; }[];
 };
 
+// Client-side number formatter to prevent hydration errors
+const ClientFormattedNumber = ({ value, maximumFractionDigits = 0 }: { value: number, maximumFractionDigits?: number }) => {
+  const [formattedValue, setFormattedValue] = React.useState(String(value));
+
+  React.useEffect(() => {
+    setFormattedValue(value.toLocaleString(undefined, { maximumFractionDigits }));
+  }, [value, maximumFractionDigits]);
+
+  return <>{formattedValue}</>;
+};
+
+
 // --- Main IA Client Component ---
 
 export default function IAClient({ 
@@ -514,15 +526,21 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                     <TableBody>
                                         <TableRow>
                                             <TableCell className="font-medium">Fundas por Hora (bruto)</TableCell>
-                                            <TableCell className="text-right">{calculatedValues.unitsPerHour.toLocaleString(undefined, { maximumFractionDigits: 0 })}</TableCell>
+                                            <TableCell className="text-right">
+                                                <ClientFormattedNumber value={calculatedValues.unitsPerHour} />
+                                            </TableCell>
                                         </TableRow>
                                         <TableRow>
                                             <TableCell className="font-medium">Fundas por Hora (con rendimiento)</TableCell>
-                                            <TableCell className="text-right">{calculatedValues.effectiveUnitsPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-right">
+                                                <ClientFormattedNumber value={calculatedValues.effectiveUnitsPerHour} maximumFractionDigits={2} />
+                                            </TableCell>
                                         </TableRow>
                                         <TableRow className="bg-muted/50">
                                             <TableCell className="font-bold text-primary">Sacos por Hora (neto)</TableCell>
-                                            <TableCell className="text-right font-bold text-primary text-base">{calculatedValues.sacksPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })}</TableCell>
+                                            <TableCell className="text-right font-bold text-primary text-base">
+                                                <ClientFormattedNumber value={calculatedValues.sacksPerHour} maximumFractionDigits={2} />
+                                            </TableCell>
                                         </TableRow>
                                     </TableBody>
                                 </Table>
