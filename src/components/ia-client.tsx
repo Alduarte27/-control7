@@ -572,15 +572,15 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                     </TableBody>
                                 </Table>
                              </div>
-                             {isSimulating &&  <p className="text-center text-muted-foreground pt-4">La IA está calculando la simulación...</p>}
-                             {result && (
-                                <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
-                                    <h4 className="font-semibold">Recomendaciones de la IA</h4>
-                                    {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
-                                </div>
-                             )}
                         </div>
                     </div>
+                     {isSimulating &&  <p className="text-center text-muted-foreground pt-4">La IA está calculando la simulación...</p>}
+                     {result && (
+                        <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full mt-4">
+                            <h4 className="font-semibold">Recomendaciones de la IA</h4>
+                            {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
+                        </div>
+                     )}
                 </CardContent>
                 <CardFooter>
                     <Button type="submit" disabled={isSimulating || !simInput.productId}><BrainCircuit className="mr-2" />{isSimulating ? 'Calculando...' : 'Ejecutar Simulación con IA'}</Button>
