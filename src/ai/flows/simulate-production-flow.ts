@@ -18,7 +18,7 @@ const HistoricalPerformanceSchema = z.object({
 
 const SimulateProductionInputSchema = z.object({
   productName: z.string().describe("The name of the product being simulated."),
-  productionRate: z.number().describe("The production rate in units per hour."),
+  productionRate: z.number().describe("The production rate in sacks per hour."),
   hoursPerDayShift: z.number().describe("The number of working hours in a day shift."),
   hoursPerNightShift: z.number().describe("The number of working hours in a night shift."),
   activeDays: z.object({
@@ -36,13 +36,13 @@ export type SimulateProductionInput = z.infer<typeof SimulateProductionInputSche
 
 const DailySimulationResultSchema = z.object({
     day: z.string().describe("The day of the week (e.g., 'Lunes')."),
-    optimalProduction: z.number().describe("The maximum possible production for that day based on parameters."),
-    realisticProjection: z.number().describe("A more realistic production projection based on historical efficiency."),
+    optimalProduction: z.number().describe("The maximum possible production for that day based on parameters, in sacks."),
+    realisticProjection: z.number().describe("A more realistic production projection based on historical efficiency, in sacks."),
 });
 
 const SimulateProductionOutputSchema = z.object({
-  totalOptimalProduction: z.number().describe("The total maximum possible production for the week."),
-  totalRealisticProjection: z.number().describe("The total realistic production projection for the week."),
+  totalOptimalProduction: z.number().describe("The total maximum possible production for the week, in sacks."),
+  totalRealisticProjection: z.number().describe("The total realistic production projection for the week, in sacks."),
   averageEfficiency: z.number().describe("The average historical efficiency percentage used for the realistic projection."),
   dailyBreakdown: z.array(DailySimulationResultSchema).describe("A day-by-day breakdown of the simulation."),
   recommendations: z.string().describe("Actionable recommendations in Spanish to improve production efficiency and align realistic projections with optimal goals. Should be a bulleted list."),
@@ -59,14 +59,16 @@ const prompt = ai.definePrompt({
   output: { schema: SimulateProductionOutputSchema },
   prompt: `Eres un analista experto en operaciones de producción para una empresa de alimentos. Tu tarea es analizar los parámetros de una simulación de producción, compararlos con datos históricos y generar un informe claro y con recomendaciones accionables en español.
 
+**IMPORTANTE: Todos tus cálculos y resultados deben expresarse en "sacos".**
+
 **Contexto de la Simulación:**
 - Producto: {{productName}}
-- Tasa de Producción Teórica: {{productionRate}} unidades/hora
+- Tasa de Producción Teórica: {{productionRate}} sacos/hora
 - Horas Turno Día: {{hoursPerDayShift}} horas
 - Horas Turno Noche: {{hoursPerNightShift}} horas
 - Días Activos: {{#each activeDays}}{{#if this}}{{@key}} {{/if}}{{/each}}
 
-**Datos de Rendimiento Histórico (si están disponibles):**
+**Datos de Rendimiento Histórico (si están disponibles, en sacos):**
 {{#if historicalPerformance}}
   {{#each historicalPerformance}}
   - Semana Pasada: Planificado {{this.totalPlanned}}, Real {{this.totalActual}} (Eficiencia: {{this.efficiency}}%)
@@ -77,23 +79,23 @@ const prompt = ai.definePrompt({
 
 **Tus Tareas:**
 
-1.  **Calcular Producción Óptima:**
-    -   Calcula la producción diaria y semanal máxima posible basándote estrictamente en la tasa de producción y las horas de trabajo. Esto es el "mundo ideal".
+1.  **Calcular Producción Óptima (en sacos):**
+    -   Calcula la producción diaria y semanal máxima posible basándote estrictamente en la tasa de producción y las horas de trabajo. El resultado debe ser en sacos.
 
-2.  **Calcular Proyección Realista:**
+2.  **Calcular Proyección Realista (en sacos):**
     -   Si hay datos históricos, calcula la **eficiencia promedio**.
-    -   Aplica esta eficiencia promedio a la producción óptima para obtener una "proyección realista".
+    -   Aplica esta eficiencia promedio a la producción óptima para obtener una "proyección realista" en sacos.
     -   Si no hay datos históricos, asume una eficiencia conservadora del 90% para la proyección realista, y menciónalo en tus recomendaciones.
 
-3.  **Generar Desglose Diario:**
-    -   Proporciona un desglose día por día (solo para los días activos) que muestre la producción óptima y la realista.
+3.  **Generar Desglose Diario (en sacos):**
+    -   Proporciona un desglose día por día (solo para los días activos) que muestre la producción óptima y la realista, ambas en sacos.
 
 4.  **Generar Recomendaciones (MUY IMPORTANTE):**
     -   Tu análisis y recomendaciones DEBEN estar en español.
     -   Escribe una lista con viñetas (usando guiones "-") con consejos claros y accionables.
-    -   Compara la producción óptima con la realista. ¿Cuál es la brecha?
+    -   Compara la producción óptima con la realista. ¿Cuál es la brecha en sacos?
     -   Si la eficiencia es baja, sugiere áreas de mejora (ej: "Revisar tiempos de inactividad los lunes", "Optimizar cambios de turno").
-    -   Si la proyección realista no cumple un objetivo hipotético, ¿qué se necesitaría? (ej: "Para alcanzar X unidades, se podría activar el turno de noche el viernes o mejorar la eficiencia en un 5%").
+    -   Si la proyección realista no cumple un objetivo hipotético, ¿qué se necesitaría? (ej: "Para alcanzar X sacos, se podría activar el turno de noche el viernes o mejorar la eficiencia en un 5%").
     -   Si no hay datos históricos, indica que la proyección se basa en un 90% estándar y que se volverá más precisa con datos reales.
     -   El objetivo es proporcionar inteligencia de negocio, no solo números.
 `,
