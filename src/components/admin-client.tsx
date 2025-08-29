@@ -627,7 +627,7 @@ export default function AdminClient() {
                     <CardDescription>
                         Gestiona cómo se comporta la aplicación.
                     </CardDescription>
-                </Header>
+                </CardHeader>
                 <CardContent>
                     <div className="flex items-center space-x-2">
                         <Switch
