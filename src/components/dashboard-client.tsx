@@ -199,7 +199,8 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   const weekOptions = React.useMemo(() => {
     return allSummaries
       .map(summary => ({ week: summary.week, year: summary.year, id: summary.id }))
-      .sort((a, b) => b.year - a.year || b.week - a.week);
+      // The reverse() is done on fetch now, so we don't need to re-sort here
+      // .sort((a, b) => b.year - a.year || b.week - a.week);
   }, [allSummaries]);
 
   React.useEffect(() => {
@@ -208,20 +209,30 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         try {
             let summariesQuery;
             if (dateRange === 'all') {
-                summariesQuery = query(collection(db, 'weeklySummaries'), orderBy('__name__', 'asc'));
+                summariesQuery = query(collection(db, 'weeklySummaries'), orderBy('__name__', 'desc'));
             } else {
                 const numberOfWeeks = parseInt(dateRange);
-                const startDate = subWeeks(new Date(), numberOfWeeks);
+                const today = new Date();
+                const currentYear = getYear(today);
+                const currentWeek = getISOWeek(today);
+
+                const startDate = subWeeks(today, numberOfWeeks -1);
                 const startYear = getYear(startDate);
                 const startWeek = getISOWeek(startDate);
-                const startPlanId = `${startYear}-W${startWeek}`;
                 
-                summariesQuery = query(collection(db, 'weeklySummaries'), where('__name__', '>=', startPlanId), orderBy('__name__', 'asc'));
+                const startPlanId = `${startYear}-W${String(startWeek).padStart(2, '0')}`;
+                const endPlanId = `${currentYear}-W${String(currentWeek).padStart(2, '0')}`;
+                
+                summariesQuery = query(collection(db, 'weeklySummaries'), 
+                    where('__name__', '>=', startPlanId),
+                    where('__name__', '<=', endPlanId),
+                    orderBy('__name__', 'desc')
+                );
             }
             
             const summariesSnapshot = await getDocs(summariesQuery);
             const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
-            setAllSummaries(fetchedSummaries.reverse());
+            setAllSummaries(fetchedSummaries);
         } catch (error) {
             console.error('Failed to fetch weekly summaries from Firestore:', error);
         }
@@ -236,7 +247,9 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         if (loading) return;
         
         // --- Data for Weekly Summary Charts (Unaffected by specific week filter) ---
-        const weeklySummaryForChart: WeeklySummaryData[] = allSummaries.map(summary => {
+        const summariesForCharts = allSummaries;
+
+        const weeklySummaryForChart: WeeklySummaryData[] = summariesForCharts.map(summary => {
             const totals = selectedCategoryId === 'all'
                 ? {
                     planned: summary.totalPlanned,
@@ -254,10 +267,10 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                 actualForPlanned: totals.actualForPlanned,
                 unplannedProduction: totals.unplannedProduction,
             };
-        }).sort((a, b) => a.week - b.week);
+        }).reverse(); // reverse to show chronologically
         setWeeklySummaryData(weeklySummaryForChart);
         
-        const weeklyShiftDataForChart = allSummaries.map(summary => {
+        const weeklyShiftDataForChart = summariesForCharts.map(summary => {
             // NOTE: Per-category shift data is not stored, so this chart is always for all categories.
             const totalDay = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.day, 0);
             const totalNight = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.night, 0);
@@ -267,13 +280,13 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                 night: totalNight,
                 week: summary.week
             };
-        }).sort((a,b) => a.week - b.week);
+        }).reverse(); // reverse to show chronologically
         setWeeklyShiftData(weeklyShiftDataForChart);
         
         // --- Data for Detail Charts (Affected by specific week filter) ---
         const summariesForDetailCharts = selectedWeek === 'all'
-            ? allSummaries
-            : allSummaries.filter(summary => summary.id === selectedWeek);
+            ? summariesForCharts
+            : summariesForCharts.filter(summary => summary.id === selectedWeek);
 
         const dailyTotals = {
             mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 

@@ -107,7 +107,11 @@ export default function IAClient({
   const [targetWeek, setTargetWeek] = React.useState<'current' | 'next'>('next');
 
   const weekOptions = React.useMemo(() => {
-    const sortedSummaries = [...allSummaries].sort((a, b) => a.year - b.year || a.week - b.week);
+    const sortedSummaries = [...allSummaries].sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.week - b.week;
+    });
+
     if (sortedSummaries.length >= 2) {
       if (!selectedWeekA) setSelectedWeekA(sortedSummaries[sortedSummaries.length - 2].id);
       if (!selectedWeekB) setSelectedWeekB(sortedSummaries[sortedSummaries.length - 1].id);
@@ -124,7 +128,7 @@ export default function IAClient({
     const fetchHistory = async () => {
         setLoadingHistory(true);
         try {
-            const summariesSnapshot = await getDocs(query(collection(db, 'weeklySummaries'), orderBy('year'), orderBy('week')));
+            const summariesSnapshot = await getDocs(query(collection(db, 'weeklySummaries'), orderBy('__name__')));
             const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
             setAllSummaries(fetchedSummaries);
 
@@ -196,17 +200,17 @@ export default function IAClient({
             // Get total from summaries for cards
             const totalsA = selectedCategoryId === 'all'
                 ? { planned: summaryA.totalPlanned, actual: summaryA.totalActualForPlanned }
-                : summaryA.categoryTotals?.[selectedCategoryId] || { planned: 0, actual: 0 };
+                : summaryA.categoryTotals?.[selectedCategoryId] || { planned: 0, actualForPlanned: 0 };
             
             const totalsB = selectedCategoryId === 'all'
                 ? { planned: summaryB.totalPlanned, actual: summaryB.totalActualForPlanned }
-                : summaryB.categoryTotals?.[selectedCategoryId] || { planned: 0, actual: 0 };
+                : summaryB.categoryTotals?.[selectedCategoryId] || { planned: 0, actualForPlanned: 0 };
 
             setComparisonData({
                 totalPlannedA: totalsA.planned,
-                totalActualA: totalsA.actual,
+                totalActualA: totalsA.actualForPlanned,
                 totalPlannedB: totalsB.planned,
-                totalActualB: totalsB.actual,
+                totalActualB: totalsB.actualForPlanned,
                 productComparison,
             });
 
@@ -226,7 +230,7 @@ export default function IAClient({
         description: 'La IA está analizando el historial de producción. Esto puede tardar un momento...',
     });
     try {
-        const plansQuery = query(collection(db, "productionPlans"), orderBy("year", "desc"), orderBy("week", "desc"), limit(8));
+        const plansQuery = query(collection(db, "productionPlans"), orderBy("__name__", "desc"), limit(8));
         const plansSnapshot = await getDocs(plansQuery);
 
         const historicalDataForAI = plansSnapshot.docs.map(doc => {
@@ -281,7 +285,7 @@ export default function IAClient({
           description: 'La IA está analizando tendencias para proyectar la demanda futura...',
       });
        try {
-        const plansQuery = query(collection(db, "productionPlans"), orderBy("year", "desc"), orderBy("week", "desc"), limit(FORECAST_WEEKS));
+        const plansQuery = query(collection(db, "productionPlans"), orderBy("__name__", "desc"), limit(FORECAST_WEEKS));
         const plansSnapshot = await getDocs(plansQuery);
 
         const historicalDataForAI = plansSnapshot.docs.map(doc => {
