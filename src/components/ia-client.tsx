@@ -276,7 +276,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
     }
 
     const handleDayChange = (day: keyof SimInputState['activeDays'], checked: boolean) => {
-        setSimInput(prev => ({ ...prev, activeDays: { ...prev.activeDays, [day]: checked } }));
+        setSimInput(prev => ({ ...prev, activeDays: { ...prev, activeDays: { ...prev.activeDays, [day]: checked } } }));
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -366,7 +366,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                                 <KpiCard title="Unidades/Minuto" value={calculatedValues.unitsPerMinute} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
                                 <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
                                 <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.effectiveUnitsPerHour} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
-                                <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.sacksPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
+                                <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.sacksPerHour} fractionDigits={2} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
                                 <KpiCard title="Producción Turno Día (Neto)" value={calculatedValues.dailyProductionDayShift} icon={Sun} description="Producción neta estimada para un solo turno de día." />
                                 <KpiCard title="Producción Turno Noche (Neto)" value={calculatedValues.dailyProductionNightShift} icon={Moon} description="Producción neta estimada para un solo turno de noche." />
                                 <KpiCard title="Producción Semanal (Estimada)" value={calculatedValues.weeklyProduction} icon={Calendar} description="Producción semanal total estimada, sumando ambos turnos y los días activos." valueColor="text-primary" />

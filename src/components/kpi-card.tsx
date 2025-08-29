@@ -12,19 +12,22 @@ export type KpiCardProps = {
   valueColor?: string;
   subValue?: string;
   subValueColor?: string;
+  fractionDigits?: number;
 };
 
-export default function KpiCard({ title, value, icon: Icon, description, valueColor, subValue, subValueColor }: KpiCardProps) {
-  const [formattedValue, setFormattedValue] = React.useState<string | number>(value);
+export default function KpiCard({ title, value, icon: Icon, description, valueColor, subValue, subValueColor, fractionDigits }: KpiCardProps) {
+  const [formattedValue, setFormattedValue] = React.useState<string | number>('-');
 
   React.useEffect(() => {
-    // Only format if it's a number. This avoids re-formatting percentages or other strings.
     if (typeof value === 'number' && !isNaN(value)) {
-        setFormattedValue(value.toLocaleString());
+      setFormattedValue(value.toLocaleString(undefined, {
+        maximumFractionDigits: fractionDigits,
+        minimumFractionDigits: fractionDigits,
+      }));
     } else {
-        setFormattedValue(value);
+      setFormattedValue(value);
     }
-  }, [value]);
+  }, [value, fractionDigits]);
 
   return (
     <TooltipProvider>
