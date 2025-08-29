@@ -253,7 +253,7 @@ export default function IAClient({
     }
   };
 
-  const handleSimulation = async (input: SimulateProductionInput) => {
+  const handleSimulation = async (input: Omit<SimulateProductionInput, 'productionRate'> & { machineSpeed: number }) => {
     setIsSimulating(true);
     setSimulationResult(null);
     toast({ title: 'Ejecutando Simulación', description: 'La IA está procesando los parámetros...' });
@@ -279,6 +279,7 @@ export default function IAClient({
 
         const result = await simulateProduction({
             ...input,
+            productionRate: input.machineSpeed * 60, // Convert units/min to units/hr
             productName: selectedProduct.productName,
             historicalPerformance: historicalPerformance.length > 0 ? historicalPerformance : undefined
         });
@@ -385,24 +386,32 @@ export default function IAClient({
 // --- Tab Components ---
 
 function SimulatorTab({ onSimulate, isSimulating, result, products }: {
-    onSimulate: (input: SimulateProductionInput) => void;
+    onSimulate: (input: Omit<SimulateProductionInput, 'productionRate'> & { machineSpeed: number }) => void;
     isSimulating: boolean;
     result: SimulateProductionOutput | null;
     products: ProductDefinition[];
 }) {
-    const [simInput, setSimInput] = React.useState<SimulateProductionInput>({
+    type SimInputState = {
+        productName: string;
+        machineSpeed: number;
+        hoursPerDayShift: number;
+        hoursPerNightShift: number;
+        activeDays: { mon: boolean; tue: boolean; wed: boolean; thu: boolean; fri: boolean; sat: boolean; sun: boolean; };
+    }
+
+    const [simInput, setSimInput] = React.useState<SimInputState>({
         productName: products.find(p => p.isActive)?.id || '',
-        productionRate: 100,
+        machineSpeed: 38,
         hoursPerDayShift: 8,
         hoursPerNightShift: 8,
         activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false },
     });
 
-    const handleInputChange = (field: keyof Omit<SimulateProductionInput, 'activeDays'>, value: string | number) => {
+    const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays'>, value: string | number) => {
         setSimInput(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleDayChange = (day: keyof SimulateProductionInput['activeDays'], checked: boolean) => {
+    const handleDayChange = (day: keyof SimInputState['activeDays'], checked: boolean) => {
         setSimInput(prev => ({ ...prev, activeDays: { ...prev.activeDays, [day]: checked } }));
     };
 
@@ -428,8 +437,8 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                             </Select>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="rate">Tasa de Producción (unidades/hora)</Label>
-                            <Input id="rate" type="number" value={simInput.productionRate} onChange={e => handleInputChange('productionRate', Number(e.target.value))} required />
+                            <Label htmlFor="rate">Velocidad de Máquina (unidades/minuto)</Label>
+                            <Input id="rate" type="number" value={simInput.machineSpeed} onChange={e => handleInputChange('machineSpeed', Number(e.target.value))} required />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
