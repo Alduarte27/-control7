@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { suggestProductionPlan, type SuggestPlanOutput, type SuggestPlanInput } from '@/ai/flows/suggest-plan-flow';
 import { forecastDemand, type ForecastDemandOutput, type ForecastDemandInput } from '@/ai/flows/forecast-demand-flow';
-import { collection, getDocs, query, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, doc, getDoc, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition } from '@/lib/types';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, BarChart } from 'recharts';
@@ -20,6 +20,7 @@ import ComparisonCard from './comparison-card';
 import { addWeeks, getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek, getDay } from 'date-fns';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { getCachedProducts } from '@/services/data-service';
 
 const trendChartConfig = {
   planned: {
@@ -39,10 +40,18 @@ const comparisonChartConfig = {
   actualB: { label: 'Real Semana B', color: 'hsl(var(--chart-4))' },
 } satisfies ChartConfig;
 
-type AllPlansData = {
+type WeeklySummaryDoc = {
+    id: string; // planId e.g., "2024-W35"
     week: number;
     year: number;
-    products: ProductData[];
+    totalPlanned: number;
+    totalActualForPlanned: number;
+    categoryTotals: {
+        [categoryId: string]: {
+            planned: number;
+            actualForPlanned: number;
+        }
+    }
 };
 
 type ComparisonData = {
@@ -77,7 +86,7 @@ export default function IAClient({ prefetchedCategories }: { prefetchedCategorie
   const [loadingHistory, setLoadingHistory] = React.useState(true);
   const { toast } = useToast();
   
-  const [allPlans, setAllPlans] = React.useState<AllPlansData[]>([]);
+  const [allSummaries, setAllSummaries] = React.useState<WeeklySummaryDoc[]>([]);
   const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
   
   // State for comparison view
@@ -90,63 +99,40 @@ export default function IAClient({ prefetchedCategories }: { prefetchedCategorie
   const [isApplyDialogOpen, setIsApplyDialogOpen] = React.useState(false);
   const [targetWeek, setTargetWeek] = React.useState<'current' | 'next'>('next');
 
-
   const weekOptions = React.useMemo(() => {
-    const sortedWeeks = allPlans
-      .map(plan => plan.week)
-      .filter((value, index, self) => self.indexOf(value) === index) // Unique weeks
-      .sort((a, b) => a - b);
-      
-    if (sortedWeeks.length >= 2) {
-      if (!selectedWeekA) setSelectedWeekA(String(sortedWeeks[sortedWeeks.length - 2]));
-      if (!selectedWeekB) setSelectedWeekB(String(sortedWeeks[sortedWeeks.length - 1]));
-    } else if (sortedWeeks.length === 1) {
-      if (!selectedWeekA) setSelectedWeekA(String(sortedWeeks[0]));
-      if (!selectedWeekB) setSelectedWeekB(String(sortedWeeks[0]));
+    const sortedSummaries = [...allSummaries].sort((a, b) => a.year - b.year || a.week - b.week);
+    if (sortedSummaries.length >= 2) {
+      if (!selectedWeekA) setSelectedWeekA(sortedSummaries[sortedSummaries.length - 2].id);
+      if (!selectedWeekB) setSelectedWeekB(sortedSummaries[sortedSummaries.length - 1].id);
+    } else if (sortedSummaries.length === 1) {
+      if (!selectedWeekA) setSelectedWeekA(sortedSummaries[0].id);
+      if (!selectedWeekB) setSelectedWeekB(sortedSummaries[0].id);
     }
-    return sortedWeeks;
+    return sortedSummaries;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allPlans]);
+  }, [allSummaries]);
 
 
   React.useEffect(() => {
     const fetchHistory = async () => {
         setLoadingHistory(true);
         try {
-            const plansSnapshot = await getDocs(collection(db, 'productionPlans'));
-            const fetchedPlans: AllPlansData[] = [];
-            plansSnapshot.forEach((doc) => {
-                const plan = doc.data();
-                if (plan.week && plan.year && plan.products) {
-                    fetchedPlans.push({
-                        week: plan.week,
-                        year: plan.year,
-                        products: plan.products,
-                    });
-                }
-            });
-            setAllPlans(fetchedPlans);
+            const summariesSnapshot = await getDocs(query(collection(db, 'weeklySummaries'), orderBy('year'), orderBy('week')));
+            const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
+            setAllSummaries(fetchedSummaries);
 
-            const limitedHistory = fetchedPlans
-                .sort((a, b) => b.year - a.year || b.week - a.week)
-                .slice(0, 12)
-                .map(plan => {
-                    const plannedProducts = plan.products.filter((p: ProductData) => p.categoryIsPlanned && p.planned > 0);
-                    
-                    const totalPlanned = plannedProducts.reduce((sum: number, p: ProductData) => sum + p.planned, 0);
-                    const totalActualForPlanned = plannedProducts.reduce((sum: number, p: ProductData) => sum + Object.values(p.actual).reduce((s: any, d: any) => s + d.day + d.night, 0), 0);
-
-                    return {
-                        name: `S${plan.week}`,
-                        week: plan.week,
-                        year: plan.year,
-                        planned: totalPlanned,
-                        actual: totalActualForPlanned,
-                    };
-                }).reverse();
+            const limitedHistory = fetchedSummaries
+                .slice(-12) // Get last 12 summaries for the trend
+                .map(summary => ({
+                    name: `S${summary.week}`,
+                    week: summary.week,
+                    year: summary.year,
+                    planned: summary.totalPlanned,
+                    actual: summary.totalActualForPlanned,
+                }));
             setHistoricalTrendData(limitedHistory);
         } catch (error) {
-            console.error("Error fetching historical data:", error);
+            console.error("Error fetching historical summaries:", error);
             toast({ title: 'Error al cargar historial', variant: 'destructive' });
         }
         setLoadingHistory(false);
@@ -156,54 +142,58 @@ export default function IAClient({ prefetchedCategories }: { prefetchedCategorie
   }, []);
 
    React.useEffect(() => {
-    if (loadingHistory) return;
+    const generateComparison = async () => {
+        if (loadingHistory || !selectedWeekA || !selectedWeekB) return;
 
-    const getFilteredProducts = (products: ProductData[]): ProductData[] => {
-        if (selectedCategoryId === 'all') return products;
-        return products.filter(p => p.categoryId === selectedCategoryId);
-    };
+        const summaryA = allSummaries.find(s => s.id === selectedWeekA);
+        const summaryB = allSummaries.find(s => s.id === selectedWeekB);
 
-    const calculateTotalActual = (product: ProductData) =>
-      Object.values(product.actual).reduce((sum, shifts) => sum + (shifts.day || 0) + (shifts.night || 0), 0);
+        if (!summaryA || !summaryB) {
+            setComparisonData(null);
+            return;
+        }
 
-    // Comparison Logic
-    if (selectedWeekA && selectedWeekB) {
-        const planA = allPlans.find(p => String(p.week) === selectedWeekA);
-        const planB = allPlans.find(p => String(p.week) === selectedWeekB);
+        try {
+            // Fetch detailed plan data only for the two selected weeks
+            const [planADoc, planBDoc] = await Promise.all([
+                getDoc(doc(db, "productionPlans", selectedWeekA)),
+                getDoc(doc(db, "productionPlans", selectedWeekB))
+            ]);
 
-        if (planA && planB) {
-            const productsA = getFilteredProducts(planA.products);
-            const productsB = getFilteredProducts(planB.products);
+            const productsA = planADoc.exists() ? (planADoc.data().products as ProductData[]) : [];
+            const productsB = planBDoc.exists() ? (planBDoc.data().products as ProductData[]) : [];
 
-            const allProductNames = Array.from(new Set([...productsA.map(p => p.productName), ...productsB.map(p => p.productName)]));
+            const getFilteredProducts = (products: ProductData[]): ProductData[] => {
+                if (selectedCategoryId === 'all') return products;
+                return products.filter(p => p.categoryId === selectedCategoryId);
+            };
+            
+            const filteredProductsA = getFilteredProducts(productsA);
+            const filteredProductsB = getFilteredProducts(productsB);
 
+            const allProductNames = Array.from(new Set([...filteredProductsA.map(p => p.productName), ...filteredProductsB.map(p => p.productName)]));
+            
+            const calculateTotalActual = (product: ProductData) =>
+                Object.values(product.actual).reduce((sum, shifts) => sum + (shifts.day || 0) + (shifts.night || 0), 0);
+            
             const productComparison = allProductNames.map(name => {
-                const productA = productsA.find(p => p.productName === name);
-                const productB = productsB.find(p => p.productName === name);
-
+                const productA = filteredProductsA.find(p => p.productName === name);
+                const productB = filteredProductsB.find(p => p.productName === name);
                 const plannedA = productA?.planned || 0;
                 const actualA = productA ? calculateTotalActual(productA) : 0;
                 const plannedB = productB?.planned || 0;
                 const actualB = productB ? calculateTotalActual(productB) : 0;
-
                 return { name, plannedA, actualA, plannedB, actualB };
             }).filter(p => p.plannedA > 0 || p.actualA > 0 || p.plannedB > 0 || p.actualB > 0);
 
-            const totalsA = productsA.reduce((acc, p) => {
-                if (p.categoryIsPlanned && p.planned > 0) {
-                    acc.planned += p.planned || 0;
-                    acc.actual += calculateTotalActual(p);
-                }
-                return acc;
-            }, { planned: 0, actual: 0 });
-
-            const totalsB = productsB.reduce((acc, p) => {
-                if (p.categoryIsPlanned && p.planned > 0) {
-                    acc.planned += p.planned || 0;
-                    acc.actual += calculateTotalActual(p);
-                }
-                return acc;
-            }, { planned: 0, actual: 0 });
+            // Get total from summaries for cards
+            const totalsA = selectedCategoryId === 'all'
+                ? { planned: summaryA.totalPlanned, actual: summaryA.totalActualForPlanned }
+                : summaryA.categoryTotals?.[selectedCategoryId] || { planned: 0, actual: 0 };
+            
+            const totalsB = selectedCategoryId === 'all'
+                ? { planned: summaryB.totalPlanned, actual: summaryB.totalActualForPlanned }
+                : summaryB.categoryTotals?.[selectedCategoryId] || { planned: 0, actual: 0 };
 
             setComparisonData({
                 totalPlannedA: totalsA.planned,
@@ -212,13 +202,14 @@ export default function IAClient({ prefetchedCategories }: { prefetchedCategorie
                 totalActualB: totalsB.actual,
                 productComparison,
             });
-        } else {
+
+        } catch (error) {
+            console.error("Error fetching comparison data:", error);
             setComparisonData(null);
         }
-    }
-
-
-  }, [allPlans, selectedWeekA, selectedWeekB, selectedCategoryId, loadingHistory]);
+    };
+    generateComparison();
+  }, [allSummaries, selectedWeekA, selectedWeekB, selectedCategoryId, loadingHistory]);
 
   const handleSuggestPlan = async () => {
     setIsSuggestingPlan(true);
@@ -245,14 +236,12 @@ export default function IAClient({ prefetchedCategories }: { prefetchedCategorie
             }
         }).reverse();
 
-        const productsSnapshot = await getDocs(query(collection(db, "products"), orderBy("order")));
-        const allProducts = productsSnapshot.docs
-            .map(doc => ({ id: doc.id, isActive: true, ...doc.data() } as any))
-            .filter(p => p.isActive);
+        const allProducts = await getCachedProducts();
+        const activeProducts = allProducts.filter(p => p.isActive);
         
         const categoryMap = new Map(categories.map(doc => [doc.id, { isPlanned: doc.isPlanned ?? true }]));
         
-        const allProductsWithCategoryInfo = allProducts.map(p => ({
+        const allProductsWithCategoryInfo = activeProducts.map(p => ({
             id: p.id,
             productName: p.productName,
             categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
@@ -556,7 +545,7 @@ export default function IAClient({ prefetchedCategories }: { prefetchedCategorie
                                   </SelectTrigger>
                                   <SelectContent>
                                       {weekOptions.map(week => (
-                                          <SelectItem key={`A-${week}`} value={String(week)}>Semana {week}</SelectItem>
+                                          <SelectItem key={`A-${week.id}`} value={String(week.id)}>Semana {week.week} ({week.year})</SelectItem>
                                       ))}
                                   </SelectContent>
                               </Select>
@@ -569,7 +558,7 @@ export default function IAClient({ prefetchedCategories }: { prefetchedCategorie
                                   </SelectTrigger>
                                   <SelectContent>
                                       {weekOptions.map(week => (
-                                          <SelectItem key={`B-${week}`} value={String(week)}>Semana {week}</SelectItem>
+                                          <SelectItem key={`B-${week.id}`} value={String(week.id)}>Semana {week.week} ({week.year})</SelectItem>
                                       ))}
                                   </SelectContent>
                               </Select>
