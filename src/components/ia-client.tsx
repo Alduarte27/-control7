@@ -21,7 +21,7 @@ import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
 import { Separator } from './ui/separator';
 import KpiCard from './kpi-card';
-import { Package, Percent, Clock, FileDigit } from 'lucide-react';
+import { Package, Percent, Clock, FileDigit, Calendar, Sun, Moon } from 'lucide-react';
 
 
 // --- Shared Chart Configurations ---
@@ -250,8 +250,22 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
         const grossUnitsPerHour = unitsPerMinute * 60;
         const effectiveUnitsPerHour = grossUnitsPerHour * (1 - (simInput.performanceLoss / 100));
         const sacksPerHour = simInput.unitsPerSack > 0 ? effectiveUnitsPerHour / simInput.unitsPerSack : 0;
-        return { unitsPerMinute, grossUnitsPerHour, effectiveUnitsPerHour, sacksPerHour };
-    }, [simInput.machineSpeed, simInput.performanceLoss, simInput.unitsPerSack]);
+
+        const dailyProductionDayShift = sacksPerHour * simInput.hoursPerDayShift;
+        const dailyProductionNightShift = sacksPerHour * simInput.hoursPerNightShift;
+        const numberOfActiveDays = Object.values(simInput.activeDays).filter(Boolean).length;
+        const weeklyProduction = (dailyProductionDayShift + dailyProductionNightShift) * numberOfActiveDays;
+        
+        return { 
+            unitsPerMinute, 
+            grossUnitsPerHour, 
+            effectiveUnitsPerHour, 
+            sacksPerHour,
+            dailyProductionDayShift,
+            dailyProductionNightShift,
+            weeklyProduction
+        };
+    }, [simInput]);
 
     const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays' | 'productId'>, value: string | number) => {
         setSimInput(prev => ({ ...prev, [field]: Number(value) }));
@@ -348,11 +362,14 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                         
                         <div>
                             <h3 className="font-semibold text-foreground mb-4">4. Cálculo de Tasa de Producción</h3>
-                            <div className="grid md:grid-cols-4 gap-4">
+                             <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
                                 <KpiCard title="Unidades/Minuto" value={calculatedValues.unitsPerMinute} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
                                 <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
-                                <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.effectiveUnitsPerHour.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
+                                <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.effectiveUnitsPerHour} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
                                 <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.sacksPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
+                                <KpiCard title="Producción Turno Día (Neto)" value={calculatedValues.dailyProductionDayShift} icon={Sun} description="Producción neta estimada para un solo turno de día." />
+                                <KpiCard title="Producción Turno Noche (Neto)" value={calculatedValues.dailyProductionNightShift} icon={Moon} description="Producción neta estimada para un solo turno de noche." />
+                                <KpiCard title="Producción Semanal (Estimada)" value={calculatedValues.weeklyProduction} icon={Calendar} description="Producción semanal total estimada, sumando ambos turnos y los días activos." valueColor="text-primary" />
                             </div>
                         </div>
                     </CardContent>
