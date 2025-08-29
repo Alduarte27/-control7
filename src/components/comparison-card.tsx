@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Minus, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipProvider, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 
 type ComparisonCardProps = {
   title: string;
@@ -11,9 +12,10 @@ type ComparisonCardProps = {
   valueB: number;
   isPercentage?: boolean;
   showPercentage?: boolean;
+  description?: string;
 };
 
-export default function ComparisonCard({ title, valueA, valueB, isPercentage = false, showPercentage = true }: ComparisonCardProps) {
+export default function ComparisonCard({ title, valueA, valueB, isPercentage = false, showPercentage = true, description }: ComparisonCardProps) {
   const formatValue = (value: number) => {
     if (typeof value !== 'number' || isNaN(value)) {
       return '-';
@@ -43,23 +45,42 @@ export default function ComparisonCard({ title, valueA, valueB, isPercentage = f
   
   const ChangeIcon = change > 0 ? ArrowUp : change < 0 ? ArrowDown : Minus;
 
+  const CardContentWrapper = ({ children }: { children: React.ReactNode }) => {
+    if (description) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>{children}</TooltipTrigger>
+            <TooltipContent><p>{description}</p></TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      );
+    }
+    return <>{children}</>;
+  };
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{formatValue(valueB)}</div>
-        <div className="text-xs text-muted-foreground">
-          Semana A: {formatValue(valueA)}
-        </div>
-        {showPercentage && (
-             <div className={cn("flex items-center text-xs mt-1", getChangeColor())}>
-                <ChangeIcon className="h-3 w-3 mr-1" />
-                <span>{changeText}</span>
-            </div>
-        )}
-      </CardContent>
-    </Card>
+    <CardContentWrapper>
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium flex items-center justify-between">
+            <span>{title}</span>
+            {description && <Info className="h-4 w-4 text-muted-foreground" />}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-2xl font-bold">{formatValue(valueB)}</div>
+          <div className="text-xs text-muted-foreground">
+            Semana A: {formatValue(valueA)}
+          </div>
+          {showPercentage && (
+              <div className={cn("flex items-center text-xs mt-1", getChangeColor())}>
+                  <ChangeIcon className="h-3 w-3 mr-1" />
+                  <span>{changeText}</span>
+              </div>
+          )}
+        </CardContent>
+      </Card>
+    </CardContentWrapper>
   );
 }

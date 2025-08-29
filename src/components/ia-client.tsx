@@ -440,9 +440,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         
         const sacksPerShift = sacksPerHour * simInput.hoursPerDayShift;
         
-        let totalHoursPerDay = 0;
-        if (simInput.hoursPerDayShift > 0) totalHoursPerDay += simInput.hoursPerDayShift;
-        if (simInput.hoursPerNightShift > 0) totalHoursPerDay += simInput.hoursPerNightShift;
+        const totalHoursPerDay = simInput.hoursPerDayShift + simInput.hoursPerNightShift;
         const sacksPerDay = sacksPerHour * totalHoursPerDay;
         
         const activeDayCount = Object.values(simInput.activeDays).filter(Boolean).length;
@@ -595,8 +593,20 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                         <h3 className="text-lg font-semibold text-center">Resultados de la Simulación Semanal (en Sacos)</h3>
                         <div className="grid md:grid-cols-2 gap-6 items-center">
                             <div className="space-y-4">
-                                <ComparisonCard title="Producción Óptima Semanal (2 Turnos)" valueA={0} valueB={result.totalOptimalProduction * 2} showPercentage={false} />
-                                <ComparisonCard title="Proyección Realista Semanal (2 Turnos)" valueA={result.totalOptimalProduction * 2} valueB={result.totalRealisticProjection * 2} isPercentage={false}/>
+                                <ComparisonCard 
+                                    title="Producción Óptima Semanal (2 Turnos)" 
+                                    valueA={0} 
+                                    valueB={result.totalOptimalProduction * 2} 
+                                    showPercentage={false} 
+                                    description="Cálculo teórico máximo basado en los parámetros de entrada, sin considerar paradas o ineficiencias."
+                                />
+                                <ComparisonCard 
+                                    title="Proyección Realista Semanal (2 Turnos)" 
+                                    valueA={result.totalOptimalProduction * 2} 
+                                    valueB={result.totalRealisticProjection * 2} 
+                                    isPercentage={false}
+                                    description="Estimación ajustada basada en la eficiencia histórica real, ofreciendo un pronóstico más alcanzable."
+                                />
                             </div>
                             <div>
                                 <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección (1 Turno)</h4>
