@@ -24,7 +24,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 
 // --- Shared Chart Configurations ---
@@ -471,7 +470,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                 <div className="space-y-4">
                                     <div className="grid gap-4 grid-cols-2">
                                         <ComparisonCard title="Producción Óptima Semanal" valueA={0} valueB={result.totalOptimalProduction} showPercentage={false} />
-                                        <ComparisonCard title="Proyección Realista Semanal" valueA={0} valueB={result.totalRealisticProjection} subValue={`Basado en ${result.averageEfficiency.toFixed(1)}% eficiencia hist.`} showPercentage={false} />
+                                        <ComparisonCard title="Proyección Realista Semanal" valueA={result.totalOptimalProduction} valueB={result.totalRealisticProjection} subValue={`Basado en ${result.averageEfficiency.toFixed(1)}% eficiencia hist.`} />
                                     </div>
                                     <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
                                         <h4 className="font-semibold">Recomendaciones de la IA</h4>
