@@ -324,7 +324,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         productId: products.find(p => p.isActive)?.id || '',
         machineSpeed: 40,
         performanceLoss: 8,
-        unitsPerSack: products.find(p => p.isActive)?.unitsPerSack || 50,
+        unitsPerSack: 50,
         hoursPerDayShift: 11,
         hoursPerNightShift: 11,
         activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: true },
@@ -385,7 +385,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                     <SelectContent>
                                         {products.filter(p => p.isActive).map(p => (
                                             <SelectItem key={p.id} value={p.id}>
-                                                {p.productName} {p.unitsPerSack && p.unitsPerSack > 0 ? `(${p.unitsPerSack} unidades)` : ''}
+                                                {p.productName}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

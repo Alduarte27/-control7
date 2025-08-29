@@ -49,7 +49,6 @@ function EditProductDialog({
     const [productName, setProductName] = React.useState(product.productName);
     const [categoryId, setCategoryId] = React.useState<string>(product.categoryId);
     const [color, setColor] = React.useState(product.color || '#000000');
-    const [unitsPerSack, setUnitsPerSack] = React.useState(product.unitsPerSack || 50);
 
     const handleSave = () => {
         onSave({
@@ -57,7 +56,6 @@ function EditProductDialog({
             productName,
             categoryId,
             color,
-            unitsPerSack,
         });
     };
 
@@ -98,15 +96,6 @@ function EditProductDialog({
                                 value={color}
                                 onChange={(e) => setColor(e.target.value)}
                                 className="w-24 h-10 p-1"
-                            />
-                        </div>
-                         <div className="space-y-2">
-                            <Label htmlFor="edit-units-per-sack">Unidades por Saco</Label>
-                            <Input
-                                id="edit-units-per-sack"
-                                type="number"
-                                value={unitsPerSack}
-                                onChange={(e) => setUnitsPerSack(Number(e.target.value))}
                             />
                         </div>
                     </div>
@@ -165,7 +154,6 @@ export default function AdminClient() {
   const [categories, setCategories] = React.useState<CategoryDefinition[]>([]);
   const [newProductName, setNewProductName] = React.useState('');
   const [newProductCategoryId, setNewProductCategoryId] = React.useState<string>('');
-  const [newProductUnitsPerSack, setNewProductUnitsPerSack] = React.useState(50);
   const [newCategoryName, setNewCategoryName] = React.useState('');
   const [newCategoryIsPlanned, setNewCategoryIsPlanned] = React.useState(true);
   const [editingProduct, setEditingProduct] = React.useState<ProductDefinition | null>(null);
@@ -242,13 +230,11 @@ export default function AdminClient() {
             categoryId: newProductCategoryId,
             color: '#cccccc', // Default color
             isActive: true,
-            unitsPerSack: newProductUnitsPerSack,
         };
         const newProduct = await addProductAction(newProductData);
 
         setProducts(prevProducts => [...prevProducts, newProduct].sort((a,b) => a.order - b.order));
         setNewProductName('');
-        setNewProductUnitsPerSack(50);
         toast({
             title: 'Producto Añadido',
             description: `Se ha añadido "${newProduct.productName}".`,
@@ -424,7 +410,6 @@ export default function AdminClient() {
                     if (product.productName !== latestProduct.productName || 
                         product.categoryId !== latestProduct.categoryId || 
                         product.color !== latestProduct.color ||
-                        product.unitsPerSack !== latestProduct.unitsPerSack ||
                         product.categoryName !== latestCategoryName ||
                         product.categoryIsPlanned !== latestCategoryIsPlanned) {
                         needsUpdate = true;
@@ -433,7 +418,6 @@ export default function AdminClient() {
                             productName: latestProduct.productName,
                             categoryId: latestProduct.categoryId,
                             color: latestProduct.color,
-                            unitsPerSack: latestProduct.unitsPerSack,
                             categoryName: latestCategoryName,
                             categoryIsPlanned: latestCategoryIsPlanned,
                         };
@@ -520,15 +504,6 @@ export default function AdminClient() {
                                 ))}
                             </SelectContent>
                         </Select>
-                      </div>
-                       <div className="w-32">
-                        <Label htmlFor="new-product-units">Unidades/Saco</Label>
-                        <Input 
-                          id="new-product-units"
-                          type="number"
-                          value={newProductUnitsPerSack}
-                          onChange={(e) => setNewProductUnitsPerSack(Number(e.target.value))}
-                        />
                       </div>
                        <Button onClick={handleAddProduct}>
                           <PlusCircle className="mr-2 h-4 w-4" />
