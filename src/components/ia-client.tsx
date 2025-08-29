@@ -330,16 +330,6 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: true },
     });
 
-    React.useEffect(() => {
-        const selectedProduct = products.find(p => p.id === simInput.productId);
-        if (selectedProduct) {
-            setSimInput(prev => ({
-                ...prev,
-                unitsPerSack: selectedProduct.unitsPerSack || 50
-            }));
-        }
-    }, [simInput.productId, products]);
-
     const calculatedValues = React.useMemo(() => {
         const unitsPerMinute = simInput.machineSpeed;
         const grossUnitsPerHour = unitsPerMinute * 60;
@@ -395,7 +385,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                     <SelectContent>
                                         {products.filter(p => p.isActive).map(p => (
                                             <SelectItem key={p.id} value={p.id}>
-                                                {p.productName} ({p.unitsPerSack || 0} unidades)
+                                                {p.productName} {p.unitsPerSack && p.unitsPerSack > 0 ? `(${p.unitsPerSack} unidades)` : ''}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -412,7 +402,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                 </div>
                                  <div className="space-y-2">
                                     <Label htmlFor="units-per-sack">Unidades/Saco</Label>
-                                    <Input id="units-per-sack" type="number" value={simInput.unitsPerSack} onChange={e => handleInputChange('unitsPerSack', e.target.value)} required readOnly />
+                                    <Input id="units-per-sack" type="number" value={simInput.unitsPerSack} onChange={e => handleInputChange('unitsPerSack', e.target.value)} required />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
