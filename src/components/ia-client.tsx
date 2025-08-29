@@ -84,7 +84,7 @@ export default function IAClient({
 
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         // Sort client-side to avoid complex queries
-        fetchedPlans.sort((a, b) => (b.id || '').localeCompare(a.id || ''));
+        fetchedPlans.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
         setAllPlans(fetchedPlans);
         
       } catch (error) {
@@ -227,6 +227,8 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
 
     const categoryMap = React.useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
     const plannableProducts = React.useMemo(() => products.filter(p => p.isActive && categoryMap.get(p.categoryId)?.isPlanned), [products, categoryMap]);
+    const [formattedWeeklyProduction, setFormattedWeeklyProduction] = React.useState<string>("...");
+
 
     const [simInput, setSimInput] = React.useState<SimInputState>({
         productId: plannableProducts[0]?.id || '',
@@ -266,6 +268,14 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
             weeklyProduction
         };
     }, [simInput]);
+
+    React.useEffect(() => {
+        setFormattedWeeklyProduction(
+            calculatedValues.weeklyProduction.toLocaleString(undefined, {
+                maximumFractionDigits: 0,
+            })
+        );
+    }, [calculatedValues.weeklyProduction]);
 
     const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays' | 'productId'>, value: string | number) => {
         setSimInput(prev => ({ ...prev, [field]: Number(value) }));
@@ -390,7 +400,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                     </CardContent>
                      <CardFooter className="flex-col items-start gap-2 border-t pt-4">
                         <p className="text-sm text-muted-foreground">Producción Semanal Estimada (Total)</p>
-                        <p className="text-3xl font-bold text-primary">{calculatedValues.weeklyProduction.toLocaleString(undefined, { maximumFractionDigits: 0 })} Sacos</p>
+                        <p className="text-3xl font-bold text-primary">{formattedWeeklyProduction} Sacos</p>
                         <p className="text-xs text-muted-foreground">Considerando {simInput.numberOfMachines} máquina(s) y los días activos seleccionados.</p>
                      </CardFooter>
                 </Card>
