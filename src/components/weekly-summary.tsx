@@ -20,6 +20,38 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
+const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        const plannedValue = data.planned;
+
+        return (
+            <div className="rounded-lg border bg-background p-2 shadow-sm text-sm">
+                <p className="font-bold mb-2">{label}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    {plannedValue > 0 && (
+                        <>
+                            <div className="flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'hsl(var(--accent))' }} />
+                                <span>Planificado:</span>
+                            </div>
+                            <span className="text-right font-medium">{plannedValue.toLocaleString()}</span>
+                        </>
+                    )}
+                    <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'hsl(var(--primary))' }} />
+                        <span>Real:</span>
+                    </div>
+                    <span className="text-right font-medium">{payload.find(p => p.dataKey === 'actual').value.toLocaleString()}</span>
+                </div>
+            </div>
+        );
+    }
+
+    return null;
+};
+
+
 export default function WeeklySummary({ data }: WeeklySummaryProps) {
   const chartData = data
     .map(item => ({
@@ -51,7 +83,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
                 height={80}
                 />
                 <YAxis />
-                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                <ChartTooltip cursor={false} content={<CustomTooltip />} />
                 <ChartLegend content={<ChartLegendContent />} />
                 <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
                 <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
