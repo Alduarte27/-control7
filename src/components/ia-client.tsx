@@ -11,7 +11,7 @@ import { simulateProduction, type SimulateProductionInput, type SimulateProducti
 import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, BarChart as RechartsBarChart } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
@@ -101,7 +101,7 @@ export default function IAClient({
   
   // --- Memoized Derived Data ---
   const historicalTrendData = React.useMemo(() => {
-    return allSummaries.slice(0, 12).reverse().map(summary => ({
+    return allSummaries.slice(-12).map(summary => ({
         name: `S${summary.week}`,
         planned: summary.totalPlanned,
         actual: summary.totalActualForPlanned,
@@ -114,7 +114,7 @@ export default function IAClient({
     setForecast(null);
     toast({ title: 'Generando Pronóstico', description: 'La IA está analizando tendencias...' });
     try {
-      const historicalDataForAI = allPlans.slice(0, 4).map(plan => ({
+      const historicalDataForAI = allPlans.slice(-4).map(plan => ({
           week: plan.week,
           year: plan.year,
           products: plan.products.map((p: ProductData) => ({
@@ -122,7 +122,7 @@ export default function IAClient({
               totalActual: Object.values(p.actual).reduce((sum: any, s: any) => sum + (s.day || 0) + (s.night || 0), 0),
               categoryIsPlanned: p.categoryIsPlanned ?? true,
           }))
-      })).reverse();
+      }));
       
       const result = await forecastDemand({ historicalData: historicalDataForAI });
       setForecast(result);
@@ -148,7 +148,7 @@ export default function IAClient({
             }))
             .filter(plan => plan.productData && plan.productData.planned > 0);
 
-        const historicalPerformance = productPlans.slice(0, 5).map(plan => {
+        const historicalPerformance = productPlans.slice(-5).map(plan => {
             const totalActual = Object.values(plan.productData.actual).reduce((sum: number, day: any) => sum + (day.day || 0) + (day.night || 0), 0);
             return {
                 totalPlanned: plan.productData.planned,
@@ -189,7 +189,13 @@ export default function IAClient({
                 </TabsList>
                 
                 <TabsContent value="simulator" className="mt-6">
-                    <SimulatorTab onSimulate={handleSimulation} isSimulating={isSimulating} result={simulationResult} products={prefetchedProducts} />
+                    <SimulatorTab 
+                      onSimulate={handleSimulation} 
+                      isSimulating={isSimulating} 
+                      result={simulationResult} 
+                      products={prefetchedProducts} 
+                      categories={prefetchedCategories} 
+                    />
                 </TabsContent>
                 <TabsContent value="forecast" className="mt-6">
                     <ForecastTab onForecast={handleForecastDemand} isForecasting={isForecasting} forecast={forecast} trendData={historicalTrendData} isLoading={loading} />
@@ -203,11 +209,12 @@ export default function IAClient({
 
 // --- Tab Components ---
 
-function SimulatorTab({ onSimulate, isSimulating, result, products }: {
+function SimulatorTab({ onSimulate, isSimulating, result, products, categories }: {
     onSimulate: (input: SimulateProductionInput) => void;
     isSimulating: boolean;
     result: SimulateProductionOutput | null;
     products: ProductDefinition[];
+    categories: CategoryDefinition[];
 }) {
     type SimInputState = {
         productId: string;
@@ -219,8 +226,11 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         activeDays: { mon: boolean; tue: boolean; wed: boolean; thu: boolean; fri: boolean; sat: boolean; sun: boolean; };
     }
 
+    const categoryMap = React.useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
+    const plannableProducts = React.useMemo(() => products.filter(p => p.isActive && categoryMap.get(p.categoryId)?.isPlanned), [products, categoryMap]);
+
     const [simInput, setSimInput] = React.useState<SimInputState>({
-        productId: products.find(p => p.isActive)?.id || '',
+        productId: plannableProducts[0]?.id || '',
         machineSpeed: 40,
         performanceLoss: 8,
         unitsPerSack: 50,
@@ -228,6 +238,12 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         hoursPerNightShift: 11,
         activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: false },
     });
+    
+    React.useEffect(() => {
+      if (!simInput.productId && plannableProducts.length > 0) {
+        setSimInput(prev => ({...prev, productId: plannableProducts[0].id}));
+      }
+    }, [plannableProducts, simInput.productId]);
 
     const calculatedValues = React.useMemo(() => {
         const unitsPerMinute = simInput.machineSpeed;
@@ -274,11 +290,11 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                             <div className="space-y-4">
                                 <h3 className="font-semibold text-foreground">1. Parámetros del Producto</h3>
                                 <div className="space-y-2">
-                                    <Label htmlFor="product-select">Producto a Simular</Label>
+                                    <Label htmlFor="product-select">Producto a Simular (Solo Planificables)</Label>
                                     <Select value={simInput.productId} onValueChange={handleProductChange}>
                                         <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
                                         <SelectContent>
-                                            {products.filter(p => p.isActive).map(p => (
+                                            {plannableProducts.map(p => (
                                                 <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>
                                             ))}
                                         </SelectContent>
@@ -355,7 +371,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                 <div className="space-y-6 mt-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Resultados de la Simulación Semanal</CardTitle>
+                            <CardTitle>Resultados de la Simulación Semanal (en Sacos)</CardTitle>
                             <CardDescription>Comparación entre el potencial teórico y una proyección realista basada en datos históricos.</CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -392,12 +408,12 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                         
                         <Card>
                             <CardHeader>
-                                <CardTitle>Desglose Diario y Proyección (1 Turno)</CardTitle>
+                                <CardTitle>Desglose Diario y Proyección (1 Turno, en Sacos)</CardTitle>
                                  <CardDescription>Diferencia entre producción óptima y realista por día.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
-                                    <RechartsBarChart data={result.dailyBreakdown}>
+                                    <ComposedChart data={result.dailyBreakdown}>
                                         <CartesianGrid vertical={false} />
                                         <XAxis dataKey="day" />
                                         <YAxis />
@@ -405,7 +421,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                         <Legend content={<ChartLegendContent />} />
                                         <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
                                         <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
-                                    </RechartsBarChart>
+                                    </ComposedChart>
                                 </ChartContainer>
                             </CardContent>
                         </Card>
