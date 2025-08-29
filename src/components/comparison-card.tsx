@@ -15,6 +15,9 @@ type ComparisonCardProps = {
 
 export default function ComparisonCard({ title, valueA, valueB, isPercentage = false, showPercentage = true }: ComparisonCardProps) {
   const formatValue = (value: number) => {
+    if (typeof value !== 'number' || isNaN(value)) {
+      return '-';
+    }
     if (isPercentage) {
       return `${value.toFixed(1)}%`;
     }
@@ -25,6 +28,7 @@ export default function ComparisonCard({ title, valueA, valueB, isPercentage = f
     if (valueA === 0 && valueB > 0) return 100;
     if (valueA === 0 && valueB === 0) return 0;
     if (valueA > 0 && valueB === 0) return -100;
+    if (typeof valueA !== 'number' || typeof valueB !== 'number' || isNaN(valueA) || isNaN(valueB)) return 0;
     return ((valueB - valueA) / valueA) * 100;
   };
 
