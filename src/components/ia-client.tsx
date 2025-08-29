@@ -24,6 +24,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 
 // --- Shared Chart Configurations ---
@@ -101,19 +102,19 @@ export default function IAClient({
       setLoading(true);
       try {
         const [summariesSnapshot, plansSnapshot] = await Promise.all([
-            getDocs(query(collection(db, 'weeklySummaries'), orderBy('__name__'))),
+            getDocs(query(collection(db, 'weeklySummaries'), orderBy('__name__', 'asc'))),
             getDocs(query(collection(db, "productionPlans"), orderBy("__name__", "desc")))
         ]);
 
         const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
-        setAllSummaries(fetchedSummaries);
+        setAllSummaries(fetchedSummaries.reverse());
 
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAllPlans(fetchedPlans);
         
         if (fetchedSummaries.length >= 2) {
-          setSelectedWeekA(fetchedSummaries[fetchedSummaries.length - 2].id);
-          setSelectedWeekB(fetchedSummaries[fetchedSummaries.length - 1].id);
+          setSelectedWeekA(fetchedSummaries[1].id);
+          setSelectedWeekB(fetchedSummaries[0].id);
         } else if (fetchedSummaries.length === 1) {
           setSelectedWeekA(fetchedSummaries[0].id);
           setSelectedWeekB(fetchedSummaries[0].id);
@@ -253,7 +254,7 @@ export default function IAClient({
     }
   };
 
-  const handleSimulation = async (input: Omit<SimulateProductionInput, 'productionRate'> & { machineSpeed: number }) => {
+  const handleSimulation = async (input: SimulateProductionInput) => {
     setIsSimulating(true);
     setSimulationResult(null);
     toast({ title: 'Ejecutando Simulación', description: 'La IA está procesando los parámetros...' });
@@ -279,7 +280,6 @@ export default function IAClient({
 
         const result = await simulateProduction({
             ...input,
-            productionRate: input.machineSpeed * 60, // Convert units/min to units/hr
             productName: selectedProduct.productName,
             historicalPerformance: historicalPerformance.length > 0 ? historicalPerformance : undefined
         });
@@ -386,14 +386,16 @@ export default function IAClient({
 // --- Tab Components ---
 
 function SimulatorTab({ onSimulate, isSimulating, result, products }: {
-    onSimulate: (input: Omit<SimulateProductionInput, 'productionRate'> & { machineSpeed: number }) => void;
+    onSimulate: (input: SimulateProductionInput) => void;
     isSimulating: boolean;
     result: SimulateProductionOutput | null;
     products: ProductDefinition[];
 }) {
     type SimInputState = {
         productName: string;
-        machineSpeed: number;
+        machineSpeed: number; // fundas/min
+        efficiency: number; // percentage
+        unitsPerSack: number;
         hoursPerDayShift: number;
         hoursPerNightShift: number;
         activeDays: { mon: boolean; tue: boolean; wed: boolean; thu: boolean; fri: boolean; sat: boolean; sun: boolean; };
@@ -401,14 +403,23 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
 
     const [simInput, setSimInput] = React.useState<SimInputState>({
         productName: products.find(p => p.isActive)?.id || '',
-        machineSpeed: 38,
+        machineSpeed: 40,
+        efficiency: 8,
+        unitsPerSack: 50,
         hoursPerDayShift: 8,
         hoursPerNightShift: 8,
         activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false },
     });
 
+    const calculatedValues = React.useMemo(() => {
+        const unitsPerHour = simInput.machineSpeed * 60;
+        const effectiveUnitsPerHour = unitsPerHour * (simInput.efficiency / 100);
+        const sacksPerHour = effectiveUnitsPerHour / simInput.unitsPerSack;
+        return { unitsPerHour, effectiveUnitsPerHour, sacksPerHour };
+    }, [simInput.machineSpeed, simInput.efficiency, simInput.unitsPerSack]);
+
     const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays'>, value: string | number) => {
-        setSimInput(prev => ({ ...prev, [field]: value }));
+        setSimInput(prev => ({ ...prev, [field]: Number(value) }));
     };
 
     const handleDayChange = (day: keyof SimInputState['activeDays'], checked: boolean) => {
@@ -417,7 +428,13 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        onSimulate(simInput);
+        onSimulate({
+            productName: simInput.productName,
+            productionRate: calculatedValues.sacksPerHour,
+            hoursPerDayShift: simInput.hoursPerDayShift,
+            hoursPerNightShift: simInput.hoursPerNightShift,
+            activeDays: simInput.activeDays,
+        });
     };
 
     return (
@@ -428,81 +445,114 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
             </CardHeader>
             <form onSubmit={handleSubmit}>
                 <CardContent>
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="product-select">Producto</Label>
-                            <Select value={simInput.productName} onValueChange={(val) => handleInputChange('productName', val)}>
-                                <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
-                                <SelectContent>{products.filter(p=>p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}</SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="rate">Velocidad de Máquina (unidades/minuto)</Label>
-                            <Input id="rate" type="number" value={simInput.machineSpeed} onChange={e => handleInputChange('machineSpeed', Number(e.target.value))} required />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="day-shift">Horas Turno Día</Label>
-                                <Input id="day-shift" type="number" value={simInput.hoursPerDayShift} onChange={e => handleInputChange('hoursPerDayShift', Number(e.target.value))} required />
+                    <div className="grid md:grid-cols-2 gap-x-8 gap-y-4">
+                        {/* Columna de Inputs */}
+                        <div className="space-y-4">
+                             <div className="space-y-2">
+                                <Label htmlFor="product-select">Producto</Label>
+                                <Select value={simInput.productName} onValueChange={(val) => setSimInput(p => ({...p, productName: val}))}>
+                                    <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
+                                    <SelectContent>{products.filter(p=>p.isActive).map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}</SelectContent>
+                                </Select>
                             </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="night-shift">Horas Turno Noche</Label>
-                                <Input id="night-shift" type="number" value={simInput.hoursPerNightShift} onChange={e => handleInputChange('hoursPerNightShift', Number(e.target.value))} required />
+                            <div className="grid grid-cols-3 gap-4">
+                               <div className="space-y-2">
+                                    <Label htmlFor="machine-speed">Velocidad (fundas/min)</Label>
+                                    <Input id="machine-speed" type="number" value={simInput.machineSpeed} onChange={e => handleInputChange('machineSpeed', e.target.value)} required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="efficiency">Rendimiento (%)</Label>
+                                    <Input id="efficiency" type="number" value={simInput.efficiency} onChange={e => handleInputChange('efficiency', e.target.value)} required />
+                                </div>
+                                 <div className="space-y-2">
+                                    <Label htmlFor="units-per-sack">Unidades/Saco</Label>
+                                    <Input id="units-per-sack" type="number" value={simInput.unitsPerSack} onChange={e => handleInputChange('unitsPerSack', e.target.value)} required />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="day-shift">Horas Turno Día</Label>
+                                    <Input id="day-shift" type="number" value={simInput.hoursPerDayShift} onChange={e => handleInputChange('hoursPerDayShift', e.target.value)} required />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="night-shift">Horas Turno Noche</Label>
+                                    <Input id="night-shift" type="number" value={simInput.hoursPerNightShift} onChange={e => handleInputChange('hoursPerNightShift', e.target.value)} required />
+                                </div>
+                            </div>
+                             <div className="space-y-2">
+                                <Label>Días de Producción Activos</Label>
+                                <div className="flex flex-wrap gap-4 pt-2">
+                                    {Object.keys(simInput.activeDays).map(day => (
+                                        <div key={day} className="flex items-center space-x-2">
+                                            <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
+                                            <Label htmlFor={day} className="capitalize text-sm font-normal">{day}</Label>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                        <div className="space-y-2">
-                            <Label>Días de Producción Activos</Label>
-                            <div className="flex flex-wrap gap-4">
-                                {Object.keys(simInput.activeDays).map(day => (
-                                    <div key={day} className="flex items-center space-x-2">
-                                        <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
-                                        <Label htmlFor={day} className="capitalize">{day}</Label>
-                                    </div>
-                                ))}
-                            </div>
+
+                        {/* Columna de Resultados */}
+                        <div className="space-y-4">
+                             <div>
+                                <Label>Resultados del Cálculo</Label>
+                                <Table className="mt-2">
+                                    <TableBody>
+                                        <TableRow>
+                                            <TableCell className="font-medium">Fundas por Hora (bruto)</TableCell>
+                                            <TableCell className="text-right">{calculatedValues.unitsPerHour.toLocaleString()}</TableCell>
+                                        </TableRow>
+                                        <TableRow>
+                                            <TableCell className="font-medium">Fundas por Hora (con rendimiento)</TableCell>
+                                            <TableCell className="text-right">{calculatedValues.effectiveUnitsPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })}</TableCell>
+                                        </TableRow>
+                                        <TableRow className="bg-muted/50">
+                                            <TableCell className="font-bold text-primary">Sacos por Hora (neto)</TableCell>
+                                            <TableCell className="text-right font-bold text-primary text-base">{calculatedValues.sacksPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })}</TableCell>
+                                        </TableRow>
+                                    </TableBody>
+                                </Table>
+                             </div>
+                             {isSimulating &&  <p className="text-center text-muted-foreground pt-4">La IA está calculando la simulación...</p>}
+                             {result && (
+                                <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
+                                    <h4 className="font-semibold">Recomendaciones de la IA</h4>
+                                    {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
+                                </div>
+                             )}
                         </div>
                     </div>
                 </CardContent>
                 <CardFooter>
-                    <Button type="submit" disabled={isSimulating}><BrainCircuit className="mr-2" />{isSimulating ? 'Calculando...' : 'Ejecutar Simulación'}</Button>
+                    <Button type="submit" disabled={isSimulating || !simInput.productName}><BrainCircuit className="mr-2" />{isSimulating ? 'Calculando...' : 'Ejecutar Simulación con IA'}</Button>
                 </CardFooter>
             </form>
             
-            {(isSimulating || result) && (
+            {result && (
                 <CardContent className="mt-6 border-t pt-6">
-                    {isSimulating ? (
-                        <p className="text-center text-muted-foreground">La IA está calculando la simulación...</p>
-                    ) : result && (
-                        <div className="space-y-6">
-                            <h3 className="text-lg font-semibold">Resultados de la Simulación</h3>
-                            <div className="grid md:grid-cols-2 gap-6">
-                                <div className="space-y-4">
-                                    <div className="grid gap-4 grid-cols-2">
-                                        <ComparisonCard title="Producción Óptima Semanal" valueA={0} valueB={result.totalOptimalProduction} showPercentage={false} />
-                                        <ComparisonCard title="Proyección Realista Semanal" valueA={result.totalOptimalProduction} valueB={result.totalRealisticProjection} subValue={`Basado en ${result.averageEfficiency.toFixed(1)}% eficiencia hist.`} />
-                                    </div>
-                                    <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
-                                        <h4 className="font-semibold">Recomendaciones de la IA</h4>
-                                        {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
-                                    </div>
-                                </div>
-                                <div>
-                                    <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección</h4>
-                                    <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
-                                        <BarChart data={result.dailyBreakdown}>
-                                            <CartesianGrid vertical={false} />
-                                            <XAxis dataKey="day" />
-                                            <YAxis />
-                                            <RechartsTooltip content={<ChartTooltipContent />} />
-                                            <Legend content={<ChartLegendContent />} />
-                                            <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
-                                            <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
-                                        </BarChart>
-                                    </ChartContainer>
-                                </div>
+                    <div className="space-y-6">
+                        <h3 className="text-lg font-semibold text-center">Resultados de la Simulación Semanal (en Sacos)</h3>
+                        <div className="grid md:grid-cols-2 gap-6 items-center">
+                            <div className="space-y-4">
+                                <ComparisonCard title="Producción Óptima Semanal" valueA={0} valueB={result.totalOptimalProduction} showPercentage={false} />
+                                <ComparisonCard title="Proyección Realista Semanal" valueA={result.totalOptimalProduction} valueB={result.totalRealisticProjection} subValue={`Basado en ${result.averageEfficiency.toFixed(1)}% eficiencia hist.`} />
+                            </div>
+                            <div>
+                                <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección</h4>
+                                <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
+                                    <BarChart data={result.dailyBreakdown}>
+                                        <CartesianGrid vertical={false} />
+                                        <XAxis dataKey="day" />
+                                        <YAxis />
+                                        <RechartsTooltip content={<ChartTooltipContent />} />
+                                        <Legend content={<ChartLegendContent />} />
+                                        <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
+                                        <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
+                                    </BarChart>
+                                </ChartContainer>
                             </div>
                         </div>
-                    )}
+                    </div>
                 </CardContent>
             )}
         </Card>
@@ -525,13 +575,18 @@ function SuggestionTab({ onSuggest, isSuggesting, suggestion, onApply }: {
             <CardContent>
                 <Button onClick={onSuggest} disabled={isSuggesting}><Bot className={`mr-2 ${isSuggesting ? 'animate-spin' : ''}`} />{isSuggesting ? 'Generando...' : 'Generar Sugerencia de Plan'}</Button>
             </CardContent>
-            {suggestion && (
-                <CardFooter className="flex-col items-start gap-4 pt-6">
-                    <Separator />
-                    <h3 className="font-semibold text-lg pt-4">Análisis y Sugerencia de la IA</h3>
-                    <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">{suggestion.analysis.split('\n').map((p, i) => <p key={i}>{p}</p>)}</div>
-                    <Button onClick={onApply}>Aplicar Sugerencias...</Button>
-                </CardFooter>
+            {(isSuggesting || suggestion) && (
+              <CardContent className="mt-6 border-t pt-6">
+                {isSuggesting ? (
+                  <p className="text-center text-muted-foreground">La IA está analizando el historial y generando una sugerencia...</p>
+                ) : suggestion && (
+                    <div className="space-y-4">
+                      <h3 className="font-semibold text-lg">Análisis y Sugerencia de la IA</h3>
+                      <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">{suggestion.analysis.split('\n').map((p, i) => <p key={i}>{p}</p>)}</div>
+                      <Button onClick={onApply}>Aplicar Sugerencias...</Button>
+                    </div>
+                )}
+              </CardContent>
             )}
         </Card>
     );
@@ -554,12 +609,17 @@ function ForecastTab({ onForecast, isForecasting, forecast, trendData, isLoading
                 <CardContent>
                     <Button onClick={onForecast} disabled={isForecasting}><TrendingUp className={`mr-2 ${isForecasting ? 'animate-spin' : ''}`} />{isForecasting ? 'Generando...' : 'Generar Pronóstico de Demanda'}</Button>
                 </CardContent>
-                {forecast && (
-                    <CardFooter className="flex-col items-start gap-4 pt-6">
-                        <Separator />
-                        <h3 className="font-semibold text-lg pt-4">Pronóstico de Demanda (Análisis IA)</h3>
-                        <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">{forecast.analysis.split('\n').map((p, i) => <p key={i}>{p}</p>)}</div>
-                    </CardFooter>
+                {(isForecasting || forecast) && (
+                  <CardContent className="mt-6 border-t pt-6">
+                     {isForecasting ? (
+                        <p className="text-center text-muted-foreground">La IA está analizando las tendencias...</p>
+                     ) : forecast && (
+                        <div className="space-y-4">
+                          <h3 className="font-semibold text-lg pt-4">Pronóstico de Demanda (Análisis IA)</h3>
+                          <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">{forecast.analysis.split('\n').map((p, i) => <p key={i}>{p}</p>)}</div>
+                        </div>
+                     )}
+                  </CardContent>
                 )}
             </Card>
             <Card>
