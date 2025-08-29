@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, HardHat, BrainCircuit } from 'lucide-react';
+import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, HardHat, BrainCircuit, Package, Percent, Clock, FileDigit, Calendar, Sun, Moon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -15,13 +15,10 @@ import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToo
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
-import ComparisonCard from './comparison-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
-import { Separator } from './ui/separator';
 import KpiCard from './kpi-card';
-import { Package, Percent, Clock, FileDigit, Calendar, Sun, Moon } from 'lucide-react';
 
 
 // --- Shared Chart Configurations ---
@@ -298,13 +295,13 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                     <CardDescription>Estima la producción semanal basándote en parámetros operativos y compárala con proyecciones realistas basadas en el historial.</CardDescription>
                 </CardHeader>
                 <form onSubmit={handleSubmit}>
-                    <CardContent className="space-y-8">
+                    <CardContent className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {/* --- Parámetros --- */}
-                        <div className="grid md:grid-cols-3 gap-6">
-                            <div className="space-y-4">
+                        <div className="lg:col-span-1 space-y-6">
+                             <div className="space-y-4">
                                 <h3 className="font-semibold text-foreground">1. Parámetros del Producto</h3>
                                 <div className="space-y-2">
-                                    <Label htmlFor="product-select">Producto a Simular (Solo Planificables)</Label>
+                                    <Label htmlFor="product-select">Producto a Simular</Label>
                                     <Select value={simInput.productId} onValueChange={handleProductChange}>
                                         <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
                                         <SelectContent>
@@ -358,11 +355,9 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                             </div>
                         </div>
 
-                        <Separator />
-                        
-                        <div>
-                            <h3 className="font-semibold text-foreground mb-4">4. Cálculo de Tasa de Producción</h3>
-                             <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        <div className="lg:col-span-2 space-y-4">
+                             <h3 className="font-semibold text-foreground">Cálculo de Tasa de Producción</h3>
+                             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <KpiCard title="Unidades/Minuto" value={calculatedValues.unitsPerMinute} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
                                 <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
                                 <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.effectiveUnitsPerHour} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
@@ -393,20 +388,16 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                         </CardHeader>
                         <CardContent>
                              <div className="grid md:grid-cols-2 gap-4">
-                                <ComparisonCard 
-                                    title="Producción Óptima Semanal (2 Turnos)" 
-                                    valueA={0} 
-                                    valueB={result.totalOptimalProduction * 2} 
-                                    showPercentage={false} 
-                                    description="Cálculo teórico máximo basado en los parámetros de entrada, sin considerar paradas o ineficiencias."
-                                />
-                                <ComparisonCard 
-                                    title="Proyección Realista Semanal (2 Turnos)" 
-                                    valueA={result.totalOptimalProduction * 2} 
-                                    valueB={result.totalRealisticProjection * 2} 
-                                    isPercentage={false}
-                                    description="Estimación ajustada basada en la eficiencia histórica real, ofreciendo un pronóstico más alcanzable."
-                                />
+                                <div>
+                                    <p className="text-sm font-medium text-muted-foreground">Producción Óptima Semanal</p>
+                                    <p className="text-2xl font-bold">{Math.round(result.totalOptimalProduction * 2).toLocaleString()}</p>
+                                    <p className="text-xs text-muted-foreground">Cálculo teórico sin ineficiencias.</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-muted-foreground">Proyección Realista Semanal</p>
+                                    <p className="text-2xl font-bold">{Math.round(result.totalRealisticProjection * 2).toLocaleString()}</p>
+                                    <p className="text-xs text-muted-foreground">Basado en {result.averageEfficiency.toFixed(1)}% de eficiencia histórica.</p>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
