@@ -5,17 +5,15 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Factory, ChevronLeft, Filter, Percent, TrendingUp, TrendingDown, GanttChart } from 'lucide-react';
+import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, where, doc, getDoc, limit } from 'firebase/firestore';
-import type { ProductData, DailyProduction, CategoryDefinition } from '@/lib/types';
+import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import type { ProductData, CategoryDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { Separator } from './ui/separator';
-import ComparisonCard from './comparison-card';
 import { subWeeks, getISOWeek, getYear } from 'date-fns';
 
 
@@ -95,13 +93,6 @@ const productChartConfig = {
     color: "hsl(var(--chart-2))",
   },
 } satisfies ChartConfig;
-
-type AllPlansData = {
-    id: string; // planId
-    week: number;
-    year: number;
-    products: ProductData[];
-};
 
 type WeeklySummaryDoc = {
     id: string;
@@ -189,6 +180,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   
   const [loading, setLoading] = React.useState(true);
   const [allSummaries, setAllSummaries] = React.useState<WeeklySummaryDoc[]>([]);
+  const [filteredSummaries, setFilteredSummaries] = React.useState<WeeklySummaryDoc[]>([]);
   const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
   const [selectedWeek, setSelectedWeek] = React.useState('all');
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
@@ -197,41 +189,19 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
 
 
   const weekOptions = React.useMemo(() => {
-    return allSummaries
+    return filteredSummaries
       .map(summary => ({ week: summary.week, year: summary.year, id: summary.id }))
       .sort((a, b) => b.year - a.year || b.week - a.week);
-  }, [allSummaries]);
+  }, [filteredSummaries]);
 
   React.useEffect(() => {
     const fetchAllSummaries = async () => {
         setLoading(true);
         try {
-            let summariesQuery;
-            if (dateRange === 'all') {
-                summariesQuery = query(collection(db, 'weeklySummaries'), orderBy('__name__', 'asc'));
-            } else {
-                const numberOfWeeks = parseInt(dateRange);
-                const today = new Date();
-                const currentYear = getYear(today);
-                const currentWeek = getISOWeek(today);
-
-                const startDate = subWeeks(today, numberOfWeeks - 1);
-                const startYear = getYear(startDate);
-                const startWeek = getISOWeek(startDate);
-                
-                const startPlanId = `${startYear}-W${String(startWeek).padStart(2, '0')}`;
-                const endPlanId = `${currentYear}-W${String(currentWeek).padStart(2, '0')}`;
-                
-                summariesQuery = query(collection(db, 'weeklySummaries'), 
-                    where('__name__', '>=', startPlanId),
-                    where('__name__', '<=', endPlanId),
-                    orderBy('__name__', 'asc')
-                );
-            }
-            
+            const summariesQuery = query(collection(db, 'weeklySummaries'), orderBy('__name__', 'desc'));
             const summariesSnapshot = await getDocs(summariesQuery);
             const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
-            setAllSummaries(fetchedSummaries.reverse()); // Reverse here to get descending order
+            setAllSummaries(fetchedSummaries);
         } catch (error) {
             console.error('Failed to fetch weekly summaries from Firestore:', error);
         }
@@ -239,14 +209,23 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     };
 
     fetchAllSummaries();
-  }, [dateRange]);
+  }, []);
+
+  React.useEffect(() => {
+    if (dateRange === 'all') {
+        setFilteredSummaries(allSummaries);
+    } else {
+        const numberOfWeeks = parseInt(dateRange, 10);
+        setFilteredSummaries(allSummaries.slice(0, numberOfWeeks));
+    }
+  }, [dateRange, allSummaries]);
 
   React.useEffect(() => {
     const processData = async () => {
         if (loading) return;
         
         // --- Data for Weekly Summary Charts (Unaffected by specific week filter) ---
-        const summariesForCharts = allSummaries;
+        const summariesForCharts = filteredSummaries;
 
         const weeklySummaryForChart: WeeklySummaryData[] = summariesForCharts.map(summary => {
             const totals = selectedCategoryId === 'all'
@@ -260,7 +239,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             
             return {
                 week: summary.week,
-                name: `Semana ${summary.week}`,
+                name: `S${summary.week}`,
                 planned: totals.planned,
                 totalActual: totals.totalActual,
                 actualForPlanned: totals.actualForPlanned,
@@ -274,7 +253,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             const totalDay = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.day, 0);
             const totalNight = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.night, 0);
             return {
-                name: `Semana ${summary.week}`,
+                name: `S${summary.week}`,
                 day: totalDay,
                 night: totalNight,
                 week: summary.week
@@ -346,7 +325,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
 
     processData();
 
-  }, [allSummaries, selectedWeek, selectedCategoryId, categories, loading]);
+  }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading]);
 
 
   return (
