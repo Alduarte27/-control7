@@ -560,7 +560,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                             </TableCell>
                                         </TableRow>
                                         <TableRow>
-                                            <TableCell className="font-medium">Sacos por Día (2 turnos)</TableCell>
+                                            <TableCell className="font-medium">Sacos por Día ({simInput.hoursPerDayShift + simInput.hoursPerNightShift} hrs)</TableCell>
                                             <TableCell className="text-right">
                                                 <ClientFormattedNumber value={calculatedValues.sacksPerDay} maximumFractionDigits={0} />
                                             </TableCell>
@@ -595,11 +595,11 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                         <h3 className="text-lg font-semibold text-center">Resultados de la Simulación Semanal (en Sacos)</h3>
                         <div className="grid md:grid-cols-2 gap-6 items-center">
                             <div className="space-y-4">
-                                <ComparisonCard title="Producción Óptima Semanal" valueA={0} valueB={result.totalOptimalProduction} showPercentage={false} />
-                                <ComparisonCard title="Proyección Realista Semanal" valueA={result.totalOptimalProduction} valueB={result.totalRealisticProjection} isPercentage={false}/>
+                                <ComparisonCard title="Producción Óptima Semanal (2 Turnos)" valueA={0} valueB={result.totalOptimalProduction * 2} showPercentage={false} />
+                                <ComparisonCard title="Proyección Realista Semanal (2 Turnos)" valueA={result.totalOptimalProduction * 2} valueB={result.totalRealisticProjection * 2} isPercentage={false}/>
                             </div>
                             <div>
-                                <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección</h4>
+                                <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección (1 Turno)</h4>
                                 <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
                                     <BarChart data={result.dailyBreakdown}>
                                         <CartesianGrid vertical={false} />

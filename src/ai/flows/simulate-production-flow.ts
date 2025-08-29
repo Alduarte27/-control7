@@ -59,7 +59,7 @@ const prompt = ai.definePrompt({
   output: { schema: SimulateProductionOutputSchema },
   prompt: `Eres un analista experto en operaciones de producción para una empresa de alimentos. Tu tarea es analizar los parámetros de una simulación de producción, compararlos con datos históricos y generar un informe claro y con recomendaciones accionables en español.
 
-**IMPORTANTE: Todos tus cálculos y resultados deben expresarse en "sacos".**
+**IMPORTANTE: Todos tus cálculos y resultados deben expresarse en "sacos". Los cálculos deben basarse en las horas de UN SOLO turno (usa hoursPerDayShift).**
 
 **Contexto de la Simulación:**
 - Producto: {{productName}}
@@ -80,8 +80,7 @@ const prompt = ai.definePrompt({
 **Tus Tareas:**
 
 1.  **Calcular Producción Óptima (en sacos):**
-    -   **Primero, suma las horas del turno de día y del turno de noche** para obtener el total de horas de producción por día.
-    -   Calcula la producción diaria y semanal máxima posible basándote en la tasa de producción y el **total de horas de trabajo diarias**. El resultado debe ser en sacos.
+    -   Calcula la producción diaria y semanal máxima posible basándote en la tasa de producción y las horas de trabajo de **un solo turno (hoursPerDayShift)**. El resultado debe ser en sacos.
 
 2.  **Calcular Proyección Realista (en sacos):**
     -   Si hay datos históricos, calcula la **eficiencia promedio**.
@@ -89,7 +88,7 @@ const prompt = ai.definePrompt({
     -   Si no hay datos históricos, asume una eficiencia conservadora del 90% para la proyección realista, y menciónalo en tus recomendaciones.
 
 3.  **Generar Desglose Diario (en sacos):**
-    -   Proporciona un desglose día por día (solo para los días activos) que muestre la producción óptima y la realista, ambas en sacos.
+    -   Proporciona un desglose día por día (solo para los días activos) que muestre la producción óptima y la realista para **un solo turno**, ambas en sacos.
 
 4.  **Generar Recomendaciones (MUY IMPORTANTE):**
     -   Tu análisis y recomendaciones DEBEN estar en español.
