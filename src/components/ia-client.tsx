@@ -86,7 +86,7 @@ export default function IAClient({
         setAllSummaries(fetchedSummaries);
 
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        fetchedPlans.sort((a, b) => a.id.localeCompare(b.id)); // Sort in code to avoid index
+        fetchedPlans.sort((a, b) => b.id.localeCompare(a.id));
         setAllPlans(fetchedPlans);
         
       } catch (error) {
@@ -349,8 +349,8 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                         <div>
                             <h3 className="font-semibold text-foreground mb-4">4. Cálculo de Tasa de Producción</h3>
                             <div className="grid md:grid-cols-4 gap-4">
-                                <KpiCard title="Unidades/Minuto" value={calculatedValues.unitsPerMinute.toLocaleString()} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
-                                <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour.toLocaleString()} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
+                                <KpiCard title="Unidades/Minuto" value={calculatedValues.unitsPerMinute} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
+                                <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
                                 <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.effectiveUnitsPerHour.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
                                 <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.sacksPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
                             </div>

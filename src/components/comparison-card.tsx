@@ -16,15 +16,24 @@ type ComparisonCardProps = {
 };
 
 export default function ComparisonCard({ title, valueA, valueB, isPercentage = false, showPercentage = true, description }: ComparisonCardProps) {
-  const formatValue = (value: number) => {
-    if (typeof value !== 'number' || isNaN(value)) {
-      return '-';
-    }
-    if (isPercentage) {
-      return `${value.toFixed(1)}%`;
-    }
-    return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
-  };
+  const [formattedValueA, setFormattedValueA] = React.useState<string>('-');
+  const [formattedValueB, setFormattedValueB] = React.useState<string>('-');
+
+  React.useEffect(() => {
+    const formatValue = (value: number) => {
+      if (typeof value !== 'number' || isNaN(value)) {
+        return '-';
+      }
+      if (isPercentage) {
+        return `${value.toFixed(1)}%`;
+      }
+      return value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    };
+
+    setFormattedValueA(formatValue(valueA));
+    setFormattedValueB(formatValue(valueB));
+  }, [valueA, valueB, isPercentage]);
+
 
   const calculateChange = () => {
     if (valueA === 0 && valueB > 0) return 100;
@@ -69,9 +78,9 @@ export default function ComparisonCard({ title, valueA, valueB, isPercentage = f
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{formatValue(valueB)}</div>
+          <div className="text-2xl font-bold">{formattedValueB}</div>
           <div className="text-xs text-muted-foreground">
-            Semana A: {formatValue(valueA)}
+            Semana A: {formattedValueA}
           </div>
           {showPercentage && (
               <div className={cn("flex items-center text-xs mt-1", getChangeColor())}>
