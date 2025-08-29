@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Factory, ChevronLeft, Filter, Percent, TrendingUp, TrendingDown } from 'lucide-react';
+import { Factory, ChevronLeft, Filter, Percent, TrendingUp, TrendingDown, GanttChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, where, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, doc, getDoc, limit } from 'firebase/firestore';
 import type { ProductData, DailyProduction, CategoryDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
@@ -199,8 +199,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   const weekOptions = React.useMemo(() => {
     return allSummaries
       .map(summary => ({ week: summary.week, year: summary.year, id: summary.id }))
-      // The reverse() is done on fetch now, so we don't need to re-sort here
-      // .sort((a, b) => b.year - a.year || b.week - a.week);
+      .sort((a, b) => b.year - a.year || b.week - a.week);
   }, [allSummaries]);
 
   React.useEffect(() => {
@@ -209,14 +208,14 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         try {
             let summariesQuery;
             if (dateRange === 'all') {
-                summariesQuery = query(collection(db, 'weeklySummaries'), orderBy('__name__', 'desc'));
+                summariesQuery = query(collection(db, 'weeklySummaries'), orderBy('__name__', 'asc'));
             } else {
                 const numberOfWeeks = parseInt(dateRange);
                 const today = new Date();
                 const currentYear = getYear(today);
                 const currentWeek = getISOWeek(today);
 
-                const startDate = subWeeks(today, numberOfWeeks -1);
+                const startDate = subWeeks(today, numberOfWeeks - 1);
                 const startYear = getYear(startDate);
                 const startWeek = getISOWeek(startDate);
                 
@@ -226,13 +225,13 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                 summariesQuery = query(collection(db, 'weeklySummaries'), 
                     where('__name__', '>=', startPlanId),
                     where('__name__', '<=', endPlanId),
-                    orderBy('__name__', 'desc')
+                    orderBy('__name__', 'asc')
                 );
             }
             
             const summariesSnapshot = await getDocs(summariesQuery);
             const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
-            setAllSummaries(fetchedSummaries);
+            setAllSummaries(fetchedSummaries.reverse()); // Reverse here to get descending order
         } catch (error) {
             console.error('Failed to fetch weekly summaries from Firestore:', error);
         }
@@ -367,12 +366,23 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
       <main className="p-4 md:p-8 space-y-6">
         <Collapsible open={isFilterOpen} onOpenChange={setIsFilterOpen} className="space-y-2">
             <div className="flex justify-between items-center">
-                <CollapsibleTrigger asChild>
-                    <Button variant="outline" size="sm">
-                        <Filter className="mr-2 h-4 w-4" />
-                        {isFilterOpen ? 'Ocultar Filtros' : 'Mostrar Filtros'}
-                    </Button>
-                </CollapsibleTrigger>
+                <div className="flex items-center gap-2">
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" size="sm">
+                            <Filter className="mr-2 h-4 w-4" />
+                            {isFilterOpen ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+                        </Button>
+                    </CollapsibleTrigger>
+                    {isFilterOpen && (
+                         <Button variant="link" size="sm" className="text-xs p-0 h-auto" onClick={() => {
+                             setSelectedCategoryId('all');
+                             setSelectedWeek('all');
+                             setDateRange('12');
+                         }}>
+                             Limpiar Filtros
+                         </Button>
+                    )}
+                </div>
                 <CardDescription className="text-right text-xs md:text-sm">
                     Elige el rango de datos a cargar. Filtra por semana específica o categoría.
                 </CardDescription>
