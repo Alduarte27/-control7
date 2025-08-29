@@ -21,7 +21,7 @@ import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
 import { Separator } from './ui/separator';
 import KpiCard from './kpi-card';
-import { Package } from 'lucide-react';
+import { Package, Percent, Clock, FileDigit } from 'lucide-react';
 
 
 // --- Shared Chart Configurations ---
@@ -86,7 +86,7 @@ export default function IAClient({
         setAllSummaries(fetchedSummaries);
 
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        fetchedPlans.sort((a, b) => b.id.localeCompare(a.id));
+        fetchedPlans.sort((a, b) => a.id.localeCompare(b.id)); // Sort in code to avoid index
         setAllPlans(fetchedPlans);
         
       } catch (error) {
@@ -234,7 +234,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
         const grossUnitsPerHour = unitsPerMinute * 60;
         const effectiveUnitsPerHour = grossUnitsPerHour * (1 - (simInput.performanceLoss / 100));
         const sacksPerHour = simInput.unitsPerSack > 0 ? effectiveUnitsPerHour / simInput.unitsPerSack : 0;
-        return { sacksPerHour };
+        return { unitsPerMinute, grossUnitsPerHour, effectiveUnitsPerHour, sacksPerHour };
     }, [simInput.machineSpeed, simInput.performanceLoss, simInput.unitsPerSack]);
 
     const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays' | 'productId'>, value: string | number) => {
@@ -314,34 +314,31 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                         <Input id="night-shift" type="number" value={simInput.hoursPerNightShift} onChange={e => handleInputChange('hoursPerNightShift', e.target.value)} required />
                                     </div>
                                 </div>
+                                <div className="space-y-3 pt-2">
+                                    <Label className="font-semibold">Días Activos</Label>
+                                    <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                        {Object.keys(simInput.activeDays).map(day => (
+                                            <div key={day} className="flex items-center space-x-2">
+                                                <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
+                                                <Label htmlFor={day} className="capitalize text-sm font-normal">{day.substring(0,3)}</Label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <Separator />
                         
-                        {/* --- Días Activos y Resultado --- */}
-                         <div className="grid md:grid-cols-2 gap-8 items-start">
-                             <div className="space-y-3">
-                                <Label className="font-semibold">4. Días de Producción Activos</Label>
-                                <div className="flex flex-wrap gap-x-6 gap-y-3 pt-2">
-                                    {Object.keys(simInput.activeDays).map(day => (
-                                        <div key={day} className="flex items-center space-x-2">
-                                            <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
-                                            <Label htmlFor={day} className="capitalize text-sm font-normal">{day.substring(0,3)}</Label>
-                                        </div>
-                                    ))}
-                                </div>
+                        <div>
+                            <h3 className="font-semibold text-foreground mb-4">4. Cálculo de Tasa de Producción</h3>
+                            <div className="grid md:grid-cols-4 gap-4">
+                                <KpiCard title="Unidades/Minuto" value={calculatedValues.unitsPerMinute.toLocaleString()} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
+                                <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour.toLocaleString()} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
+                                <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.effectiveUnitsPerHour.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
+                                <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.sacksPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
                             </div>
-                             <div className="space-y-3">
-                                 <Label className="font-semibold">Resultado Clave del Cálculo</Label>
-                                 <KpiCard
-                                     title="Sacos por Hora (Neto)"
-                                     value={calculatedValues.sacksPerHour.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                     icon={Package}
-                                     description="Esta es la tasa de producción neta, considerando la velocidad y la pérdida de rendimiento. Es el valor que se enviará a la IA para la simulación."
-                                 />
-                             </div>
-                         </div>
+                        </div>
                     </CardContent>
                     <CardFooter>
                         <Button type="submit" disabled={isSimulating || !simInput.productId} size="lg">
@@ -381,36 +378,38 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                         </CardContent>
                     </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Análisis y Recomendaciones de la IA</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
-                                {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
-                            </div>
-                        </CardContent>
-                    </Card>
-                    
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Desglose Diario y Proyección (1 Turno)</CardTitle>
-                             <CardDescription>Visualiza la diferencia entre la producción óptima y la realista para cada día activo.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
-                                <RechartsBarChart data={result.dailyBreakdown}>
-                                    <CartesianGrid vertical={false} />
-                                    <XAxis dataKey="day" />
-                                    <YAxis />
-                                    <RechartsTooltip content={<ChartTooltipContent />} />
-                                    <Legend content={<ChartLegendContent />} />
-                                    <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
-                                    <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
-                                </RechartsBarChart>
-                            </ChartContainer>
-                        </CardContent>
-                    </Card>
+                    <div className="grid md:grid-cols-2 gap-6 items-start">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Análisis y Recomendaciones de la IA</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full max-h-96 overflow-y-auto">
+                                    {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
+                                </div>
+                            </CardContent>
+                        </Card>
+                        
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Desglose Diario y Proyección (1 Turno)</CardTitle>
+                                 <CardDescription>Diferencia entre producción óptima y realista por día.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
+                                    <RechartsBarChart data={result.dailyBreakdown}>
+                                        <CartesianGrid vertical={false} />
+                                        <XAxis dataKey="day" />
+                                        <YAxis />
+                                        <RechartsTooltip content={<ChartTooltipContent />} />
+                                        <Legend content={<ChartLegendContent />} />
+                                        <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
+                                        <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
+                                    </RechartsBarChart>
+                                </ChartContainer>
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
             )}
         </div>
@@ -468,5 +467,3 @@ function ForecastTab({ onForecast, isForecasting, forecast, trendData, isLoading
         </div>
     );
 }
-
-    
