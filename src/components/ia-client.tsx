@@ -2,16 +2,16 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, BarChart2, HardHat, BrainCircuit } from 'lucide-react';
+import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, HardHat, BrainCircuit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { forecastDemand, type ForecastDemandOutput } from '@/ai/flows/forecast-demand-flow';
 import { simulateProduction, type SimulateProductionInput, type SimulateProductionOutput } from '@/ai/flows/simulate-production-flow';
-import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, BarChart } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, BarChart as RechartsBarChart } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
@@ -19,7 +19,7 @@ import ComparisonCard from './comparison-card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from './ui/input';
 import { Checkbox } from './ui/checkbox';
-import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 
 
 // --- Shared Chart Configurations ---
@@ -27,13 +27,6 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from '@/components
 const trendChartConfig = {
   planned: { label: 'Planificado', color: 'hsl(var(--chart-2))' },
   actual: { label: 'Real (s/Plan)', color: 'hsl(var(--chart-1))' },
-} satisfies ChartConfig;
-
-const comparisonChartConfig = {
-  plannedA: { label: 'Plan Semana A', color: 'hsl(var(--chart-1))' },
-  actualA: { label: 'Real Semana A', color: 'hsl(var(--chart-2))' },
-  plannedB: { label: 'Plan Semana B', color: 'hsl(var(--chart-3))' },
-  actualB: { label: 'Real Semana B', color: 'hsl(var(--chart-4))' },
 } satisfies ChartConfig;
 
 const simulationChartConfig = {
@@ -50,14 +43,6 @@ type WeeklySummaryDoc = {
     totalPlanned: number;
     totalActualForPlanned: number;
     categoryTotals: { [categoryId: string]: { planned: number; actualForPlanned: number; } }
-};
-
-type ComparisonData = {
-  totalPlannedA: number;
-  totalActualA: number;
-  totalPlannedB: number;
-  totalActualB: number;
-  productComparison: { name: string; plannedA: number; actualA: number; plannedB: number; actualB: number; }[];
 };
 
 // Client-side number formatter to prevent hydration errors
@@ -78,6 +63,7 @@ export default function IAClient({
   prefetchedCategories, 
   prefetchedProducts 
 }: { 
+  initialPlanId?: string,
   prefetchedCategories: CategoryDefinition[], 
   prefetchedProducts: ProductDefinition[]
 }) {
@@ -85,7 +71,6 @@ export default function IAClient({
   const [loading, setLoading] = React.useState(true);
   const [allSummaries, setAllSummaries] = React.useState<WeeklySummaryDoc[]>([]);
   const [allPlans, setAllPlans] = React.useState<any[]>([]);
-  const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
   
   // --- States for each Tab ---
   const [isForecasting, setIsForecasting] = React.useState(false);
@@ -93,11 +78,6 @@ export default function IAClient({
   const [isSimulating, setIsSimulating] = React.useState(false);
   const [simulationResult, setSimulationResult] = React.useState<SimulateProductionOutput | null>(null);
 
-  const [selectedWeekA, setSelectedWeekA] = React.useState<string>('');
-  const [selectedWeekB, setSelectedWeekB] = React.useState<string>('');
-  const [comparisonData, setComparisonData] = React.useState<ComparisonData | null>(null);
-  const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
-  
   // --- Initial Data Fetching ---
   React.useEffect(() => {
     const fetchHistory = async () => {
@@ -114,14 +94,6 @@ export default function IAClient({
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setAllPlans(fetchedPlans);
         
-        if (fetchedSummaries.length >= 2) {
-          setSelectedWeekA(fetchedSummaries[1].id);
-          setSelectedWeekB(fetchedSummaries[0].id);
-        } else if (fetchedSummaries.length === 1) {
-          setSelectedWeekA(fetchedSummaries[0].id);
-          setSelectedWeekB(fetchedSummaries[0].id);
-        }
-
       } catch (error) {
         console.error("Error fetching historical data:", error);
         toast({ title: 'Error al cargar historial', variant: 'destructive' });
@@ -133,10 +105,6 @@ export default function IAClient({
   }, []);
   
   // --- Memoized Derived Data ---
-  const weekOptions = React.useMemo(() => {
-    return [...allSummaries].sort((a, b) => b.year - a.year || b.week - a.week);
-  }, [allSummaries]);
-  
   const historicalTrendData = React.useMemo(() => {
     return allSummaries.slice(0, 12).reverse().map(summary => ({
         name: `S${summary.week}`,
@@ -144,55 +112,6 @@ export default function IAClient({
         actual: summary.totalActualForPlanned,
     }));
   }, [allSummaries]);
-
-  // --- Logic for Comparison Tab ---
-  React.useEffect(() => {
-    const generateComparison = async () => {
-      if (loading || !selectedWeekA || !selectedWeekB) return;
-      const summaryA = allSummaries.find(s => s.id === selectedWeekA);
-      const summaryB = allSummaries.find(s => s.id === selectedWeekB);
-      if (!summaryA || !summaryB) return;
-
-      try {
-        const [planADoc, planBDoc] = await Promise.all([
-          getDoc(doc(db, "productionPlans", selectedWeekA)),
-          getDoc(doc(db, "productionPlans", selectedWeekB))
-        ]);
-
-        const productsA = planADoc.exists() ? (planADoc.data().products as ProductData[]) : [];
-        const productsB = planBDoc.exists() ? (planBDoc.data().products as ProductData[]) : [];
-
-        const filterProducts = (p: ProductData) => selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
-        
-        const allProductNames = Array.from(new Set([
-          ...productsA.filter(filterProducts).map(p => p.productName), 
-          ...productsB.filter(filterProducts).map(p => p.productName)
-        ]));
-
-        const calculateTotalActual = (p: ProductData) => Object.values(p.actual).reduce((sum, s) => sum + (s.day || 0) + (s.night || 0), 0);
-
-        const productComparison = allProductNames.map(name => {
-          const productA = productsA.find(p => p.productName === name);
-          const productB = productsB.find(p => p.productName === name);
-          return {
-            name,
-            plannedA: productA?.planned || 0,
-            actualA: productA ? calculateTotalActual(productA) : 0,
-            plannedB: productB?.planned || 0,
-            actualB: productB ? calculateTotalActual(productB) : 0,
-          };
-        }).filter(p => p.plannedA > 0 || p.actualA > 0 || p.plannedB > 0 || p.actualB > 0);
-
-        const totalsA = selectedCategoryId === 'all' ? { p: summaryA.totalPlanned, a: summaryA.totalActualForPlanned } : { p: summaryA.categoryTotals?.[selectedCategoryId]?.planned || 0, a: summaryA.categoryTotals?.[selectedCategoryId]?.actualForPlanned || 0 };
-        const totalsB = selectedCategoryId === 'all' ? { p: summaryB.totalPlanned, a: summaryB.totalActualForPlanned } : { p: summaryB.categoryTotals?.[selectedCategoryId]?.planned || 0, a: summaryB.categoryTotals?.[selectedCategoryId]?.actualForPlanned || 0 };
-
-        setComparisonData({ totalPlannedA: totalsA.p, totalActualA: totalsA.a, totalPlannedB: totalsB.p, totalActualB: totalsB.a, productComparison });
-      } catch (error) {
-        console.error("Error fetching comparison data:", error);
-      }
-    };
-    generateComparison();
-  }, [allSummaries, selectedWeekA, selectedWeekB, selectedCategoryId, loading]);
 
   // --- AI Flow Handlers ---
   const handleForecastDemand = async () => {
@@ -269,10 +188,9 @@ export default function IAClient({
         
         <main className="p-4 md:p-8 space-y-6">
             <Tabs defaultValue="simulator" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
+                <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="simulator"><HardHat className="mr-2" />Simulador</TabsTrigger>
                     <TabsTrigger value="forecast"><TrendingUp className="mr-2" />Pronóstico</TabsTrigger>
-                    <TabsTrigger value="comparison"><BarChart2 className="mr-2" />Comparativo</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="simulator" className="mt-6">
@@ -280,20 +198,6 @@ export default function IAClient({
                 </TabsContent>
                 <TabsContent value="forecast" className="mt-6">
                     <ForecastTab onForecast={handleForecastDemand} isForecasting={isForecasting} forecast={forecast} trendData={historicalTrendData} isLoading={loading} />
-                </TabsContent>
-                <TabsContent value="comparison" className="mt-6">
-                    <ComparisonTab 
-                        weekOptions={weekOptions} 
-                        categories={categories}
-                        selectedWeekA={selectedWeekA}
-                        setSelectedWeekA={setSelectedWeekA}
-                        selectedWeekB={selectedWeekB}
-                        setSelectedWeekB={setSelectedWeekB}
-                        selectedCategoryId={selectedCategoryId}
-                        setSelectedCategoryId={setSelectedCategoryId}
-                        comparisonData={comparisonData}
-                        isLoading={loading}
-                    />
                 </TabsContent>
             </Tabs>
         </main>
@@ -475,7 +379,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                              </div>
                         </div>
                     </div>
-                     <div className="px-6 mt-4">
+                     <div className="px-6 pt-4">
                         {isSimulating &&  <p className="text-center text-muted-foreground pt-4">La IA está calculando la simulación...</p>}
                         {result && (
                             <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full">
@@ -499,14 +403,14 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                 <ComparisonCard 
                                     title="Producción Óptima Semanal (2 Turnos)" 
                                     valueA={0} 
-                                    valueB={result.totalOptimalProduction * 2} 
+                                    valueB={result.totalOptimalProduction} 
                                     showPercentage={false} 
                                     description="Cálculo teórico máximo basado en los parámetros de entrada, sin considerar paradas o ineficiencias."
                                 />
                                 <ComparisonCard 
                                     title="Proyección Realista Semanal (2 Turnos)" 
-                                    valueA={result.totalOptimalProduction * 2} 
-                                    valueB={result.totalRealisticProjection * 2} 
+                                    valueA={result.totalOptimalProduction} 
+                                    valueB={result.totalRealisticProjection} 
                                     isPercentage={false}
                                     description="Estimación ajustada basada en la eficiencia histórica real, ofreciendo un pronóstico más alcanzable."
                                 />
@@ -514,7 +418,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                             <div>
                                 <h4 className="font-semibold mb-2 text-center">Desglose Diario y Proyección (1 Turno)</h4>
                                 <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
-                                    <BarChart data={result.dailyBreakdown}>
+                                    <RechartsBarChart data={result.dailyBreakdown}>
                                         <CartesianGrid vertical={false} />
                                         <XAxis dataKey="day" />
                                         <YAxis />
@@ -522,7 +426,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products }: {
                                         <Legend content={<ChartLegendContent />} />
                                         <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
                                         <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
-                                    </BarChart>
+                                    </RechartsBarChart>
                                 </ChartContainer>
                             </div>
                         </div>
@@ -582,54 +486,5 @@ function ForecastTab({ onForecast, isForecasting, forecast, trendData, isLoading
                 </CardContent>
             </Card>
         </div>
-    );
-}
-
-function ComparisonTab({ weekOptions, categories, selectedWeekA, setSelectedWeekA, selectedWeekB, setSelectedWeekB, selectedCategoryId, setSelectedCategoryId, comparisonData, isLoading }: {
-    weekOptions: any[], categories: CategoryDefinition[], selectedWeekA: string, setSelectedWeekA: (v: string) => void, selectedWeekB: string, setSelectedWeekB: (v: string) => void, selectedCategoryId: string, setSelectedCategoryId: (v: string) => void, comparisonData: ComparisonData | null, isLoading: boolean
-}) {
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Análisis Comparativo Semanal</CardTitle>
-                <CardDescription>Compara el rendimiento de dos semanas (solo productos con plan > 0). El filtro de categoría se aplica aquí también.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="flex flex-col md:flex-row items-center gap-4">
-                    <div className="flex-grow space-y-2"><Label>Filtrar por Categoría</Label>
-                        <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent><SelectItem value="all">Todas</SelectItem>{categories.map(c=><SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select>
-                    </div>
-                    <div className="flex-grow space-y-2"><Label>Semana A</Label>
-                        <Select value={selectedWeekA} onValueChange={setSelectedWeekA}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{weekOptions.map(w=><SelectItem key={`A-${w.id}`} value={w.id}>S{w.week} ({w.year})</SelectItem>)}</SelectContent></Select>
-                    </div>
-                    <div className="flex-grow space-y-2"><Label>Semana B</Label>
-                        <Select value={selectedWeekB} onValueChange={setSelectedWeekB}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{weekOptions.map(w=><SelectItem key={`B-${w.id}`} value={w.id}>S{w.week} ({w.year})</SelectItem>)}</SelectContent></Select>
-                    </div>
-                </div>
-                {isLoading ? <p>Cargando...</p> : comparisonData ? (
-                    <div className="space-y-6">
-                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                            <ComparisonCard title="Total Planificado" valueA={comparisonData.totalPlannedA} valueB={comparisonData.totalPlannedB} />
-                            <ComparisonCard title="Total Real" valueA={comparisonData.totalActualA} valueB={comparisonData.totalActualB} />
-                            <ComparisonCard title="Cumplimiento" valueA={comparisonData.totalPlannedA > 0 ? (comparisonData.totalActualA / comparisonData.totalPlannedA) * 100 : 0} valueB={comparisonData.totalPlannedB > 0 ? (comparisonData.totalActualB / comparisonData.totalPlannedB) * 100 : 0} isPercentage />
-                            <ComparisonCard title="Varianza" valueA={comparisonData.totalActualA - comparisonData.totalPlannedA} valueB={comparisonData.totalActualB - comparisonData.totalPlannedB} showPercentage={false} />
-                        </div>
-                        <ChartContainer config={comparisonChartConfig} className="w-full h-[500px]">
-                            <BarChart data={comparisonData.productComparison} margin={{bottom: 120}}>
-                                <CartesianGrid vertical={false} />
-                                <XAxis dataKey="name" angle={-60} textAnchor="end" interval={0} height={100} style={{fontSize:'0.75rem'}}/>
-                                <YAxis />
-                                <ChartTooltip content={<ChartTooltipContent />} />
-                                <ChartLegend verticalAlign="top" content={<ChartLegendContent />} />
-                                <Bar dataKey="plannedA" fill="var(--color-plannedA)" radius={4} />
-                                <Bar dataKey="actualA" fill="var(--color-actualA)" radius={4} />
-                                <Bar dataKey="plannedB" fill="var(--color-plannedB)" radius={4} />
-                                <Bar dataKey="actualB" fill="var(--color-actualB)" radius={4} />
-                            </BarChart>
-                        </ChartContainer>
-                    </div>
-                ) : <p>Selecciona dos semanas para comparar.</p>}
-            </CardContent>
-        </Card>
     );
 }

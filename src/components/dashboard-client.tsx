@@ -9,13 +9,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query, doc, getDoc } from 'firebase/firestore';
 import type { ProductData, CategoryDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { subWeeks, getISOWeek, getYear } from 'date-fns';
 
 
 type WeeklySummaryData = {
@@ -204,7 +203,10 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
             
             // Sort client-side to avoid complex queries
-            fetchedSummaries.sort((a, b) => b.year - a.year || b.week - a.week);
+            fetchedSummaries.sort((a, b) => {
+                if (a.year !== b.year) return b.year - a.year;
+                return b.week - a.week;
+            });
             
             setAllSummaries(fetchedSummaries);
         } catch (error) {
