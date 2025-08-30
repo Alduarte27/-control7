@@ -268,7 +268,13 @@ function SimulatorTab({ products, categories }: {
     }
 
     const handleDayChange = (day: keyof SimInputState['activeDays'], checked: boolean) => {
-        setSimInput(prev => ({ ...prev, activeDays: { ...prev, activeDays: { ...prev.activeDays, [day]: checked } } }));
+      setSimInput(prev => ({
+        ...prev,
+        activeDays: {
+          ...prev.activeDays,
+          [day]: checked,
+        },
+      }));
     };
 
     return (
