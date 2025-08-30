@@ -182,6 +182,16 @@ function SimulatorTab({ products, categories }: {
         activeDays: { mon: boolean; tue: boolean; wed: boolean; thu: boolean; fri: boolean; sat: boolean; sun: boolean; };
     }
 
+    const dayTranslations: { [key: string]: string } = {
+        mon: 'Lun',
+        tue: 'Mar',
+        wed: 'Mié',
+        thu: 'Jue',
+        fri: 'Vie',
+        sat: 'Sáb',
+        sun: 'Dom'
+    };
+
     const categoryMap = React.useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
     const plannableProducts = React.useMemo(() => products.filter(p => p.isActive && categoryMap.get(p.categoryId)?.isPlanned), [products, categoryMap]);
     const [formattedWeeklyProduction, setFormattedWeeklyProduction] = React.useState<string>("...");
@@ -223,7 +233,7 @@ function SimulatorTab({ products, categories }: {
         const dailyBreakdown = Object.entries(simInput.activeDays)
             .filter(([, isActive]) => isActive)
             .map(([day]) => ({
-                day: day.substring(0, 3),
+                day: dayTranslations[day] || day.substring(0, 3),
                 optimalProduction: optimalDailyProductionDayShift,
                 realisticProjection: realisticDailyProductionDayShift,
             }));
@@ -238,6 +248,7 @@ function SimulatorTab({ products, categories }: {
             weeklyProduction,
             dailyBreakdown,
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [simInput]);
 
     React.useEffect(() => {
@@ -324,7 +335,7 @@ function SimulatorTab({ products, categories }: {
                                     {Object.keys(simInput.activeDays).map(day => (
                                         <div key={day} className="flex items-center space-x-1.5">
                                             <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
-                                            <Label htmlFor={day} className="capitalize text-sm font-normal">{day.substring(0,3)}</Label>
+                                            <Label htmlFor={day} className="capitalize text-sm font-normal">{dayTranslations[day]}</Label>
                                         </div>
                                     ))}
                                 </div>
