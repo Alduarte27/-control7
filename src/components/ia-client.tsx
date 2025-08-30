@@ -84,7 +84,10 @@ export default function IAClient({
 
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         // Sort client-side to avoid complex queries
-        fetchedPlans.sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+        fetchedPlans.sort((a, b) => {
+            if (!a.id || !b.id) return 0;
+            return b.id.localeCompare(a.id);
+        });
         setAllPlans(fetchedPlans);
         
       } catch (error) {
@@ -112,7 +115,7 @@ export default function IAClient({
     setForecast(null);
     toast({ title: 'Generando Pronóstico', description: 'La IA está analizando tendencias...' });
     try {
-      const historicalDataForAI = allPlans.slice(-4).map(plan => ({
+      const historicalDataForAI = allPlans.slice(0, 4).map(plan => ({
           week: plan.week,
           year: plan.year,
           products: plan.products.map((p: ProductData) => ({
@@ -146,7 +149,7 @@ export default function IAClient({
             }))
             .filter(plan => plan.productData && plan.productData.planned > 0);
 
-        const historicalPerformance = productPlans.slice(-5).map(plan => {
+        const historicalPerformance = productPlans.slice(0, 5).map(plan => {
             const totalActual = Object.values(plan.productData.actual).reduce((sum: number, day: any) => sum + (day.day || 0) + (day.night || 0), 0);
             return {
                 totalPlanned: plan.productData.planned,
@@ -394,6 +397,8 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                             <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
                             <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.effectiveUnitsPerHour} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
                             <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.sacksPerHour} fractionDigits={2} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
+                            <KpiCard title="Producción Turno Día" value={calculatedValues.dailyProductionDayShift} icon={Sun} description="Producción neta estimada para un solo turno de día." />
+                            <KpiCard title="Producción Turno Noche" value={calculatedValues.dailyProductionNightShift} icon={Moon} description="Producción neta estimada para un solo turno de noche." />
                          </div>
                     </CardContent>
                 </Card>
@@ -427,7 +432,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                                 </div>
                             </CardContent>
                         </Card>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+                        <div className="space-y-4">
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Análisis y Recomendaciones de la IA</CardTitle>
