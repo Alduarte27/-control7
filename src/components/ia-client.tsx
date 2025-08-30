@@ -301,17 +301,17 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-            <div className="lg:col-span-1 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <div className="space-y-4">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><HardHat />Parámetros</CardTitle>
-                        <CardDescription>Configura las variables de la simulación.</CardDescription>
+                        <CardTitle className="flex items-center gap-2"><HardHat />Parámetros de Simulación</CardTitle>
+                        <CardDescription>Ajusta las variables para proyectar la producción.</CardDescription>
                     </CardHeader>
                     <form onSubmit={handleSubmit}>
-                        <CardContent className="space-y-6">
-                            <div className="space-y-4">
-                                <h3 className="font-semibold text-foreground text-sm">1. Producto</h3>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-foreground text-sm">1. Parámetros del Producto</h3>
                                 <div className="space-y-2">
                                     <Label htmlFor="product-select">Producto a Simular</Label>
                                     <Select value={simInput.productId} onValueChange={handleProductChange}>
@@ -329,8 +329,8 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                                 </div>
                             </div>
 
-                             <div className="space-y-4">
-                                <h3 className="font-semibold text-foreground text-sm">2. Maquinaria</h3>
+                             <div className="space-y-3">
+                                <h3 className="font-semibold text-foreground text-sm">2. Parámetros de Maquinaria</h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="machine-speed">Velocidad (fundas/min)</Label>
@@ -347,8 +347,8 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                <h3 className="font-semibold text-foreground text-sm">3. Horario</h3>
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-foreground text-sm">3. Horario de Producción</h3>
                                  <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
                                         <Label htmlFor="day-shift">Horas Turno Día</Label>
@@ -359,7 +359,7 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                                         <Input id="night-shift" type="number" value={simInput.hoursPerNightShift} onChange={e => handleInputChange('hoursPerNightShift', e.target.value)} required />
                                     </div>
                                 </div>
-                                <div className="space-y-3 pt-2">
+                                <div className="space-y-2 pt-2">
                                     <Label className="font-semibold text-xs">Días Activos</Label>
                                     <div className="flex flex-wrap gap-x-4 gap-y-2">
                                         {Object.keys(simInput.activeDays).map(day => (
@@ -382,40 +382,33 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                 </Card>
             </div>
 
-            <div className="lg:col-span-2 space-y-6">
+            <div className="space-y-4">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Cálculo de Tasa de Producción (por máquina)</CardTitle>
-                        <CardDescription>Desglose de cómo se calcula la capacidad de producción antes de enviarla a la IA.</CardDescription>
+                        <CardTitle>Cálculo de Tasa de Producción</CardTitle>
+                        <CardDescription>Desglose de la capacidad por máquina.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                         <div className="grid grid-cols-2 gap-4">
                             <KpiCard title="Unidades/Minuto" value={calculatedValues.unitsPerMinute} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
                             <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
                             <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.effectiveUnitsPerHour} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
                             <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.sacksPerHour} fractionDigits={2} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
-                            <KpiCard title="Producción Turno Día" value={calculatedValues.dailyProductionDayShift} icon={Sun} description="Producción neta estimada para un solo turno de día." />
-                            <KpiCard title="Producción Turno Noche" value={calculatedValues.dailyProductionNightShift} icon={Moon} description="Producción neta estimada para un solo turno de noche." />
-                        </div>
+                         </div>
                     </CardContent>
-                     <CardFooter className="flex-col items-start gap-2 border-t pt-4">
-                        <p className="text-sm text-muted-foreground">Producción Semanal Estimada (Total)</p>
-                        <p className="text-3xl font-bold text-primary">{formattedWeeklyProduction} Sacos</p>
-                        <p className="text-xs text-muted-foreground">Considerando {simInput.numberOfMachines} máquina(s) y los días activos seleccionados.</p>
-                     </CardFooter>
                 </Card>
 
                 {isSimulating &&  <p className="text-center text-muted-foreground pt-8">La IA está calculando la simulación, por favor espera...</p>}
 
                 {result && (
-                    <div className="space-y-6 mt-6">
-                        <Card>
+                    <div className="space-y-4">
+                         <Card>
                             <CardHeader>
                                 <CardTitle>Resultados de la Simulación (Total en Sacos)</CardTitle>
                                 <CardDescription>Comparación entre el potencial teórico y una proyección realista basada en datos históricos para el total de máquinas.</CardDescription>
                             </CardHeader>
-                            <CardContent>
-                                 <div className="grid md:grid-cols-2 gap-4">
+                            <CardContent className="space-y-4">
+                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground">Producción Óptima Semanal</p>
                                         <p className="text-2xl font-bold">{Math.round(result.totalOptimalProduction * simInput.numberOfMachines).toLocaleString()}</p>
@@ -427,16 +420,20 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                                         <p className="text-xs text-muted-foreground">Basado en {result.averageEfficiency.toFixed(1)}% de eficiencia histórica.</p>
                                     </div>
                                 </div>
+                                <div className="border-t pt-4">
+                                    <p className="text-sm text-muted-foreground">Producción Semanal Estimada (Total)</p>
+                                    <p className="text-2xl font-bold text-primary">{formattedWeeklyProduction} Sacos</p>
+                                    <p className="text-xs text-muted-foreground">Considerando {simInput.numberOfMachines} máquina(s) y los días activos seleccionados.</p>
+                                </div>
                             </CardContent>
                         </Card>
-
-                        <div className="grid md:grid-cols-2 gap-6 items-start">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
                             <Card>
                                 <CardHeader>
                                     <CardTitle>Análisis y Recomendaciones de la IA</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full max-h-96 overflow-y-auto">
+                                    <div className="prose prose-sm dark:prose-invert bg-muted/50 p-4 rounded-md w-full max-h-80 overflow-y-auto">
                                         {result.recommendations.split('\n').map((line, i) => <p key={i} className="my-1">{line}</p>)}
                                     </div>
                                 </CardContent>
@@ -448,11 +445,11 @@ function SimulatorTab({ onSimulate, isSimulating, result, products, categories }
                                      <CardDescription>Diferencia entre producción óptima y realista por día.</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <ChartContainer config={simulationChartConfig} className="w-full h-[300px]">
+                                    <ChartContainer config={simulationChartConfig} className="w-full h-[260px]">
                                         <ComposedChart data={result.dailyBreakdown}>
                                             <CartesianGrid vertical={false} />
-                                            <XAxis dataKey="day" />
-                                            <YAxis />
+                                            <XAxis dataKey="day" tickMargin={5} fontSize={10} />
+                                            <YAxis fontSize={10}/>
                                             <RechartsTooltip content={<ChartTooltipContent />} />
                                             <Legend content={<ChartLegendContent />} />
                                             <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
