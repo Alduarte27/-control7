@@ -261,8 +261,8 @@ function SimulatorTab({ products, categories }: {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-            <div className="space-y-4">
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><HardHat />Parámetros de Simulación</CardTitle>
@@ -332,9 +332,6 @@ function SimulatorTab({ products, categories }: {
                         </div>
                     </CardContent>
                 </Card>
-            </div>
-
-            <div className="space-y-4">
                 <Card>
                     <CardHeader>
                         <CardTitle>Cálculo de Tasa de Producción</CardTitle>
@@ -356,28 +353,27 @@ function SimulatorTab({ products, categories }: {
                         </div>
                     </CardContent>
                 </Card>
-
-                <div className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Desglose de Producción Diaria (1 Turno)</CardTitle>
-                             <CardDescription>Comparación de la producción óptima vs. la realista para un turno de día en los días activos.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <ChartContainer config={simulationChartConfig} className="w-full h-[260px]">
-                                <ComposedChart data={calculatedValues.dailyBreakdown}>
-                                    <CartesianGrid vertical={false} />
-                                    <XAxis dataKey="day" tickMargin={5} fontSize={10} />
-                                    <YAxis fontSize={10}/>
-                                    <RechartsTooltip content={<ChartTooltipContent />} />
-                                    <Legend content={<ChartLegendContent />} />
-                                    <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
-                                    <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
-                                </ComposedChart>
-                            </ChartContainer>
-                        </CardContent>
-                    </Card>
-                </div>
+            </div>
+            <div className="space-y-4">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Desglose de Producción Diaria (1 Turno)</CardTitle>
+                         <CardDescription>Comparación de la producción óptima vs. la realista para un turno de día en los días activos.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ChartContainer config={simulationChartConfig} className="w-full h-[260px]">
+                            <ComposedChart data={calculatedValues.dailyBreakdown}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis dataKey="day" tickMargin={5} fontSize={10} />
+                                <YAxis fontSize={10}/>
+                                <RechartsTooltip content={<ChartTooltipContent />} />
+                                <Legend content={<ChartLegendContent />} />
+                                <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
+                                <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
+                            </ComposedChart>
+                        </ChartContainer>
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );
