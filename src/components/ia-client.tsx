@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, HardHat, Package, Percent, Clock, FileDigit, Sun, Moon } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { forecastDemand, type ForecastDemandOutput } from '@/ai/flows/forecast-demand-flow';
@@ -29,6 +29,7 @@ const trendChartConfig = {
 
 const simulationChartConfig = {
     optimalProduction: { label: 'Producción Óptima', color: 'hsl(var(--chart-2))' },
+    realisticProjection: { label: 'Proyección Realista', color: 'hsl(var(--chart-1))' },
 } satisfies ChartConfig;
 
 // --- Type Definitions ---
@@ -204,30 +205,36 @@ function SimulatorTab({ products, categories }: {
     }, [plannableProducts, simInput.productId]);
 
     const calculatedValues = React.useMemo(() => {
-        const unitsPerMinute = simInput.machineSpeed;
-        const grossUnitsPerHour = unitsPerMinute * 60;
-        const effectiveUnitsPerHour = grossUnitsPerHour * (1 - (simInput.performanceLoss / 100));
-        const sacksPerHour = simInput.unitsPerSack > 0 ? effectiveUnitsPerHour / simInput.unitsPerSack : 0;
+        // Optimal (Gross) Calculations
+        const grossUnitsPerMinute = simInput.machineSpeed;
+        const grossUnitsPerHour = grossUnitsPerMinute * 60;
+        const grossSacksPerHour = simInput.unitsPerSack > 0 ? grossUnitsPerHour / simInput.unitsPerSack : 0;
+        const optimalDailyProductionDayShift = grossSacksPerHour * simInput.hoursPerDayShift;
 
-        const dailyProductionDayShift = sacksPerHour * simInput.hoursPerDayShift;
-        const dailyProductionNightShift = sacksPerHour * simInput.hoursPerNightShift;
+        // Realistic (Net) Calculations
+        const netUnitsPerHour = grossUnitsPerHour * (1 - (simInput.performanceLoss / 100));
+        const netSacksPerHour = simInput.unitsPerSack > 0 ? netUnitsPerHour / simInput.unitsPerSack : 0;
+        const realisticDailyProductionDayShift = netSacksPerHour * simInput.hoursPerDayShift;
+        const realisticDailyProductionNightShift = netSacksPerHour * simInput.hoursPerNightShift;
+        
         const numberOfActiveDays = Object.values(simInput.activeDays).filter(Boolean).length;
-        const weeklyProduction = (dailyProductionDayShift + dailyProductionNightShift) * numberOfActiveDays * simInput.numberOfMachines;
+        const weeklyProduction = (realisticDailyProductionDayShift + realisticDailyProductionNightShift) * numberOfActiveDays * simInput.numberOfMachines;
         
         const dailyBreakdown = Object.entries(simInput.activeDays)
             .filter(([, isActive]) => isActive)
             .map(([day]) => ({
                 day: day.substring(0, 3),
-                optimalProduction: dailyProductionDayShift, // Breakdown is for a single day shift
+                optimalProduction: optimalDailyProductionDayShift,
+                realisticProjection: realisticDailyProductionDayShift,
             }));
 
         return { 
-            unitsPerMinute, 
+            grossUnitsPerMinute, 
             grossUnitsPerHour, 
-            effectiveUnitsPerHour, 
-            sacksPerHour,
-            dailyProductionDayShift,
-            dailyProductionNightShift,
+            netUnitsPerHour, 
+            netSacksPerHour,
+            realisticDailyProductionDayShift,
+            realisticDailyProductionNightShift,
             weeklyProduction,
             dailyBreakdown,
         };
@@ -254,17 +261,17 @@ function SimulatorTab({ products, categories }: {
     };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             <div className="space-y-4">
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><HardHat />Parámetros de Simulación</CardTitle>
                         <CardDescription>Ajusta las variables para proyectar la producción.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-3">
-                            <h3 className="font-semibold text-foreground text-sm">1. Parámetros del Producto</h3>
-                            <div className="space-y-2">
+                    <CardContent className="space-y-3">
+                        <div className="space-y-2">
+                            <h3 className="font-semibold text-foreground text-xs">1. PARÁMETROS DEL PRODUCTO</h3>
+                            <div className="space-y-1.5">
                                 <Label htmlFor="product-select">Producto a Simular</Label>
                                 <Select value={simInput.productId} onValueChange={handleProductChange} disabled={plannableProducts.length === 0}>
                                     <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
@@ -275,47 +282,47 @@ function SimulatorTab({ products, categories }: {
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                                 <Label htmlFor="units-per-sack">Unidades por Saco</Label>
                                 <Input id="units-per-sack" type="number" value={simInput.unitsPerSack} onChange={e => handleInputChange('unitsPerSack', e.target.value)} required />
                             </div>
                         </div>
 
-                         <div className="space-y-3">
-                            <h3 className="font-semibold text-foreground text-sm">2. Parámetros de Maquinaria</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
+                         <div className="space-y-2">
+                            <h3 className="font-semibold text-foreground text-xs">2. PARÁMETROS DE MAQUINARIA</h3>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1.5">
                                     <Label htmlFor="machine-speed">Velocidad (fundas/min)</Label>
                                     <Input id="machine-speed" type="number" value={simInput.machineSpeed} onChange={e => handleInputChange('machineSpeed', e.target.value)} required />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     <Label htmlFor="performance-loss">Pérdida (%)</Label>
                                     <Input id="performance-loss" type="number" value={simInput.performanceLoss} onChange={e => handleInputChange('performanceLoss', e.target.value)} required />
                                 </div>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                                 <Label htmlFor="number-of-machines">Número de Máquinas a Simular</Label>
                                 <Input id="number-of-machines" type="number" value={simInput.numberOfMachines} onChange={e => handleInputChange('numberOfMachines', e.target.value)} required min="1" />
                             </div>
                         </div>
 
-                        <div className="space-y-3">
-                            <h3 className="font-semibold text-foreground text-sm">3. Horario de Producción</h3>
-                             <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
+                        <div className="space-y-2">
+                            <h3 className="font-semibold text-foreground text-xs">3. HORARIO DE PRODUCCIÓN</h3>
+                             <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1.5">
                                     <Label htmlFor="day-shift">Horas Turno Día</Label>
                                     <Input id="day-shift" type="number" value={simInput.hoursPerDayShift} onChange={e => handleInputChange('hoursPerDayShift', e.target.value)} required />
                                 </div>
-                                <div className="space-y-2">
+                                <div className="space-y-1.5">
                                     <Label htmlFor="night-shift">Horas Turno Noche</Label>
                                     <Input id="night-shift" type="number" value={simInput.hoursPerNightShift} onChange={e => handleInputChange('hoursPerNightShift', e.target.value)} required />
                                 </div>
                             </div>
-                            <div className="space-y-2 pt-2">
+                            <div className="space-y-1.5 pt-1">
                                 <Label className="font-semibold text-xs">Días Activos</Label>
-                                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                                <div className="flex flex-wrap gap-x-3 gap-y-1">
                                     {Object.keys(simInput.activeDays).map(day => (
-                                        <div key={day} className="flex items-center space-x-2">
+                                        <div key={day} className="flex items-center space-x-1.5">
                                             <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
                                             <Label htmlFor={day} className="capitalize text-sm font-normal">{day.substring(0,3)}</Label>
                                         </div>
@@ -334,15 +341,15 @@ function SimulatorTab({ products, categories }: {
                         <CardDescription>Desglose de la capacidad por máquina.</CardDescription>
                     </CardHeader>
                     <CardContent>
-                         <div className="grid grid-cols-2 gap-4">
-                            <KpiCard title="Unidades/Minuto" value={calculatedValues.unitsPerMinute} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
+                         <div className="grid grid-cols-2 gap-2">
+                            <KpiCard title="Unidades/Minuto" value={calculatedValues.grossUnitsPerMinute} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
                             <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
-                            <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.effectiveUnitsPerHour} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
-                            <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.sacksPerHour} fractionDigits={2} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
-                            <KpiCard title="Producción Turno Día" value={calculatedValues.dailyProductionDayShift} icon={Sun} description="Producción neta estimada para un solo turno de día." />
-                            <KpiCard title="Producción Turno Noche" value={calculatedValues.dailyProductionNightShift} icon={Moon} description="Producción neta estimada para un solo turno de noche." />
+                            <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.netUnitsPerHour} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
+                            <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.netSacksPerHour} fractionDigits={2} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
+                            <KpiCard title="Producción Turno Día" value={calculatedValues.realisticDailyProductionDayShift} icon={Sun} description="Producción neta estimada para un solo turno de día." />
+                            <KpiCard title="Producción Turno Noche" value={calculatedValues.realisticDailyProductionNightShift} icon={Moon} description="Producción neta estimada para un solo turno de noche." />
                          </div>
-                         <div className="border-t pt-4 mt-4">
+                         <div className="border-t pt-3 mt-3">
                             <p className="text-sm text-muted-foreground">Producción Semanal Estimada (Total)</p>
                             <p className="text-2xl font-bold text-primary">{formattedWeeklyProduction} Sacos</p>
                             <p className="text-xs text-muted-foreground">Considerando {simInput.numberOfMachines} máquina(s) y los días activos seleccionados.</p>
@@ -354,7 +361,7 @@ function SimulatorTab({ products, categories }: {
                     <Card>
                         <CardHeader>
                             <CardTitle>Desglose de Producción Diaria (1 Turno)</CardTitle>
-                             <CardDescription>Producción óptima calculada para un turno de día en los días activos.</CardDescription>
+                             <CardDescription>Comparación de la producción óptima vs. la realista para un turno de día en los días activos.</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <ChartContainer config={simulationChartConfig} className="w-full h-[260px]">
@@ -365,6 +372,7 @@ function SimulatorTab({ products, categories }: {
                                     <RechartsTooltip content={<ChartTooltipContent />} />
                                     <Legend content={<ChartLegendContent />} />
                                     <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
+                                    <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
                                 </ComposedChart>
                             </ChartContainer>
                         </CardContent>
