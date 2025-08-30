@@ -15,9 +15,9 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLe
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Input } from './ui/input';
-import { Checkbox } from './ui/checkbox';
-import KpiCard from './kpi-card';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import KpiCard from '@/components/kpi-card';
 
 
 // --- Shared Chart Configurations ---
