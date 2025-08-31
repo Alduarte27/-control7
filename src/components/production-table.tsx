@@ -36,6 +36,13 @@ const getVarianceColorClass = (variance: number, compliance: number): string => 
     return '';
 };
 
+const getComplianceColorClass = (compliance: number): string => {
+    if (compliance >= 95) return 'bg-green-600';
+    if (compliance >= 90) return 'bg-yellow-500';
+    return 'bg-red-600';
+};
+
+
 const renderProductRow = (
     item: ProductData, 
     handlePlannedInputChange: (id: string, value: string) => void, 
@@ -45,6 +52,8 @@ const renderProductRow = (
     const variance = totalActual - item.planned;
     const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
     const varianceColorClass = getVarianceColorClass(variance, compliance);
+    const complianceColorClass = getComplianceColorClass(compliance);
+
 
     return (
       <TableRow key={item.id} className="bg-card hover:bg-muted/50">
@@ -79,7 +88,11 @@ const renderProductRow = (
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-2">
-            <Progress value={compliance > 100 ? 100 : compliance} className="w-[60%]" />
+            <Progress 
+                value={compliance > 100 ? 100 : compliance} 
+                className="w-[60%]" 
+                indicatorClassName={complianceColorClass}
+            />
             <span className="text-xs font-medium w-[45px] text-right">{compliance.toFixed(1)}%</span>
           </div>
         </TableCell>
