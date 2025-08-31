@@ -28,6 +28,14 @@ const dayNames: { [key in keyof DailyProduction]: string } = {
   sun: 'Dom'
 };
 
+const getVarianceColorClass = (variance: number, compliance: number): string => {
+    if (variance > 0) return 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300';
+    if (compliance >= 95) return 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400';
+    if (compliance >= 90) return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300';
+    if (variance < 0) return 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300';
+    return '';
+};
+
 const renderProductRow = (
     item: ProductData, 
     handlePlannedInputChange: (id: string, value: string) => void, 
@@ -36,6 +44,8 @@ const renderProductRow = (
     const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
     const variance = totalActual - item.planned;
     const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
+    const varianceColorClass = getVarianceColorClass(variance, compliance);
+
     return (
       <TableRow key={item.id} className="bg-card hover:bg-muted/50">
         <TableCell className="font-medium sticky left-0 bg-card z-10 text-xs">
@@ -62,8 +72,10 @@ const renderProductRow = (
           )
         })}
         <TableCell className="text-right font-medium">{totalActual.toLocaleString()}</TableCell>
-        <TableCell className={`text-right font-medium ${variance < 0 ? 'text-destructive' : 'text-green-600'}`}>
-          {variance.toLocaleString()}
+        <TableCell className="text-right">
+            <span className={cn("font-medium rounded-md px-2 py-1", varianceColorClass)}>
+                {variance.toLocaleString()}
+            </span>
         </TableCell>
         <TableCell>
           <div className="flex items-center gap-2">
