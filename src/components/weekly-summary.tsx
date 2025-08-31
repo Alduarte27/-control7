@@ -90,9 +90,9 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
                                 <h4 className="font-semibold mb-1 text-primary">{category}</h4>
                                 <ul className="space-y-1 pl-2">
                                     {(products as any[]).map(p => (
-                                        <li key={p.name} className="flex justify-between">
-                                            <span>{p.name}</span>
-                                            <span className="font-medium">{p.value.toLocaleString()}</span>
+                                        <li key={p.name} className="flex justify-between items-start">
+                                            <span className="flex-1 pr-2">{p.name}</span>
+                                            <span className="font-medium ml-2">{p.value.toLocaleString()}</span>
                                         </li>
                                     ))}
                                 </ul>
