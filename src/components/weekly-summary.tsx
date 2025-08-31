@@ -14,16 +14,21 @@ const chartConfig = {
     label: 'Planificado',
     color: 'hsl(var(--accent))',
   },
-  actual: {
-    label: 'Real',
+  actualForPlanned: {
+    label: 'Real (s/Plan)',
     color: 'hsl(var(--primary))',
+  },
+  unplannedProduction: {
+    label: 'No Programado',
+    color: 'hsl(var(--chart-3))',
   },
 } satisfies ChartConfig;
 
 const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
-        const plannedValue = data.planned;
+        const plannedValue = data.planned || 0;
+        const actualValue = data.actualForPlanned || data.unplannedProduction || 0;
 
         return (
             <div className="rounded-lg border bg-background p-2 shadow-sm text-sm">
@@ -39,10 +44,12 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                         </>
                     )}
                     <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'hsl(var(--primary))' }} />
+                        <div className="w-2 h-2 rounded-full" style={{ 
+                            backgroundColor: plannedValue > 0 ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))' 
+                        }} />
                         <span>Real:</span>
                     </div>
-                    <span className="text-right font-medium">{payload.find(p => p.dataKey === 'actual').value.toLocaleString()}</span>
+                    <span className="text-right font-medium">{actualValue.toLocaleString()}</span>
                 </div>
             </div>
         );
@@ -54,12 +61,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function WeeklySummary({ data }: WeeklySummaryProps) {
   const chartData = data
-    .map(item => ({
-      name: item.productName,
-      planned: item.planned,
-      actual: Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0),
-    }))
-    .filter(item => item.planned > 0 || item.actual > 0); // Only show products with data
+    .map(item => {
+      const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
+      return {
+        name: item.productName,
+        planned: item.planned,
+        actualForPlanned: item.planned > 0 ? totalActual : 0,
+        unplannedProduction: item.planned === 0 ? totalActual : 0,
+      }
+    })
+    .filter(item => item.planned > 0 || item.actualForPlanned > 0 || item.unplannedProduction > 0);
 
   return (
     <Card>
@@ -86,7 +97,8 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
                 <ChartTooltip cursor={false} content={<CustomTooltip />} />
                 <ChartLegend content={<ChartLegendContent />} />
                 <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
+                <Bar dataKey="actualForPlanned" fill="var(--color-actualForPlanned)" radius={4} />
+                <Bar dataKey="unplannedProduction" fill="var(--color-unplannedProduction)" radius={4} />
             </BarChart>
             </ChartContainer>
         ) : (
