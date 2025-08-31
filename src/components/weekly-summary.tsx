@@ -68,17 +68,34 @@ const CustomProductTooltip = ({ active, payload, label }: any) => {
 const CustomDailyTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
+        
+        const productsByCategory = data.products.reduce((acc: { [key: string]: any[] }, p: any) => {
+            const category = p.category || 'Sin Categoría';
+            if (!acc[category]) {
+                acc[category] = [];
+            }
+            acc[category].push(p);
+            return acc;
+        }, {});
+
         return (
             <div className="rounded-lg border bg-background p-2 shadow-sm text-sm max-w-xs">
                 <p className="font-bold mb-1">{label}</p>
                 <p className="text-muted-foreground text-xs mb-2">Total: <span className="font-bold text-foreground">{data.total.toLocaleString()}</span></p>
+                
                 <div className="border-t pt-2 mt-2">
-                    <h4 className="font-semibold mb-1">Desglose de Productos:</h4>
-                    <ul className="space-y-1 max-h-48 overflow-y-auto text-xs">
-                        {data.products.length > 0 ? data.products.map((p: any) => (
-                           <li key={p.name} className="flex justify-between">
-                               <span>{p.name}</span>
-                               <span className="font-medium">{p.value.toLocaleString()}</span>
+                    <ul className="space-y-2 max-h-48 overflow-y-auto text-xs">
+                        {Object.keys(productsByCategory).length > 0 ? Object.entries(productsByCategory).map(([category, products]) => (
+                           <li key={category}>
+                                <h4 className="font-semibold mb-1 text-primary">{category}</h4>
+                                <ul className="space-y-1 pl-2">
+                                    {(products as any[]).map(p => (
+                                        <li key={p.name} className="flex justify-between">
+                                            <span>{p.name}</span>
+                                            <span className="font-medium">{p.value.toLocaleString()}</span>
+                                        </li>
+                                    ))}
+                                </ul>
                            </li>
                         )) : (
                             <li>No hubo producción.</li>
@@ -106,7 +123,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
     .filter(item => item.planned > 0 || item.actualForPlanned > 0 || item.unplannedProduction > 0);
   
   const dailyChartData = React.useMemo(() => {
-    const dailyTotals: { [key: string]: { total: number; products: { name: string; value: number }[] } } = {
+    const dailyTotals: { [key: string]: { total: number; products: { name: string; value: number, category: string }[] } } = {
       Lunes: { total: 0, products: [] },
       Martes: { total: 0, products: [] },
       Miércoles: { total: 0, products: [] },
@@ -127,7 +144,11 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         const dayProduction = (product.actual[dayKey]?.day || 0) + (product.actual[dayKey]?.night || 0);
         if (dayProduction > 0) {
           dailyTotals[dayName].total += dayProduction;
-          dailyTotals[dayName].products.push({ name: product.productName, value: dayProduction });
+          dailyTotals[dayName].products.push({ 
+              name: product.productName, 
+              value: dayProduction,
+              category: product.categoryName 
+          });
         }
       }
     });
@@ -178,7 +199,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
       <Card>
         <CardHeader>
             <CardTitle>Producción Total por Día</CardTitle>
-            <CardDescription>Suma de toda la producción para cada día de la semana. Pasa el mouse para ver el desglose.</CardDescription>
+            <CardDescription>Suma de toda la producción para cada día de la semana.</CardDescription>
         </CardHeader>
         <CardContent>
              {dailyChartData.some(d => d.total > 0) ? (
