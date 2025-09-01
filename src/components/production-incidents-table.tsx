@@ -53,16 +53,18 @@ export default function ProductionIncidentsTable({ product, onClose, onSave }: P
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[120px]">Día</TableHead>
+                <TableHead className="w-[120px]">Nro. de Lote</TableHead>
                 <TableHead>Incidencia Turno Día</TableHead>
                 <TableHead>Incidencia Turno Noche</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {days.map(day => {
-                const dayData = editedProduct.actual[day] || { dayNote: '', nightNote: '' };
+                const dayData = editedProduct.actual[day] || { dayNote: '', nightNote: '', lotNumber: '' };
                 return (
                   <TableRow key={day}>
                     <TableCell className="font-medium align-top pt-4">{dayNames[day]}</TableCell>
+                    <TableCell className="align-top pt-4 text-sm text-muted-foreground">{dayData.lotNumber || '-'}</TableCell>
                     <TableCell>
                       <Textarea
                         placeholder="Añadir nota para el turno de día..."
