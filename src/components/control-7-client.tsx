@@ -3,7 +3,7 @@
 import React from 'react';
 import type { ProductData, ProductDefinition, CategoryDefinition, DailyProduction, ShiftProduction } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks } from 'date-fns';
+import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks, startOfWeek } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
 
@@ -28,7 +28,8 @@ const emptyActual: DailyProduction = {
 const getDateFromPlanId = (planId: string): Date => {
     const [year, week] = planId.split('-W');
     const date = setISOWeek(new Date(parseInt(year), 0, 4), parseInt(week));
-    return startOfISOWeek(date);
+    // Using startOfWeek with weekStartsOn: 1 ensures consistency with ISO 8601 standard (Monday as the first day)
+    return startOfWeek(date, { weekStartsOn: 1 });
 }
 
 // We pass the prefetched data as props to avoid hydration issues and waterfalls.
