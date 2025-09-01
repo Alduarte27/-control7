@@ -34,9 +34,15 @@ const dailyChartConfig = {
 
 const CustomProductTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-        const data = payload[0].payload;
-        const plannedValue = data.planned || 0;
-        const actualValue = data.actualForPlanned || data.unplannedProduction || 0;
+        // Find the payload data for the visible bars
+        const plannedData = payload.find(p => p.dataKey === 'planned');
+        const actualPlannedData = payload.find(p => p.dataKey === 'actualForPlanned');
+        const actualUnplannedData = payload.find(p => p.dataKey === 'unplannedProduction');
+        
+        const plannedValue = plannedData?.value || 0;
+        const actualPlannedValue = actualPlannedData?.value || 0;
+        const actualUnplannedValue = actualUnplannedData?.value || 0;
+        const totalActual = actualPlannedValue + actualUnplannedValue;
 
         return (
             <div className="rounded-lg border bg-background p-2 shadow-sm text-sm">
@@ -51,15 +57,15 @@ const CustomProductTooltip = ({ active, payload, label }: any) => {
                             <span className="text-right font-medium">{plannedValue.toLocaleString()}</span>
                         </>
                     )}
-                    {actualValue > 0 && (
+                     {totalActual > 0 && (
                        <>
                          <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full" style={{ 
-                                backgroundColor: plannedValue > 0 ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))' 
+                                backgroundColor: actualPlannedValue > 0 ? 'hsl(var(--primary))' : 'hsl(var(--chart-3))' 
                             }} />
-                            <span>Real:</span>
+                            <span>Real Total:</span>
                         </div>
-                        <span className="text-right font-medium">{actualValue.toLocaleString()}</span>
+                        <span className="text-right font-medium">{totalActual.toLocaleString()}</span>
                        </>
                     )}
                 </div>
@@ -123,6 +129,8 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         planned: item.planned,
         actualForPlanned: item.planned > 0 ? totalActual : 0,
         unplannedProduction: item.planned === 0 ? totalActual : 0,
+        // Ghost bar for centering
+        ghost: item.planned > 0 ? 0 : totalActual
       }
     })
     .filter(item => item.planned > 0 || item.actualForPlanned > 0 || item.unplannedProduction > 0);
@@ -188,9 +196,10 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
                   <YAxis />
                   <ChartTooltip cursor={false} content={<CustomProductTooltip />} />
                   <ChartLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="planned" stackId="plannedGroup" fill="var(--color-planned)" radius={4} barSize={40} />
-                  <Bar dataKey="actualForPlanned" stackId="plannedGroup" fill="var(--color-actualForPlanned)" radius={4} barSize={40} />
-                  <Bar dataKey="unplannedProduction" fill="var(--color-unplannedProduction)" radius={4} barSize={40} />
+                  <Bar dataKey="planned" stackId="a" fill="var(--color-planned)" radius={4} barSize={40} />
+                  <Bar dataKey="ghost" stackId="a" fill="transparent" barSize={40} />
+                  <Bar dataKey="actualForPlanned" stackId="b" fill="var(--color-actualForPlanned)" radius={4} barSize={40} />
+                  <Bar dataKey="unplannedProduction" stackId="b" fill="var(--color-unplannedProduction)" radius={4} barSize={40} />
               </BarChart>
               </ChartContainer>
           ) : (
