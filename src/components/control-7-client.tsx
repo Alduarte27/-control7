@@ -55,7 +55,9 @@ export default function Control7Client({
 }) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
-  const [date, setDate] = React.useState<Date | undefined>();
+  const [date, setDate] = React.useState<Date | undefined>(() => 
+    initialPlanId ? getDateFromPlanId(initialPlanId) : new Date()
+  );
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
@@ -72,12 +74,16 @@ export default function Control7Client({
   }, []);
   
   React.useEffect(() => {
-    if (!initialPlanId) {
-      setDate(new Date());
-    } else {
-      setDate(getDateFromPlanId(initialPlanId));
+    if (initialPlanId) {
+      const newDate = getDateFromPlanId(initialPlanId);
+      // Avoid unnecessary state updates if the date is already correct
+      if (date?.getTime() !== newDate.getTime()) {
+        setDate(newDate);
+      }
+    } else if (!date) {
+        setDate(new Date());
     }
-  }, [initialPlanId]);
+  }, [initialPlanId, date]);
 
 
   const currentYear = (date || new Date()).getFullYear();
@@ -487,3 +493,4 @@ export default function Control7Client({
 
     
 
+    
