@@ -55,13 +55,20 @@ export default function Control7Client({
 }) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
-  const [date, setDate] = React.useState<Date | undefined>(() => 
-    initialPlanId ? getDateFromPlanId(initialPlanId) : new Date()
+  const [date, setDate] = React.useState<Date | undefined>(
+    initialPlanId ? getDateFromPlanId(initialPlanId) : undefined
   );
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
   const { toast } = useToast();
+
+  React.useEffect(() => {
+    // This runs only on the client, after hydration, to avoid mismatches.
+    if (!initialPlanId && !date) {
+        setDate(new Date());
+    }
+  }, [initialPlanId, date]);
 
   React.useEffect(() => {
     const showDialogPreference = localStorage.getItem('showInfoDialogOnStartup');
@@ -80,8 +87,6 @@ export default function Control7Client({
       if (date?.getTime() !== newDate.getTime()) {
         setDate(newDate);
       }
-    } else if (!date) {
-        setDate(new Date());
     }
   }, [initialPlanId, date]);
 
