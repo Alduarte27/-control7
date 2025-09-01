@@ -3,7 +3,7 @@
 import React from 'react';
 import type { ProductData, ProductDefinition, CategoryDefinition, DailyProduction, ShiftProduction } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks, startOfWeek } from 'date-fns';
+import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks, startOfWeek, getDayOfYear, addDays } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
 
@@ -31,6 +31,17 @@ const getDateFromPlanId = (planId: string): Date => {
     // Using startOfWeek with weekStartsOn: 1 ensures consistency with ISO 8601 standard (Monday as the first day)
     return startOfWeek(date, { weekStartsOn: 1 });
 }
+
+const getDayOfYearForWeek = (weekDate: Date) => {
+    const start = startOfISOWeek(weekDate);
+    const dayOfYearMap: { [key in keyof DailyProduction]: string } = {} as any;
+    (Object.keys(emptyActual) as (keyof DailyProduction)[]).forEach((day, index) => {
+        const dateOfDay = addDays(start, index);
+        dayOfYearMap[day] = `${getDayOfYear(dateOfDay)}`;
+    });
+    return dayOfYearMap;
+};
+
 
 // We pass the prefetched data as props to avoid hydration issues and waterfalls.
 export default function Control7Client({ 
@@ -75,17 +86,26 @@ export default function Control7Client({
   const planId = `${currentYear}-W${currentWeek}`;
 
 
-  const generateInitialData = (products: ProductDefinition[], categories: CategoryDefinition[]): ProductData[] => {
+  const generateInitialData = (products: ProductDefinition[], categories: CategoryDefinition[], currentDate: Date): ProductData[] => {
     const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, isPlanned: c.isPlanned }]));
+    const dayOfYearMap = getDayOfYearForWeek(currentDate);
+
     return products
       .filter(p => p.isActive)
-      .map(p => ({
-        ...p,
-        categoryName: categoryMap.get(p.categoryId)?.name || 'Sin Categoría',
-        categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
-        planned: 0,
-        actual: JSON.parse(JSON.stringify(emptyActual)),
-      }));
+      .map(p => {
+        const newActual = JSON.parse(JSON.stringify(emptyActual));
+        (Object.keys(newActual) as (keyof DailyProduction)[]).forEach(day => {
+            newActual[day].lotNumber = dayOfYearMap[day];
+        });
+
+        return {
+            ...p,
+            categoryName: categoryMap.get(p.categoryId)?.name || 'Sin Categoría',
+            categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
+            planned: 0,
+            actual: newActual,
+        };
+      });
   };
 
   const applyAISuggestion = React.useCallback((currentData: ProductData[]): ProductData[] => {
@@ -138,6 +158,7 @@ export default function Control7Client({
             const categories = prefetchedCategories;
             const productDefinitions = prefetchedProducts;
             const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, isPlanned: c.isPlanned }]));
+            const dayOfYearMap = getDayOfYearForWeek(date);
 
             if (productDefinitions.length === 0) {
                 setData([]);
@@ -169,10 +190,12 @@ export default function Control7Client({
                                 mergedActual[day] = {
                                     day: savedProductData.actual[day].day || 0,
                                     night: savedProductData.actual[day].night || 0,
-                                    lotNumber: savedProductData.actual[day].lotNumber || '',
+                                    lotNumber: savedProductData.actual[day].lotNumber || dayOfYearMap[day],
                                     dayNote: savedProductData.actual[day].dayNote || '',
                                     nightNote: savedProductData.actual[day].nightNote || '',
                                 };
+                            } else {
+                                mergedActual[day] = { ...emptyProductionDay, lotNumber: dayOfYearMap[day] };
                             }
                         }
 
@@ -184,17 +207,22 @@ export default function Control7Client({
                             categoryIsPlanned: categoryInfo?.isPlanned ?? true,
                         };
                     } else {
+                        // New product not present in the saved plan
+                        const newActual = JSON.parse(JSON.stringify(emptyActual));
+                        (Object.keys(newActual) as (keyof DailyProduction)[]).forEach(day => {
+                            newActual[day].lotNumber = dayOfYearMap[day];
+                        });
                         return {
                             ...def,
                             categoryName: categoryInfo?.name || 'Sin Categoría',
                             categoryIsPlanned: categoryInfo?.isPlanned ?? true,
                             planned: 0,
-                            actual: JSON.parse(JSON.stringify(emptyActual)),
+                            actual: newActual,
                         };
                     }
                 });
             } else {
-                loadedData = generateInitialData(productDefinitions.filter(p => p.isActive), categories);
+                loadedData = generateInitialData(productDefinitions.filter(p => p.isActive), categories, date);
             }
 
             const urlParams = new URLSearchParams(window.location.search);
@@ -387,7 +415,7 @@ export default function Control7Client({
         if (item.id === id) {
           const newActual = { ...item.actual };
           if (typeof newActual[day] !== 'object' || newActual[day] === null) {
-              newActual[day] = { day: 0, night: 0 };
+              newActual[day] = { ...emptyProductionDay };
           }
           
           if (shift === 'lotNumber' || shift === 'dayNote' || shift === 'nightNote') {
@@ -458,3 +486,4 @@ export default function Control7Client({
 }
 
     
+
