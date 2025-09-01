@@ -1,19 +1,20 @@
 'use client';
 
 import React from 'react';
-import type { ProductData, DailyProduction, ShiftProduction } from '@/lib/types';
+import type { ProductData, DailyProduction } from '@/lib/types';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Progress } from '@/components/ui/progress';
 import { Button } from './ui/button';
-import { Edit, ChevronUp } from 'lucide-react';
+import { Edit, ChevronUp, NotebookPen } from 'lucide-react';
 import ProductionShiftTable from './production-shift-table';
+import ProductionIncidentsTable from './production-incidents-table'; // NUEVA IMPORTACIÓN
 import { cn } from '@/lib/utils';
 
 type ProductionTableProps = {
   data: ProductData[];
   onPlannedChange: (id: string, value: number) => void;
-  onActualChange: (id: string, day: keyof DailyProduction, shift: 'day' | 'night' | 'lotNumber', value: number | string) => void;
+  onActualChange: (id: string, day: keyof DailyProduction, shift: 'day' | 'night' | 'lotNumber' | 'dayNote' | 'nightNote', value: any) => void;
   currentDate: Date;
 };
 
@@ -46,7 +47,8 @@ const getComplianceColorClass = (compliance: number): string => {
 const renderProductRow = (
     item: ProductData, 
     handlePlannedInputChange: (id: string, value: string) => void, 
-    setSelectedProduct: (product: ProductData) => void
+    setSelectedProductForShifts: (product: ProductData) => void,
+    setSelectedProductForIncidents: (product: ProductData) => void // NUEVO
 ) => {
     const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
     const variance = totalActual - item.planned;
@@ -54,6 +56,7 @@ const renderProductRow = (
     const varianceColorClass = getVarianceColorClass(variance, compliance);
     const complianceColorClass = getComplianceColorClass(compliance);
 
+    const hasIncidents = Object.values(item.actual).some(val => val.dayNote || val.nightNote);
 
     return (
       <TableRow key={item.id} className="bg-card hover:bg-muted/50">
@@ -97,9 +100,19 @@ const renderProductRow = (
           </div>
         </TableCell>
         <TableCell>
-          <Button variant="outline" size="icon" onClick={() => setSelectedProduct(item)}>
+          <Button variant="outline" size="icon" onClick={() => setSelectedProductForShifts(item)}>
             <Edit className="h-4 w-4" />
           </Button>
+        </TableCell>
+        <TableCell>
+            <Button 
+                variant={hasIncidents ? 'default' : 'outline'} 
+                size="icon" 
+                onClick={() => setSelectedProductForIncidents(item)}
+                className={cn(hasIncidents && "bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800")}
+            >
+                <NotebookPen className="h-4 w-4" />
+            </Button>
         </TableCell>
       </TableRow>
     );
@@ -107,7 +120,8 @@ const renderProductRow = (
 
 
 export default function ProductionTable({ data, onPlannedChange, onActualChange, currentDate }: ProductionTableProps) {
-  const [selectedProduct, setSelectedProduct] = React.useState<ProductData | null>(null);
+  const [selectedProductForShifts, setSelectedProductForShifts] = React.useState<ProductData | null>(null);
+  const [selectedProductForIncidents, setSelectedProductForIncidents] = React.useState<ProductData | null>(null);
   const [openCategories, setOpenCategories] = React.useState<Record<string, boolean>>({});
   
   const groupedData = data.reduce((acc, product) => {
@@ -171,7 +185,15 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
       onActualChange(updatedProduct.id, day, 'day', updatedProduct.actual[day].day);
       onActualChange(updatedProduct.id, day, 'night', updatedProduct.actual[day].night);
     });
-    setSelectedProduct(null);
+    setSelectedProductForShifts(null);
+  };
+
+  const handleIncidentsSave = (updatedProduct: ProductData) => {
+    days.forEach(day => {
+        onActualChange(updatedProduct.id, day, 'dayNote', updatedProduct.actual[day].dayNote || '');
+        onActualChange(updatedProduct.id, day, 'nightNote', updatedProduct.actual[day].nightNote || '');
+    });
+    setSelectedProductForIncidents(null);
   };
 
   const toggleCategory = (category: string) => {
@@ -192,12 +214,13 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
                 <TableHead className="text-right min-w-[110px]">Varianza</TableHead>
                 <TableHead className="min-w-[120px]">Cumplimiento</TableHead>
                 <TableHead className="min-w-[70px]">Turnos</TableHead>
+                <TableHead className="min-w-[70px]">Incidencias</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="h-24 text-center">
+                    <TableCell colSpan={13} className="h-24 text-center">
                       Ningún producto coincide con tu búsqueda.
                     </TableCell>
                   </TableRow>
@@ -205,14 +228,14 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
                 categories.map(category => (
                     <React.Fragment key={category}>
                       <TableRow className="bg-muted/50 hover:bg-muted cursor-pointer" onClick={() => toggleCategory(category)}>
-                          <TableCell colSpan={12} className="font-bold text-primary sticky left-0 bg-muted/50 z-10">
+                          <TableCell colSpan={13} className="font-bold text-primary sticky left-0 bg-muted/50 z-10">
                               <div className="flex items-center gap-2">
                                   <ChevronUp className={cn("h-4 w-4 transition-transform", !openCategories[category] && "rotate-180")} />
                                   {category}
                               </div>
                           </TableCell>
                       </TableRow>
-                      {openCategories[category] && groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProduct))}
+                      {openCategories[category] && groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProductForShifts, setSelectedProductForIncidents))}
                     </React.Fragment>
                 ))
               )}
@@ -220,12 +243,19 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
           </Table>
         </div>
       </div>
-      {selectedProduct && (
+      {selectedProductForShifts && (
         <ProductionShiftTable 
-          product={selectedProduct} 
-          onClose={() => setSelectedProduct(null)}
+          product={selectedProductForShifts} 
+          onClose={() => setSelectedProductForShifts(null)}
           onSave={handleShiftDataSave}
           currentDate={currentDate}
+        />
+      )}
+      {selectedProductForIncidents && (
+        <ProductionIncidentsTable
+            product={selectedProductForIncidents}
+            onClose={() => setSelectedProductForIncidents(null)}
+            onSave={handleIncidentsSave}
         />
       )}
     </>

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ProductData, DailyProduction, ShiftProduction } from '@/lib/types';
+import type { ProductData, DailyProduction } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -61,7 +61,7 @@ export default function ProductionShiftTable({ product, onClose, onSave, current
             dayData.lotNumber = value;
         } else {
             const numValue = parseInt(value, 10);
-            dayData[field] = isNaN(numValue) ? 0 : numValue;
+            dayData[field as 'day' | 'night'] = isNaN(numValue) ? 0 : numValue;
         }
 
         newActual[day] = dayData;

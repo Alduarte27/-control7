@@ -14,7 +14,7 @@ import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 import InfoDialog from './info-dialog';
 
-const emptyProductionDay: ShiftProduction = { day: 0, night: 0, lotNumber: '' };
+const emptyProductionDay: ShiftProduction = { day: 0, night: 0, lotNumber: '', dayNote: '', nightNote: '' };
 const emptyActual: DailyProduction = {
   mon: { ...emptyProductionDay },
   tue: { ...emptyProductionDay },
@@ -170,6 +170,8 @@ export default function Control7Client({
                                     day: savedProductData.actual[day].day || 0,
                                     night: savedProductData.actual[day].night || 0,
                                     lotNumber: savedProductData.actual[day].lotNumber || '',
+                                    dayNote: savedProductData.actual[day].dayNote || '',
+                                    nightNote: savedProductData.actual[day].nightNote || '',
                                 };
                             }
                         }
@@ -379,13 +381,17 @@ export default function Control7Client({
     setIsDirty(true);
   };
 
-  const handleActualDataChange = (id: string, day: keyof DailyProduction, shift: 'day' | 'night' | 'lotNumber', value: number | string) => {
+  const handleActualDataChange = (id: string, day: keyof DailyProduction, shift: 'day' | 'night' | 'lotNumber' | 'dayNote' | 'nightNote', value: any) => {
     setData(currentData =>
       currentData.map(item => {
         if (item.id === id) {
           const newActual = { ...item.actual };
-          if (shift === 'lotNumber') {
-              newActual[day] = { ...newActual[day], lotNumber: String(value) };
+          if (typeof newActual[day] !== 'object' || newActual[day] === null) {
+              newActual[day] = { day: 0, night: 0 };
+          }
+          
+          if (shift === 'lotNumber' || shift === 'dayNote' || shift === 'nightNote') {
+              newActual[day] = { ...newActual[day], [shift]: String(value) };
           } else {
               newActual[day] = { ...newActual[day], [shift]: value };
           }

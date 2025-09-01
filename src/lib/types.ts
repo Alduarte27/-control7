@@ -4,6 +4,8 @@ export type ShiftProduction = {
   day: number;
   night: number;
   lotNumber?: string;
+  dayNote?: string;
+  nightNote?: string;
 };
 
 export type DailyProduction = {
