@@ -4,7 +4,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, PackageCheck, Bot, Goal, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash } from 'lucide-react';
+import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -69,6 +69,11 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                         description="Haz clic en el icono de lápiz (Editar) para registrar la producción por turno y el número de lote de cada día, que se sugiere automáticamente."
                     />
                      <FeatureItem 
+                        icon={NotebookPen}
+                        title="Registro de Incidencias"
+                        description="Usa el botón de libreta para añadir notas o incidencias por turno. Esto es clave para entender las variaciones y mejorar a futuro."
+                    />
+                     <FeatureItem 
                         icon={Copy}
                         title="Copiar Plan de la Semana Anterior"
                         description="Ahorra tiempo utilizando el botón 'Copiar Plan Anterior'. Esto cargará automáticamente los valores planificados de la semana previa."
@@ -80,19 +85,14 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                 <h3 className="text-lg font-semibold mb-3 text-primary">Centro de Análisis con IA</h3>
                 <div className="space-y-4">
                      <FeatureItem 
-                        icon={Bot}
-                        title="Sugerencia de Planificación Inteligente"
-                        description="En la página 'Análisis IA', el asistente analiza el historial y propone un plan optimizado que ahora se muestra directamente en la página para tu revisión."
+                        icon={HardHat}
+                        title="Simulador de Producción"
+                        description="En 'Análisis IA', usa el simulador para proyectar la capacidad de producción. Ajusta parámetros como velocidad de máquina, pérdidas y horas por turno para calcular la tasa de producción final en sacos por hora."
                     />
                     <FeatureItem 
                         icon={TrendingUp}
                         title="Pronóstico de Demanda"
-                        description="La IA puede generar un pronóstico cualitativo de la demanda futura, acompañado de gráficos históricos para una mejor comprensión de las tendencias."
-                    />
-                     <FeatureItem 
-                        icon={BarChart2}
-                        title="Análisis Comparativo Semanal"
-                        description="Compara el rendimiento detallado entre dos semanas, con KPIs y gráficos producto a producto, todo dentro de la misma sección de análisis."
+                        description="La IA puede generar un pronóstico cualitativo de la demanda futura, analizando el historial de producción para identificar tendencias de crecimiento, estabilidad o declive."
                     />
                 </div>
             </div>
@@ -108,7 +108,7 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                     <FeatureItem 
                         icon={LayoutDashboard}
                         title="Gráfico de Resumen Semanal Avanzado"
-                        description="El gráfico principal del Dashboard ahora es una barra apilada que te permite ver la composición de tu producción real (ejecutado vs. no programado) en comparación con tu plan."
+                        description="El gráfico principal del Dashboard te permite ver la composición de tu producción real ('Ejecutado s/Plan' vs. 'No Programado') en comparación con tu plan."
                     />
                 </div>
             </div>
@@ -123,8 +123,8 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                     />
                     <FeatureItem 
                         icon={Settings}
-                        title="Administración Centralizada y con Caché"
-                        description="Gestiona productos y categorías. Los datos se guardan en caché en el servidor para una carga más rápida en toda la aplicación."
+                        title="Sincronización de Datos Históricos"
+                        description="Desde 'Admin', usa el botón 'Sincronizar' para actualizar todos los planes antiguos con los nombres y categorías más recientes de tus productos."
                     />
                     <FeatureItem 
                         icon={Download}
