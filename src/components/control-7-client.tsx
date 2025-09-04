@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks, startOfWeek, getDayOfYear, addDays } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
+import { useSearchParams } from 'next/navigation';
 
 import Header from './header';
 import FilterBar from './filter-bar';
@@ -27,8 +28,8 @@ const emptyActual: DailyProduction = {
 
 const getDateFromPlanId = (planId: string): Date => {
     const [year, week] = planId.split('-W');
+    // Using startOfWeek ensures we get the Monday of that week, which is consistent.
     const date = setISOWeek(new Date(parseInt(year), 0, 4), parseInt(week));
-    // Using startOfWeek with weekStartsOn: 1 ensures consistency with ISO 8601 standard (Monday as the first day)
     return startOfWeek(date, { weekStartsOn: 1 });
 }
 
@@ -45,7 +46,7 @@ const getDayOfYearForWeek = (weekDate: Date) => {
 
 // We pass the prefetched data as props to avoid hydration issues and waterfalls.
 export default function Control7Client({ 
-    initialPlanId,
+    initialPlanId: serverInitialPlanId,
     prefetchedCategories,
     prefetchedProducts
 }: { 
@@ -55,20 +56,28 @@ export default function Control7Client({
 }) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
+  
+  // Client-side search params are the source of truth for navigation
+  const searchParams = useSearchParams();
+  const planIdFromUrl = searchParams.get('planId');
+
   const [date, setDate] = React.useState<Date | undefined>(
-    initialPlanId ? getDateFromPlanId(initialPlanId) : undefined
+    planIdFromUrl ? getDateFromPlanId(planIdFromUrl) : undefined
   );
+  
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
   const { toast } = useToast();
 
   React.useEffect(() => {
-    // This runs only on the client, after hydration, to avoid mismatches.
-    if (!initialPlanId && !date) {
-        setDate(new Date());
+    // This effect runs only on the client and ensures the date is set to the current
+    // week if no planId is in the URL. This is the definitive fix for the hydration
+    // and wrong-week-on-load issue.
+    if (!planIdFromUrl) {
+      setDate(new Date());
     }
-  }, [initialPlanId, date]);
+  }, [planIdFromUrl]);
 
   React.useEffect(() => {
     const showDialogPreference = localStorage.getItem('showInfoDialogOnStartup');
@@ -79,17 +88,6 @@ export default function Control7Client({
         sessionStorage.setItem('infoDialogShownThisSession', 'true');
     }
   }, []);
-  
-  React.useEffect(() => {
-    if (initialPlanId) {
-      const newDate = getDateFromPlanId(initialPlanId);
-      // Avoid unnecessary state updates if the date is already correct
-      if (date?.getTime() !== newDate.getTime()) {
-        setDate(newDate);
-      }
-    }
-  }, [initialPlanId, date]);
-
 
   const currentYear = (date || new Date()).getFullYear();
   const currentWeek = getISOWeek(date || new Date());
@@ -446,9 +444,22 @@ export default function Control7Client({
     if (isDirty) {
         if (confirm('Tienes cambios sin guardar. ¿Estás seguro de que quieres cambiar de semana? Se perderán los cambios.')) {
             setDate(newDate);
+            // Update URL to reflect the new date
+            if (newDate) {
+              const newPlanId = `${newDate.getFullYear()}-W${getISOWeek(newDate)}`;
+              window.history.pushState({}, '', `?planId=${newPlanId}`);
+            } else {
+              window.history.pushState({}, '', `/`);
+            }
         }
     } else {
         setDate(newDate);
+        if (newDate) {
+          const newPlanId = `${newDate.getFullYear()}-W${getISOWeek(newDate)}`;
+          window.history.pushState({}, '', `?planId=${newPlanId}`);
+        } else {
+          window.history.pushState({}, '', `/`);
+        }
     }
   };
 
