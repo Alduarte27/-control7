@@ -89,6 +89,24 @@ export default function Control7Client({
     }
   }, []);
 
+  // Effect to handle unsaved changes warning
+  React.useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (isDirty) {
+        event.preventDefault();
+        // Modern browsers show a generic message, but this is required for legacy browsers.
+        event.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isDirty]);
+
+
   const currentYear = (date || new Date()).getFullYear();
   const currentWeek = getISOWeek(date || new Date());
   
