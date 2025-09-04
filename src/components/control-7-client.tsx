@@ -443,15 +443,12 @@ export default function Control7Client({
   };
 
   const handleDateChange = (newDate: Date | undefined) => {
-    if (newDate) {
-        const newPlanId = `${newDate.getFullYear()}-W${getISOWeek(newDate)}`;
-        if (isDirty) {
-            if (confirm('Tienes cambios sin guardar. ¿Estás seguro de que quieres cambiar de semana? Se perderán los cambios.')) {
-                 window.location.href = `/?planId=${newPlanId}`;
-            }
-        } else {
-            window.location.href = `/?planId=${newPlanId}`;
+    if (isDirty) {
+        if (confirm('Tienes cambios sin guardar. ¿Estás seguro de que quieres cambiar de semana? Se perderán los cambios.')) {
+            setDate(newDate);
         }
+    } else {
+        setDate(newDate);
     }
   };
 
@@ -495,8 +492,3 @@ export default function Control7Client({
     </div>
   );
 }
-
-    
-
-    
-
