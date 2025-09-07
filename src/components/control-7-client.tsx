@@ -7,6 +7,7 @@ import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks, startOfWeek, getDayOf
 import { db } from '@/lib/firebase';
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
 import { useSearchParams } from 'next/navigation';
+import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 
 import Header from './header';
 import FilterBar from './filter-bar';
@@ -14,6 +15,8 @@ import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 import InfoDialog from './info-dialog';
+import { usePageVisibility } from '@/hooks/use-page-visibility';
+import { Button } from './ui/button';
 
 const emptyProductionDay: ShiftProduction = { day: 0, night: 0, lotNumber: '', dayNote: '', nightNote: '' };
 const emptyActual: DailyProduction = {
@@ -43,6 +46,8 @@ const getDayOfYearForWeek = (weekDate: Date) => {
     return dayOfYearMap;
 };
 
+const INACTIVITY_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
+
 
 // We pass the prefetched data as props to avoid hydration issues and waterfalls.
 export default function Control7Client({ 
@@ -68,7 +73,14 @@ export default function Control7Client({
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
+  const [showReloadNotification, setShowReloadNotification] = React.useState(false);
   const { toast } = useToast();
+
+  usePageVisibility((isInitial, timeInactive) => {
+    if (!isInitial && timeInactive > INACTIVITY_THRESHOLD_MS) {
+      setShowReloadNotification(true);
+    }
+  });
 
   React.useEffect(() => {
     // This effect runs only on the client and ensures the date is set to the current
@@ -481,6 +493,16 @@ export default function Control7Client({
     }
   };
 
+  const handleReload = () => {
+    if (isDirty) {
+        if (confirm('Tienes cambios sin guardar. Si recargas, perderás los cambios. ¿Estás seguro?')) {
+            window.location.reload();
+        }
+    } else {
+        window.location.reload();
+    }
+  };
+
   const filteredData = data.filter(item =>
     item.productName.toLowerCase().includes(productSearch.toLowerCase())
   );
@@ -493,6 +515,26 @@ export default function Control7Client({
         setIsInfoDialogOpen={setIsInfoDialogOpen}
       />
       <div className="p-4 md:p-8 space-y-6">
+        {showReloadNotification && (
+            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md flex justify-between items-center shadow-md">
+                <div className="flex items-center">
+                    <AlertTriangle className="h-5 w-5 mr-3" />
+                    <div>
+                        <p className="font-bold">¡Bienvenido de vuelta!</p>
+                        <p className="text-sm">La sesión ha estado inactiva. Para asegurar que tienes los últimos datos, te recomendamos recargar la página.</p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={handleReload}>
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Recargar Ahora
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowReloadNotification(false)}>
+                        <X className="h-4 w-4" />
+                    </Button>
+                </div>
+            </div>
+        )}
         <FilterBar 
             productSearch={productSearch} 
             onProductSearchChange={setProductSearch}
