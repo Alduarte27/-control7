@@ -28,10 +28,13 @@ const dailyChartConfig = {
     }
 } satisfies ChartConfig;
 
+// Factor de conversión: 1 quintal (qq) = 2 sacos
+const SACKS_PER_QUINTAL = 2;
 
 const CustomDailyTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
+        const quintales = data.total / SACKS_PER_QUINTAL;
         
         const productsByCategory = data.products.reduce((acc: { [key: string]: any[] }, p: any) => {
             const category = p.category || 'Sin Categoría';
@@ -45,7 +48,7 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
         return (
             <div className="rounded-lg border bg-background p-2 shadow-sm text-sm max-w-xs">
                 <p className="font-bold mb-1">{label}</p>
-                <p className="text-muted-foreground text-xs mb-2">Total: <span className="font-bold text-foreground">{data.total.toLocaleString()}</span></p>
+                <p className="text-muted-foreground text-xs mb-2">Total: <span className="font-bold text-foreground">{data.total.toLocaleString()}</span> ({quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)</p>
                 
                 <div className="border-t pt-2 mt-2">
                     <ul className="space-y-2 max-h-48 overflow-y-auto text-xs">
@@ -68,6 +71,33 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
                 </div>
             </div>
         );
+    }
+    return null;
+};
+
+const CustomProductTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="rounded-lg border bg-background p-2 shadow-sm text-sm">
+          <p className="font-bold mb-2">{label}</p>
+          <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs">
+            {payload.map((entry: any) => {
+              const quintales = entry.value / SACKS_PER_QUINTAL;
+              return (
+                <React.Fragment key={entry.dataKey}>
+                  <div className="flex items-center gap-2 font-medium" style={{ color: entry.color }}>
+                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                    <span>{entry.name}:</span>
+                  </div>
+                  <span className="text-right font-mono">
+                    {entry.value.toLocaleString()} ({quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)
+                  </span>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+      );
     }
     return null;
 };
@@ -173,7 +203,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
                     textAnchor='end'
                   />
                   <YAxis />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
+                  <ChartTooltip cursor={false} content={<CustomProductTooltip />} />
                   <ChartLegend content={<ChartLegendContent />} />
                   <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
                   <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
