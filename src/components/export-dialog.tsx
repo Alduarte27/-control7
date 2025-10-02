@@ -263,8 +263,7 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
             </Select>
           </div>
         </div>
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+        <DialogFooter className="grid grid-cols-1 gap-2">
           <Button onClick={handleGenerateReport} disabled={isProcessing}>
             <FileText className="mr-2 h-4 w-4" />
             {isProcessing ? 'Generando...' : 'Generar Reporte Visual (PDF)'}
@@ -273,6 +272,7 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
             <Download className="mr-2 h-4 w-4" />
             {isProcessing ? 'Exportando...' : 'Descargar como CSV'}
           </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
