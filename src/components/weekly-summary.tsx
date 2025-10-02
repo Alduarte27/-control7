@@ -207,7 +207,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         <CardContent>
           {productChartData.length > 0 ? (
               <ChartContainer config={productChartConfig} className="w-full h-[400px]">
-              <BarChart accessibilityLayer data={productChartData} margin={{ top: 20, right: 20, left: 0, bottom: 60 }}>
+              <BarChart accessibilityLayer data={productChartData} margin={{ top: 20, right: 20, left: 0, bottom: 80 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis
                     dataKey="name"
