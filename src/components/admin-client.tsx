@@ -49,6 +49,7 @@ function EditProductDialog({
     const [productName, setProductName] = React.useState(product.productName);
     const [categoryId, setCategoryId] = React.useState<string>(product.categoryId);
     const [color, setColor] = React.useState(product.color || '#000000');
+    const [sackWeight, setSackWeight] = React.useState(product.sackWeight || 50);
 
     const handleSave = () => {
         onSave({
@@ -56,6 +57,7 @@ function EditProductDialog({
             productName,
             categoryId,
             color,
+            sackWeight: Number(sackWeight),
         });
     };
 
@@ -98,6 +100,15 @@ function EditProductDialog({
                                 className="w-24 h-10 p-1"
                             />
                         </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-product-weight">Peso por Saco (kg)</Label>
+                            <Input
+                                id="edit-product-weight"
+                                type="number"
+                                value={sackWeight}
+                                onChange={(e) => setSackWeight(Number(e.target.value))}
+                            />
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>
@@ -135,6 +146,7 @@ function SortableItem({ product, categoryName, onEdit, onToggleStatus }: { produ
             <div className="flex items-center gap-2">
               <span className="h-4 w-4 rounded-full" style={{ backgroundColor: product.color || '#ccc' }}></span>
               {product.productName}
+              <span className="text-xs text-muted-foreground">({product.sackWeight || 50}kg)</span>
             </div>
         </div>
         <div className="flex items-center gap-2">
@@ -179,7 +191,7 @@ export default function AdminClient() {
             }
 
             const productsSnapshot = await getDocs(query(collection(db, 'products'), orderBy('order')));
-            const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, isActive: true, ...doc.data() } as ProductDefinition));
+            const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, isActive: true, sackWeight: 50, ...doc.data() } as ProductDefinition));
             setProducts(productsList);
         } catch (error) {
             console.error('Error loading data from Firestore', error);
@@ -230,6 +242,7 @@ export default function AdminClient() {
             categoryId: newProductCategoryId,
             color: '#cccccc', // Default color
             isActive: true,
+            sackWeight: 50, // Default weight
         };
         const newProduct = await addProductAction(newProductData);
 
@@ -411,7 +424,8 @@ export default function AdminClient() {
                         product.categoryId !== latestProduct.categoryId || 
                         product.color !== latestProduct.color ||
                         product.categoryName !== latestCategoryName ||
-                        product.categoryIsPlanned !== latestCategoryIsPlanned) {
+                        product.categoryIsPlanned !== latestCategoryIsPlanned ||
+                        product.sackWeight !== (latestProduct.sackWeight || 50)) { // Sync sackWeight
                         needsUpdate = true;
                         return {
                             ...product,
@@ -420,6 +434,7 @@ export default function AdminClient() {
                             color: latestProduct.color,
                             categoryName: latestCategoryName,
                             categoryIsPlanned: latestCategoryIsPlanned,
+                            sackWeight: latestProduct.sackWeight || 50, // Add new field
                         };
                     }
                 }

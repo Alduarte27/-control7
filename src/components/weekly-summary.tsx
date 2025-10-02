@@ -28,13 +28,14 @@ const dailyChartConfig = {
     }
 } satisfies ChartConfig;
 
-// Based on user feedback: 1 sack of 50kg = 1 quintal (qq)
-const SACKS_PER_QUINTAL = 1;
+// Conversion factor from kg to quintal
+const KG_PER_QUINTAL = 50;
 
 const CustomDailyTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         const data = payload[0].payload;
-        const quintales = data.total / SACKS_PER_QUINTAL;
+        const totalWeightKg = data.products.reduce((sum: number, p: any) => sum + p.weight, 0);
+        const quintales = totalWeightKg / KG_PER_QUINTAL;
         
         const productsByCategory = data.products.reduce((acc: { [key: string]: any[] }, p: any) => {
             const category = p.category || 'Sin Categoría';
@@ -48,7 +49,10 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
         return (
             <div className="rounded-lg border bg-background p-2 shadow-sm text-sm max-w-xs">
                 <p className="font-bold mb-1">{label}</p>
-                <p className="text-muted-foreground text-xs mb-2">Total: <span className="font-bold text-foreground">{data.total.toLocaleString()}</span> ({quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)</p>
+                <p className="text-muted-foreground text-xs mb-2">
+                  Total: <span className="font-bold text-foreground">{data.total.toLocaleString()}</span> sacos
+                  (<span className="font-bold text-foreground">{quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq</span>)
+                </p>
                 
                 <div className="border-t pt-2 mt-2">
                     <ul className="space-y-2 max-h-48 overflow-y-auto text-xs">
@@ -59,7 +63,7 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
                                     {(products as any[]).map(p => (
                                         <li key={p.name} className="flex justify-between items-start">
                                             <span className="flex-1 pr-2">{p.name}</span>
-                                            <span className="font-medium ml-2">{p.value.toLocaleString()}</span>
+                                            <span className="font-medium ml-2">{p.value.toLocaleString()} sacos</span>
                                         </li>
                                     ))}
                                 </ul>
@@ -77,24 +81,34 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
 
 const CustomProductTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const product = payload[0].payload;
+      const plannedWeightKg = (product.planned || 0) * (product.sackWeight || 50);
+      const actualWeightKg = (product.actual || 0) * (product.sackWeight || 50);
+      const plannedQuintales = plannedWeightKg / KG_PER_QUINTAL;
+      const actualQuintales = actualWeightKg / KG_PER_QUINTAL;
+
       return (
         <div className="rounded-lg border bg-background p-2 shadow-sm text-sm">
           <p className="font-bold mb-2">{label}</p>
           <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs">
-            {payload.map((entry: any) => {
-              const quintales = entry.value / SACKS_PER_QUINTAL;
-              return (
-                <React.Fragment key={entry.dataKey}>
-                  <div className="flex items-center gap-2 font-medium" style={{ color: entry.color }}>
-                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                    <span>{entry.name}:</span>
-                  </div>
-                  <span className="text-right font-mono">
-                    {entry.value.toLocaleString()} ({quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)
-                  </span>
-                </React.Fragment>
-              );
-            })}
+            <React.Fragment key="planned">
+              <div className="flex items-center gap-2 font-medium" style={{ color: 'hsl(var(--accent))' }}>
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'hsl(var(--accent))' }} />
+                <span>Planificado:</span>
+              </div>
+              <span className="text-right font-mono">
+                {product.planned.toLocaleString()} sacos ({plannedQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)
+              </span>
+            </React.Fragment>
+            <React.Fragment key="actual">
+              <div className="flex items-center gap-2 font-medium" style={{ color: 'hsl(var(--primary))' }}>
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'hsl(var(--primary))' }} />
+                <span>Real:</span>
+              </div>
+              <span className="text-right font-mono">
+                {product.actual.toLocaleString()} sacos ({actualQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)
+              </span>
+            </React.Fragment>
           </div>
         </div>
       );
@@ -111,12 +125,13 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         name: item.productName,
         planned: item.planned,
         actual: totalActual,
+        sackWeight: item.sackWeight || 50,
       }
     })
     .filter(item => item.planned > 0 || item.actual > 0);
   
   const dailyChartData = React.useMemo(() => {
-    const dailyTotals: { [key: string]: { total: number; products: { name: string; value: number, category: string }[] } } = {
+    const dailyTotals: { [key: string]: { total: number; products: { name: string; value: number, category: string, weight: number }[] } } = {
       Lunes: { total: 0, products: [] },
       Martes: { total: 0, products: [] },
       Miércoles: { total: 0, products: [] },
@@ -137,10 +152,12 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         const dayProduction = (product.actual[dayKey]?.day || 0) + (product.actual[dayKey]?.night || 0);
         if (dayProduction > 0) {
           dailyTotals[dayName].total += dayProduction;
+          const weight = dayProduction * (product.sackWeight || 50);
           dailyTotals[dayName].products.push({ 
               name: product.productName, 
               value: dayProduction,
-              category: product.categoryName 
+              category: product.categoryName,
+              weight: weight,
           });
         }
       }

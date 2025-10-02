@@ -31,6 +31,7 @@ export type ProductDefinition = {
   categoryId: string;
   color?: string; // e.g., '#ff0000'
   isActive: boolean;
+  sackWeight?: number; // Weight of one sack in kg
 }
 
 export type ProductData = ProductDefinition & {
