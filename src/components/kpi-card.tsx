@@ -41,7 +41,7 @@ export default function KpiCard({ title, value, icon: Icon, description, valueCo
             <CardContent className="pt-0">
               <div className={cn("text-2xl font-bold", valueColor)}>{formattedValue}</div>
               <p className={cn("text-xs font-medium h-[16px]", subValueColor)}>
-                  {subValue || ''}
+                  {subValue || <>&nbsp;</>}
               </p>
             </CardContent>
           </Card>

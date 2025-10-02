@@ -9,35 +9,61 @@ type KpiDashboardProps = {
   data: ProductData[];
 };
 
+const KG_PER_QUINTAL = 50;
+
 export default function KpiDashboard({ data }: KpiDashboardProps) {
+  // --- Helper function to calculate total weight ---
+  const calculateWeight = (products: ProductData[], type: 'planned' | 'actual'): number => {
+    return products.reduce((totalWeight, item) => {
+      let sacks = 0;
+      if (type === 'planned') {
+        sacks = item.planned || 0;
+      } else { // actual
+        sacks = Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+      }
+      const itemWeight = sacks * (item.sackWeight || 50); // Default to 50kg if not specified
+      return totalWeight + itemWeight;
+    }, 0);
+  };
+  
+  // --- KPI Calculations ---
+
   // Products that are part of a planned category AND have a plan > 0 for the week
   const productsForCompliance = data.filter(
     item => item.categoryIsPlanned && item.planned > 0
   );
   
-  const totalPlannedForCompliance = productsForCompliance.reduce((sum, item) => sum + (item.planned || 0), 0);
-  const totalActualForCompliance = productsForCompliance.reduce((sum, item) => 
+  const totalPlannedForComplianceSacks = productsForCompliance.reduce((sum, item) => sum + (item.planned || 0), 0);
+  const totalPlannedForComplianceQuintales = calculateWeight(productsForCompliance, 'planned') / KG_PER_QUINTAL;
+
+  const totalActualForComplianceSacks = productsForCompliance.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
-  const varianceForCompliance = totalActualForCompliance - totalPlannedForCompliance;
+  const totalActualForComplianceQuintales = calculateWeight(productsForCompliance, 'actual') / KG_PER_QUINTAL;
+
+  const varianceForComplianceSacks = totalActualForComplianceSacks - totalPlannedForComplianceSacks;
+  const varianceForComplianceQuintales = totalActualForComplianceQuintales - totalPlannedForComplianceQuintales;
 
   // Production from planned categories that had no plan for the week (plan === 0)
   const unplannedProductionProducts = data.filter(
     item => item.categoryIsPlanned && (item.planned || 0) === 0
   );
-  const totalUnplannedProduction = unplannedProductionProducts.reduce((sum, item) =>
+  const totalUnplannedProductionSacks = unplannedProductionProducts.reduce((sum, item) =>
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
+  const totalUnplannedProductionQuintales = calculateWeight(unplannedProductionProducts, 'actual') / KG_PER_QUINTAL;
 
   // Calculate totals for all products for overall display
-  const totalPlanned = data.reduce((sum, item) => sum + (item.planned || 0), 0);
-  const totalActual = data.reduce((sum, item) => 
+  const totalPlannedSacks = data.reduce((sum, item) => sum + (item.planned || 0), 0);
+  const totalActualSacks = data.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
-  
-  const totalVariance = totalActual - totalPlanned;
+  const totalActualQuintales = calculateWeight(data, 'actual') / KG_PER_QUINTAL;
 
-  const completion = totalPlannedForCompliance > 0 ? (totalActualForCompliance / totalPlannedForCompliance) * 100 : 0;
+  const totalVarianceSacks = totalActualSacks - totalPlannedSacks;
+  const totalVarianceQuintales = totalActualQuintales - (calculateWeight(data, 'planned') / KG_PER_QUINTAL);
+
+  const completion = totalPlannedForComplianceSacks > 0 ? (totalActualForComplianceSacks / totalPlannedForComplianceSacks) * 100 : 0;
   
   const getVarianceColor = (value: number): KpiCardProps['valueColor'] => {
     if (value >= 0) return 'text-green-600';
@@ -54,36 +80,41 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
       <KpiCard 
         title="Total Planificado" 
-        value={totalPlanned.toLocaleString()} 
+        value={totalPlannedSacks.toLocaleString()} 
         icon={Target}
-        description="Suma total de la producción planificada para todos los productos de categorías planificables." 
+        description="Suma total de la producción planificada para todos los productos de categorías planificables."
+        subValue={`(${totalPlannedForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
       />
       <KpiCard 
         title="Real s/Plan" 
-        value={totalActualForCompliance.toLocaleString()} 
+        value={totalActualForComplianceSacks.toLocaleString()} 
         icon={CheckCircle2}
         description="Suma de la producción real que responde directamente a un plan (productos de categorías planificables con plan > 0)."
-        subValue={`${varianceForCompliance.toLocaleString()} Varianza s/Plan`}
-        subValueColor={getVarianceColor(varianceForCompliance)}
+        subValue={`(${totalActualForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq) / ${varianceForComplianceSacks.toLocaleString()} Var. sacos`}
+        subValueColor={getVarianceColor(varianceForComplianceSacks)}
       />
       <KpiCard
         title="No Programado"
-        value={totalUnplannedProduction.toLocaleString()}
+        value={totalUnplannedProductionSacks.toLocaleString()}
         icon={ClipboardPlus}
         description="Producción real de productos de categorías planificables que NO tenían un plan para la semana (plan = 0)."
+        subValue={`(${totalUnplannedProductionQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
       />
       <KpiCard 
         title="Producción Total Real" 
-        value={totalActual.toLocaleString()} 
+        value={totalActualSacks.toLocaleString()} 
         icon={PackageCheck}
         description="Suma total de toda la producción real, incluyendo planificada, no programada y de categorías no planificadas."
+        subValue={`(${totalActualQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
       />
       <KpiCard 
         title="Varianza vs. Plan Total"
-        value={totalVariance.toLocaleString()}
+        value={totalVarianceSacks.toLocaleString()}
         icon={ArrowLeftRight}
-        valueColor={getVarianceColor(totalVariance)}
+        valueColor={getVarianceColor(totalVarianceSacks)}
         description="Diferencia entre la 'Producción Total Real' y el 'Total Planificado'."
+        subValue={`(${totalVarianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
+        subValueColor={getVarianceColor(totalVarianceSacks)}
       />
       <KpiCard 
         title="Cumplimiento del Plan" 
