@@ -28,7 +28,6 @@ const dailyChartConfig = {
     }
 } satisfies ChartConfig;
 
-// Conversion factor from kg to quintal
 const KG_PER_QUINTAL = 50;
 
 const CustomDailyTooltip = ({ active, payload, label }: any) => {
@@ -207,7 +206,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         <CardContent>
           {productChartData.length > 0 ? (
               <ChartContainer config={productChartConfig} className="w-full h-[400px]">
-              <BarChart accessibilityLayer data={productChartData} margin={{ top: 20, right: 20, left: 0, bottom: 80 }}>
+              <BarChart accessibilityLayer data={productChartData} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis
                     dataKey="name"
@@ -218,10 +217,11 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
                     tickFormatter={(value) => value.length > 20 ? `${value.slice(0, 18)}...` : value}
                     angle={-45}
                     textAnchor='end'
+                    height={80}
                   />
                   <YAxis />
                   <ChartTooltip cursor={false} content={<CustomProductTooltip />} />
-                  <ChartLegend content={<ChartLegendContent />} />
+                  <ChartLegend verticalAlign="bottom" wrapperStyle={{ paddingTop: '30px' }} content={<ChartLegendContent />} />
                   <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
                   <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
               </BarChart>
