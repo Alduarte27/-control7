@@ -122,6 +122,13 @@ type WeeklySummaryDoc = {
     }
 };
 
+type FullPlanDoc = {
+  id: string;
+  products: ProductData[];
+  week: number;
+  year: number;
+}
+
 const WeeklyTooltipContent = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload as WeeklySummaryData;
@@ -177,9 +184,11 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   const [weeklyShiftData, setWeeklyShiftData] = React.useState<WeeklyShiftSummaryData[]>([]);
   const [dailyData, setDailyData] = React.useState<DailySummaryData[]>([]);
   const [productData, setProductData] = React.useState<ProductSummaryData[]>([]);
+  const [aggregatedProductData, setAggregatedProductData] = React.useState<ProductSummaryData[]>([]);
   
   const [loading, setLoading] = React.useState(true);
   const [allSummaries, setAllSummaries] = React.useState<WeeklySummaryDoc[]>([]);
+  const [allPlans, setAllPlans] = React.useState<FullPlanDoc[]>([]);
   const [filteredSummaries, setFilteredSummaries] = React.useState<WeeklySummaryDoc[]>([]);
   const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
   const [selectedWeek, setSelectedWeek] = React.useState('all');
@@ -195,27 +204,30 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   }, [filteredSummaries]);
 
   React.useEffect(() => {
-    const fetchAllSummaries = async () => {
+    const fetchAllData = async () => {
         setLoading(true);
         try {
-            const summariesQuery = query(collection(db, 'weeklySummaries'));
-            const summariesSnapshot = await getDocs(summariesQuery);
-            const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
+            const [summariesSnapshot, plansSnapshot] = await Promise.all([
+                getDocs(query(collection(db, 'weeklySummaries'))),
+                getDocs(query(collection(db, 'productionPlans'))),
+            ]);
             
-            // Sort client-side to avoid complex queries
+            const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
             fetchedSummaries.sort((a, b) => {
                 if (a.year !== b.year) return b.year - a.year;
                 return b.week - a.week;
             });
-            
             setAllSummaries(fetchedSummaries);
+
+            const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FullPlanDoc));
+            setAllPlans(fetchedPlans);
         } catch (error) {
-            console.error('Failed to fetch weekly summaries from Firestore:', error);
+            console.error('Failed to fetch data from Firestore:', error);
         }
         setLoading(false);
     };
 
-    fetchAllSummaries();
+    fetchAllData();
   }, []);
 
   React.useEffect(() => {
@@ -297,42 +309,57 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
         ]);
         
-        // --- Product Chart Logic (Only runs if a specific week is selected) ---
+        // --- Single Week Product Chart Logic (Only runs if a specific week is selected) ---
         if (selectedWeek !== 'all') {
-            try {
-                const planDocRef = doc(db, "productionPlans", selectedWeek);
-                const planDocSnap = await getDoc(planDocRef);
-                if (planDocSnap.exists()) {
-                    const planData = planDocSnap.data() as { products: ProductData[] };
-                    const productChartData = planData.products
-                        .filter(p => {
-                            const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
-                            const isPlannable = p.categoryIsPlanned;
-                            const hasActivity = p.planned > 0 || Object.values(p.actual).some(d => d.day > 0 || d.night > 0);
-                            return categoryMatch && isPlannable && hasActivity;
-                        })
-                        .map(p => ({
-                            name: p.productName,
-                            planned: p.planned,
-                            actual: Object.values(p.actual).reduce((sum, dayVal) => sum + dayVal.day + dayVal.night, 0),
-                            color: p.color,
-                        }));
-                    setProductData(productChartData);
-                } else {
-                    setProductData([]);
-                }
-            } catch (error) {
-                console.error("Error fetching single plan for product chart:", error);
+            const plan = allPlans.find(p => p.id === selectedWeek);
+            if (plan) {
+                const productChartData = plan.products
+                    .filter((p: ProductData) => {
+                        const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
+                        const isPlannable = p.categoryIsPlanned;
+                        const hasActivity = p.planned > 0 || Object.values(p.actual).some(d => d.day > 0 || d.night > 0);
+                        return categoryMatch && isPlannable && hasActivity;
+                    })
+                    .map((p: ProductData) => ({
+                        name: p.productName,
+                        planned: p.planned,
+                        actual: Object.values(p.actual).reduce((sum, dayVal) => sum + dayVal.day + dayVal.night, 0),
+                        color: p.color,
+                    }));
+                setProductData(productChartData);
+            } else {
                 setProductData([]);
             }
         } else {
             setProductData([]);
         }
+
+        // --- Aggregated Product Chart Logic ---
+        const filteredPlanIds = new Set(summariesForCharts.map(s => s.id));
+        const relevantPlans = allPlans.filter(p => filteredPlanIds.has(p.id));
+        const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string } } = {};
+
+        relevantPlans.forEach(plan => {
+            plan.products.forEach((product: ProductData) => {
+                const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
+                if (categoryMatch && product.categoryIsPlanned) {
+                    if (!productTotals[product.id]) {
+                        productTotals[product.id] = { name: product.productName, planned: 0, actual: 0, color: product.color };
+                    }
+                    productTotals[product.id].planned += product.planned || 0;
+                    productTotals[product.id].actual += Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+                }
+            });
+        });
+
+        const aggregatedData = Object.values(productTotals).filter(p => p.planned > 0 || p.actual > 0);
+        setAggregatedProductData(aggregatedData);
+
     };
 
     processData();
 
-  }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading]);
+  }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans]);
 
 
   return (
@@ -510,7 +537,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             </Card>
             <Card className="md:col-span-2">
                 <CardHeader>
-                    <CardTitle>Producción por Producto (Cumplimiento de Plan)</CardTitle>
+                    <CardTitle>Producción por Producto (Cumplimiento de Plan Semanal)</CardTitle>
                     <CardDescription>
                         {selectedWeek === 'all'
                             ? "Selecciona una semana específica en los filtros para ver el detalle de producción por producto."
@@ -551,6 +578,47 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                         </ChartContainer>
                     ) : (
                         <p className="text-center text-muted-foreground py-8">No hay datos de productos planificados para esta semana o categoría.</p>
+                    )}
+                </CardContent>
+            </Card>
+            <Card className="md:col-span-2">
+                <CardHeader>
+                    <CardTitle>Rendimiento Histórico por Producto</CardTitle>
+                    <CardDescription>
+                        Total planificado vs. real para cada producto en el rango de fechas seleccionado.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {loading ? (
+                        <p className="text-center text-muted-foreground py-8">Calculando rendimiento histórico...</p>
+                    ) : aggregatedProductData.length > 0 ? (
+                        <ChartContainer config={productChartConfig} className="w-full h-[400px]">
+                            <BarChart accessibilityLayer data={aggregatedProductData} margin={{ left: -20 }}>
+                                <CartesianGrid vertical={false} />
+                                <XAxis
+                                    dataKey="name"
+                                    tickLine={false}
+                                    tickMargin={10}
+                                    axisLine={false}
+                                    tickFormatter={(value) => value.slice(0, 15) + (value.length > 15 ? '...' : '')}
+                                />
+                                <YAxis />
+                                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                                <ChartLegend content={<ChartLegendContent />} />
+                                <Bar dataKey="planned" fill="var(--color-planned)" radius={4}>
+                                    {aggregatedProductData.map((entry, index) => (
+                                        <Cell key={`cell-planned-${index}`} fill={entry.color || 'hsl(var(--accent))'} opacity={0.5} />
+                                    ))}
+                                </Bar>
+                                <Bar dataKey="actual" fill="var(--color-actual)" radius={4}>
+                                    {aggregatedProductData.map((entry, index) => (
+                                        <Cell key={`cell-actual-${index}`} fill={entry.color || 'hsl(var(--primary))'} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ChartContainer>
+                    ) : (
+                        <p className="text-center text-muted-foreground py-8">No hay datos de productos planificados en el rango seleccionado para mostrar.</p>
                     )}
                 </CardContent>
             </Card>
