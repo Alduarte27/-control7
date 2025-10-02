@@ -50,7 +50,7 @@ export default function ReportPreviewDialog({ open, onOpenChange, data, week, ye
   // The entire dialog content is what will be controlled for printing.
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[90vh] flex flex-col print-area">
+      <DialogContent className="max-w-6xl h-[90vh] flex flex-col print-area">
         <div className="no-print">
             <DialogHeader>
             <DialogTitle>Vista Previa de Reporte Semanal</DialogTitle>
