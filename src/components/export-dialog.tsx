@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useRouter } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -10,7 +11,6 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData } from '@/lib/types';
 import { FileText, Download } from 'lucide-react';
-import ReportPreviewDialog from './report-preview-dialog'; // Import the new component
 
 type ExportDialogProps = {
   open: boolean;
@@ -28,17 +28,11 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
   const [startWeek, setStartWeek] = React.useState<string>('');
   const [endWeek, setEndWeek] = React.useState<string>('');
   const [isProcessing, setIsProcessing] = React.useState(false);
-  const [reportData, setReportData] = React.useState<ProductData[] | null>(null);
-  const [reportWeek, setReportWeek] = React.useState(0);
-  const [reportYear, setReportYear] = React.useState(0);
   const { toast } = useToast();
+  const router = useRouter();
 
   React.useEffect(() => {
-    if (!open) {
-      // Reset state when dialog closes
-      setReportData(null);
-      return;
-    };
+    if (!open) return;
 
     const fetchAvailablePlans = async () => {
       try {
@@ -66,27 +60,26 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
   }, [open, toast]);
 
   const fetchRangeData = async (): Promise<{ allPlansData: any[], selectedPlanIds: string[] }> => {
-    const startIndex = availablePlans.findIndex(p => p.id === startWeek);
-    const endIndex = availablePlans.findIndex(p => p.id === endWeek);
-    
-    // Ensure chronological order for processing
+    // Note: The plans are sorted newest-first in the UI, but we need them chronologically for processing.
     const sortedPlans = [...availablePlans].sort((a,b) => a.year - b.year || a.week - b.week);
-    const sortedStartIndex = sortedPlans.findIndex(p => p.id === startWeek);
-    const sortedEndIndex = sortedPlans.findIndex(p => p.id === endWeek);
+    
+    // Find the actual start/end index in the chronologically sorted array
+    const chronologicalStartIndex = sortedPlans.findIndex(p => p.id === startWeek);
+    const chronologicalEndIndex = sortedPlans.findIndex(p => p.id === endWeek);
 
-    if (sortedStartIndex > sortedEndIndex) {
+    if (chronologicalStartIndex > chronologicalEndIndex) {
         toast({ title: 'Error de Rango', description: 'La semana de inicio debe ser anterior o igual a la semana de fin.', variant: 'destructive'});
         throw new Error("Invalid range");
     }
     
-    const selectedPlanIds = sortedPlans.slice(sortedStartIndex, sortedEndIndex + 1).map(p => p.id);
+    const selectedPlanIds = sortedPlans.slice(chronologicalStartIndex, chronologicalEndIndex + 1).map(p => p.id);
 
     if (selectedPlanIds.length === 0) {
         toast({ title: 'Advertencia', description: 'No hay planes en el rango seleccionado.', variant: 'destructive'});
         throw new Error("No plans in range");
     }
 
-    const BATCH_SIZE = 30;
+    const BATCH_SIZE = 30; // Firestore 'in' query limit
     const planPromises = [];
     for (let i = 0; i < selectedPlanIds.length; i += BATCH_SIZE) {
         const batchIds = selectedPlanIds.slice(i, i + BATCH_SIZE);
@@ -103,37 +96,26 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
         });
     });
     
-    // Sort data chronologically to match IDs
+    // Sort data chronologically to match IDs, ensuring consistent order
     allPlansData.sort((a, b) => a.id.localeCompare(b.id));
     return { allPlansData, selectedPlanIds };
   }
 
   const handleGenerateReport = async () => {
-      if (!startWeek || !endWeek) {
-          toast({ title: 'Error', description: 'Por favor, selecciona un rango de semanas.', variant: 'destructive' });
+      if (!startWeek) {
+          toast({ title: 'Error', description: 'Por favor, selecciona una semana.', variant: 'destructive' });
           return;
       }
-      setIsProcessing(true);
-      try {
-          const { allPlansData } = await fetchRangeData();
-
-          if (allPlansData.length > 1) {
-              toast({ title: 'Advertencia', description: 'La vista previa de reporte solo funciona para una semana. Generando reporte para la primera semana del rango.', variant: 'default'});
-          }
-
-          const singlePlan = allPlansData[0];
-          setReportData(singlePlan.products);
-          setReportWeek(singlePlan.week);
-          setReportYear(singlePlan.year);
-          // The ReportPreviewDialog will be rendered because reportData is not null
-      } catch (error: any) {
-          if (error.message !== "Invalid range" && error.message !== "No plans in range") {
-            console.error("Error generating report:", error);
-            toast({ title: 'Error de Reporte', description: 'No se pudo obtener los datos para el reporte.', variant: 'destructive' });
-          }
-      } finally {
-          setIsProcessing(false);
+      
+      const startIndex = availablePlans.findIndex(p => p.id === startWeek);
+      const endIndex = availablePlans.findIndex(p => p.id === endWeek);
+      
+      if (startIndex < endIndex) {
+           toast({ title: 'Información', description: 'El reporte visual se generará para la primera semana del rango seleccionado.', duration: 5000 });
       }
+
+      router.push(`/report?planId=${startWeek}`);
+      onOpenChange(false); // Close the dialog after navigating
   }
 
   const handleExportCSV = async () => {
@@ -208,20 +190,6 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
     }
   };
   
-  if (reportData) {
-    return (
-        <ReportPreviewDialog
-            open={!!reportData}
-            onOpenChange={(isOpen) => {
-                if (!isOpen) setReportData(null);
-            }}
-            data={reportData}
-            week={reportWeek}
-            year={reportYear}
-        />
-    )
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -263,10 +231,10 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
             </Select>
           </div>
         </div>
-        <DialogFooter className="grid grid-cols-1 gap-2">
+        <DialogFooter className="grid grid-cols-1 sm:grid-cols-1 gap-2">
           <Button onClick={handleGenerateReport} disabled={isProcessing}>
             <FileText className="mr-2 h-4 w-4" />
-            {isProcessing ? 'Generando...' : 'Generar Reporte Visual (PDF)'}
+            {isProcessing ? 'Generando...' : 'Generar Reporte Visual'}
           </Button>
           <Button onClick={handleExportCSV} disabled={isProcessing}>
             <Download className="mr-2 h-4 w-4" />

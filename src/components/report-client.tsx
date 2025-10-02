@@ -1,10 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Factory, Printer } from 'lucide-react';
+import { Factory, Printer, ChevronLeft } from 'lucide-react';
 import type { ProductData } from '@/lib/types';
 import KpiDashboard from './kpi-dashboard';
 import WeeklySummary from './weekly-summary';
@@ -12,11 +10,10 @@ import { Separator } from './ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { cn } from '@/lib/utils';
 import { Progress } from './ui/progress';
+import Link from 'next/link';
 
-type ReportPreviewDialogProps = {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    data: ProductData[];
+type ReportClientProps = {
+    initialData: ProductData[];
     week: number;
     year: number;
 };
@@ -36,7 +33,8 @@ const getComplianceColorClass = (compliance: number): string => {
 };
 
 
-export default function ReportPreviewDialog({ open, onOpenChange, data, week, year }: ReportPreviewDialogProps) {
+export default function ReportClient({ initialData, week, year }: ReportClientProps) {
+  const [data] = React.useState(initialData);
 
   const handlePrint = () => {
     const originalTitle = document.title;
@@ -48,19 +46,24 @@ export default function ReportPreviewDialog({ open, onOpenChange, data, week, ye
   const productsWithActivity = data.filter(item => item.planned > 0 || Object.values(item.actual).some(d => (d.day || 0) + (d.night || 0) > 0));
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl h-[90vh] flex flex-col print-area">
-        <div className="no-print">
-            <DialogHeader>
-            <DialogTitle>Vista Previa de Reporte Semanal</DialogTitle>
-            <DialogDescription>
-                Revisa el reporte gerencial para la semana {week}, {year}. Puedes imprimirlo o guardarlo como PDF.
-            </DialogDescription>
-            </DialogHeader>
-        </div>
-        <div className="flex-1 min-h-0">
-          <ScrollArea className="h-full pr-6 -mr-6">
-            <div className="print-content bg-white text-black p-4 rounded-lg">
+    <div className="bg-background min-h-screen">
+        <header className="p-4 bg-card border-b no-print flex justify-between items-center">
+            <h1 className="text-xl font-bold">Reporte Semanal</h1>
+            <div className="flex items-center gap-2">
+                <Button asChild variant="outline">
+                    <Link href="/">
+                        <ChevronLeft className="mr-2 h-4 w-4" />
+                        Volver
+                    </Link>
+                </Button>
+                <Button onClick={handlePrint}>
+                    <Printer className="mr-2 h-4 w-4" />
+                    Imprimir / Guardar como PDF
+                </Button>
+            </div>
+        </header>
+        <main className="p-4 md:p-8 print-area">
+            <div className="bg-white text-black p-4 md:p-8 rounded-lg shadow-lg max-w-5xl mx-auto">
                 <header className="flex items-center justify-between pb-4 border-b mb-6">
                     <div className="flex items-center gap-3">
                         <Factory className="h-8 w-8 text-primary" />
@@ -71,7 +74,7 @@ export default function ReportPreviewDialog({ open, onOpenChange, data, week, ye
                         <p className="text-lg text-gray-600">{year}</p>
                     </div>
                 </header>
-                <main className="space-y-6">
+                <div className="space-y-8">
                     <section>
                         <h2 className="text-xl font-semibold mb-4 text-primary">Indicadores Clave de Rendimiento</h2>
                         <KpiDashboard data={data} />
@@ -123,24 +126,13 @@ export default function ReportPreviewDialog({ open, onOpenChange, data, week, ye
                         <h2 className="text-xl font-semibold mb-4 text-primary">Resumen Gráfico de la Semana</h2>
                         <WeeklySummary data={data} />
                     </section>
-                </main>
+                </div>
                 <footer className="text-center text-xs text-gray-500 pt-8 mt-8 border-t">
                     <p>Reporte generado el {new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })} a las {new Date().toLocaleTimeString('es-ES')}</p>
                     <p>Control 7 - Planificación y Seguimiento de la Producción</p>
                 </footer>
             </div>
-          </ScrollArea>
-        </div>
-        <DialogFooter className="sm:justify-end no-print">
-            <DialogClose asChild>
-                <Button type="button" variant="secondary">Cerrar</Button>
-            </DialogClose>
-          <Button onClick={handlePrint}>
-            <Printer className="mr-2 h-4 w-4" />
-            Imprimir / Guardar como PDF
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </main>
+    </div>
   );
 }

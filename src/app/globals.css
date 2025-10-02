@@ -85,37 +85,14 @@
 
 @media print {
   body {
-    visibility: hidden;
-    background-color: white;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    background-color: white !important;
   }
-  .print-area, .print-area * {
-    visibility: visible;
+  .no-print {
+    display: none !important;
   }
   .print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: auto !important;
-    overflow: visible !important;
-  }
-  .no-print, .no-print * {
-    visibility: hidden !important;
-    display: none !important;
-    height: 0 !important;
-    width: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-  .print-content {
-    box-shadow: none !important;
-    border: none !important;
-    color: black !important;
-    height: auto !important;
-    overflow: visible !important;
-  }
-  .print-content .grid {
-    display: flex;
-    flex-direction: column;
+    display: block !important;
   }
 }
