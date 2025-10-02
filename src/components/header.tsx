@@ -94,11 +94,11 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                   <TooltipTrigger asChild>
                       <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-10 h-10 p-0 lg:w-auto lg:px-4">
                           <Download className="h-4 w-4 lg:mr-2" />
-                          <span className="hidden lg:inline">Exportar</span>
+                          <span className="hidden lg:inline">Exportar / Reportes</span>
                       </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                      <p>Exportar CSV</p>
+                      <p>Exportar / Reportes</p>
                   </TooltipContent>
               </Tooltip>
           </TooltipProvider>
@@ -136,7 +136,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                     <DropdownMenuItem asChild><Link href="/dashboard" className="flex items-center"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/admin" className="flex items-center"><Settings className="mr-2 h-4 w-4" />Admin</Link></DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setIsInfoDialogOpen(true)}><Info className="mr-2 h-4 w-4" />Información</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                           {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}

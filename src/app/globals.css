@@ -84,7 +84,7 @@
 }
 
 @media print {
-  body * {
+  body {
     visibility: hidden;
   }
   .print-area, .print-area * {
@@ -95,9 +95,12 @@
     left: 0;
     top: 0;
     width: 100%;
-    height: 100%;
-    padding: 1rem;
+    height: auto;
     background: white;
+  }
+  .no-print, .no-print * {
+    visibility: hidden;
+    display: none;
   }
   .print-content {
     box-shadow: none !important;

@@ -15,7 +15,7 @@ import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 import InfoDialog from './info-dialog';
-import ReportPreviewDialog from './report-preview-dialog'; // NUEVA IMPORTACIÓN
+import ReportPreviewDialog from './report-preview-dialog';
 import { usePageVisibility } from '@/hooks/use-page-visibility';
 import { Button } from './ui/button';
 
@@ -74,7 +74,6 @@ export default function Control7Client({
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
-  const [isReportDialogOpen, setIsReportDialogOpen] = React.useState(false); // NUEVO ESTADO
   const [showReloadNotification, setShowReloadNotification] = React.useState(false);
   const { toast } = useToast();
 
@@ -543,7 +542,6 @@ export default function Control7Client({
             date={date}
             onDateChange={handleDateChange}
             onCopyLastWeek={handleCopyLastWeek}
-            onGenerateReport={() => setIsReportDialogOpen(true)}
         />
         {loading || !date ? (
             <p>Cargando datos...</p>
@@ -563,15 +561,6 @@ export default function Control7Client({
         )}
       </div>
       <InfoDialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen} />
-      {isReportDialogOpen && (
-        <ReportPreviewDialog
-            open={isReportDialogOpen}
-            onOpenChange={setIsReportDialogOpen}
-            data={data}
-            week={currentWeek}
-            year={currentYear}
-        />
-      )}
     </div>
   );
 }

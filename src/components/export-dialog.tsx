@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { collection, getDocs, query, where, and, or } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData } from '@/lib/types';
+import { FileText, Download } from 'lucide-react';
+import ReportPreviewDialog from './report-preview-dialog'; // Import the new component
 
 type ExportDialogProps = {
   open: boolean;
@@ -25,11 +27,18 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
   const [availablePlans, setAvailablePlans] = React.useState<SavedPlanMeta[]>([]);
   const [startWeek, setStartWeek] = React.useState<string>('');
   const [endWeek, setEndWeek] = React.useState<string>('');
-  const [isExporting, setIsExporting] = React.useState(false);
+  const [isProcessing, setIsProcessing] = React.useState(false);
+  const [reportData, setReportData] = React.useState<ProductData[] | null>(null);
+  const [reportWeek, setReportWeek] = React.useState(0);
+  const [reportYear, setReportYear] = React.useState(0);
   const { toast } = useToast();
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      // Reset state when dialog closes
+      setReportData(null);
+      return;
+    };
 
     const fetchAvailablePlans = async () => {
       try {
@@ -41,12 +50,12 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
             plans.push({ id: doc.id, week: data.week, year: data.year });
           }
         });
-        plans.sort((a, b) => a.year - b.year || a.week - b.week);
+        plans.sort((a, b) => b.year - a.year || b.week - a.week); // Show newest first
         setAvailablePlans(plans);
 
         if (plans.length > 0) {
             setStartWeek(plans[0].id);
-            setEndWeek(plans[plans.length - 1].id);
+            setEndWeek(plans[0].id);
         }
       } catch (error) {
         toast({ title: 'Error', description: 'No se pudieron cargar las semanas disponibles.', variant: 'destructive' });
@@ -56,61 +65,97 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
     fetchAvailablePlans();
   }, [open, toast]);
 
-  const handleExport = async () => {
+  const fetchRangeData = async (): Promise<{ allPlansData: any[], selectedPlanIds: string[] }> => {
+    const startIndex = availablePlans.findIndex(p => p.id === startWeek);
+    const endIndex = availablePlans.findIndex(p => p.id === endWeek);
+    
+    // Ensure chronological order for processing
+    const sortedPlans = [...availablePlans].sort((a,b) => a.year - b.year || a.week - b.week);
+    const sortedStartIndex = sortedPlans.findIndex(p => p.id === startWeek);
+    const sortedEndIndex = sortedPlans.findIndex(p => p.id === endWeek);
+
+    if (sortedStartIndex > sortedEndIndex) {
+        toast({ title: 'Error de Rango', description: 'La semana de inicio debe ser anterior o igual a la semana de fin.', variant: 'destructive'});
+        throw new Error("Invalid range");
+    }
+    
+    const selectedPlanIds = sortedPlans.slice(sortedStartIndex, sortedEndIndex + 1).map(p => p.id);
+
+    if (selectedPlanIds.length === 0) {
+        toast({ title: 'Advertencia', description: 'No hay planes en el rango seleccionado.', variant: 'destructive'});
+        throw new Error("No plans in range");
+    }
+
+    const BATCH_SIZE = 30;
+    const planPromises = [];
+    for (let i = 0; i < selectedPlanIds.length; i += BATCH_SIZE) {
+        const batchIds = selectedPlanIds.slice(i, i + BATCH_SIZE);
+        planPromises.push(getDocs(query(collection(db, 'productionPlans'), where('__name__', 'in', batchIds))));
+    }
+
+    const querySnapshots = await Promise.all(planPromises);
+    
+    const allPlansData: any[] = [];
+    querySnapshots.forEach(snapshot => {
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            allPlansData.push({ ...data, id: doc.id });
+        });
+    });
+    
+    // Sort data chronologically to match IDs
+    allPlansData.sort((a, b) => a.id.localeCompare(b.id));
+    return { allPlansData, selectedPlanIds };
+  }
+
+  const handleGenerateReport = async () => {
+      if (!startWeek || !endWeek) {
+          toast({ title: 'Error', description: 'Por favor, selecciona un rango de semanas.', variant: 'destructive' });
+          return;
+      }
+      setIsProcessing(true);
+      try {
+          const { allPlansData } = await fetchRangeData();
+
+          if (allPlansData.length > 1) {
+              toast({ title: 'Advertencia', description: 'La vista previa de reporte solo funciona para una semana. Generando reporte para la primera semana del rango.', variant: 'default'});
+          }
+
+          const singlePlan = allPlansData[0];
+          setReportData(singlePlan.products);
+          setReportWeek(singlePlan.week);
+          setReportYear(singlePlan.year);
+          // The ReportPreviewDialog will be rendered because reportData is not null
+      } catch (error: any) {
+          if (error.message !== "Invalid range" && error.message !== "No plans in range") {
+            console.error("Error generating report:", error);
+            toast({ title: 'Error de Reporte', description: 'No se pudo obtener los datos para el reporte.', variant: 'destructive' });
+          }
+      } finally {
+          setIsProcessing(false);
+      }
+  }
+
+  const handleExportCSV = async () => {
     if (!startWeek || !endWeek) {
         toast({ title: 'Error', description: 'Por favor, selecciona un rango de semanas.', variant: 'destructive' });
         return;
     }
-    setIsExporting(true);
+    setIsProcessing(true);
 
     try {
-        const startIndex = availablePlans.findIndex(p => p.id === startWeek);
-        const endIndex = availablePlans.findIndex(p => p.id === endWeek);
-        const selectedPlanIds = availablePlans.slice(startIndex, endIndex + 1).map(p => p.id);
-
-        if (selectedPlanIds.length === 0) {
-            toast({ title: 'Advertencia', description: 'No hay planes en el rango seleccionado.', variant: 'destructive'});
-            setIsExporting(false);
-            return;
-        }
-
-        // Firestore 'in' query is limited to 30 items. If more, we need to batch.
-        const BATCH_SIZE = 30;
-        const planPromises = [];
-        for (let i = 0; i < selectedPlanIds.length; i += BATCH_SIZE) {
-            const batchIds = selectedPlanIds.slice(i, i + BATCH_SIZE);
-            planPromises.push(getDocs(query(collection(db, 'productionPlans'), where('__name__', 'in', batchIds))));
-        }
-
-        const querySnapshots = await Promise.all(planPromises);
+        const { allPlansData } = await fetchRangeData();
         
-        const allPlansData: (ProductData[] & { week: number, year: number })[] = [];
-        querySnapshots.forEach(snapshot => {
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                allPlansData.push({ ...data.products, week: data.week, year: data.year, products: data.products });
-            });
-        });
-        
-        // Sort data chronologically
-        allPlansData.sort((a, b) => a.year - b.year || a.week - b.week);
-
         const headers = [
-            'Año',
-            'Semana',
-            'Producto',
-            'Categoría',
-            'Plan Semanal',
-            'Lote Lun', 'Real Lun',
-            'Lote Mar', 'Real Mar',
-            'Lote Mié', 'Real Mié',
-            'Lote Jue', 'Real Jue',
-            'Lote Vie', 'Real Vie',
-            'Lote Sáb', 'Real Sáb',
-            'Lote Dom', 'Real Dom',
-            'Total Real',
-            'Varianza',
-            'Cumplimiento (%)',
+            'Año', 'Semana', 'Producto', 'Categoría', 'Plan Semanal',
+            'Lote Lun', 'Real Lun', 'Incidencia Día Lun', 'Incidencia Noche Lun',
+            'Lote Mar', 'Real Mar', 'Incidencia Día Mar', 'Incidencia Noche Mar',
+            'Lote Mié', 'Real Mié', 'Incidencia Día Mié', 'Incidencia Noche Mié',
+            'Lote Jue', 'Real Jue', 'Incidencia Día Jue', 'Incidencia Noche Jue',
+            'Lote Vie', 'Real Vie', 'Incidencia Día Vie', 'Incidencia Noche Vie',
+            'Lote Sáb', 'Real Sáb', 'Incidencia Día Sáb', 'Incidencia Noche Sáb',
+            'Lote Dom', 'Real Dom', 'Incidencia Día Dom', 'Incidencia Noche Dom',
+            'Total Real', 'Varianza', 'Cumplimiento (%)',
         ];
 
         const rows: string[] = [];
@@ -120,75 +165,70 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
                 const variance = totalActual - item.planned;
                 const compliance = item.planned > 0 ? ((totalActual / item.planned) * 100).toFixed(1) : '0.0';
 
-                const dailyTotals = {
-                    mon: (item.actual.mon?.day || 0) + (item.actual.mon?.night || 0),
-                    tue: (item.actual.tue?.day || 0) + (item.actual.tue?.night || 0),
-                    wed: (item.actual.wed?.day || 0) + (item.actual.wed?.night || 0),
-                    thu: (item.actual.thu?.day || 0) + (item.actual.thu?.night || 0),
-                    fri: (item.actual.fri?.day || 0) + (item.actual.fri?.night || 0),
-                    sat: (item.actual.sat?.day || 0) + (item.actual.sat?.night || 0),
-                    sun: (item.actual.sun?.day || 0) + (item.actual.sun?.night || 0),
-                };
-      
-                const lotNumbers = {
-                    mon: item.actual.mon?.lotNumber || '',
-                    tue: item.actual.tue?.lotNumber || '',
-                    wed: item.actual.wed?.lotNumber || '',
-                    thu: item.actual.thu?.lotNumber || '',
-                    fri: item.actual.fri?.lotNumber || '',
-                    sat: item.actual.sat?.lotNumber || '',
-                    sun: item.actual.sun?.lotNumber || '',
-                };
+                const dailyData = (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const).flatMap(day => {
+                    const dayInfo = item.actual[day] || {};
+                    return [
+                        dayInfo.lotNumber || '',
+                        (dayInfo.day || 0) + (dayInfo.night || 0),
+                        `"${(dayInfo.dayNote || '').replace(/"/g, '""')}"`,
+                        `"${(dayInfo.nightNote || '').replace(/"/g, '""')}"`,
+                    ];
+                });
 
                 const row = [
-                    plan.year,
-                    plan.week,
-                    `"${item.productName.replace(/"/g, '""')}"`,
-                    item.categoryName,
-                    item.planned,
-                    lotNumbers.mon, dailyTotals.mon,
-                    lotNumbers.tue, dailyTotals.tue,
-                    lotNumbers.wed, dailyTotals.wed,
-                    lotNumbers.thu, dailyTotals.thu,
-                    lotNumbers.fri, dailyTotals.fri,
-                    lotNumbers.sat, dailyTotals.sat,
-                    lotNumbers.sun, dailyTotals.sun,
-                    totalActual,
-                    variance,
-                    compliance,
+                    plan.year, plan.week, `"${item.productName.replace(/"/g, '""')}"`, item.categoryName, item.planned,
+                    ...dailyData,
+                    totalActual, variance, compliance,
                 ].join(',');
                 rows.push(row);
             });
         });
         
         const csvContent = [headers.join(','), ...rows].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' }); // Add BOM for Excel
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.href = url;
-        link.setAttribute('download', `reporte-produccion-${startWeek}-a-${endWeek}.csv`);
+        const startPlan = availablePlans.find(p=>p.id === startWeek);
+        const endPlan = availablePlans.find(p=>p.id === endWeek);
+        link.setAttribute('download', `reporte-produccion-${startPlan?.year}-S${startPlan?.week}-a-${endPlan?.year}-S${endPlan?.week}.csv`);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
 
         toast({ title: 'Exportación Exitosa', description: `Se ha generado el reporte para ${allPlansData.length} semanas.` });
-        onOpenChange(false);
-    } catch (error) {
-        console.error("Error exporting data:", error);
-        toast({ title: 'Error de Exportación', description: 'No se pudo generar el archivo CSV.', variant: 'destructive' });
+    } catch (error: any) {
+        if (error.message !== "Invalid range" && error.message !== "No plans in range") {
+            console.error("Error exporting data:", error);
+            toast({ title: 'Error de Exportación', description: 'No se pudo generar el archivo CSV.', variant: 'destructive' });
+        }
     } finally {
-        setIsExporting(false);
+        setIsProcessing(false);
     }
   };
   
+  if (reportData) {
+    return (
+        <ReportPreviewDialog
+            open={!!reportData}
+            onOpenChange={(isOpen) => {
+                if (!isOpen) setReportData(null);
+            }}
+            data={reportData}
+            week={reportWeek}
+            year={reportYear}
+        />
+    )
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Exportar Reporte de Producción a CSV</DialogTitle>
+          <DialogTitle>Exportar o Generar Reporte</DialogTitle>
           <DialogDescription>
-            Selecciona el rango de semanas que deseas incluir en el reporte.
+            Selecciona el rango de semanas y elige el formato de salida.
           </DialogDescription>
         </DialogHeader>
         <div className="grid grid-cols-2 gap-4 py-4">
@@ -223,10 +263,15 @@ export default function ExportDialog({ open, onOpenChange }: ExportDialogProps) 
             </Select>
           </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-          <Button onClick={handleExport} disabled={isExporting}>
-            {isExporting ? 'Exportando...' : 'Generar y Descargar CSV'}
+          <Button onClick={handleGenerateReport} disabled={isProcessing}>
+            <FileText className="mr-2 h-4 w-4" />
+            {isProcessing ? 'Generando...' : 'Generar Reporte Visual (PDF)'}
+          </Button>
+          <Button onClick={handleExportCSV} disabled={isProcessing}>
+            <Download className="mr-2 h-4 w-4" />
+            {isProcessing ? 'Exportando...' : 'Descargar como CSV'}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -4,7 +4,7 @@ import React from 'react';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Search, Copy, FileText } from 'lucide-react';
+import { CalendarDays, Search, Copy } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek } from 'date-fns';
@@ -17,7 +17,6 @@ type FilterBarProps = {
   date: Date | undefined;
   onDateChange: (date: Date | undefined) => void;
   onCopyLastWeek: () => void;
-  onGenerateReport: () => void;
 };
 
 export default function FilterBar({ 
@@ -26,7 +25,6 @@ export default function FilterBar({
     date, 
     onDateChange, 
     onCopyLastWeek,
-    onGenerateReport,
 }: FilterBarProps) {
   const currentWeek = getISOWeek(date || new Date());
   const currentYear = (date || new Date()).getFullYear();
@@ -53,7 +51,7 @@ export default function FilterBar({
 
   return (
     <div className="p-4 bg-card rounded-lg shadow-sm border">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
         <div className="flex flex-col gap-1.5">
             <Label htmlFor="productSearch">Búsqueda de Producto</Label>
             <div className="relative">
@@ -109,12 +107,6 @@ export default function FilterBar({
             <Button onClick={onCopyLastWeek} variant="outline">
                 <Copy className="mr-2 h-4 w-4" />
                 Copiar Plan Anterior
-            </Button>
-        </div>
-        <div className="flex flex-col gap-1.5">
-            <Button onClick={onGenerateReport} variant="outline">
-                <FileText className="mr-2 h-4 w-4" />
-                Generar Reporte
             </Button>
         </div>
       </div>
