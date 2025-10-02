@@ -28,8 +28,8 @@ const dailyChartConfig = {
     }
 } satisfies ChartConfig;
 
-// Factor de conversión: 1 quintal (qq) = 2 sacos
-const SACKS_PER_QUINTAL = 2;
+// Based on user feedback: 1 sack of 50kg = 1 quintal (qq)
+const SACKS_PER_QUINTAL = 1;
 
 const CustomDailyTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
