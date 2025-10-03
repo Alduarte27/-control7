@@ -26,8 +26,8 @@ export default function FilterBar({
     onDateChange, 
     onCopyLastWeek,
 }: FilterBarProps) {
-  const currentWeek = getISOWeek(date || new Date());
-  const currentYear = (date || new Date()).getFullYear();
+  const currentWeek = date ? getISOWeek(date) : getISOWeek(new Date());
+  const currentYear = date ? date.getFullYear() : new Date().getFullYear();
 
   const handleWeekChange = (weekNumber: string) => {
     const newDate = setISOWeek(new Date(currentYear, 0, 1), parseInt(weekNumber, 10));

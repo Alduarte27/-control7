@@ -67,8 +67,8 @@ export default function Control7Client({
   const searchParams = useSearchParams();
   const planIdFromUrl = searchParams.get('planId');
 
-  const [date, setDate] = React.useState<Date>(
-    planIdFromUrl ? getDateFromPlanId(planIdFromUrl) : new Date()
+  const [date, setDate] = React.useState<Date | undefined>(
+    planIdFromUrl ? getDateFromPlanId(planIdFromUrl) : undefined
   );
   
   const [loading, setLoading] = React.useState(true);
@@ -90,12 +90,12 @@ export default function Control7Client({
     if (planIdFromUrl) {
         const newDate = getDateFromPlanId(planIdFromUrl);
         // Avoid state update if the date is already correct
-        if (newDate.getTime() !== date.getTime()) {
+        if (newDate.getTime() !== date?.getTime()) {
             setDate(newDate);
         }
     } else {
         const today = new Date();
-        if (getISOWeek(today) !== getISOWeek(date) || today.getFullYear() !== date.getFullYear()) {
+        if (!date || getISOWeek(today) !== getISOWeek(date) || today.getFullYear() !== date.getFullYear()) {
             setDate(today);
         }
     }
@@ -130,8 +130,8 @@ export default function Control7Client({
   }, [isDirty]);
 
 
-  const currentYear = date.getFullYear();
-  const currentWeek = getISOWeek(date);
+  const currentYear = date ? date.getFullYear() : new Date().getFullYear();
+  const currentWeek = date ? getISOWeek(date) : getISOWeek(new Date());
   
   const planId = `${currentYear}-W${currentWeek}`;
 
