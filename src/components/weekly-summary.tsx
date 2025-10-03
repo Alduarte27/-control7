@@ -186,7 +186,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
                             axisLine={false}
                         />
                         <YAxis />
-                        <ChartTooltip cursor={{ fill: 'hsl(var(--accent))', radius: 4 }} content={<CustomDailyTooltip />} />
+                        <ChartTooltip cursor={false} content={<CustomDailyTooltip />} />
                         <Bar dataKey="total" fill="var(--color-total)" radius={4} barSize={60} />
                     </BarChart>
                 </ChartContainer>
