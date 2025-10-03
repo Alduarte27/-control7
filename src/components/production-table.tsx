@@ -43,6 +43,7 @@ const getComplianceColorClass = (compliance: number): string => {
     return 'bg-red-600';
 };
 
+const KG_PER_QUINTAL = 50;
 
 const renderProductRow = (
     item: ProductData, 
@@ -51,6 +52,7 @@ const renderProductRow = (
     setSelectedProductForIncidents: (product: ProductData) => void // NUEVO
 ) => {
     const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
+    const totalQuintales = (totalActual * (item.sackWeight || 50)) / KG_PER_QUINTAL;
     const variance = totalActual - item.planned;
     const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
     const varianceColorClass = getVarianceColorClass(variance, compliance);
@@ -84,6 +86,7 @@ const renderProductRow = (
           )
         })}
         <TableCell className="text-right font-medium">{totalActual.toLocaleString()}</TableCell>
+        <TableCell className="text-right font-medium text-muted-foreground">{totalQuintales.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1})}</TableCell>
         <TableCell className="text-right">
             <span className={cn("font-medium rounded-md px-2 py-1", varianceColorClass)}>
                 {variance.toLocaleString()}
@@ -211,6 +214,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
                 <TableHead className="text-right min-w-[110px]">Plan Semanal</TableHead>
                 {days.map(day => <TableHead key={day} className="text-right min-w-[90px] capitalize">{dayNames[day]}</TableHead>)}
                 <TableHead className="text-right min-w-[110px]">Total Real</TableHead>
+                <TableHead className="text-right min-w-[90px]">QQ</TableHead>
                 <TableHead className="text-right min-w-[110px]">Varianza</TableHead>
                 <TableHead className="min-w-[120px]">Cumplimiento</TableHead>
                 <TableHead className="min-w-[70px]">Turnos</TableHead>
@@ -220,7 +224,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
             <TableBody>
               {data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={13} className="h-24 text-center">
+                    <TableCell colSpan={14} className="h-24 text-center">
                       Ningún producto coincide con tu búsqueda.
                     </TableCell>
                   </TableRow>
@@ -228,7 +232,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
                 categories.map(category => (
                     <React.Fragment key={category}>
                       <TableRow className="bg-muted/50 hover:bg-muted cursor-pointer" onClick={() => toggleCategory(category)}>
-                          <TableCell colSpan={13} className="font-bold text-primary sticky left-0 bg-muted/50 z-10">
+                          <TableCell colSpan={14} className="font-bold text-primary sticky left-0 bg-muted/50 z-10">
                               <div className="flex items-center gap-2">
                                   <ChevronUp className={cn("h-4 w-4 transition-transform", !openCategories[category] && "rotate-180")} />
                                   {category}
