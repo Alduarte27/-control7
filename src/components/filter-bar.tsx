@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CalendarDays, Search, Copy } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek } from 'date-fns';
+import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Label } from '@/components/ui/label';
 
@@ -74,7 +74,7 @@ export default function FilterBar({
                 className="w-full justify-start text-left font-normal"
               >
                 <CalendarDays className="mr-2 h-4 w-4" />
-                {date ? format(date, "PPP", { locale: es }) : <span>Elige una fecha</span>}
+                {date && isValid(date) ? format(date, "PPP", { locale: es }) : <span>Elige una fecha</span>}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">

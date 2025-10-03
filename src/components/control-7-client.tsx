@@ -67,8 +67,8 @@ export default function Control7Client({
   const searchParams = useSearchParams();
   const planIdFromUrl = searchParams.get('planId');
 
-  const [date, setDate] = React.useState<Date | undefined>(
-    planIdFromUrl ? getDateFromPlanId(planIdFromUrl) : undefined
+  const [date, setDate] = React.useState<Date>(
+    planIdFromUrl ? getDateFromPlanId(planIdFromUrl) : new Date()
   );
   
   const [loading, setLoading] = React.useState(true);
@@ -87,9 +87,19 @@ export default function Control7Client({
     // This effect runs only on the client and ensures the date is set to the current
     // week if no planId is in the URL. This is the definitive fix for the hydration
     // and wrong-week-on-load issue.
-    if (!planIdFromUrl) {
-      setDate(new Date());
+    if (planIdFromUrl) {
+        const newDate = getDateFromPlanId(planIdFromUrl);
+        // Avoid state update if the date is already correct
+        if (newDate.getTime() !== date.getTime()) {
+            setDate(newDate);
+        }
+    } else {
+        const today = new Date();
+        if (getISOWeek(today) !== getISOWeek(date) || today.getFullYear() !== date.getFullYear()) {
+            setDate(today);
+        }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planIdFromUrl]);
 
   React.useEffect(() => {
@@ -120,8 +130,8 @@ export default function Control7Client({
   }, [isDirty]);
 
 
-  const currentYear = (date || new Date()).getFullYear();
-  const currentWeek = getISOWeek(date || new Date());
+  const currentYear = date.getFullYear();
+  const currentWeek = getISOWeek(date);
   
   const planId = `${currentYear}-W${currentWeek}`;
 
@@ -472,6 +482,7 @@ export default function Control7Client({
   };
 
   const handleDateChange = (newDate: Date | undefined) => {
+    if (!newDate) return;
     if (isDirty) {
         if (confirm('Tienes cambios sin guardar. ¿Estás seguro de que quieres cambiar de semana? Se perderán los cambios.')) {
             setDate(newDate);
