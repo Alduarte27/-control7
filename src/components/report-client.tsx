@@ -11,12 +11,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { cn } from '@/lib/utils';
 import { Progress } from './ui/progress';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 
 type ReportClientProps = {
     initialData: ProductData[];
-    week: number;
-    year: number;
+    startWeek: number;
+    startYear: number;
+    endWeek: number;
+    endYear: number;
 };
+
+const KG_PER_QUINTAL = 50;
 
 const getVarianceColorClass = (variance: number, compliance: number): string => {
     if (variance > 0) return 'bg-green-100 text-green-700';
@@ -33,15 +38,32 @@ const getComplianceColorClass = (compliance: number): string => {
 };
 
 
-export default function ReportClient({ initialData, week, year }: ReportClientProps) {
+export default function ReportClient({ initialData, startWeek, startYear, endWeek, endYear }: ReportClientProps) {
   const [data] = React.useState(initialData);
+  const searchParams = useSearchParams();
+  const startWeekId = searchParams.get('startWeek');
+  const endWeekId = searchParams.get('endWeek');
+
 
   const handlePrint = () => {
     const originalTitle = document.title;
-    document.title = `Reporte Semana ${week} - ${year}.pdf`;
+    const fileName = startWeek === endWeek 
+      ? `Reporte-S${startWeek}-${startYear}.pdf`
+      : `Reporte-S${startWeek}-a-S${endWeek}-${endYear}.pdf`;
+    document.title = fileName;
     window.print();
     document.title = originalTitle;
   };
+
+  const getTitle = () => {
+      if (startYear !== endYear) {
+          return `Semanas ${startWeek}/${startYear} a ${endWeek}/${endYear}`;
+      }
+      if (startWeek === endWeek) {
+          return `Semana ${startWeek}, ${startYear}`;
+      }
+      return `Semanas ${startWeek} a ${endWeek}, ${endYear}`;
+  }
 
   const productsWithActivity = data.filter(item => item.planned > 0 || Object.values(item.actual).some(d => (d.day || 0) + (d.night || 0) > 0));
 
@@ -51,7 +73,7 @@ export default function ReportClient({ initialData, week, year }: ReportClientPr
             <h1 className="text-xl font-bold">Reporte Semanal</h1>
             <div className="flex items-center gap-2">
                 <Button asChild variant="outline">
-                    <Link href="/">
+                    <Link href={`/?planId=${startWeekId}`}>
                         <ChevronLeft className="mr-2 h-4 w-4" />
                         Volver
                     </Link>
@@ -63,15 +85,14 @@ export default function ReportClient({ initialData, week, year }: ReportClientPr
             </div>
         </header>
         <main className="p-4 md:p-8 print-area">
-            <div className="bg-white text-black p-4 md:p-8 rounded-lg shadow-lg max-w-5xl mx-auto">
+            <div className="bg-white text-black p-4 md:p-8 rounded-lg shadow-lg max-w-6xl mx-auto print-content">
                 <header className="flex items-center justify-between pb-4 border-b mb-6">
                     <div className="flex items-center gap-3">
                         <Factory className="h-8 w-8 text-primary" />
-                        <h1 className="text-2xl font-bold">Reporte de Producción Semanal</h1>
+                        <h1 className="text-2xl font-bold">Reporte de Producción</h1>
                     </div>
                     <div className="text-right">
-                        <p className="text-xl font-semibold">Semana {week}</p>
-                        <p className="text-lg text-gray-600">{year}</p>
+                        <p className="text-xl font-semibold">{getTitle()}</p>
                     </div>
                 </header>
                 <div className="space-y-8">
@@ -90,6 +111,7 @@ export default function ReportClient({ initialData, week, year }: ReportClientPr
                                     <TableHead className="text-left">Producto</TableHead>
                                     <TableHead className="text-right">Plan (Sacos)</TableHead>
                                     <TableHead className="text-right">Real (Sacos)</TableHead>
+                                    <TableHead className="text-right">QQ</TableHead>
                                     <TableHead className="text-right">Varianza</TableHead>
                                     <TableHead>Cumplimiento</TableHead>
                                 </TableRow>
@@ -99,11 +121,13 @@ export default function ReportClient({ initialData, week, year }: ReportClientPr
                                     const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
                                     const variance = totalActual - item.planned;
                                     const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
+                                    const totalQuintales = (totalActual * (item.sackWeight || 50)) / KG_PER_QUINTAL;
                                     return (
                                         <TableRow key={item.id}>
                                             <TableCell className="text-left font-medium">{item.productName}</TableCell>
                                             <TableCell className="text-right">{item.planned.toLocaleString()}</TableCell>
                                             <TableCell className="text-right">{totalActual.toLocaleString()}</TableCell>
+                                            <TableCell className="text-right text-muted-foreground">{totalQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})}</TableCell>
                                             <TableCell className={cn("text-right font-medium", getVarianceColorClass(variance, compliance))}>
                                                 {variance.toLocaleString()}
                                             </TableCell>
@@ -123,7 +147,7 @@ export default function ReportClient({ initialData, week, year }: ReportClientPr
                     <Separator />
 
                     <section>
-                        <h2 className="text-xl font-semibold mb-4 text-primary">Resumen Gráfico de la Semana</h2>
+                        <h2 className="text-xl font-semibold mb-4 text-primary">Resumen Gráfico del Período</h2>
                         <WeeklySummary data={data} />
                     </section>
                 </div>

@@ -4,7 +4,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash } from 'lucide-react';
+import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -98,7 +98,7 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
             </div>
 
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Dashboard y Visualizaciones</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Reportes y Dashboards</h3>
                 <div className="space-y-4">
                      <FeatureItem 
                         icon={Zap}
@@ -106,15 +106,20 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                         description="Gracias a la nueva arquitectura de datos, el Dashboard General ahora carga de forma casi instantánea, consumiendo muchos menos recursos."
                     />
                     <FeatureItem 
-                        icon={LayoutDashboard}
-                        title="Gráfico de Resumen Semanal Avanzado"
-                        description="El gráfico principal del Dashboard te permite ver la composición de tu producción real ('Ejecutado s/Plan' vs. 'No Programado') en comparación con tu plan."
+                        icon={FileText}
+                        title="Página de Reportes Profesionales"
+                        description="Navega a /report para generar un reporte visual profesional de un rango de semanas. Incluye KPIs, tabla de cumplimiento, y gráficos consolidados, listo para imprimir o guardar como PDF."
+                    />
+                    <FeatureItem 
+                        icon={Download}
+                        title="Exportación Centralizada"
+                        description="Usa el botón 'Exportar / Reportes' para abrir un diálogo donde podrás seleccionar un rango de fechas y elegir entre generar el reporte visual o descargar un CSV detallado."
                     />
                 </div>
             </div>
 
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Gestión y Herramientas</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Gestión y Administración</h3>
                 <div className="space-y-4">
                     <FeatureItem 
                         icon={History}
@@ -125,11 +130,6 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                         icon={Settings}
                         title="Sincronización de Datos Históricos"
                         description="Desde 'Admin', usa el botón 'Sincronizar' para actualizar todos los planes antiguos con los nombres y categorías más recientes de tus productos."
-                    />
-                    <FeatureItem 
-                        icon={Download}
-                        title="Exportación a CSV por Rango de Fechas"
-                        description="Usa el botón 'Exportar' para abrir un diálogo donde podrás seleccionar un rango de semanas y generar un reporte CSV personalizado."
                     />
                 </div>
             </div>
