@@ -49,7 +49,7 @@ export default function OperationsClient({
     // Estado para el simulador detallado
     const [detailedProductId, setDetailedProductId] = React.useState(products[0]?.id || '');
     const [unitsPerSack, setUnitsPerSack] = React.useState(50);
-    const [detailedSpeed, setDetailedSpeed] = React.useState(39); // fundas/min
+    const [detailedSpeed, setDetailedSpeed] = React.useState(2400); // fundas/hr
     const [detailedLoss, setDetailedLoss] = React.useState(8);
     const [detailedMachineCount, setDetailedMachineCount] = React.useState(1);
     const [detailedDayHours, setDetailedDayHours] = React.useState(11);
@@ -105,19 +105,13 @@ export default function OperationsClient({
             return { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour };
         };
         
-        let totalSacksPerHourFromAllPackers = 0;
-        let effectiveWrapperSacksPerHour = 0;
-        let isOverallBottleneck = false;
-        let bottleneckDescription = '';
-        let noBottleneckDescription = 'Todas las líneas operan dentro de su capacidad.';
-
         if (wrapperScenario === 'single') {
             const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines);
-            totalSacksPerHourFromAllPackers = totalSacksPerHourFromPackers;
-            effectiveWrapperSacksPerHour = wrapperSacksPerHour;
-            isOverallBottleneck = isWrapperBottleneck;
-            bottleneckDescription = `La enfardadora (cap: ${wrapperSacksPerHour.toLocaleString()} sacos/hr) limita a las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr).`;
-            noBottleneckDescription = `Las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr) operan dentro de la capacidad de la enfardadora (${wrapperSacksPerHour.toLocaleString()} sacos/hr).`;
+            const totalSacksPerHourFromAllPackers = totalSacksPerHourFromPackers;
+            const effectiveWrapperSacksPerHour = wrapperSacksPerHour;
+            const isOverallBottleneck = isWrapperBottleneck;
+            const bottleneckDescription = `La enfardadora (cap: ${wrapperSacksPerHour.toLocaleString()} sacos/hr) limita a las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr).`;
+            const noBottleneckDescription = `Las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr) operan dentro de la capacidad de la enfardadora (${wrapperSacksPerHour.toLocaleString()} sacos/hr).`;
 
             const timeToEmptyHours = effectiveKgPerHour > 0 ? siloAmount / effectiveKgPerHour : 0;
             const totalSacksProduced = effectiveSacksPerHour * timeToEmptyHours;
@@ -153,11 +147,12 @@ export default function OperationsClient({
             const result1 = calculateProduction(machinesForWrapper1);
             const result2 = calculateProduction(machinesForWrapper2);
             
-            isOverallBottleneck = result1.isWrapperBottleneck || result2.isWrapperBottleneck;
-            bottleneckDescription = `Línea 1: ${result1.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'} Línea 2: ${result2.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'}`;
+            const isOverallBottleneck = result1.isWrapperBottleneck || result2.isWrapperBottleneck;
+            const bottleneckDescription = `Línea 1: ${result1.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'} Línea 2: ${result2.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'}`;
+            const noBottleneckDescription = `Línea 1: ${!result1.isWrapperBottleneck ? 'OK.' : ''} Línea 2: ${!result2.isWrapperBottleneck ? 'OK.' : ''}`
 
-            totalSacksPerHourFromAllPackers = result1.totalSacksPerHourFromPackers + result2.totalSacksPerHourFromPackers;
-            effectiveWrapperSacksPerHour = result1.wrapperSacksPerHour + result2.wrapperSacksPerHour;
+            const totalSacksPerHourFromAllPackers = result1.totalSacksPerHourFromPackers + result2.totalSacksPerHourFromPackers;
+            const effectiveWrapperSacksPerHour = result1.wrapperSacksPerHour + result2.wrapperSacksPerHour;
 
             const totalEffectiveKgPerHour = result1.effectiveKgPerHour + result2.effectiveKgPerHour;
             const timeToEmptyHours = totalEffectiveKgPerHour > 0 ? siloAmount / totalEffectiveKgPerHour : 0;
@@ -189,8 +184,7 @@ export default function OperationsClient({
     }, [siloAmount, machines, products, wrapperScenario, sacksPerBundle]);
 
     const detailedSimulationResults = React.useMemo(() => {
-        const unitsPerMinute = detailedSpeed;
-        const unitsPerHourBruto = unitsPerMinute * 60;
+        const unitsPerHourBruto = detailedSpeed; // This is now in fundas/hr
         const unitsPerHourNeto = unitsPerHourBruto * (1 - detailedLoss / 100);
         
         const sacksPerHourNeto = (unitsPerSack > 0) ? (unitsPerHourNeto / unitsPerSack) : 0;
@@ -378,7 +372,7 @@ export default function OperationsClient({
                                             <h4 className="font-semibold mb-2">Parámetros de Maquinaria</h4>
                                             <div className="grid grid-cols-3 gap-4">
                                                  <div className="space-y-1.5">
-                                                    <Label htmlFor="sim-speed">Velocidad (fundas/min)</Label>
+                                                    <Label htmlFor="sim-speed">Velocidad (fundas/hr)</Label>
                                                     <Input id="sim-speed" type="number" value={detailedSpeed} onChange={e => setDetailedSpeed(Number(e.target.value))}/>
                                                 </div>
                                                  <div className="space-y-1.5">
