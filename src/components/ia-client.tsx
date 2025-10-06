@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, HardHat, Separator as SeparatorIcon } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -34,10 +34,10 @@ export default function OperationsClient({
 
     // Etapa 2: Envasadoras (para simulación de línea completa)
     const [machines, setMachines] = React.useState([
-        { id: 1, productId: products[0]?.id || 'inactive', speed: 40, loss: 2 },
-        { id: 2, productId: 'inactive', speed: 40, loss: 2 },
-        { id: 3, productId: 'inactive', speed: 40, loss: 2 },
-        { id: 4, productId: 'inactive', speed: 40, loss: 2 },
+        { id: 1, productId: products[0]?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
+        { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
+        { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
+        { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
     ]);
 
     // Etapa 3: Enfardadora
@@ -46,7 +46,7 @@ export default function OperationsClient({
 
     // Estado para el simulador detallado
     const [detailedProductId, setDetailedProductId] = React.useState(products[0]?.id || '');
-    const [unitsPerSack, setUnitsPerSack] = React.useState(50);
+    const [detailedUnitsPerSack, setDetailedUnitsPerSack] = React.useState(50);
     const [detailedSpeed, setDetailedSpeed] = React.useState(39); // fundas/min
     const [detailedLoss, setDetailedLoss] = React.useState(8);
     const [detailedMachineCount, setDetailedMachineCount] = React.useState(1);
@@ -72,7 +72,7 @@ export default function OperationsClient({
 
     // Lógica del Simulador de Línea Completa
     const simulationResults = React.useMemo(() => {
-        const calculateProduction = (machineList: {id: number, productId: string, speed: number, loss: number}[]) => {
+        const calculateProduction = (machineList: typeof machines) => {
             const packingCapacity = machineList.map(machine => {
                 const product = products.find(p => p.id === machine.productId);
                 if (!product) return { machineId: machine.id, sacksPerHour: 0, kgPerHour: 0, productName: 'N/A' };
@@ -194,7 +194,7 @@ export default function OperationsClient({
         const unitsPerHourBruto = detailedSpeed * 60;
         const unitsPerHourNeto = unitsPerHourBruto * (1 - detailedLoss / 100);
         
-        const sacksPerHourNeto = (unitsPerSack > 0) ? (unitsPerHourNeto / unitsPerSack) : 0;
+        const sacksPerHourNeto = (detailedUnitsPerSack > 0) ? (unitsPerHourNeto / detailedUnitsPerSack) : 0;
         
         const dayProduction = sacksPerHourNeto * detailedDayHours * detailedMachineCount;
         const nightProduction = sacksPerHourNeto * detailedNightHours * detailedMachineCount;
@@ -206,7 +206,7 @@ export default function OperationsClient({
             dayProduction,
             nightProduction
         };
-    }, [detailedSpeed, detailedLoss, unitsPerSack, detailedDayHours, detailedNightHours, detailedMachineCount]);
+    }, [detailedSpeed, detailedLoss, detailedUnitsPerSack, detailedDayHours, detailedNightHours, detailedMachineCount]);
     
     const formatTime = (hours: number) => {
         if (!isFinite(hours) || hours <= 0) return '0h 0m';
@@ -292,7 +292,6 @@ export default function OperationsClient({
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                {/* Columna de Configuración */}
                 <div className="lg:col-span-2 space-y-8">
                     <Card>
                         <CardHeader>
@@ -319,12 +318,12 @@ export default function OperationsClient({
                             <CardTitle className="flex items-center gap-2">2. Configuración de Línea de Empaque</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                            <div className="p-4 border rounded-lg bg-muted/30">
-                                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Package className="h-5 w-5" />Parámetros de las Envasadoras</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                           <div>
+                                <h3 className="font-semibold text-lg mb-4">Parámetros de las Envasadoras</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
                                     {machines.map((machine) => (
-                                        <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background">
-                                            <Label className="font-bold">Máquina {machine.id}</Label>
+                                        <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background relative">
+                                            <Label className="font-bold absolute -top-3 bg-background px-1 text-primary">Máquina {machine.id}</Label>
                                             <div className="space-y-1.5">
                                                 <Label htmlFor={`product-${machine.id}`} className="text-xs">Producto</Label>
                                                 <Select value={machine.productId} onValueChange={(val) => handleMachineChange(machine.id, 'productId', val)}>
@@ -335,13 +334,19 @@ export default function OperationsClient({
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/min)</Label>
-                                                <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={e => handleMachineChange(machine.id, 'speed', Number(e.target.value))}/>
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor={`loss-${machine.id}`} className="text-xs">Merma (%)</Label>
-                                                <Input id={`loss-${machine.id}`} type="number" value={machine.loss} onChange={e => handleMachineChange(machine.id, 'loss', Number(e.target.value))}/>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/min)</Label>
+                                                    <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={e => handleMachineChange(machine.id, 'speed', Number(e.target.value))}/>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor={`loss-${machine.id}`} className="text-xs">Merma (%)</Label>
+                                                    <Input id={`loss-${machine.id}`} type="number" value={machine.loss} onChange={e => handleMachineChange(machine.id, 'loss', Number(e.target.value))}/>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor={`units-${machine.id}`} className="text-xs">Unidades por Saco</Label>
+                                                    <Input id={`units-${machine.id}`} type="number" value={machine.unitsPerSack} onChange={e => handleMachineChange(machine.id, 'unitsPerSack', Number(e.target.value))}/>
+                                                </div>
                                             </div>
                                         </div>
                                     ))}
@@ -350,8 +355,8 @@ export default function OperationsClient({
                             
                             <Separator />
                             
-                            <div className="mt-6">
-                                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><HardHat className="h-5 w-5" />Análisis de Rendimiento por Producto</h3>
+                           <div>
+                                <h3 className="font-semibold text-lg mb-4">Análisis de Rendimiento por Producto</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                     <div className="space-y-6">
                                         <div>
@@ -368,7 +373,7 @@ export default function OperationsClient({
                                                 </div>
                                                 <div className="space-y-1.5">
                                                     <Label htmlFor="sim-units-per-sack">Unidades por Saco</Label>
-                                                    <Input id="sim-units-per-sack" type="number" value={unitsPerSack} onChange={e => setUnitsPerSack(Number(e.target.value))}/>
+                                                    <Input id="sim-units-per-sack" type="number" value={detailedUnitsPerSack} onChange={e => setDetailedUnitsPerSack(Number(e.target.value))}/>
                                                 </div>
                                             </div>
                                         </div>
@@ -432,8 +437,8 @@ export default function OperationsClient({
                             
                             <Separator />
                             
-                            <div className="p-4 border rounded-lg bg-muted/30">
-                                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><PackageCheck className="h-5 w-5" />Parámetros de Empaque</h3>
+                            <div>
+                                <h3 className="font-semibold text-lg mb-4">Parámetros de Empaque</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
                                         <Label htmlFor="sacks-per-bundle">Sacos por Paquete (Fardo)</Label>
@@ -456,7 +461,6 @@ export default function OperationsClient({
                     </Card>
                 </div>
                 
-                {/* Columna de Resultados */}
                 <div className="space-y-6">
                     <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
                     <div className="grid grid-cols-1 gap-4">
