@@ -309,168 +309,169 @@ export default function OperationsClient({
       </header>
       
       <main className="p-4 md:p-8 space-y-8">
-
-        {/* Visual Flow Diagram */}
-        <div className="mb-8">
-            <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Producción</h3>
-            <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30">
-                <div className="flex flex-col items-center gap-2 text-center">
-                    <Warehouse className="h-10 w-10 text-primary" />
-                    <h4 className="font-semibold">Silo</h4>
-                    {isClient ? <p className="text-sm text-muted-foreground">{totalQuintales.toLocaleString()} QQ</p> : <p className="text-sm text-muted-foreground">- QQ</p>}
-                </div>
-                <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
-                <div className="flex flex-col items-center gap-2 text-center">
-                    <Package className="h-10 w-10 text-primary" />
-                    <h4 className="font-semibold">Envasadoras</h4>
-                      {isClient ? <p className="text-sm text-muted-foreground">{simulationResults.totalSacksPerHourFromAllPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p> : <p className="text-sm text-muted-foreground">- fundas/hr</p>}
-                </div>
-                <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
-                <div className="flex flex-col items-center gap-2 text-center">
-                    <PackageCheck className="h-10 w-10 text-primary" />
-                    <h4 className="font-semibold">Enfardadora</h4>
-                    {isClient ? <p className="text-sm text-muted-foreground">{simulationResults.effectiveWrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p> : <p className="text-sm text-muted-foreground">- fundas/hr</p>}
+        {!isClient ? (
+          <div className="flex justify-center items-center h-64">
+            <p className="text-muted-foreground">Cargando panel de operaciones...</p>
+          </div>
+        ) : (
+        <>
+            {/* Visual Flow Diagram */}
+            <div className="mb-8">
+                <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Producción</h3>
+                <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30">
+                    <div className="flex flex-col items-center gap-2 text-center">
+                        <Warehouse className="h-10 w-10 text-primary" />
+                        <h4 className="font-semibold">Silo</h4>
+                        <p className="text-sm text-muted-foreground">{totalQuintales.toLocaleString()} QQ</p>
+                    </div>
+                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
+                    <div className="flex flex-col items-center gap-2 text-center">
+                        <Package className="h-10 w-10 text-primary" />
+                        <h4 className="font-semibold">Envasadoras</h4>
+                        <p className="text-sm text-muted-foreground">{simulationResults.totalSacksPerHourFromAllPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p>
+                    </div>
+                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
+                    <div className="flex flex-col items-center gap-2 text-center">
+                        <PackageCheck className="h-10 w-10 text-primary" />
+                        <h4 className="font-semibold">Enfardadora</h4>
+                        <p className="text-sm text-muted-foreground">{simulationResults.effectiveWrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        {/* Etapa 1: Materia Prima */}
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                <div className="space-y-1.5">
-                    <Label htmlFor="masa-count">Cantidad de Masa Recibida</Label>
-                    <Input id="masa-count" type="number" value={masaCount} onChange={e => setMasaCount(Number(e.target.value))} min="0" />
-                </div>
-                <div className="space-y-1.5">
-                    <Label>Equivalente por Masa</Label>
-                    <p className="text-lg font-semibold p-2 border rounded-md bg-muted/50">{QQ_PER_MASA} QQ</p>
-                </div>
-                <div className="space-y-1.5">
-                    <Label>Total en Silo</Label>
-                    <p className="text-2xl font-bold text-primary p-1 border rounded-md text-center">{totalQuintales.toLocaleString()} QQ</p>
-                </div>
-            </CardContent>
-        </Card>
+            {/* Etapa 1: Materia Prima */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="masa-count">Cantidad de Masa Recibida</Label>
+                        <Input id="masa-count" type="number" value={masaCount} onChange={e => setMasaCount(Number(e.target.value))} min="0" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Equivalente por Masa</Label>
+                        <p className="text-lg font-semibold p-2 border rounded-md bg-muted/50">{QQ_PER_MASA} QQ</p>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Total en Silo</Label>
+                        <p className="text-2xl font-bold text-primary p-1 border rounded-md text-center">{totalQuintales.toLocaleString()} QQ</p>
+                    </div>
+                </CardContent>
+            </Card>
 
-        {/* Etapa 2: Simulador Detallado */}
-        <DetailedProductionSimulator products={products} />
+            {/* Etapa 2: Simulador Detallado */}
+            <DetailedProductionSimulator products={products} />
 
-        {/* Etapa 3: Línea de Empaque y Resultados Globales */}
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">3. Configuración y Resultados de Línea de Empaque</CardTitle>
-                <CardDescription>
-                    Configura la línea de envasado y empaque para simular el vaciado del silo y ver los resultados globales.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                        {/* Parámetros Envasadoras */}
-                        <div className="p-4 border rounded-lg bg-muted/30">
-                            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Package className="h-5 w-5" />Parámetros de las Envasadoras</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {machines.map((machine) => (
-                                    <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background">
-                                        <Label className="font-bold">Máquina {machine.id}</Label>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor={`product-${machine.id}`} className="text-xs">Producto</Label>
-                                            <Select value={machine.productId} onValueChange={(val) => handleMachineChange(machine.id, 'productId', val)}>
-                                                <SelectTrigger id={`product-${machine.id}`}><SelectValue /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="inactive">-- Inactiva --</SelectItem>
-                                                    {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
+            {/* Etapa 3: Línea de Empaque y Resultados Globales */}
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">3. Configuración y Resultados de Línea de Empaque</CardTitle>
+                    <CardDescription>
+                        Configura la línea de envasado y empaque para simular el vaciado del silo y ver los resultados globales.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="space-y-6">
+                            {/* Parámetros Envasadoras */}
+                            <div className="p-4 border rounded-lg bg-muted/30">
+                                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Package className="h-5 w-5" />Parámetros de las Envasadoras</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {machines.map((machine) => (
+                                        <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background">
+                                            <Label className="font-bold">Máquina {machine.id}</Label>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor={`product-${machine.id}`} className="text-xs">Producto</Label>
+                                                <Select value={machine.productId} onValueChange={(val) => handleMachineChange(machine.id, 'productId', val)}>
+                                                    <SelectTrigger id={`product-${machine.id}`}><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="inactive">-- Inactiva --</SelectItem>
+                                                        {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/hr)</Label>
+                                                <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={e => handleMachineChange(machine.id, 'speed', Number(e.target.value))}/>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor={`loss-${machine.id}`} className="text-xs">Merma (%)</Label>
+                                                <Input id={`loss-${machine.id}`} type="number" value={machine.loss} onChange={e => handleMachineChange(machine.id, 'loss', Number(e.target.value))}/>
+                                            </div>
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/hr)</Label>
-                                            <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={e => handleMachineChange(machine.id, 'speed', Number(e.target.value))}/>
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor={`loss-${machine.id}`} className="text-xs">Merma (%)</Label>
-                                            <Input id={`loss-${machine.id}`} type="number" value={machine.loss} onChange={e => handleMachineChange(machine.id, 'loss', Number(e.target.value))}/>
-                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Parámetros Enfardadora */}
+                            <div className="p-4 border rounded-lg bg-muted/30">
+                                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><PackageCheck className="h-5 w-5" />Parámetros de Empaque</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="sacks-per-bundle">Sacos por Paquete (Fardo)</Label>
+                                        <Input id="sacks-per-bundle" type="number" value={sacksPerBundle} onChange={e => setSacksPerBundle(Number(e.target.value))}/>
                                     </div>
-                                ))}
+                                    <div className="space-y-1.5 md:col-span-1">
+                                        <Label>Escenario de Enfardado</Label>
+                                        <Select value={wrapperScenario} onValueChange={(val: 'single' | 'dual') => setWrapperScenario(val)}>
+                                            <SelectTrigger><SelectValue/></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="single">1 Enfardadora Central</SelectItem>
+                                                <SelectItem value="dual">2 Líneas Paralelas (Máq. 1-2 y 3-4)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground md:col-span-2">Nota: La velocidad de la enfardadora se ajusta automáticamente. Con 1 envasadora activa, usa 4 fardos/min. Con más de 1, usa 6 fardos/min.</p>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Parámetros Enfardadora */}
-                        <div className="p-4 border rounded-lg bg-muted/30">
-                             <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><PackageCheck className="h-5 w-5" />Parámetros de Empaque</h3>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="sacks-per-bundle">Sacos por Paquete (Fardo)</Label>
-                                    <Input id="sacks-per-bundle" type="number" value={sacksPerBundle} onChange={e => setSacksPerBundle(Number(e.target.value))}/>
-                                </div>
-                                <div className="space-y-1.5 md:col-span-1">
-                                    <Label>Escenario de Enfardado</Label>
-                                    <Select value={wrapperScenario} onValueChange={(val: 'single' | 'dual') => setWrapperScenario(val)}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="single">1 Enfardadora Central</SelectItem>
-                                            <SelectItem value="dual">2 Líneas Paralelas (Máq. 1-2 y 3-4)</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <p className="text-xs text-muted-foreground md:col-span-2">Nota: La velocidad de la enfardadora se ajusta automáticamente. Con 1 envasadora activa, usa 4 fardos/min. Con más de 1, usa 6 fardos/min.</p>
-                             </div>
+                        {/* Resultados Globales */}
+                        <div className="space-y-6">
+                            <h3 className="font-semibold text-lg text-center">Resultados Globales de la Línea</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
+                                <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
+                                <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
+                            </div>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {simulationResults.machineContribution.every(m => m.value === 0) ? (
+                                        <p className="text-center text-muted-foreground h-[200px] flex items-center justify-center">Activa una máquina para ver la contribución.</p>
+                                    ) : (
+                                        <ResponsiveContainer width="100%" height={200}>
+                                            <PieChart>
+                                                <Pie data={simulationResults.machineContribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                                    {simulationResults.machineContribution.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                    ))}
+                                                </Pie>
+                                                <RechartsTooltip />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    )}
+                                </CardContent>
+                            </Card>
+                                <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className={cn("text-sm p-3 rounded-md", simulationResults.isWrapperBottleneck ? 'bg-destructive/10 text-destructive' : 'bg-green-600/10 text-green-700')}>
+                                        {simulationResults.isWrapperBottleneck ? simulationResults.bottleneckDescription : simulationResults.noBottleneckDescription}
+                                    </p>
+                                </CardContent>
+                            </Card>
                         </div>
                     </div>
-
-                    {/* Resultados Globales */}
-                    <div className="space-y-6">
-                        <h3 className="font-semibold text-lg text-center">Resultados Globales de la Línea</h3>
-                         {isClient ? (
-                            <>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
-                                    <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
-                                    <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
-                                </div>
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {simulationResults.machineContribution.every(m => m.value === 0) ? (
-                                            <p className="text-center text-muted-foreground h-[200px] flex items-center justify-center">Activa una máquina para ver la contribución.</p>
-                                        ) : (
-                                            <ResponsiveContainer width="100%" height={200}>
-                                                <PieChart>
-                                                    <Pie data={simulationResults.machineContribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                                        {simulationResults.machineContribution.map((entry, index) => (
-                                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                        ))}
-                                                    </Pie>
-                                                    <RechartsTooltip />
-                                                </PieChart>
-                                            </ResponsiveContainer>
-                                        )}
-                                    </CardContent>
-                                </Card>
-                                 <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <p className={cn("text-sm p-3 rounded-md", simulationResults.isWrapperBottleneck ? 'bg-destructive/10 text-destructive' : 'bg-green-600/10 text-green-700')}>
-                                            {simulationResults.isWrapperBottleneck ? simulationResults.bottleneckDescription : simulationResults.noBottleneckDescription}
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            </>
-                        ) : (
-                            <p className="text-center py-8 text-muted-foreground">Calculando resultados...</p>
-                        )}
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+        </>
+        )}
       </main>
     </div>
   );
