@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import KpiCard from '@/components/kpi-card';
 import { Separator } from '@/components/ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Bar as RechartsBar, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -20,7 +19,7 @@ import { Switch } from './ui/switch';
 
 const KG_PER_QUINTAL = 50;
 
-function SiloSimulatorTab({ products, isClient }: { products: ProductDefinition[], isClient: boolean }) {
+function SiloSimulator({ products, isClient }: { products: ProductDefinition[], isClient: boolean }) {
     // STATE for Silo Simulator
     const [siloAmount, setSiloAmount] = React.useState(25000);
     const [machines, setMachines] = React.useState([
@@ -262,8 +261,8 @@ function SiloSimulatorTab({ products, isClient }: { products: ProductDefinition[
                         <>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Clock} description="Tiempo total estimado para procesar toda la materia prima." />
-                                <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced.toLocaleString(undefined, {maximumFractionDigits: 0})} icon={Package} description="Cantidad total de sacos que se producirán." />
-                                <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={Warehouse} description={`Basado en la cantidad del silo (${siloAmount.toLocaleString()} kg).`} />
+                                <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
+                                <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales} icon={Warehouse} description={`Basado en la cantidad del silo (${siloAmount.toLocaleString()} kg).`} fractionDigits={1}/>
                             </div>
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 <Card>
@@ -323,7 +322,7 @@ function SiloSimulatorTab({ products, isClient }: { products: ProductDefinition[
     );
 }
 
-function ProductionSimulatorTab({ products, isClient }: { products: ProductDefinition[], isClient: boolean }) {
+function ProductionSimulator({ products, isClient }: { products: ProductDefinition[], isClient: boolean }) {
     
     // Sim Params
     const [selectedProductId, setSelectedProductId] = React.useState<string | undefined>(products[0]?.id);
@@ -390,10 +389,10 @@ function ProductionSimulatorTab({ products, isClient }: { products: ProductDefin
             <CardHeader>
                 <CardTitle className="flex items-center gap-3">
                     <Factory className="h-6 w-6 text-primary" />
-                    Simulador de Producción
+                    Simulador de Producción Detallada
                 </CardTitle>
                 <CardDescription>
-                    Estima la producción semanal para un producto específico ajustando los parámetros de maquinaria y horario.
+                    Estima la producción semanal para un producto específico ajustando los parámetros de maquinaria y horario para un análisis más granular.
                 </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -480,8 +479,8 @@ function ProductionSimulatorTab({ products, isClient }: { products: ProductDefin
                             <CardTitle>Resultados Consolidados</CardTitle>
                         </CardHeader>
                          <CardContent className="grid grid-cols-2 gap-4">
-                            <KpiCard title="Producción Semanal (Sacos)" value={results.totalWeeklySacks.toLocaleString(undefined, {maximumFractionDigits: 0})} icon={Package} description="Producción total estimada para la semana con los parámetros actuales."/>
-                            <KpiCard title="Producción Semanal (QQ)" value={results.totalWeeklyQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={Warehouse} description="Peso total estimado de la producción semanal."/>
+                            <KpiCard title="Producción Semanal (Sacos)" value={results.totalWeeklySacks} icon={Package} description="Producción total estimada para la semana con los parámetros actuales." fractionDigits={0} />
+                            <KpiCard title="Producción Semanal (QQ)" value={results.totalWeeklyQuintales} icon={Warehouse} description="Peso total estimado de la producción semanal." fractionDigits={1}/>
                         </CardContent>
                     </Card>
 
@@ -491,8 +490,8 @@ function ProductionSimulatorTab({ products, isClient }: { products: ProductDefin
                         </CardHeader>
                         <CardContent className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
                            <IndicatorDisplay label="Unidades/Minuto" value={results.unitsPerMinute} icon={Settings}/>
-                           <IndicatorDisplay label="Unidades/Hora (Bruto)" value={results.unitsPerHourGross} icon={Factory}/>
-                           <IndicatorDisplay label="Unidades/Hora (Neto)" value={results.unitsPerHourNet} icon={PackageCheck} />
+                           <IndicatorDisplay label="Unidades/Hora (Bruto)" value={results.unitsPerHourGross} icon={Factory} fractionDigits={0}/>
+                           <IndicatorDisplay label="Unidades/Hora (Neto)" value={results.unitsPerHourNet} icon={PackageCheck} fractionDigits={0}/>
                            <IndicatorDisplay label="Sacos por Hora (Neto)" value={results.sacksPerHourNet} icon={Hash} fractionDigits={2}/>
                            <IndicatorDisplay label="Producción Turno Día" value={results.productionPerDayShift} icon={Clock} fractionDigits={2}/>
                            <IndicatorDisplay label="Producción Turno Noche" value={results.productionPerNightShift} icon={Clock} fractionDigits={2}/>
@@ -555,24 +554,14 @@ export default function OperationsClient({
       <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <Factory className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Centro de Operaciones</h1>
+          <h1 className="text-2xl font-bold text-foreground">Panel de Operaciones</h1>
         </div>
-        <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2" />Volver</Button></Link>
+        <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver a la Planificación</Button></Link>
       </header>
       
-      <main className="p-4 md:p-8">
-         <Tabs defaultValue="production-simulator" className="space-y-4">
-            <TabsList>
-                <TabsTrigger value="production-simulator">Simulador de Producción</TabsTrigger>
-                <TabsTrigger value="silo-simulator">Simulador de Silo</TabsTrigger>
-            </TabsList>
-            <TabsContent value="production-simulator">
-                <ProductionSimulatorTab products={products} isClient={isClient} />
-            </TabsContent>
-            <TabsContent value="silo-simulator">
-                <SiloSimulatorTab products={products} isClient={isClient} />
-            </TabsContent>
-        </Tabs>
+      <main className="p-4 md:p-8 space-y-8">
+        <SiloSimulator products={products} isClient={isClient} />
+        <ProductionSimulator products={products} isClient={isClient} />
       </main>
     </div>
   );
