@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, HardHat, Package, Percent, Clock, FileDigit, Sun, Moon } from 'lucide-react';
+import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, HardHat, Package, Percent, Clock, FileDigit, Sun, Moon, Warehouse, PieChart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -11,7 +11,7 @@ import { simulateProduction, type SimulateProductionOutput } from '@/ai/flows/si
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, Pie, Cell, ResponsiveContainer, RadialBarChart, RadialBar } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -128,13 +128,17 @@ export default function OperationsClient({
         
         <main className="p-4 md:p-8 space-y-6">
             <Tabs defaultValue="prod-simulator" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                     <TabsTrigger value="prod-simulator"><HardHat className="mr-2" />Simulador de Producción</TabsTrigger>
+                    <TabsTrigger value="silo-simulator"><Warehouse className="mr-2" />Simulador de Silo</TabsTrigger>
                     <TabsTrigger value="forecast"><TrendingUp className="mr-2" />Pronóstico de Demanda</TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="prod-simulator" className="mt-6">
                     <ProductionSimulatorTab products={prefetchedProducts} allPlans={allPlans} />
+                </TabsContent>
+                <TabsContent value="silo-simulator" className="mt-6">
+                    <SiloSimulatorTab products={prefetchedProducts} />
                 </TabsContent>
                 <TabsContent value="forecast" className="mt-6">
                     <ForecastTab onForecast={handleForecastDemand} isForecasting={isForecasting} forecast={forecast} trendData={historicalTrendData} isLoading={loading} />
@@ -252,7 +256,7 @@ function ProductionSimulatorTab({ products, allPlans }: {
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="night-shift-hours">Horas Turno Noche</Label>
-                                <Input id="night-shift-hours" type="number" value={simulationParams.hoursPerNightShift} onChange={e => handleParamChange('hoursPerNightShift', Number(e.target.value))} />
+                                <Input id="night-shift-hours" type="number" value={simulationParams.hoursPerNightShift} onChange={e => handleParamChange('nightShiftHours', Number(e.target.value))} />
                             </div>
                         </div>
                         <div className="space-y-2">
@@ -327,6 +331,179 @@ function ProductionSimulatorTab({ products, allPlans }: {
         </div>
     );
 }
+
+const KG_PER_QUINTAL = 50;
+const MACHINE_COLORS = ["hsl(var(--chart-1))", "hsl(var(--chart-2))", "hsl(var(--chart-3))"];
+
+const initialMachineState = { productId: '', speed: 0, loss: 0 };
+function SiloSimulatorTab({ products }: { products: ProductDefinition[] }) {
+    const plannableProducts = React.useMemo(() => products.filter(p => p.isActive), [products]);
+    
+    const [siloAmount, setSiloAmount] = React.useState(25000); // Default 25 Ton
+    const [machines, setMachines] = React.useState([
+        { ...initialMachineState, productId: plannableProducts[0]?.id || '', speed: 40 },
+        { ...initialMachineState },
+        { ...initialMachineState },
+    ]);
+
+    const handleMachineChange = (index: number, field: string, value: any) => {
+        const newMachines = [...machines];
+        newMachines[index] = { ...newMachines[index], [field]: value };
+        setMachines(newMachines);
+    };
+
+    const simulationResults = React.useMemo(() => {
+        let totalSpeedKgPerMinute = 0;
+        const machineDetails: any[] = [];
+
+        machines.forEach(machine => {
+            if (machine.productId && machine.speed > 0) {
+                const product = products.find(p => p.id === machine.productId);
+                if (product) {
+                    const sackWeight = product.sackWeight || 50;
+                    const effectiveSpeed = machine.speed * (1 - (machine.loss || 0) / 100);
+                    const speedKgPerMinute = effectiveSpeed * sackWeight / 60;
+                    totalSpeedKgPerMinute += speedKgPerMinute;
+                    machineDetails.push({ ...machine, product, sackWeight, speedKgPerMinute });
+                }
+            }
+        });
+
+        if (siloAmount <= 0 || totalSpeedKgPerMinute <= 0) {
+            return { timeToEmptyMinutes: 0, machineProduction: [], totalSacks: 0, totalQuintales: 0 };
+        }
+
+        const timeToEmptyMinutes = siloAmount / totalSpeedKgPerMinute;
+        
+        let totalSacks = 0;
+        let totalWeight = 0;
+
+        const machineProduction = machineDetails.map(detail => {
+            const weightProduced = detail.speedKgPerMinute * timeToEmptyMinutes;
+            const sacksProduced = weightProduced / detail.sackWeight;
+            totalSacks += sacksProduced;
+            totalWeight += weightProduced;
+            return {
+                productName: detail.product.productName,
+                sacks: Math.floor(sacksProduced),
+                weight: weightProduced
+            };
+        });
+        
+        const totalQuintales = totalWeight / KG_PER_QUINTAL;
+
+        return { timeToEmptyMinutes, machineProduction, totalSacks, totalQuintales };
+
+    }, [siloAmount, machines, products]);
+
+    const formatTime = (minutes: number) => {
+        if (minutes <= 0) return '0h 0m';
+        const hours = Math.floor(minutes / 60);
+        const mins = Math.round(minutes % 60);
+        return `${hours}h ${mins}m`;
+    };
+    
+    const chartData = simulationResults.machineProduction.map((m, i) => ({
+        name: m.productName,
+        value: m.sacks,
+        fill: MACHINE_COLORS[i % MACHINE_COLORS.length]
+    }));
+
+    return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                <Card className="lg:col-span-1">
+                     <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><Warehouse />Parámetros del Silo</CardTitle>
+                        <CardDescription>Configura la materia prima y las máquinas envasadoras.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="silo-amount">Materia Prima en Silo (Kg)</Label>
+                            <Input id="silo-amount" type="number" value={siloAmount} onChange={e => setSiloAmount(Number(e.target.value))} />
+                        </div>
+
+                        {machines.map((machine, index) => (
+                             <Card key={index} className="p-4">
+                                <Label className="font-semibold">Máquina {index + 1}</Label>
+                                <div className="space-y-2 mt-2">
+                                     <Select value={machine.productId} onValueChange={(val) => handleMachineChange(index, 'productId', val)}>
+                                        <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="">Ninguno</SelectItem>
+                                            {plannableProducts.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <Label htmlFor={`speed-${index}`} className="text-xs">Velocidad (un/min)</Label>
+                                            <Input id={`speed-${index}`} type="number" value={machine.speed} onChange={e => handleMachineChange(index, 'speed', Number(e.target.value))} />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor={`loss-${index}`} className="text-xs">Pérdida (%)</Label>
+                                            <Input id={`loss-${index}`} type="number" value={machine.loss} onChange={e => handleMachineChange(index, 'loss', Number(e.target.value))} />
+                                        </div>
+                                    </div>
+                                </div>
+                             </Card>
+                        ))}
+                    </CardContent>
+                </Card>
+                <Card className="lg:col-span-2">
+                    <CardHeader>
+                        <CardTitle>Resultados de la Simulación de Silo</CardTitle>
+                        <CardDescription>Proyección basada en los parámetros configurados.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <KpiCard title="Tiempo para Vaciar Silo" value={formatTime(simulationResults.timeToEmptyMinutes)} icon={Clock} description="Tiempo estimado para consumir toda la materia prima del silo." />
+                            <KpiCard title="Producción Total (Sacos)" value={Math.floor(simulationResults.totalSacks).toLocaleString()} icon={Package} description="Total de sacos producidos por todas las máquinas." />
+                            <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={FileDigit} description="Total de quintales producidos." />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
+                            <div>
+                                <h4 className="font-semibold mb-2 text-center">Desglose por Máquina</h4>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Producto</TableHead>
+                                            <TableHead className="text-right">Sacos</TableHead>
+                                            <TableHead className="text-right">Peso (Kg)</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {simulationResults.machineProduction.map((m, i) => (
+                                            <TableRow key={i}>
+                                                <TableCell>{m.productName}</TableCell>
+                                                <TableCell className="text-right">{m.sacks.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right">{Math.round(m.weight).toLocaleString()}</TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                             <div>
+                                <h4 className="font-semibold mb-2 text-center">Contribución por Máquina</h4>
+                                 <ResponsiveContainer width="100%" height={200}>
+                                    <PieChart>
+                                        <RechartsTooltip formatter={(value, name) => [`${Number(value).toLocaleString()} sacos`, name]}/>
+                                        <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                            {chartData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                                            ))}
+                                        </Pie>
+                                        <Legend />
+                                    </PieChart>
+                                 </ResponsiveContainer>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
+    );
+}
+
 
 function ForecastTab({ onForecast, isForecasting, forecast, trendData, isLoading }: {
     onForecast: () => void;
