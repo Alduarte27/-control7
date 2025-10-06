@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, Settings, Clock, AlertTriangle, ArrowRight, CheckCircle2, SlidersHorizontal, BrainCircuit, PieChart, Info, CalendarClock, Bot, BarChart, Percent } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, ArrowRight, AlertTriangle, CheckCircle2, SlidersHorizontal, PackageCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
@@ -11,355 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import KpiCard from '@/components/kpi-card';
 import { Separator } from '@/components/ui/separator';
-import { Pie, Cell, ResponsiveContainer } from 'recharts';
-import { useToast } from '@/hooks/use-toast';
-import { Switch } from './ui/switch';
 
 const KG_PER_QUINTAL = 50;
-
-function ProductionSimulatorSection({ products }: { products: ProductDefinition[] }) {
-    const [productId, setProductId] = React.useState<string>(products[0]?.id || '');
-    const [sacksPerHour, setSacksPerHour] = React.useState(2000);
-    const [lossPercentage, setLossPercentage] = React.useState(0);
-    const [numMachines, setNumMachines] = React.useState(1);
-    const [dayShiftHours, setDayShiftHours] = React.useState(12);
-    const [nightShiftHours, setNightShiftHours] = React.useState(12);
-    const [activeDays, setActiveDays] = React.useState({ mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false });
-
-    const selectedProduct = React.useMemo(() => products.find(p => p.id === productId), [productId, products]);
-
-    const simulationResults = React.useMemo(() => {
-        if (!selectedProduct) return null;
-
-        const sackWeight = selectedProduct.sackWeight || 50;
-        const effectiveSacksPerHour = sacksPerHour * (1 - (lossPercentage / 100));
-
-        let totalSacks = 0;
-        const dailyBreakdown = (Object.keys(activeDays) as (keyof typeof activeDays)[]).map(day => {
-            if (!activeDays[day]) return { day, daySacks: 0, nightSacks: 0 };
-            
-            const daySacks = effectiveSacksPerHour * dayShiftHours * numMachines;
-            const nightSacks = effectiveSacksPerHour * nightShiftHours * numMachines;
-            totalSacks += daySacks + nightSacks;
-
-            return { day, daySacks, nightSacks };
-        });
-
-        return {
-            totalSacks,
-            totalQuintales: (totalSacks * sackWeight) / KG_PER_QUINTAL,
-            productionPerMachine: totalSacks / numMachines,
-            efficiency: 100 - lossPercentage,
-            dailyBreakdown,
-        }
-
-    }, [selectedProduct, sacksPerHour, lossPercentage, numMachines, dayShiftHours, nightShiftHours, activeDays]);
-    
-    const handleDayToggle = (day: keyof typeof activeDays) => {
-        setActiveDays(prev => ({ ...prev, [day]: !prev[day] }));
-    };
-
-    const dayNames: { [key: string]: string } = { mon: 'L', tue: 'M', wed: 'X', thu: 'J', fri: 'V', sat: 'S', sun: 'D' };
-
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-3"><CalendarClock className="h-6 w-6 text-primary" />Simulador de Producción Semanal</CardTitle>
-                <CardDescription>Estima la producción para un producto específico basado en los parámetros de la maquinaria y los horarios de los turnos.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                 {/* INPUTS */}
-                <div className="space-y-6">
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="sim-product">1. Producto a Simular</Label>
-                            <Select value={productId} onValueChange={setProductId}>
-                                <SelectTrigger id="sim-product"><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
-                                <SelectContent>
-                                    {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>2. Parámetros de Maquinaria</Label>
-                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-3 bg-muted/30 rounded-md border">
-                                <div>
-                                    <Label htmlFor="sim-speed" className="text-xs">Velocidad (sacos/hr)</Label>
-                                    <Input id="sim-speed" type="number" value={sacksPerHour} onChange={e => setSacksPerHour(Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label htmlFor="sim-loss" className="text-xs">Merma (%)</Label>
-                                    <Input id="sim-loss" type="number" value={lossPercentage} onChange={e => setLossPercentage(Number(e.target.value))} />
-                                </div>
-                                <div>
-                                    <Label htmlFor="sim-machines" className="text-xs">Nº Máquinas</Label>
-                                    <Input id="sim-machines" type="number" value={numMachines} onChange={e => setNumMachines(Number(e.target.value))} />
-                                </div>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>3. Horario de Producción</Label>
-                             <div className="p-3 bg-muted/30 rounded-md border space-y-3">
-                                <div className="grid grid-cols-2 gap-2">
-                                     <div>
-                                        <Label htmlFor="sim-day-hours" className="text-xs">Horas Turno Día</Label>
-                                        <Input id="sim-day-hours" type="number" value={dayShiftHours} onChange={e => setDayShiftHours(Number(e.target.value))} />
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="sim-night-hours" className="text-xs">Horas Turno Noche</Label>
-                                        <Input id="sim-night-hours" type="number" value={nightShiftHours} onChange={e => setNightShiftHours(Number(e.target.value))} />
-                                    </div>
-                                </div>
-                                <div>
-                                     <Label className="text-xs mb-2 block">Días Activos</Label>
-                                     <div className="flex items-center justify-center gap-1">
-                                        {Object.keys(dayNames).map(day => (
-                                            <Button 
-                                                key={day} 
-                                                variant={activeDays[day as keyof typeof activeDays] ? 'default' : 'outline'} 
-                                                size="icon" 
-                                                className="h-8 w-8"
-                                                onClick={() => handleDayToggle(day as keyof typeof activeDays)}
-                                            >
-                                                {dayNames[day]}
-                                            </Button>
-                                        ))}
-                                     </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                 {/* OUTPUTS */}
-                <div className="space-y-6">
-                    <div className="space-y-4">
-                        {!selectedProduct ? (
-                            <div className="flex items-center justify-center h-full">
-                                <p className="text-center text-muted-foreground py-8">Selecciona un producto para empezar.</p>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <KpiCard title="Producción Estimada" value={simulationResults?.totalSacks || 0} fractionDigits={0} icon={Package} description="Sacos totales que se producirían en el período." subValue={`(${simulationResults?.totalQuintales.toLocaleString(undefined, { maximumFractionDigits: 1 }) || '0'} QQ)`} />
-                                    <KpiCard title="Producción por Máquina" value={simulationResults?.productionPerMachine || 0} fractionDigits={0} icon={Factory} description="Sacos que cada máquina produciría en el período." />
-                                    <KpiCard title="Eficiencia" value={`${simulationResults?.efficiency || 0}%`} icon={Percent} description="Eficiencia neta de la producción considerando la merma." valueColor={simulationResults && simulationResults.efficiency >= 90 ? 'text-green-600' : 'text-yellow-600'} />
-                                </div>
-                                <Separator />
-                                <div>
-                                    <h4 className="font-semibold mb-2">Desglose de Producción Diaria (Sacos)</h4>
-                                     <div className="space-y-2">
-                                        <div className="grid grid-cols-7 text-center text-xs font-bold text-muted-foreground">
-                                            {Object.values(dayNames).map(name => <div key={name}>{name}</div>)}
-                                        </div>
-                                        <div className="grid grid-cols-7 gap-1">
-                                            {simulationResults?.dailyBreakdown.map(d => (
-                                                <div key={d.day} className="p-1.5 rounded-md bg-muted/50 text-center text-sm">
-                                                    <p className="font-bold">{((d.daySacks || 0) + (d.nightSacks || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-                                                    <p className="text-xs text-muted-foreground">{(d.daySacks || 0).toLocaleString(undefined, {maximumFractionDigits: 0})} / {(d.nightSacks || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <p className="text-xs text-muted-foreground text-center pt-1">Total / (Día / Noche)</p>
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
-    );
-}
-
-function SiloSimulatorSection({ products }: { products: ProductDefinition[] }) {
-    const [isClient, setIsClient] = React.useState(false);
-    
-    const [siloAmount, setSiloAmount] = React.useState(25000); // Default 25 Ton
-    const [machines, setMachines] = React.useState<any[]>([
-        { productId: products[0]?.id || 'inactive', speed: 2000, loss: 0 },
-        { productId: 'inactive', speed: 0, loss: 0 },
-        { productId: 'inactive', speed: 0, loss: 0 },
-    ]);
-    
-    React.useEffect(() => {
-        setIsClient(true);
-    }, []);
-
-    const handleMachineChange = (index: number, field: string, value: any) => {
-        const newMachines = [...machines];
-        const numValue = Number(value);
-        newMachines[index] = { ...newMachines[index], [field]: field === 'productId' ? value : (isNaN(numValue) ? 0 : numValue) };
-        setMachines(newMachines);
-    };
-    
-    const simulationResults = React.useMemo(() => {
-        const activeMachines = machines.map((machine, index) => {
-            if (machine.productId === 'inactive' || !machine.productId) return null;
-            
-            const product = products.find(p => p.id === machine.productId);
-            if (!product || machine.speed <= 0) return null;
-
-            const sackWeight = product.sackWeight || 50;
-            const effectiveSpeedSacks = machine.speed * (1 - machine.loss / 100);
-            const kgPerHour = effectiveSpeedSacks * sackWeight;
-
-            return {
-                index,
-                ...machine,
-                product,
-                sackWeight,
-                effectiveSpeedSacks,
-                kgPerHour
-            };
-        }).filter(Boolean);
-        
-        if (siloAmount <= 0 || activeMachines.length === 0) {
-            return { timeToEmptyHours: 0, productionPerMachine: [], totalSacks: 0, totalQuintales: 0, chartData: [] };
-        }
-
-        const totalKgPerHour = activeMachines.reduce((sum, m) => sum + m.kgPerHour, 0);
-        const timeToEmptyHours = totalKgPerHour > 0 ? siloAmount / totalKgPerHour : 0;
-        
-        const productionPerMachine = activeMachines.map(m => {
-            const totalSacks = m.effectiveSpeedSacks * timeToEmptyHours;
-            const totalKg = m.kgPerHour * timeToEmptyHours;
-            return {
-                productName: m.product.productName,
-                sacks: totalSacks,
-                quintales: totalKg / KG_PER_QUINTAL
-            };
-        });
-        
-        const totalSacks = productionPerMachine.reduce((sum, p) => sum + p.sacks, 0);
-        const totalQuintales = productionPerMachine.reduce((sum, p) => sum + p.quintales, 0);
-
-        const chartData = productionPerMachine.map(p => ({ name: p.productName, value: p.sacks }));
-
-        return { timeToEmptyHours, productionPerMachine, totalSacks, totalQuintales, chartData };
-
-    }, [siloAmount, machines, products]);
-
-    const formatTime = (hours: number) => {
-        if (hours <= 0) return '0h 0m';
-        const h = Math.floor(hours);
-        const m = Math.round((hours - h) * 60);
-        return `${h}h ${m}m`;
-    };
-    
-    const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))'];
-
-  return (
-    <Card>
-        <CardHeader>
-            <CardTitle className="flex items-center gap-3"><Warehouse className="h-6 w-6 text-primary" />Simulador de Vaciado de Silo</CardTitle>
-            <CardDescription>Calcula cuánto tiempo tomará procesar la materia prima del silo y cuánta producción se generará con las máquinas activas.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* INPUTS */}
-            <div className="space-y-6">
-                <div className="space-y-4">
-                     <div className="space-y-2">
-                        <Label htmlFor="silo-amount">1. Cantidad en Silo (Kg)</Label>
-                        <Input id="silo-amount" type="number" value={siloAmount} onChange={e => setSiloAmount(Number(e.target.value) || 0)} className="mt-2" placeholder="Kg de materia prima"/>
-                    </div>
-                     <div className="space-y-2">
-                        <Label>2. Configuración de Envasadoras</Label>
-                        <div className="space-y-3">
-                            {machines.map((machine, index) => (
-                                <div key={index} className="space-y-2 p-3 bg-muted/30 rounded-md border">
-                                    <Label className="font-semibold">Máquina {index + 1}</Label>
-                                    <Select value={machine.productId} onValueChange={(val) => handleMachineChange(index, 'productId', val)}>
-                                        <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="inactive">-- Inactiva --</SelectItem>
-                                            {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div>
-                                            <Label htmlFor={`silo-speed-${index}`} className="text-xs">Velocidad (sacos/hr)</Label>
-                                            <Input id={`silo-speed-${index}`} type="number" value={machine.speed} onChange={e => handleMachineChange(index, 'speed', e.target.value)} />
-                                        </div>
-                                        <div>
-                                            <Label htmlFor={`silo-loss-${index}`} className="text-xs">Merma (%)</Label>
-                                            <Input id={`silo-loss-${index}`} type="number" value={machine.loss} onChange={e => handleMachineChange(index, 'loss', e.target.value)} />
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* OUTPUTS */}
-            <div className="space-y-6">
-                {!isClient ? (
-                    <div className="flex items-center justify-center h-full">
-                        <p className="text-center text-muted-foreground py-8">Calculando resultados...</p>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <KpiCard title="Tiempo para Vaciar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Clock} description="Tiempo estimado para consumir toda la materia prima." />
-                            <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacks} fractionDigits={0} icon={Package} description="Total de sacos producidos por todas las máquinas." />
-                            <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales} fractionDigits={1} icon={Factory} description="Total de quintales producidos." />
-                        </div>
-                        <Separator />
-                        <div>
-                            <h4 className="font-semibold mb-2 flex items-center gap-2"><PieChart /> Desglose de Producción por Máquina</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                                <div className="w-full h-40">
-                                     <ResponsiveContainer width="100%" height="100%">
-                                         <Pie
-                                            data={simulationResults.chartData}
-                                            dataKey="value"
-                                            nameKey="name"
-                                            cx="50%"
-                                            cy="50%"
-                                            outerRadius={60}
-                                            labelLine={false}
-                                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                                if (percent === 0) return null;
-                                                const radius = innerRadius + (outerRadius - innerRadius) * 1.2;
-                                                const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
-                                                const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
-                                                return (
-                                                <text x={x} y={y} fill="currentColor" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs">
-                                                    {`${(percent * 100).toFixed(0)}%`}
-                                                </text>
-                                                );
-                                            }}
-                                         >
-                                            {simulationResults.chartData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                            ))}
-                                         </Pie>
-                                     </ResponsiveContainer>
-                                </div>
-                                <div className="space-y-2">
-                                    {simulationResults.productionPerMachine.length > 0 ? simulationResults.productionPerMachine.map((p, i) => (
-                                        <div key={i} className="flex justify-between items-center text-sm p-2 bg-muted/30 rounded-md">
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
-                                                <span className="font-medium">{p.productName}</span>
-                                            </div>
-                                            <div className="text-right">
-                                                <p>{p.sacks.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos</p>
-                                                <p className="text-xs text-muted-foreground">{p.quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} QQ</p>
-                                            </div>
-                                        </div>
-                                    )) : <p className="text-sm text-center text-muted-foreground py-4">No hay producción para mostrar.</p>}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </CardContent>
-    </Card>
-  );
-}
 
 export default function OperationsClient({ 
   prefetchedProducts,
@@ -367,21 +20,233 @@ export default function OperationsClient({
   prefetchedProducts: ProductDefinition[],
   prefetchedCategories: CategoryDefinition[]
 }) {
+    const [isClient, setIsClient] = React.useState(false);
     const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
+
+    // STATE
+    const [siloAmount, setSiloAmount] = React.useState(25000);
+    const [machines, setMachines] = React.useState([
+        { id: 1, productId: products[0]?.id || 'inactive', speed: 2000, loss: 2 },
+        { id: 2, productId: 'inactive', speed: 2000, loss: 2 },
+        { id: 3, productId: 'inactive', speed: 2000, loss: 2 },
+        { id: 4, productId: 'inactive', speed: 2000, loss: 2 },
+    ]);
+    const [wrapperSpeed, setWrapperSpeed] = React.useState(8000);
+    const [sacksPerBundle, setSacksPerBundle] = React.useState(1);
+
+    React.useEffect(() => {
+        setIsClient(true);
+    }, []);
+
+    const handleMachineChange = (id: number, field: string, value: any) => {
+        setMachines(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
+    };
+
+    const simulationResults = React.useMemo(() => {
+        const activeMachines = machines.filter(m => m.productId !== 'inactive');
+        
+        // 1. Calculate total packing capacity
+        const packingCapacity = activeMachines.map(machine => {
+            const product = products.find(p => p.id === machine.productId);
+            if (!product) return { machineId: machine.id, sacksPerHour: 0, kgPerHour: 0 };
+            const effectiveSpeed = machine.speed * (1 - machine.loss / 100);
+            return {
+                machineId: machine.id,
+                sacksPerHour: effectiveSpeed,
+                kgPerHour: effectiveSpeed * (product.sackWeight || 50),
+            };
+        });
+
+        const totalSacksPerHourFromPackers = packingCapacity.reduce((sum, m) => sum + m.sacksPerHour, 0);
+        const totalKgPerHourFromPackers = packingCapacity.reduce((sum, m) => sum + m.kgPerHour, 0);
+
+        // 2. Calculate wrapping capacity in sacks per hour
+        const wrapperSacksPerHour = wrapperSpeed * sacksPerBundle;
+
+        // 3. Determine the bottleneck
+        const isWrapperBottleneck = totalSacksPerHourFromPackers > wrapperSacksPerHour;
+        const effectiveSacksPerHour = Math.min(totalSacksPerHourFromPackers, wrapperSacksPerHour);
+        
+        let effectiveKgPerHour = 0;
+        if (effectiveSacksPerHour > 0) {
+            if (isWrapperBottleneck) {
+                 // If wrapper is bottleneck, kg/hr is proportional to the reduced sack rate
+                 const reductionFactor = wrapperSacksPerHour / totalSacksPerHourFromPackers;
+                 effectiveKgPerHour = totalKgPerHourFromPackers * reductionFactor;
+            } else {
+                effectiveKgPerHour = totalKgPerHourFromPackers;
+            }
+        }
+
+        // 4. Final calculations
+        const timeToEmptyHours = effectiveKgPerHour > 0 ? siloAmount / effectiveKgPerHour : 0;
+        const totalSacksProduced = effectiveSacksPerHour * timeToEmptyHours;
+        const totalQuintales = (totalSacksProduced * KG_PER_QUINTAL) / KG_PER_QUINTAL;
+
+
+        return {
+            timeToEmptyHours,
+            totalSacksProduced,
+            totalQuintales,
+            isWrapperBottleneck,
+            packingSacksPerHour: totalSacksPerHourFromPackers,
+            wrapperSacksPerHour,
+        };
+    }, [siloAmount, machines, products, wrapperSpeed, sacksPerBundle]);
+    
+    const formatTime = (hours: number) => {
+        if (!isFinite(hours) || hours <= 0) return '0h 0m';
+        const h = Math.floor(hours);
+        const m = Math.round((hours - h) * 60);
+        return `${h}h ${m}m`;
+    };
+
+    if (!isClient) {
+        return (
+            <div className="flex justify-center items-center h-full">
+                <p>Cargando simulador...</p>
+            </div>
+        );
+    }
 
   return (
     <div className="bg-background min-h-screen text-foreground">
       <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
         <div className="flex items-center gap-3">
           <Factory className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Centro de Operaciones</h1>
+          <h1 className="text-2xl font-bold text-foreground">Panel de Operaciones</h1>
         </div>
         <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2" />Volver</Button></Link>
       </header>
       
       <main className="p-4 md:p-8 space-y-8">
-        <ProductionSimulatorSection products={products} />
-        <SiloSimulatorSection products={products} />
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-3">
+                    <SlidersHorizontal className="h-6 w-6 text-primary" />
+                    Simulador de Línea de Empaque
+                </CardTitle>
+                <CardDescription>
+                    Modela tu línea de producción desde el silo hasta la enfardadora. Ajusta los valores para ver el impacto en tiempo real e identificar cuellos de botella.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-8">
+                {/* Visual Flow */}
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_2fr_auto_1fr] items-center gap-6 p-4 border rounded-lg bg-muted/20">
+                    {/* 1. Silo */}
+                    <div className="flex flex-col items-center gap-2 text-center">
+                        <Warehouse className="h-12 w-12 text-primary" />
+                        <h3 className="font-semibold">Silo</h3>
+                        <p className="text-xs text-muted-foreground">{siloAmount.toLocaleString()} Kg</p>
+                    </div>
+
+                    <ArrowRight className="h-8 w-8 text-muted-foreground hidden md:block" />
+
+                    {/* 2. Packers */}
+                    <div className="flex flex-wrap items-center justify-center gap-4">
+                        {machines.map(m => (
+                            <div key={m.id} className="flex flex-col items-center gap-2 text-center p-2 border rounded-md bg-background w-24">
+                                <Package className="h-8 w-8 text-primary" />
+                                <p className="text-xs font-semibold">Máq. {m.id}</p>
+                                <p className="text-xs text-muted-foreground truncate w-full">{m.productId === 'inactive' ? 'Inactiva' : products.find(p=>p.id === m.productId)?.productName}</p>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    <ArrowRight className="h-8 w-8 text-muted-foreground hidden md:block" />
+
+                    {/* 3. Wrapper */}
+                    <div className="flex flex-col items-center gap-2 text-center">
+                        <PackageCheck className="h-12 w-12 text-primary" />
+                        <h3 className="font-semibold">Enfardadora</h3>
+                        <p className="text-xs text-muted-foreground">{simulationResults.wrapperSacksPerHour.toLocaleString()} sacos/hr</p>
+                    </div>
+                </div>
+
+                <Separator />
+                
+                {/* Inputs */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <div className="lg:col-span-2 space-y-4">
+                        <h3 className="font-semibold text-lg">Parámetros de las Envasadoras</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {machines.map((machine) => (
+                                <div key={machine.id} className="p-4 border rounded-lg space-y-3 bg-muted/50">
+                                    <Label className="font-bold">Máquina {machine.id}</Label>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor={`product-${machine.id}`} className="text-xs">Producto</Label>
+                                        <Select value={machine.productId} onValueChange={(val) => handleMachineChange(machine.id, 'productId', val)}>
+                                            <SelectTrigger id={`product-${machine.id}`}><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="inactive">-- Inactiva --</SelectItem>
+                                                {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (sacos/hr)</Label>
+                                        <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={e => handleMachineChange(machine.id, 'speed', Number(e.target.value))}/>
+                                    </div>
+                                     <div className="space-y-1.5">
+                                        <Label htmlFor={`loss-${machine.id}`} className="text-xs">Merma (%)</Label>
+                                        <Input id={`loss-${machine.id}`} type="number" value={machine.loss} onChange={e => handleMachineChange(machine.id, 'loss', Number(e.target.value))}/>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                     <div className="space-y-4">
+                        <h3 className="font-semibold text-lg">Materia Prima y Empaque</h3>
+                        <div className="p-4 border rounded-lg space-y-4 bg-muted/50">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="silo-amount">Cantidad en Silo (Kg)</Label>
+                                <Input id="silo-amount" type="number" value={siloAmount} onChange={e => setSiloAmount(Number(e.target.value))}/>
+                            </div>
+                            <Separator />
+                            <div className="space-y-1.5">
+                                <Label htmlFor="wrapper-speed">Velocidad Enfardadora (paquetes/hr)</Label>
+                                <Input id="wrapper-speed" type="number" value={wrapperSpeed} onChange={e => setWrapperSpeed(Number(e.target.value))}/>
+                            </div>
+                             <div className="space-y-1.5">
+                                <Label htmlFor="sacks-per-bundle">Sacos por Paquete</Label>
+                                <Input id="sacks-per-bundle" type="number" value={sacksPerBundle} onChange={e => setSacksPerBundle(Number(e.target.value))}/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <Separator />
+                
+                {/* Results */}
+                <div className="space-y-6">
+                    <h3 className="font-semibold text-lg text-center">Resultados de la Simulación</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                         <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
+                         <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced.toLocaleString(undefined, {maximumFractionDigits: 0})} icon={Package} description="Cantidad total de sacos que se producirán." />
+                         <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={Warehouse} description="Cantidad total de quintales que se producirán." />
+                    </div>
+                    <Card className={simulationResults.isWrapperBottleneck ? 'border-destructive' : 'border-green-500'}>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                {simulationResults.isWrapperBottleneck ? <AlertTriangle className="h-5 w-5 text-destructive" /> : <CheckCircle2 className="h-5 w-5 text-green-500" />}
+                                Análisis de Cuello de Botella
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {simulationResults.isWrapperBottleneck ? (
+                                <p>
+                                    La <span className="font-bold">Enfardadora</span> es el cuello de botella. Su capacidad es de <span className="font-bold">{simulationResults.wrapperSacksPerHour.toLocaleString()} sacos/hr</span>, pero las envasadoras activas podrían producir a <span className="font-bold">{simulationResults.packingSacksPerHour.toLocaleString()} sacos/hr</span>. La producción está limitada por la enfardadora.
+                                </p>
+                            ) : (
+                                <p>
+                                    Las <span className="font-bold">Envasadoras</span> son el factor limitante. Su capacidad combinada es de <span className="font-bold">{simulationResults.packingSacksPerHour.toLocaleString()} sacos/hr</span>, lo cual está dentro de la capacidad de la enfardadora de <span className="font-bold">{simulationResults.wrapperSacksPerHour.toLocaleString()} sacos/hr</span>. La línea está balanceada o limitada por la velocidad de envasado.
+                                </p>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </CardContent>
+        </Card>
       </main>
     </div>
   );
