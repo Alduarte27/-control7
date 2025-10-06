@@ -49,7 +49,7 @@ export default function OperationsClient({
     // Estado para el simulador detallado
     const [detailedProductId, setDetailedProductId] = React.useState(products[0]?.id || '');
     const [unitsPerSack, setUnitsPerSack] = React.useState(50);
-    const [detailedSpeed, setDetailedSpeed] = React.useState(2400); // fundas/hr
+    const [detailedSpeed, setDetailedSpeed] = React.useState(39); // fundas/min
     const [detailedLoss, setDetailedLoss] = React.useState(8);
     const [detailedMachineCount, setDetailedMachineCount] = React.useState(1);
     const [detailedDayHours, setDetailedDayHours] = React.useState(11);
@@ -184,7 +184,7 @@ export default function OperationsClient({
     }, [siloAmount, machines, products, wrapperScenario, sacksPerBundle]);
 
     const detailedSimulationResults = React.useMemo(() => {
-        const unitsPerHourBruto = detailedSpeed; // This is now in fundas/hr
+        const unitsPerHourBruto = detailedSpeed * 60;
         const unitsPerHourNeto = unitsPerHourBruto * (1 - detailedLoss / 100);
         
         const sacksPerHourNeto = (unitsPerSack > 0) ? (unitsPerHourNeto / unitsPerSack) : 0;
@@ -372,7 +372,7 @@ export default function OperationsClient({
                                             <h4 className="font-semibold mb-2">Parámetros de Maquinaria</h4>
                                             <div className="grid grid-cols-3 gap-4">
                                                  <div className="space-y-1.5">
-                                                    <Label htmlFor="sim-speed">Velocidad (fundas/hr)</Label>
+                                                    <Label htmlFor="sim-speed">Velocidad (fundas/min)</Label>
                                                     <Input id="sim-speed" type="number" value={detailedSpeed} onChange={e => setDetailedSpeed(Number(e.target.value))}/>
                                                 </div>
                                                  <div className="space-y-1.5">
