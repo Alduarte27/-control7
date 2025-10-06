@@ -2,10 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, HardHat } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, HardHat, Separator as SeparatorIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
+import type { ProductDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -19,12 +19,10 @@ const KG_PER_QUINTAL = 45.3592;
 const QQ_PER_MASA = 350;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
-
 export default function OperationsClient({ 
   prefetchedProducts,
 }: { 
   prefetchedProducts: ProductDefinition[],
-  prefetchedCategories: CategoryDefinition[]
 }) {
     const [isClient, setIsClient] = React.useState(false);
     const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
@@ -36,10 +34,10 @@ export default function OperationsClient({
 
     // Etapa 2: Envasadoras (para simulación de línea completa)
     const [machines, setMachines] = React.useState([
-        { id: 1, productId: products[0]?.id || 'inactive', speed: 2400, loss: 2 },
-        { id: 2, productId: 'inactive', speed: 2400, loss: 2 },
-        { id: 3, productId: 'inactive', speed: 2400, loss: 2 },
-        { id: 4, productId: 'inactive', speed: 2400, loss: 2 },
+        { id: 1, productId: products[0]?.id || 'inactive', speed: 40, loss: 2 },
+        { id: 2, productId: 'inactive', speed: 40, loss: 2 },
+        { id: 3, productId: 'inactive', speed: 40, loss: 2 },
+        { id: 4, productId: 'inactive', speed: 40, loss: 2 },
     ]);
 
     // Etapa 3: Enfardadora
@@ -55,11 +53,15 @@ export default function OperationsClient({
     const [detailedDayHours, setDetailedDayHours] = React.useState(11);
     const [detailedNightHours, setDetailedNightHours] = React.useState(11);
 
-
     React.useEffect(() => {
         setIsClient(true);
-        if (products.length > 0 && !machines.some(m => m.productId !== 'inactive')) {
-             setMachines(prev => prev.map(m => m.id === 1 ? { ...m, productId: products[0].id } : m));
+        if (products.length > 0) {
+            if (!machines.some(m => m.productId !== 'inactive')) {
+                setMachines(prev => prev.map(m => m.id === 1 ? { ...m, productId: products[0].id } : m));
+            }
+            if (!detailedProductId) {
+                setDetailedProductId(products[0].id);
+            }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [products]);
@@ -70,17 +72,19 @@ export default function OperationsClient({
 
     // Lógica del Simulador de Línea Completa
     const simulationResults = React.useMemo(() => {
-        const activeMachines = machines.filter(m => m.productId !== 'inactive');
-
-        const calculateProduction = (machineList: typeof activeMachines) => {
+        const calculateProduction = (machineList: {id: number, productId: string, speed: number, loss: number}[]) => {
             const packingCapacity = machineList.map(machine => {
                 const product = products.find(p => p.id === machine.productId);
                 if (!product) return { machineId: machine.id, sacksPerHour: 0, kgPerHour: 0, productName: 'N/A' };
-                const effectiveSpeed = machine.speed * (1 - machine.loss / 100);
+                
+                // machine.speed is now in units/min
+                const effectiveSacksPerMinute = machine.speed * (1 - machine.loss / 100);
+                const sacksPerHour = effectiveSacksPerMinute * 60;
+                
                 return {
                     machineId: machine.id,
-                    sacksPerHour: effectiveSpeed,
-                    kgPerHour: effectiveSpeed * (product.sackWeight || 50),
+                    sacksPerHour: sacksPerHour,
+                    kgPerHour: sacksPerHour * (product.sackWeight || 50),
                     productName: product.productName,
                 };
             });
@@ -106,16 +110,14 @@ export default function OperationsClient({
         };
         
         if (wrapperScenario === 'single') {
+            const activeMachines = machines.filter(m => m.productId !== 'inactive');
             const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines);
-            const totalSacksPerHourFromAllPackers = totalSacksPerHourFromPackers;
-            const effectiveWrapperSacksPerHour = wrapperSacksPerHour;
-            const isOverallBottleneck = isWrapperBottleneck;
-            const bottleneckDescription = `La enfardadora (cap: ${wrapperSacksPerHour.toLocaleString()} sacos/hr) limita a las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr).`;
-            const noBottleneckDescription = `Las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr) operan dentro de la capacidad de la enfardadora (${wrapperSacksPerHour.toLocaleString()} sacos/hr).`;
+            
+            const bottleneckDescription = `La enfardadora (cap: ${wrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr) limita a las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr).`;
+            const noBottleneckDescription = `Las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr) operan dentro de la capacidad de la enfardadora (${wrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr).`;
 
             const timeToEmptyHours = effectiveKgPerHour > 0 ? siloAmount / effectiveKgPerHour : 0;
             const totalSacksProduced = effectiveSacksPerHour * timeToEmptyHours;
-            const totalQuintalesProduced = (siloAmount) / KG_PER_QUINTAL;
             
             const machineContribution = packingCapacity.map(m => ({ 
                 name: `Máq. ${m.machineId} (${m.productName})`, 
@@ -125,8 +127,7 @@ export default function OperationsClient({
             return {
                 timeToEmptyHours,
                 totalSacksProduced,
-                totalQuintales: totalQuintalesProduced,
-                isWrapperBottleneck: isOverallBottleneck,
+                isWrapperBottleneck,
                 bottleneckDescription,
                 noBottleneckDescription,
                 machineProduction: packingCapacity.map(m => ({
@@ -136,8 +137,8 @@ export default function OperationsClient({
                     weight: (totalKgPerHourFromPackers > 0 ? m.kgPerHour / totalKgPerHourFromPackers : 0) * siloAmount
                 })),
                 machineContribution,
-                totalSacksPerHourFromAllPackers,
-                effectiveWrapperSacksPerHour,
+                totalSacksPerHourFromAllPackers: totalSacksPerHourFromPackers,
+                effectiveWrapperSacksPerHour: wrapperSacksPerHour,
             };
 
         } else { // dual wrapper scenario
@@ -148,21 +149,27 @@ export default function OperationsClient({
             const result2 = calculateProduction(machinesForWrapper2);
             
             const isOverallBottleneck = result1.isWrapperBottleneck || result2.isWrapperBottleneck;
-            const bottleneckDescription = `Línea 1: ${result1.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'} Línea 2: ${result2.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'}`;
-            const noBottleneckDescription = `Línea 1: ${!result1.isWrapperBottleneck ? 'OK.' : ''} Línea 2: ${!result2.isWrapperBottleneck ? 'OK.' : ''}`
-
-            const totalSacksPerHourFromAllPackers = result1.totalSacksPerHourFromPackers + result2.totalSacksPerHourFromPackers;
-            const effectiveWrapperSacksPerHour = result1.wrapperSacksPerHour + result2.wrapperSacksPerHour;
+            let bottleneckDescription = `Línea 1: ${result1.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'} Línea 2: ${result2.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'}`;
+            if (!result1.isWrapperBottleneck && !result2.isWrapperBottleneck) {
+                bottleneckDescription = "Ambas líneas operan de forma eficiente sin cuellos de botella en las enfardadoras.";
+            }
 
             const totalEffectiveKgPerHour = result1.effectiveKgPerHour + result2.effectiveKgPerHour;
             const timeToEmptyHours = totalEffectiveKgPerHour > 0 ? siloAmount / totalEffectiveKgPerHour : 0;
             
-            const totalSacksProduced = (result1.effectiveSacksPerHour * timeToEmptyHours) + (result2.effectiveSacksPerHour * timeToEmptyHours);
-            const totalQuintalesProduced = siloAmount / KG_PER_QUINTAL;
+            const sacksFromLine1 = result1.effectiveSacksPerHour * timeToEmptyHours;
+            const sacksFromLine2 = result2.effectiveSacksPerHour * timeToEmptyHours;
+            const totalSacksProduced = sacksFromLine1 + sacksFromLine2;
             
             const combinedMachineProd = [
-                ...result1.packingCapacity.map(m => ({ id: m.machineId, productName: m.productName, sacks: (result1.totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / result1.totalSacksPerHourFromPackers : 0) * (result1.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (result1.totalKgPerHourFromPackers > 0 ? m.kgPerHour / result1.totalKgPerHourFromPackers : 0) * (result1.effectiveKgPerHour * timeToEmptyHours) || 0 })),
-                ...result2.packingCapacity.map(m => ({ id: m.machineId, productName: m.productName, sacks: (result2.totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / result2.totalSacksPerHourFromPackers : 0) * (result2.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (result2.totalKgPerHourFromPackers > 0 ? m.kgPerHour / result2.totalKgPerHourFromPackers : 0) * (result2.effectiveKgPerHour * timeToEmptyHours) || 0 }))
+                ...result1.packingCapacity.map(m => {
+                    const lineShare = (result1.totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / result1.totalSacksPerHourFromPackers : 0);
+                    return { id: m.machineId, productName: m.productName, sacks: lineShare * sacksFromLine1 || 0, weight: lineShare * (result1.effectiveKgPerHour * timeToEmptyHours) || 0 }
+                }),
+                ...result2.packingCapacity.map(m => {
+                    const lineShare = (result2.totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / result2.totalSacksPerHourFromPackers : 0);
+                    return { id: m.machineId, productName: m.productName, sacks: lineShare * sacksFromLine2 || 0, weight: lineShare * (result2.effectiveKgPerHour * timeToEmptyHours) || 0 }
+                })
             ];
              const machineContribution = combinedMachineProd.map(m => ({
                 name: `Máq. ${m.id} (${m.productName})`, value: isNaN(m.sacks) ? 0 : m.sacks
@@ -171,19 +178,19 @@ export default function OperationsClient({
             return {
                 timeToEmptyHours,
                 totalSacksProduced,
-                totalQuintales: totalQuintalesProduced,
                 isWrapperBottleneck: isOverallBottleneck,
                 bottleneckDescription,
-                noBottleneckDescription,
+                noBottleneckDescription: bottleneckDescription, // Use the same for simplicity
                 machineProduction: combinedMachineProd.filter(m => m.sacks > 0),
                 machineContribution,
-                totalSacksPerHourFromAllPackers,
-                effectiveWrapperSacksPerHour,
+                totalSacksPerHourFromAllPackers: result1.totalSacksPerHourFromPackers + result2.totalSacksPerHourFromPackers,
+                effectiveWrapperSacksPerHour: result1.wrapperSacksPerHour + result2.wrapperSacksPerHour,
             }
         }
     }, [siloAmount, machines, products, wrapperScenario, sacksPerBundle]);
 
     const detailedSimulationResults = React.useMemo(() => {
+        // detailedSpeed is in units/min
         const unitsPerHourBruto = detailedSpeed * 60;
         const unitsPerHourNeto = unitsPerHourBruto * (1 - detailedLoss / 100);
         
@@ -310,12 +317,9 @@ export default function OperationsClient({
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">2. Configuración de Línea de Empaque</CardTitle>
-                            <CardDescription>
-                                Configura la línea de envasado y empaque para simular el vaciado del silo y analiza el rendimiento detallado.
-                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
-                           <div className="p-4 border rounded-lg bg-muted/30">
+                            <div className="p-4 border rounded-lg bg-muted/30">
                                 <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Package className="h-5 w-5" />Parámetros de las Envasadoras</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                     {machines.map((machine) => (
@@ -332,7 +336,7 @@ export default function OperationsClient({
                                                 </Select>
                                             </div>
                                             <div className="space-y-1.5">
-                                                <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/hr)</Label>
+                                                <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/min)</Label>
                                                 <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={e => handleMachineChange(machine.id, 'speed', Number(e.target.value))}/>
                                             </div>
                                             <div className="space-y-1.5">
@@ -458,7 +462,7 @@ export default function OperationsClient({
                     <div className="grid grid-cols-1 gap-4">
                         <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
                         <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
-                        <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
+                        <KpiCard title="Producción Total (QQ)" value={simulationResults.totalSacksProduced * (products.find(p=>p.id === machines.find(m=>m.productId !== 'inactive')?.productId)?.sackWeight || 50) / KG_PER_QUINTAL} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
                     </div>
                     <Card>
                         <CardHeader>
@@ -469,7 +473,7 @@ export default function OperationsClient({
                                 <AlertTriangle className="h-5 w-5 mt-0.5" />
                                 <div>
                                     <h4 className="font-bold mb-1">{simulationResults.isWrapperBottleneck ? "¡Cuello de Botella Detectado!" : "Operación Eficiente"}</h4>
-                                    <p>{simulationResults.isWrapperBottleneck ? simulationResults.bottleneckDescription : simulationResults.noBottleneckDescription}</p>
+                                    <p>{simulationResults.bottleneckDescription}</p>
                                 </div>
                             </div>
                         </CardContent>
