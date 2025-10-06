@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, ToggleLeft, ToggleRight, CheckSquare, Square } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, ToggleLeft, ToggleRight, CheckSquare, Square, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
@@ -14,6 +14,8 @@ import { Separator } from '@/components/ui/separator';
 import { Pie, Cell, ResponsiveContainer, PieChart, Tooltip as RechartsTooltip } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+
 
 const KG_PER_QUINTAL = 45.3592;
 const QQ_PER_MASA = 350;
@@ -33,7 +35,6 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
     const [machineCount, setMachineCount] = React.useState(1);
     const [dayHours, setDayHours] = React.useState(11);
     const [nightHours, setNightHours] = React.useState(11);
-    const [activeDays, setActiveDays] = React.useState<Record<string, boolean>>({ mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false });
 
     const results = React.useMemo(() => {
         const unitsPerMinute = speed;
@@ -56,14 +57,14 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
     return (
         <Card>
             <CardHeader>
-                <CardTitle className="flex items-center gap-2">2. Parámetros de Envasado (Simulación Detallada)</CardTitle>
-                <CardDescription>Calcula el rendimiento detallado para un producto específico.</CardDescription>
+                <CardTitle className="flex items-center gap-2">Análisis de Rendimiento por Producto</CardTitle>
+                <CardDescription>Calcula el rendimiento detallado para un producto y configuración de maquinaria específicos.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-6">
                     {/* Parámetros */}
                     <div>
-                        <h4 className="font-semibold mb-2">2.1 Parámetros del Producto</h4>
+                        <h4 className="font-semibold mb-2">Parámetros del Producto</h4>
                         <div className="grid grid-cols-2 gap-4">
                              <div className="space-y-1.5">
                                 <Label htmlFor="sim-product">Producto a Simular</Label>
@@ -81,7 +82,7 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
                         </div>
                     </div>
                      <div>
-                        <h4 className="font-semibold mb-2">2.2 Parámetros de Maquinaria</h4>
+                        <h4 className="font-semibold mb-2">Parámetros de Maquinaria</h4>
                         <div className="grid grid-cols-3 gap-4">
                              <div className="space-y-1.5">
                                 <Label htmlFor="sim-speed">Velocidad (fundas/min)</Label>
@@ -98,7 +99,7 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
                         </div>
                     </div>
                      <div>
-                        <h4 className="font-semibold mb-2">2.3 Horario de Producción</h4>
+                        <h4 className="font-semibold mb-2">Horario de Producción</h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="sim-day-hours">Horas Turno Día</Label>
@@ -219,11 +220,17 @@ export default function OperationsClient({
         
         let totalSacksPerHourFromAllPackers = 0;
         let effectiveWrapperSacksPerHour = 0;
+        let isOverallBottleneck = false;
+        let bottleneckDescription = '';
+        let noBottleneckDescription = 'Todas las líneas operan dentro de su capacidad.';
 
         if (wrapperScenario === 'single') {
             const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines);
             totalSacksPerHourFromAllPackers = totalSacksPerHourFromPackers;
             effectiveWrapperSacksPerHour = wrapperSacksPerHour;
+            isOverallBottleneck = isWrapperBottleneck;
+            bottleneckDescription = `La enfardadora (cap: ${wrapperSacksPerHour.toLocaleString()} sacos/hr) limita a las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr).`;
+            noBottleneckDescription = `Las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr) operan dentro de la capacidad de la enfardadora (${wrapperSacksPerHour.toLocaleString()} sacos/hr).`;
 
             const timeToEmptyHours = effectiveKgPerHour > 0 ? siloAmount / effectiveKgPerHour : 0;
             const totalSacksProduced = effectiveSacksPerHour * timeToEmptyHours;
@@ -238,9 +245,9 @@ export default function OperationsClient({
                 timeToEmptyHours,
                 totalSacksProduced,
                 totalQuintales: totalQuintalesProduced,
-                isWrapperBottleneck,
-                bottleneckDescription: `La enfardadora (cap: ${wrapperSacksPerHour.toLocaleString()} sacos/hr) limita a las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr).`,
-                noBottleneckDescription: `Las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString()} sacos/hr) operan dentro de la capacidad de la enfardadora (${wrapperSacksPerHour.toLocaleString()} sacos/hr).`,
+                isWrapperBottleneck: isOverallBottleneck,
+                bottleneckDescription,
+                noBottleneckDescription,
                 machineProduction: packingCapacity.map(m => ({
                     id: m.machineId,
                     productName: m.productName,
@@ -258,6 +265,9 @@ export default function OperationsClient({
             
             const result1 = calculateProduction(machinesForWrapper1);
             const result2 = calculateProduction(machinesForWrapper2);
+            
+            isOverallBottleneck = result1.isWrapperBottleneck || result2.isWrapperBottleneck;
+            bottleneckDescription = `Línea 1: ${result1.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'} Línea 2: ${result2.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'}`;
 
             totalSacksPerHourFromAllPackers = result1.totalSacksPerHourFromPackers + result2.totalSacksPerHourFromPackers;
             effectiveWrapperSacksPerHour = result1.wrapperSacksPerHour + result2.wrapperSacksPerHour;
@@ -280,9 +290,9 @@ export default function OperationsClient({
                 timeToEmptyHours,
                 totalSacksProduced,
                 totalQuintales: totalQuintalesProduced,
-                isWrapperBottleneck: result1.isWrapperBottleneck || result2.isWrapperBottleneck,
-                bottleneckDescription: `Línea 1: ${result1.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'} Línea 2: ${result2.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'}`,
-                noBottleneckDescription: `Ambas líneas operan dentro de su capacidad.`,
+                isWrapperBottleneck: isOverallBottleneck,
+                bottleneckDescription,
+                noBottleneckDescription,
                 machineProduction: combinedMachineProd.filter(m => m.sacks > 0),
                 machineContribution,
                 totalSacksPerHourFromAllPackers,
@@ -319,65 +329,98 @@ export default function OperationsClient({
             <div className="mb-8">
                 <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Producción</h3>
                 <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30">
-                    <div className="flex flex-col items-center gap-2 text-center">
-                        <Warehouse className="h-10 w-10 text-primary" />
-                        <h4 className="font-semibold">Silo</h4>
-                        <p className="text-sm text-muted-foreground">{totalQuintales.toLocaleString()} QQ</p>
-                    </div>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <div className="flex flex-col items-center gap-2 text-center">
+                                    <Warehouse className="h-10 w-10 text-primary" />
+                                    <h4 className="font-semibold">Silo</h4>
+                                    <p className="text-sm text-muted-foreground">{totalQuintales.toLocaleString()} QQ</p>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Materia prima total disponible para la producción.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
-                    <div className="flex flex-col items-center gap-2 text-center">
-                        <Package className="h-10 w-10 text-primary" />
-                        <h4 className="font-semibold">Envasadoras</h4>
-                        <p className="text-sm text-muted-foreground">{simulationResults.totalSacksPerHourFromAllPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p>
-                    </div>
+                    
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <div className={cn("flex flex-col items-center gap-2 text-center p-2 rounded-md", simulationResults.isWrapperBottleneck && 'bg-destructive/10')}>
+                                    <Package className="h-10 w-10 text-primary" />
+                                    <h4 className="font-semibold">Envasadoras</h4>
+                                    <p className={cn("text-sm", simulationResults.isWrapperBottleneck ? 'text-destructive font-bold' : 'text-muted-foreground')}>
+                                        {simulationResults.totalSacksPerHourFromAllPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr
+                                    </p>
+                                </div>
+                            </TooltipTrigger>
+                             <TooltipContent>
+                                <p>Capacidad total de las envasadoras activas.</p>
+                                {simulationResults.isWrapperBottleneck && <p className="text-destructive font-semibold">¡Limitadas por la enfardadora!</p>}
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                    
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
-                    <div className="flex flex-col items-center gap-2 text-center">
-                        <PackageCheck className="h-10 w-10 text-primary" />
-                        <h4 className="font-semibold">Enfardadora</h4>
-                        <p className="text-sm text-muted-foreground">{simulationResults.effectiveWrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p>
-                    </div>
+                    
+                    <TooltipProvider>
+                         <Tooltip>
+                            <TooltipTrigger>
+                                <div className="flex flex-col items-center gap-2 text-center">
+                                    <PackageCheck className="h-10 w-10 text-primary" />
+                                    <h4 className="font-semibold">Enfardadora</h4>
+                                    <p className={cn("text-sm", simulationResults.isWrapperBottleneck ? 'text-destructive font-bold' : 'text-muted-foreground')}>
+                                        {simulationResults.effectiveWrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr
+                                    </p>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Capacidad de la línea de empaque final.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                 </div>
             </div>
 
-            {/* Etapa 1: Materia Prima */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
-                </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="masa-count">Cantidad de Masa Recibida</Label>
-                        <Input id="masa-count" type="number" value={masaCount} onChange={e => setMasaCount(Number(e.target.value))} min="0" />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label>Equivalente por Masa</Label>
-                        <p className="text-lg font-semibold p-2 border rounded-md bg-muted/50">{QQ_PER_MASA} QQ</p>
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label>Total en Silo</Label>
-                        <p className="text-2xl font-bold text-primary p-1 border rounded-md text-center">{totalQuintales.toLocaleString()} QQ</p>
-                    </div>
-                </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Columna de Configuración */}
+                <div className="lg:col-span-2 space-y-8">
+                    {/* Etapa 1: Materia Prima */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="masa-count">Cantidad de Masa Recibida</Label>
+                                <Input id="masa-count" type="number" value={masaCount} onChange={e => setMasaCount(Number(e.target.value))} min="0" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Equivalente por Masa</Label>
+                                <p className="text-lg font-semibold p-2 border rounded-md bg-muted/50">{QQ_PER_MASA} QQ</p>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Total en Silo</Label>
+                                <p className="text-2xl font-bold text-primary p-1 border rounded-md text-center">{totalQuintales.toLocaleString()} QQ</p>
+                            </div>
+                        </CardContent>
+                    </Card>
 
-            {/* Etapa 2: Simulador Detallado */}
-            <DetailedProductionSimulator products={products} />
-
-            {/* Etapa 3: Línea de Empaque y Resultados Globales */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">3. Configuración y Resultados de Línea de Empaque</CardTitle>
-                    <CardDescription>
-                        Configura la línea de envasado y empaque para simular el vaciado del silo y ver los resultados globales.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        <div className="space-y-6">
-                            {/* Parámetros Envasadoras */}
-                            <div className="p-4 border rounded-lg bg-muted/30">
+                    {/* Etapa 2 y 3: Línea de Empaque */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">2. Configuración de Línea de Empaque</CardTitle>
+                            <CardDescription>
+                                Configura la línea de envasado y empaque para simular el vaciado del silo.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                           <div className="p-4 border rounded-lg bg-muted/30">
                                 <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Package className="h-5 w-5" />Parámetros de las Envasadoras</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                     {machines.map((machine) => (
                                         <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background">
                                             <Label className="font-bold">Máquina {machine.id}</Label>
@@ -403,8 +446,6 @@ export default function OperationsClient({
                                     ))}
                                 </div>
                             </div>
-
-                            {/* Parámetros Enfardadora */}
                             <div className="p-4 border rounded-lg bg-muted/30">
                                 <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><PackageCheck className="h-5 w-5" />Parámetros de Empaque</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -425,51 +466,56 @@ export default function OperationsClient({
                                     <p className="text-xs text-muted-foreground md:col-span-2">Nota: La velocidad de la enfardadora se ajusta automáticamente. Con 1 envasadora activa, usa 4 fardos/min. Con más de 1, usa 6 fardos/min.</p>
                                 </div>
                             </div>
-                        </div>
-
-                        {/* Resultados Globales */}
-                        <div className="space-y-6">
-                            <h3 className="font-semibold text-lg text-center">Resultados Globales de la Línea</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
-                                <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
-                                <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
-                            </div>
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    {simulationResults.machineContribution.every(m => m.value === 0) ? (
-                                        <p className="text-center text-muted-foreground h-[200px] flex items-center justify-center">Activa una máquina para ver la contribución.</p>
-                                    ) : (
-                                        <ResponsiveContainer width="100%" height={200}>
-                                            <PieChart>
-                                                <Pie data={simulationResults.machineContribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                                    {simulationResults.machineContribution.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                    ))}
-                                                </Pie>
-                                                <RechartsTooltip />
-                                            </PieChart>
-                                        </ResponsiveContainer>
-                                    )}
-                                </CardContent>
-                            </Card>
-                                <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className={cn("text-sm p-3 rounded-md", simulationResults.isWrapperBottleneck ? 'bg-destructive/10 text-destructive' : 'bg-green-600/10 text-green-700')}>
-                                        {simulationResults.isWrapperBottleneck ? simulationResults.bottleneckDescription : simulationResults.noBottleneckDescription}
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </div>
+                        </CardContent>
+                    </Card>
+                    <DetailedProductionSimulator products={products} />
+                </div>
+                
+                {/* Columna de Resultados */}
+                <div className="space-y-6">
+                    <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
+                    <div className="grid grid-cols-1 gap-4">
+                        <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
+                        <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
+                        <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
                     </div>
-                </CardContent>
-            </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className={cn("text-sm p-3 rounded-md flex items-start gap-3", simulationResults.isWrapperBottleneck ? 'bg-destructive/10 text-destructive' : 'bg-green-600/10 text-green-700')}>
+                                <AlertTriangle className="h-5 w-5 mt-0.5" />
+                                <div>
+                                    <h4 className="font-bold mb-1">{simulationResults.isWrapperBottleneck ? "¡Cuello de Botella Detectado!" : "Operación Eficiente"}</h4>
+                                    <p>{simulationResults.isWrapperBottleneck ? simulationResults.bottleneckDescription : simulationResults.noBottleneckDescription}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {simulationResults.machineContribution.every(m => m.value === 0) ? (
+                                <p className="text-center text-muted-foreground h-[200px] flex items-center justify-center">Activa una máquina para ver la contribución.</p>
+                            ) : (
+                                <ResponsiveContainer width="100%" height={200}>
+                                    <PieChart>
+                                        <Pie data={simulationResults.machineContribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                            {simulationResults.machineContribution.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                        </Pie>
+                                        <RechartsTooltip formatter={(value: number) => `${value.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos`} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
         </>
         )}
       </main>
