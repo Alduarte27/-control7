@@ -44,7 +44,7 @@ export default function OperationsClient({
 
     // Etapa 3: Enfardadora
     const [wrapperScenario, setWrapperScenario] = React.useState<'single' | 'dual'>('single');
-    const [sacksPerBundle, setSacksPerBundle] = React.useState(1);
+    const [sacksPerBundle, setSacksPerBundle] = React.useState(12);
 
     React.useEffect(() => {
         setIsClient(true);
@@ -66,7 +66,6 @@ export default function OperationsClient({
                 const product = products.find(p => p.id === machine.productId);
                 if (!product) return { machineId: machine.id, sacksPerHour: 0, kgPerHour: 0, productName: 'N/A' };
                 
-                // machine.speed is now in units/min
                 const effectiveSacksPerMinute = machine.speed * (1 - machine.loss / 100);
                 const sacksPerHour = effectiveSacksPerMinute * 60;
                 
@@ -123,7 +122,7 @@ export default function OperationsClient({
                     id: m.machineId,
                     productName: m.productName,
                     sacks: (totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / totalSacksPerHourFromPackers : 0) * totalSacksProduced,
-                    weight: (totalKgPerHourFromPackers > 0 ? m.kgPerHour / totalKgPerHourFromPackers : 0) * siloAmount
+                    weight: (totalKgPerHourFromPackers > 0 ? m.kgPerHour / totalKgPerHourFromPackers : 0) * (effectiveKgPerHour > 0 ? siloAmount * (effectiveKgPerHour/totalKgPerHourFromPackers) : siloAmount)
                 })),
                 machineContribution,
                 totalSacksPerHourFromAllPackers: totalSacksPerHourFromPackers,
@@ -326,12 +325,8 @@ export default function OperationsClient({
                                             </div>
                                             {machine.productId !== 'inactive' && (
                                                 <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
-                                                    <h3 className="font-semibold text-center text-muted-foreground">Indicadores de Rendimiento (Máquina {machine.id})</h3>
-                                                    <div className="grid grid-cols-3 gap-2 text-center">
-                                                        <div className="bg-background p-1 rounded-md border">
-                                                            <p className="text-muted-foreground">Unid/Hora (Bruto)</p>
-                                                            <p className="font-bold text-sm">{unitsPerHourBruto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-                                                        </div>
+                                                    <h3 className="font-semibold text-center text-muted-foreground">Indicadores de Rendimiento</h3>
+                                                    <div className="grid grid-cols-2 gap-2 text-center">
                                                         <div className="bg-background p-1 rounded-md border">
                                                             <p className="text-muted-foreground">Unid/Hora (Neto)</p>
                                                             <p className="font-bold text-sm">{unitsPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
@@ -367,7 +362,7 @@ export default function OperationsClient({
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <p className="text-xs text-muted-foreground md:col-span-2">Nota: La velocidad de la enfardadora se ajusta automáticamente. Con 1 envasadora activa, usa 4 fardos/min. Con más de 1, usa 6 fardos/min.</p>
+                                    <p className="text-xs text-muted-foreground md:col-span-2">Nota: La velocidad de la enfardadora se ajusta automáticamente. Con 1 envasadora activa, usa 4 fardos/min. Con 2 o más, usa 6 fardos/min.</p>
                                 </div>
                             </div>
                         </CardContent>
