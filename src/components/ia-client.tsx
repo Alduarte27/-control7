@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, Settings, Clock, Percent, AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, Settings, Clock, AlertTriangle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -21,7 +21,7 @@ type MachineState = {
     loss: number; // percentage
 };
 
-const initialMachineState: MachineState = { productId: '', speed: 0, loss: 0 };
+const initialMachineState: MachineState = { productId: 'inactive', speed: 0, loss: 0 };
 
 export default function OperationsClient({ 
   prefetchedProducts 
@@ -33,7 +33,7 @@ export default function OperationsClient({
     
     const [siloAmount, setSiloAmount] = React.useState(25000); // Default 25 Ton
     const [machines, setMachines] = React.useState<MachineState[]>([
-        { ...initialMachineState, productId: products[0]?.id || '', speed: 2000, loss: 0 },
+        { productId: products[0]?.id || 'inactive', speed: 2000, loss: 0 },
         { ...initialMachineState },
         { ...initialMachineState },
         { ...initialMachineState },
@@ -56,6 +56,8 @@ export default function OperationsClient({
     
     const simulationResults = React.useMemo(() => {
         const activeMachines = machines.map((machine, index) => {
+            if (machine.productId === 'inactive' || !machine.productId) return null;
+            
             const product = products.find(p => p.id === machine.productId);
             if (!product || machine.speed <= 0) return null;
 
@@ -145,12 +147,12 @@ export default function OperationsClient({
                     <div className="flex flex-col items-center gap-2 text-center">
                         <Warehouse className="h-12 w-12 text-primary" />
                         <h3 className="font-semibold">Silo</h3>
-                        <p className="text-xs text-muted-foreground">{isClient ? siloAmount.toLocaleString() : '...'} Kg</p>
+                        {isClient ? <p className="text-xs text-muted-foreground">{siloAmount.toLocaleString()} Kg</p> : <p className="text-xs text-muted-foreground">...</p>}
                     </div>
                     <ArrowRight className="h-8 w-8 text-muted-foreground hidden md:block" />
                     <div className="flex flex-wrap items-center justify-center gap-4">
                         {machines.map((m, i) => (
-                           m.productId && m.speed > 0 && <Package key={i} className="h-10 w-10 text-green-600" />
+                           m.productId && m.productId !== 'inactive' && m.speed > 0 && <Package key={i} className="h-10 w-10 text-green-600" />
                         ))}
                         <p className="w-full text-center text-xs font-semibold">Envasadoras</p>
                     </div>
@@ -181,7 +183,7 @@ export default function OperationsClient({
                                         <Select value={machine.productId} onValueChange={(val) => handleMachineChange(index, 'productId', val)}>
                                             <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="">-- Inactiva --</SelectItem>
+                                                <SelectItem value="inactive">-- Inactiva --</SelectItem>
                                                 {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
                                             </SelectContent>
                                         </Select>
