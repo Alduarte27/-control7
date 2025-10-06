@@ -262,7 +262,7 @@ export default function OperationsClient({
             </div>
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                <div className="lg:col-span-2 space-y-8">
+                <div className="lg:col-span-3 space-y-8">
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
@@ -290,9 +290,10 @@ export default function OperationsClient({
                         <CardContent className="space-y-6">
                            <div>
                                 <h3 className="font-semibold text-lg mb-4">Parámetros de las Envasadoras</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-6">
                                     {machines.map((machine) => {
-                                      const unitsPerHourBruto = machine.speed * 60;
+                                      const unitsPerMinuteBruto = machine.speed;
+                                      const unitsPerHourBruto = unitsPerMinuteBruto * 60;
                                       const unitsPerHourNeto = unitsPerHourBruto * (1 - machine.loss / 100);
                                       const sacksPerHourNeto = (machine.unitsPerSack > 0) ? (unitsPerHourNeto / machine.unitsPerSack) : 0;
 
@@ -309,7 +310,7 @@ export default function OperationsClient({
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            <div className="grid grid-cols-3 gap-2">
+                                            <div className="grid grid-cols-2 gap-2">
                                                 <div className="space-y-1.5">
                                                     <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/min)</Label>
                                                     <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={e => handleMachineChange(machine.id, 'speed', Number(e.target.value))}/>
@@ -318,10 +319,10 @@ export default function OperationsClient({
                                                     <Label htmlFor={`loss-${machine.id}`} className="text-xs">Merma (%)</Label>
                                                     <Input id={`loss-${machine.id}`} type="number" value={machine.loss} onChange={e => handleMachineChange(machine.id, 'loss', Number(e.target.value))}/>
                                                 </div>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor={`units-${machine.id}`} className="text-xs">Unidades por Saco</Label>
-                                                    <Input id={`units-${machine.id}`} type="number" value={machine.unitsPerSack} onChange={e => handleMachineChange(machine.id, 'unitsPerSack', Number(e.target.value))}/>
-                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor={`units-${machine.id}`} className="text-xs">Unidades por Saco</Label>
+                                                <Input id={`units-${machine.id}`} type="number" value={machine.unitsPerSack} onChange={e => handleMachineChange(machine.id, 'unitsPerSack', Number(e.target.value))}/>
                                             </div>
                                             {machine.productId !== 'inactive' && (
                                                 <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
@@ -373,9 +374,9 @@ export default function OperationsClient({
                     </Card>
                 </div>
                 
-                <div className="space-y-6">
+                <div className="lg:col-span-3 space-y-6">
                     <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
-                    <div className="grid grid-cols-1 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
                         <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
                         <KpiCard title="Producción Total (QQ)" value={simulationResults.totalSacksProduced * (products.find(p=>p.id === machines.find(m=>m.productId !== 'inactive')?.productId)?.sackWeight || 50) / KG_PER_QUINTAL} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
@@ -423,5 +424,3 @@ export default function OperationsClient({
     </div>
   );
 }
-
-    
