@@ -5,26 +5,19 @@ import Link from 'next/link';
 import { Factory, ChevronLeft, Warehouse, Package, Settings, Clock, AlertTriangle, ArrowRight, CheckCircle2, SlidersHorizontal, BrainCircuit, PieChart, Info, CalendarClock, Bot, BarChart, Percent } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { ProductDefinition, CategoryDefinition, ProductData } from '@/lib/types';
+import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import KpiCard from '@/components/kpi-card';
 import { Separator } from '@/components/ui/separator';
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bar as RechartsBar, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Pie, Cell, ResponsiveContainer } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
 import { Switch } from './ui/switch';
 
 const KG_PER_QUINTAL = 50;
 
-function ProductionSimulatorTab({ products, categories }: { products: ProductDefinition[], categories: CategoryDefinition[] }) {
-    const { toast } = useToast();
-    const [isSimulating, setIsSimulating] = React.useState(false);
-
+function ProductionSimulatorSection({ products }: { products: ProductDefinition[] }) {
     const [productId, setProductId] = React.useState<string>(products[0]?.id || '');
     const [sacksPerHour, setSacksPerHour] = React.useState(2000);
     const [lossPercentage, setLossPercentage] = React.useState(0);
@@ -69,14 +62,15 @@ function ProductionSimulatorTab({ products, categories }: { products: ProductDef
     const dayNames: { [key: string]: string } = { mon: 'L', tue: 'M', wed: 'X', thu: 'J', fri: 'V', sat: 'S', sun: 'D' };
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* INPUTS */}
-            <div className="space-y-6">
-                 <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><SlidersHorizontal />Parámetros de Simulación</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-3"><CalendarClock className="h-6 w-6 text-primary" />Simulador de Producción Semanal</CardTitle>
+                <CardDescription>Estima la producción para un producto específico basado en los parámetros de la maquinaria y los horarios de los turnos.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                 {/* INPUTS */}
+                <div className="space-y-6">
+                    <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="sim-product">1. Producto a Simular</Label>
                             <Select value={productId} onValueChange={setProductId}>
@@ -134,23 +128,20 @@ function ProductionSimulatorTab({ products, categories }: { products: ProductDef
                                 </div>
                             </div>
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
-             {/* OUTPUTS */}
-            <div className="space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Resultados de la Simulación</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
+                    </div>
+                </div>
+                 {/* OUTPUTS */}
+                <div className="space-y-6">
+                    <div className="space-y-4">
                         {!selectedProduct ? (
-                            <p className="text-center text-muted-foreground py-8">Selecciona un producto para empezar.</p>
+                            <div className="flex items-center justify-center h-full">
+                                <p className="text-center text-muted-foreground py-8">Selecciona un producto para empezar.</p>
+                            </div>
                         ) : (
                             <>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <KpiCard title="Producción Estimada" value={simulationResults?.totalSacks.toLocaleString() || '0'} icon={Package} description="Sacos totales que se producirían en el período." subValue={`(${simulationResults?.totalQuintales.toLocaleString(undefined, { maximumFractionDigits: 1 }) || '0'} QQ)`} />
-                                    <KpiCard title="Producción por Máquina" value={simulationResults?.productionPerMachine.toLocaleString() || '0'} icon={Factory} description="Sacos que cada máquina produciría en el período." />
+                                    <KpiCard title="Producción Estimada" value={simulationResults?.totalSacks || 0} fractionDigits={0} icon={Package} description="Sacos totales que se producirían en el período." subValue={`(${simulationResults?.totalQuintales.toLocaleString(undefined, { maximumFractionDigits: 1 }) || '0'} QQ)`} />
+                                    <KpiCard title="Producción por Máquina" value={simulationResults?.productionPerMachine || 0} fractionDigits={0} icon={Factory} description="Sacos que cada máquina produciría en el período." />
                                     <KpiCard title="Eficiencia" value={`${simulationResults?.efficiency || 0}%`} icon={Percent} description="Eficiencia neta de la producción considerando la merma." valueColor={simulationResults && simulationResults.efficiency >= 90 ? 'text-green-600' : 'text-yellow-600'} />
                                 </div>
                                 <Separator />
@@ -163,8 +154,8 @@ function ProductionSimulatorTab({ products, categories }: { products: ProductDef
                                         <div className="grid grid-cols-7 gap-1">
                                             {simulationResults?.dailyBreakdown.map(d => (
                                                 <div key={d.day} className="p-1.5 rounded-md bg-muted/50 text-center text-sm">
-                                                    <p className="font-bold">{(d.daySacks + d.nightSacks).toLocaleString()}</p>
-                                                    <p className="text-xs text-muted-foreground">{d.daySacks.toLocaleString()} / {d.nightSacks.toLocaleString()}</p>
+                                                    <p className="font-bold">{((d.daySacks || 0) + (d.nightSacks || 0)).toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                                                    <p className="text-xs text-muted-foreground">{(d.daySacks || 0).toLocaleString(undefined, {maximumFractionDigits: 0})} / {(d.nightSacks || 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
                                                 </div>
                                             ))}
                                         </div>
@@ -173,15 +164,14 @@ function ProductionSimulatorTab({ products, categories }: { products: ProductDef
                                 </div>
                             </>
                         )}
-                    </CardContent>
-                </Card>
-            </div>
-        </div>
-    )
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
 }
 
-
-function SiloSimulatorTab({ products }: { products: ProductDefinition[] }) {
+function SiloSimulatorSection({ products }: { products: ProductDefinition[] }) {
     const [isClient, setIsClient] = React.useState(false);
     
     const [siloAmount, setSiloAmount] = React.useState(25000); // Default 25 Ton
@@ -259,14 +249,15 @@ function SiloSimulatorTab({ products }: { products: ProductDefinition[] }) {
     const COLORS = ['hsl(var(--chart-1))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))'];
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* INPUTS */}
-        <div className="space-y-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Warehouse className="text-primary"/>Silo y Envasadoras</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
+    <Card>
+        <CardHeader>
+            <CardTitle className="flex items-center gap-3"><Warehouse className="h-6 w-6 text-primary" />Simulador de Vaciado de Silo</CardTitle>
+            <CardDescription>Calcula cuánto tiempo tomará procesar la materia prima del silo y cuánta producción se generará con las máquinas activas.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* INPUTS */}
+            <div className="space-y-6">
+                <div className="space-y-4">
                      <div className="space-y-2">
                         <Label htmlFor="silo-amount">1. Cantidad en Silo (Kg)</Label>
                         <Input id="silo-amount" type="number" value={siloAmount} onChange={e => setSiloAmount(Number(e.target.value) || 0)} className="mt-2" placeholder="Kg de materia prima"/>
@@ -298,85 +289,80 @@ function SiloSimulatorTab({ products }: { products: ProductDefinition[] }) {
                             ))}
                         </div>
                     </div>
-                </CardContent>
-            </Card>
-        </div>
+                </div>
+            </div>
 
-        {/* OUTPUTS */}
-        <div className="space-y-6">
-             <Card>
-                 <CardHeader>
-                     <CardTitle>Resultados de la Simulación</CardTitle>
-                 </CardHeader>
-                 <CardContent className="space-y-4">
-                    {isClient ? (
-                        <>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <KpiCard title="Tiempo para Vaciar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Clock} description="Tiempo estimado para consumir toda la materia prima." />
-                                <KpiCard title="Producción Total (Sacos)" value={Math.floor(simulationResults.totalSacks).toLocaleString()} icon={Package} description="Total de sacos producidos por todas las máquinas." />
-                                <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={Factory} description="Total de quintales producidos." />
-                            </div>
-                            <Separator />
-                            <div>
-                                <h4 className="font-semibold mb-2 flex items-center gap-2"><PieChart /> Desglose de Producción por Máquina</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
-                                    <div className="w-full h-40">
-                                         <ResponsiveContainer width="100%" height="100%">
-                                             <Pie
-                                                data={simulationResults.chartData}
-                                                dataKey="value"
-                                                nameKey="name"
-                                                cx="50%"
-                                                cy="50%"
-                                                outerRadius={60}
-                                                labelLine={false}
-                                                label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
-                                                    const radius = innerRadius + (outerRadius - innerRadius) * 1.2;
-                                                    const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
-                                                    const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
-                                                    return (
-                                                    <text x={x} y={y} fill="currentColor" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs">
-                                                        {`${(percent * 100).toFixed(0)}%`}
-                                                    </text>
-                                                    );
-                                                }}
-                                             >
-                                                {simulationResults.chartData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                ))}
-                                             </Pie>
-                                         </ResponsiveContainer>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {simulationResults.productionPerMachine.length > 0 ? simulationResults.productionPerMachine.map((p, i) => (
-                                            <div key={i} className="flex justify-between items-center text-sm p-2 bg-muted/30 rounded-md">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
-                                                    <span className="font-medium">{p.productName}</span>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p>{p.sacks.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos</p>
-                                                    <p className="text-xs text-muted-foreground">{p.quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} QQ</p>
-                                                </div>
+            {/* OUTPUTS */}
+            <div className="space-y-6">
+                {!isClient ? (
+                    <div className="flex items-center justify-center h-full">
+                        <p className="text-center text-muted-foreground py-8">Calculando resultados...</p>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <KpiCard title="Tiempo para Vaciar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Clock} description="Tiempo estimado para consumir toda la materia prima." />
+                            <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacks} fractionDigits={0} icon={Package} description="Total de sacos producidos por todas las máquinas." />
+                            <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales} fractionDigits={1} icon={Factory} description="Total de quintales producidos." />
+                        </div>
+                        <Separator />
+                        <div>
+                            <h4 className="font-semibold mb-2 flex items-center gap-2"><PieChart /> Desglose de Producción por Máquina</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                                <div className="w-full h-40">
+                                     <ResponsiveContainer width="100%" height="100%">
+                                         <Pie
+                                            data={simulationResults.chartData}
+                                            dataKey="value"
+                                            nameKey="name"
+                                            cx="50%"
+                                            cy="50%"
+                                            outerRadius={60}
+                                            labelLine={false}
+                                            label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                                                if (percent === 0) return null;
+                                                const radius = innerRadius + (outerRadius - innerRadius) * 1.2;
+                                                const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
+                                                const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
+                                                return (
+                                                <text x={x} y={y} fill="currentColor" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs">
+                                                    {`${(percent * 100).toFixed(0)}%`}
+                                                </text>
+                                                );
+                                            }}
+                                         >
+                                            {simulationResults.chartData.map((entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            ))}
+                                         </Pie>
+                                     </ResponsiveContainer>
+                                </div>
+                                <div className="space-y-2">
+                                    {simulationResults.productionPerMachine.length > 0 ? simulationResults.productionPerMachine.map((p, i) => (
+                                        <div key={i} className="flex justify-between items-center text-sm p-2 bg-muted/30 rounded-md">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                                                <span className="font-medium">{p.productName}</span>
                                             </div>
-                                        )) : <p className="text-sm text-center text-muted-foreground py-4">No hay producción para mostrar.</p>}
-                                    </div>
+                                            <div className="text-right">
+                                                <p>{p.sacks.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos</p>
+                                                <p className="text-xs text-muted-foreground">{p.quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} QQ</p>
+                                            </div>
+                                        </div>
+                                    )) : <p className="text-sm text-center text-muted-foreground py-4">No hay producción para mostrar.</p>}
                                 </div>
                             </div>
-                        </>
-                     ) : (
-                        <p className="text-center text-muted-foreground py-8">Calculando resultados...</p>
-                     )}
-                 </CardContent>
-             </Card>
-        </div>
-    </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </CardContent>
+    </Card>
   );
 }
 
 export default function OperationsClient({ 
   prefetchedProducts,
-  prefetchedCategories
 }: { 
   prefetchedProducts: ProductDefinition[],
   prefetchedCategories: CategoryDefinition[]
@@ -393,33 +379,9 @@ export default function OperationsClient({
         <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2" />Volver</Button></Link>
       </header>
       
-      <main className="p-4 md:p-8 space-y-6">
-        <Card>
-            <CardHeader>
-                <CardTitle>Herramientas de Simulación y Análisis</CardTitle>
-                <CardDescription>
-                    Utiliza estas herramientas para planificar la producción, simular la capacidad de la planta y obtener pronósticos de demanda basados en IA.
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <Tabs defaultValue="production-simulator" className="w-full">
-                    <TabsList className="grid w-full grid-cols-2">
-                        <TabsTrigger value="production-simulator">
-                            <CalendarClock className="mr-2" /> Simulador de Producción
-                        </TabsTrigger>
-                         <TabsTrigger value="silo-simulator">
-                            <Warehouse className="mr-2" /> Simulador de Silo
-                        </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="production-simulator" className="pt-6">
-                        <ProductionSimulatorTab products={products} categories={prefetchedCategories} />
-                    </TabsContent>
-                    <TabsContent value="silo-simulator" className="pt-6">
-                       <SiloSimulatorTab products={products} />
-                    </TabsContent>
-                </Tabs>
-            </CardContent>
-        </Card>
+      <main className="p-4 md:p-8 space-y-8">
+        <ProductionSimulatorSection products={products} />
+        <SiloSimulatorSection products={products} />
       </main>
     </div>
   );
