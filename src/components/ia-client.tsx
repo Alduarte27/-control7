@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, HardHat } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
@@ -19,120 +19,6 @@ const KG_PER_QUINTAL = 45.3592;
 const QQ_PER_MASA = 350;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
-// --- Componente para el Simulador Detallado de Producción (integrado) ---
-function DetailedProductionSimulator({ products }: { products: ProductDefinition[] }) {
-    const [productId, setProductId] = React.useState(products[0]?.id || '');
-    const [unitsPerSack, setUnitsPerSack] = React.useState(12);
-    const [speed, setSpeed] = React.useState(40); // fundas/min
-    const [loss, setLoss] = React.useState(8);
-    const [machineCount, setMachineCount] = React.useState(1);
-    const [dayHours, setDayHours] = React.useState(11);
-    const [nightHours, setNightHours] = React.useState(11);
-
-    const results = React.useMemo(() => {
-        const unitsPerMinute = speed;
-        const unitsPerHourBruto = unitsPerMinute * 60;
-        const unitsPerHourNeto = unitsPerHourBruto * (1 - loss / 100);
-        
-        const sacksPerHourNeto = (unitsPerSack > 0) ? (unitsPerHourNeto / unitsPerSack) : 0;
-        
-        const dayProduction = sacksPerHourNeto * dayHours * machineCount;
-        const nightProduction = sacksPerHourNeto * nightHours * machineCount;
-        
-        return {
-            unitsPerHourBruto,
-            unitsPerHourNeto,
-            sacksPerHourNeto,
-            dayProduction,
-            nightProduction
-        };
-    }, [speed, loss, unitsPerSack, dayHours, nightHours, machineCount]);
-
-    return (
-        <div className="mt-6 border-t pt-6">
-             <CardTitle className="flex items-center gap-2 mb-2">Análisis de Rendimiento por Producto</CardTitle>
-            <CardDescription className="mb-4">Calcula el rendimiento detallado para un producto y configuración de maquinaria específicos.</CardDescription>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-6">
-                    {/* Parámetros */}
-                    <div>
-                        <h4 className="font-semibold mb-2">1. Parámetros del Producto</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                             <div className="space-y-1.5">
-                                <Label htmlFor="sim-product">Producto a Simular</Label>
-                                <Select value={productId} onValueChange={setProductId}>
-                                    <SelectTrigger id="sim-product"><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="sim-units-per-sack">Unidades por Saco</Label>
-                                <Input id="sim-units-per-sack" type="number" value={unitsPerSack} onChange={e => setUnitsPerSack(Number(e.target.value))}/>
-                            </div>
-                        </div>
-                    </div>
-                     <div>
-                        <h4 className="font-semibold mb-2">2. Parámetros de Maquinaria</h4>
-                        <div className="grid grid-cols-3 gap-4">
-                             <div className="space-y-1.5">
-                                <Label htmlFor="sim-speed">Velocidad (fundas/min)</Label>
-                                <Input id="sim-speed" type="number" value={speed} onChange={e => setSpeed(Number(e.target.value))}/>
-                            </div>
-                             <div className="space-y-1.5">
-                                <Label htmlFor="sim-loss">Pérdida (%)</Label>
-                                <Input id="sim-loss" type="number" value={loss} onChange={e => setLoss(Number(e.target.value))}/>
-                            </div>
-                             <div className="space-y-1.5">
-                                <Label htmlFor="sim-machines">Nº de Máquinas</Label>
-                                <Input id="sim-machines" type="number" value={machineCount} onChange={e => setMachineCount(Number(e.target.value))}/>
-                            </div>
-                        </div>
-                    </div>
-                     <div>
-                        <h4 className="font-semibold mb-2">3. Horario de Producción</h4>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="sim-day-hours">Horas Turno Día</Label>
-                                <Input id="sim-day-hours" type="number" value={dayHours} onChange={e => setDayHours(Number(e.target.value))}/>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="sim-night-hours">Horas Turno Noche</Label>
-                                <Input id="sim-night-hours" type="number" value={nightHours} onChange={e => setNightHours(Number(e.target.value))}/>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div className="space-y-4 rounded-lg bg-muted/30 p-4 border">
-                    {/* Resultados */}
-                    <h3 className="font-semibold text-center">Indicadores de Rendimiento (por máquina)</h3>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div className="bg-background p-2 rounded-md border">
-                            <p className="text-muted-foreground">Unidades/Hora (Bruto)</p>
-                            <p className="font-bold text-lg">{results.unitsPerHourBruto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-                        </div>
-                        <div className="bg-background p-2 rounded-md border">
-                            <p className="text-muted-foreground">Unidades/Hora (Neto)</p>
-                            <p className="font-bold text-lg">{results.unitsPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-                        </div>
-                         <div className="bg-background p-2 rounded-md border">
-                            <p className="text-muted-foreground">Sacos por Hora (Neto)</p>
-                            <p className="font-bold text-lg text-green-600">{results.sacksPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
-                        </div>
-                        <div className="bg-background p-2 rounded-md border col-span-2">
-                             <p className="text-muted-foreground">Producción Total por Turno (Considerando {machineCount} máquinas)</p>
-                             <div className="flex justify-around mt-1">
-                                <p>Día: <span className="font-bold text-lg">{results.dayProduction.toLocaleString(undefined, {maximumFractionDigits: 0})}</span> sacos</p>
-                                <p>Noche: <span className="font-bold text-lg">{results.nightProduction.toLocaleString(undefined, {maximumFractionDigits: 0})}</span> sacos</p>
-                             </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-}
 
 export default function OperationsClient({ 
   prefetchedProducts,
@@ -159,6 +45,16 @@ export default function OperationsClient({
     // Etapa 3: Enfardadora
     const [wrapperScenario, setWrapperScenario] = React.useState<'single' | 'dual'>('single');
     const [sacksPerBundle, setSacksPerBundle] = React.useState(1);
+
+    // Estado para el simulador detallado
+    const [detailedProductId, setDetailedProductId] = React.useState(products[0]?.id || '');
+    const [unitsPerSack, setUnitsPerSack] = React.useState(50);
+    const [detailedSpeed, setDetailedSpeed] = React.useState(39); // fundas/min
+    const [detailedLoss, setDetailedLoss] = React.useState(8);
+    const [detailedMachineCount, setDetailedMachineCount] = React.useState(1);
+    const [detailedDayHours, setDetailedDayHours] = React.useState(11);
+    const [detailedNightHours, setDetailedNightHours] = React.useState(11);
+
 
     React.useEffect(() => {
         setIsClient(true);
@@ -291,6 +187,25 @@ export default function OperationsClient({
             }
         }
     }, [siloAmount, machines, products, wrapperScenario, sacksPerBundle]);
+
+    const detailedSimulationResults = React.useMemo(() => {
+        const unitsPerMinute = detailedSpeed;
+        const unitsPerHourBruto = unitsPerMinute * 60;
+        const unitsPerHourNeto = unitsPerHourBruto * (1 - detailedLoss / 100);
+        
+        const sacksPerHourNeto = (unitsPerSack > 0) ? (unitsPerHourNeto / unitsPerSack) : 0;
+        
+        const dayProduction = sacksPerHourNeto * detailedDayHours * detailedMachineCount;
+        const nightProduction = sacksPerHourNeto * detailedNightHours * detailedMachineCount;
+        
+        return {
+            unitsPerHourBruto,
+            unitsPerHourNeto,
+            sacksPerHourNeto,
+            dayProduction,
+            nightProduction
+        };
+    }, [detailedSpeed, detailedLoss, unitsPerSack, detailedDayHours, detailedNightHours, detailedMachineCount]);
     
     const formatTime = (hours: number) => {
         if (!isFinite(hours) || hours <= 0) return '0h 0m';
@@ -316,7 +231,6 @@ export default function OperationsClient({
           </div>
         ) : (
         <>
-            {/* Visual Flow Diagram */}
             <div className="mb-8">
                 <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Producción</h3>
                 <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30">
@@ -375,11 +289,10 @@ export default function OperationsClient({
                     </TooltipProvider>
                 </div>
             </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                 {/* Columna de Configuración */}
                 <div className="lg:col-span-2 space-y-8">
-                    {/* Etapa 1: Materia Prima */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
@@ -400,12 +313,11 @@ export default function OperationsClient({
                         </CardContent>
                     </Card>
 
-                    {/* Etapa 2 y 3: Línea de Empaque */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">2. Configuración de Línea de Empaque</CardTitle>
                             <CardDescription>
-                                Configura la línea de envasado y empaque para simular el vaciado del silo.
+                                Configura la línea de envasado y empaque para simular el vaciado del silo y analiza el rendimiento detallado.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-6">
@@ -437,6 +349,91 @@ export default function OperationsClient({
                                     ))}
                                 </div>
                             </div>
+                            
+                            <Separator />
+                            
+                            <div className="mt-6">
+                                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><HardHat className="h-5 w-5" />Análisis de Rendimiento por Producto</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-6">
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Parámetros del Producto</h4>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                 <div className="space-y-1.5">
+                                                    <Label htmlFor="sim-product">Producto a Simular</Label>
+                                                    <Select value={detailedProductId} onValueChange={setDetailedProductId}>
+                                                        <SelectTrigger id="sim-product"><SelectValue /></SelectTrigger>
+                                                        <SelectContent>
+                                                            {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="sim-units-per-sack">Unidades por Saco</Label>
+                                                    <Input id="sim-units-per-sack" type="number" value={unitsPerSack} onChange={e => setUnitsPerSack(Number(e.target.value))}/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                         <div>
+                                            <h4 className="font-semibold mb-2">Parámetros de Maquinaria</h4>
+                                            <div className="grid grid-cols-3 gap-4">
+                                                 <div className="space-y-1.5">
+                                                    <Label htmlFor="sim-speed">Velocidad (fundas/min)</Label>
+                                                    <Input id="sim-speed" type="number" value={detailedSpeed} onChange={e => setDetailedSpeed(Number(e.target.value))}/>
+                                                </div>
+                                                 <div className="space-y-1.5">
+                                                    <Label htmlFor="sim-loss">Pérdida (%)</Label>
+                                                    <Input id="sim-loss" type="number" value={detailedLoss} onChange={e => setDetailedLoss(Number(e.target.value))}/>
+                                                </div>
+                                                 <div className="space-y-1.5">
+                                                    <Label htmlFor="sim-machines">Nº de Máquinas</Label>
+                                                    <Input id="sim-machines" type="number" value={detailedMachineCount} onChange={e => setDetailedMachineCount(Number(e.target.value))}/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                         <div>
+                                            <h4 className="font-semibold mb-2">Horario de Producción</h4>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="sim-day-hours">Horas Turno Día</Label>
+                                                    <Input id="sim-day-hours" type="number" value={detailedDayHours} onChange={e => setDetailedDayHours(Number(e.target.value))}/>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="sim-night-hours">Horas Turno Noche</Label>
+                                                    <Input id="sim-night-hours" type="number" value={detailedNightHours} onChange={e => setDetailedNightHours(Number(e.target.value))}/>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4 rounded-lg bg-muted/30 p-4 border">
+                                        <h3 className="font-semibold text-center">Indicadores de Rendimiento (por máquina)</h3>
+                                        <div className="grid grid-cols-2 gap-3 text-sm">
+                                            <div className="bg-background p-2 rounded-md border">
+                                                <p className="text-muted-foreground">Unidades/Hora (Bruto)</p>
+                                                <p className="font-bold text-lg">{detailedSimulationResults.unitsPerHourBruto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                                            </div>
+                                            <div className="bg-background p-2 rounded-md border">
+                                                <p className="text-muted-foreground">Unidades/Hora (Neto)</p>
+                                                <p className="font-bold text-lg">{detailedSimulationResults.unitsPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                                            </div>
+                                             <div className="bg-background p-2 rounded-md border">
+                                                <p className="text-muted-foreground">Sacos por Hora (Neto)</p>
+                                                <p className="font-bold text-lg text-green-600">{detailedSimulationResults.sacksPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
+                                            </div>
+                                            <div className="bg-background p-2 rounded-md border col-span-2">
+                                                 <p className="text-muted-foreground">Producción Total por Turno (Considerando {detailedMachineCount} máquinas)</p>
+                                                 <div className="flex justify-around mt-1">
+                                                    <p>Día: <span className="font-bold text-lg">{detailedSimulationResults.dayProduction.toLocaleString(undefined, {maximumFractionDigits: 0})}</span> sacos</p>
+                                                    <p>Noche: <span className="font-bold text-lg">{detailedSimulationResults.nightProduction.toLocaleString(undefined, {maximumFractionDigits: 0})}</span> sacos</p>
+                                                 </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <Separator />
+                            
                             <div className="p-4 border rounded-lg bg-muted/30">
                                 <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><PackageCheck className="h-5 w-5" />Parámetros de Empaque</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -457,8 +454,6 @@ export default function OperationsClient({
                                     <p className="text-xs text-muted-foreground md:col-span-2">Nota: La velocidad de la enfardadora se ajusta automáticamente. Con 1 envasadora activa, usa 4 fardos/min. Con más de 1, usa 6 fardos/min.</p>
                                 </div>
                             </div>
-                            {/* Simulador detallado integrado */}
-                            <DetailedProductionSimulator products={products} />
                         </CardContent>
                     </Card>
                 </div>
