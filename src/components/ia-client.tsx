@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { ProductDefinition } from '@/lib/types';
+import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -20,8 +20,10 @@ const QQ_PER_MASA = 350;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
 export default function OperationsClient({ 
+  prefetchedCategories,
   prefetchedProducts,
 }: { 
+  prefetchedCategories: CategoryDefinition[],
   prefetchedProducts: ProductDefinition[],
 }) {
     const [isClient, setIsClient] = React.useState(false);
@@ -32,7 +34,7 @@ export default function OperationsClient({
     const totalQuintales = masaCount * QQ_PER_MASA;
     const siloAmount = totalQuintales * KG_PER_QUINTAL;
 
-    // Etapa 2: Envasadoras (para simulación de línea completa)
+    // Etapa 2: Envasadoras
     const [machines, setMachines] = React.useState([
         { id: 1, productId: products[0]?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
         { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
@@ -44,24 +46,11 @@ export default function OperationsClient({
     const [wrapperScenario, setWrapperScenario] = React.useState<'single' | 'dual'>('single');
     const [sacksPerBundle, setSacksPerBundle] = React.useState(1);
 
-    // Estado para el simulador detallado
-    const [detailedProductId, setDetailedProductId] = React.useState(products[0]?.id || '');
-    const [detailedUnitsPerSack, setDetailedUnitsPerSack] = React.useState(50);
-    const [detailedSpeed, setDetailedSpeed] = React.useState(39); // fundas/min
-    const [detailedLoss, setDetailedLoss] = React.useState(8);
-    const [detailedMachineCount, setDetailedMachineCount] = React.useState(1);
-    const [detailedDayHours, setDetailedDayHours] = React.useState(11);
-    const [detailedNightHours, setDetailedNightHours] = React.useState(11);
-
     React.useEffect(() => {
         setIsClient(true);
-        if (products.length > 0) {
-            if (!machines.some(m => m.productId !== 'inactive')) {
-                setMachines(prev => prev.map(m => m.id === 1 ? { ...m, productId: products[0].id } : m));
-            }
-            if (!detailedProductId) {
-                setDetailedProductId(products[0].id);
-            }
+        // Initialize first machine if no product is selected on any machine
+        if (products.length > 0 && !machines.some(m => m.productId !== 'inactive')) {
+            setMachines(prev => prev.map(m => m.id === 1 ? { ...m, productId: products[0].id } : m));
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [products]);
@@ -188,25 +177,6 @@ export default function OperationsClient({
             }
         }
     }, [siloAmount, machines, products, wrapperScenario, sacksPerBundle]);
-
-    const detailedSimulationResults = React.useMemo(() => {
-        // detailedSpeed is in units/min
-        const unitsPerHourBruto = detailedSpeed * 60;
-        const unitsPerHourNeto = unitsPerHourBruto * (1 - detailedLoss / 100);
-        
-        const sacksPerHourNeto = (detailedUnitsPerSack > 0) ? (unitsPerHourNeto / detailedUnitsPerSack) : 0;
-        
-        const dayProduction = sacksPerHourNeto * detailedDayHours * detailedMachineCount;
-        const nightProduction = sacksPerHourNeto * detailedNightHours * detailedMachineCount;
-        
-        return {
-            unitsPerHourBruto,
-            unitsPerHourNeto,
-            sacksPerHourNeto,
-            dayProduction,
-            nightProduction
-        };
-    }, [detailedSpeed, detailedLoss, detailedUnitsPerSack, detailedDayHours, detailedNightHours, detailedMachineCount]);
     
     const formatTime = (hours: number) => {
         if (!isFinite(hours) || hours <= 0) return '0h 0m';
@@ -321,8 +291,13 @@ export default function OperationsClient({
                            <div>
                                 <h3 className="font-semibold text-lg mb-4">Parámetros de las Envasadoras</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-6">
-                                    {machines.map((machine) => (
-                                        <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background relative">
+                                    {machines.map((machine) => {
+                                      const unitsPerHourBruto = machine.speed * 60;
+                                      const unitsPerHourNeto = unitsPerHourBruto * (1 - machine.loss / 100);
+                                      const sacksPerHourNeto = (machine.unitsPerSack > 0) ? (unitsPerHourNeto / machine.unitsPerSack) : 0;
+
+                                      return (
+                                        <div key={machine.id} className="p-3 border rounded-lg space-y-4 bg-background relative">
                                             <Label className="font-bold absolute -top-3 bg-background px-1 text-primary">Máquina {machine.id}</Label>
                                             <div className="space-y-1.5">
                                                 <Label htmlFor={`product-${machine.id}`} className="text-xs">Producto</Label>
@@ -348,90 +323,27 @@ export default function OperationsClient({
                                                     <Input id={`units-${machine.id}`} type="number" value={machine.unitsPerSack} onChange={e => handleMachineChange(machine.id, 'unitsPerSack', Number(e.target.value))}/>
                                                 </div>
                                             </div>
+                                            {machine.productId !== 'inactive' && (
+                                                <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
+                                                    <h3 className="font-semibold text-center text-muted-foreground">Indicadores de Rendimiento (Máquina {machine.id})</h3>
+                                                    <div className="grid grid-cols-3 gap-2 text-center">
+                                                        <div className="bg-background p-1 rounded-md border">
+                                                            <p className="text-muted-foreground">Unid/Hora (Bruto)</p>
+                                                            <p className="font-bold text-sm">{unitsPerHourBruto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                                                        </div>
+                                                        <div className="bg-background p-1 rounded-md border">
+                                                            <p className="text-muted-foreground">Unid/Hora (Neto)</p>
+                                                            <p className="font-bold text-sm">{unitsPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                                                        </div>
+                                                         <div className="bg-background p-1 rounded-md border">
+                                                            <p className="text-muted-foreground">Sacos/Hora (Neto)</p>
+                                                            <p className="font-bold text-sm text-green-600">{sacksPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
-                            
-                            <Separator />
-                            
-                           <div>
-                                <h3 className="font-semibold text-lg mb-4">Análisis de Rendimiento por Producto</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-6">
-                                        <div>
-                                            <h4 className="font-semibold mb-2">Parámetros del Producto</h4>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                 <div className="space-y-1.5">
-                                                    <Label htmlFor="sim-product">Producto a Simular</Label>
-                                                    <Select value={detailedProductId} onValueChange={setDetailedProductId}>
-                                                        <SelectTrigger id="sim-product"><SelectValue /></SelectTrigger>
-                                                        <SelectContent>
-                                                            {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="sim-units-per-sack">Unidades por Saco</Label>
-                                                    <Input id="sim-units-per-sack" type="number" value={detailedUnitsPerSack} onChange={e => setDetailedUnitsPerSack(Number(e.target.value))}/>
-                                                </div>
-                                            </div>
-                                        </div>
-                                         <div>
-                                            <h4 className="font-semibold mb-2">Parámetros de Maquinaria</h4>
-                                            <div className="grid grid-cols-3 gap-4">
-                                                 <div className="space-y-1.5">
-                                                    <Label htmlFor="sim-speed">Velocidad (fundas/min)</Label>
-                                                    <Input id="sim-speed" type="number" value={detailedSpeed} onChange={e => setDetailedSpeed(Number(e.target.value))}/>
-                                                </div>
-                                                 <div className="space-y-1.5">
-                                                    <Label htmlFor="sim-loss">Pérdida (%)</Label>
-                                                    <Input id="sim-loss" type="number" value={detailedLoss} onChange={e => setDetailedLoss(Number(e.target.value))}/>
-                                                </div>
-                                                 <div className="space-y-1.5">
-                                                    <Label htmlFor="sim-machines">Nº de Máquinas</Label>
-                                                    <Input id="sim-machines" type="number" value={detailedMachineCount} onChange={e => setDetailedMachineCount(Number(e.target.value))}/>
-                                                </div>
-                                            </div>
-                                        </div>
-                                         <div>
-                                            <h4 className="font-semibold mb-2">Horario de Producción</h4>
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="sim-day-hours">Horas Turno Día</Label>
-                                                    <Input id="sim-day-hours" type="number" value={detailedDayHours} onChange={e => setDetailedDayHours(Number(e.target.value))}/>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="sim-night-hours">Horas Turno Noche</Label>
-                                                    <Input id="sim-night-hours" type="number" value={detailedNightHours} onChange={e => setDetailedNightHours(Number(e.target.value))}/>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-4 rounded-lg bg-muted/30 p-4 border">
-                                        <h3 className="font-semibold text-center">Indicadores de Rendimiento (por máquina)</h3>
-                                        <div className="grid grid-cols-2 gap-3 text-sm">
-                                            <div className="bg-background p-2 rounded-md border">
-                                                <p className="text-muted-foreground">Unidades/Hora (Bruto)</p>
-                                                <p className="font-bold text-lg">{detailedSimulationResults.unitsPerHourBruto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-                                            </div>
-                                            <div className="bg-background p-2 rounded-md border">
-                                                <p className="text-muted-foreground">Unidades/Hora (Neto)</p>
-                                                <p className="font-bold text-lg">{detailedSimulationResults.unitsPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-                                            </div>
-                                             <div className="bg-background p-2 rounded-md border">
-                                                <p className="text-muted-foreground">Sacos por Hora (Neto)</p>
-                                                <p className="font-bold text-lg text-green-600">{detailedSimulationResults.sacksPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
-                                            </div>
-                                            <div className="bg-background p-2 rounded-md border col-span-2">
-                                                 <p className="text-muted-foreground">Producción Total por Turno (Considerando {detailedMachineCount} máquinas)</p>
-                                                 <div className="flex justify-around mt-1">
-                                                    <p>Día: <span className="font-bold text-lg">{detailedSimulationResults.dayProduction.toLocaleString(undefined, {maximumFractionDigits: 0})}</span> sacos</p>
-                                                    <p>Noche: <span className="font-bold text-lg">{detailedSimulationResults.nightProduction.toLocaleString(undefined, {maximumFractionDigits: 0})}</span> sacos</p>
-                                                 </div>
-                                            </div>
-                                        </div>
-                                    </div>
+                                    )})}
                                 </div>
                             </div>
                             
@@ -477,7 +389,7 @@ export default function OperationsClient({
                                 <AlertTriangle className="h-5 w-5 mt-0.5" />
                                 <div>
                                     <h4 className="font-bold mb-1">{simulationResults.isWrapperBottleneck ? "¡Cuello de Botella Detectado!" : "Operación Eficiente"}</h4>
-                                    <p>{simulationResults.bottleneckDescription}</p>
+                                    <p>{simulationResults.isWrapperBottleneck ? simulationResults.bottleneckDescription : simulationResults.noBottleneckDescription}</p>
                                 </div>
                             </div>
                         </CardContent>
@@ -511,3 +423,5 @@ export default function OperationsClient({
     </div>
   );
 }
+
+    
