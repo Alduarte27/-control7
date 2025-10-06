@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, HardHat, Package, Percent, Clock, FileDigit, Sun, Moon } from 'lucide-react';
+import { Factory, ChevronLeft, Sparkles, LineChart, TrendingUp, HardHat, Package, Percent, Clock, FileDigit, Sun, Moon, Database, Donut } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -10,7 +10,7 @@ import { forecastDemand, type ForecastDemandOutput } from '@/ai/flows/forecast-d
 import { collection, getDocs, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
-import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line } from 'recharts';
+import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, Line, Pie, PieChart, Cell } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
@@ -19,20 +19,12 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import KpiCard from '@/components/kpi-card';
 
-
-// --- Shared Chart Configurations ---
-
 const trendChartConfig = {
   planned: { label: 'Planificado', color: 'hsl(var(--chart-2))' },
   actual: { label: 'Real (s/Plan)', color: 'hsl(var(--chart-1))' },
 } satisfies ChartConfig;
 
-const simulationChartConfig = {
-    optimalProduction: { label: 'Producción Óptima', color: 'hsl(var(--chart-2))' },
-    realisticProjection: { label: 'Proyección Realista', color: 'hsl(var(--chart-1))' },
-} satisfies ChartConfig;
-
-// --- Type Definitions ---
+const KG_PER_QUINTAL = 50;
 
 type WeeklySummaryDoc = {
     id: string;
@@ -43,9 +35,7 @@ type WeeklySummaryDoc = {
     categoryTotals: { [categoryId: string]: { planned: number; actualForPlanned: number; } }
 };
 
-// --- Main IA Client Component ---
-
-export default function IAClient({ 
+export default function OperationsClient({ 
   prefetchedCategories, 
   prefetchedProducts 
 }: { 
@@ -58,11 +48,9 @@ export default function IAClient({
   const [allSummaries, setAllSummaries] = React.useState<WeeklySummaryDoc[]>([]);
   const [allPlans, setAllPlans] = React.useState<any[]>([]);
   
-  // --- States for each Tab ---
   const [isForecasting, setIsForecasting] = React.useState(false);
   const [forecast, setForecast] = React.useState<ForecastDemandOutput | null>(null);
   
-  // --- Initial Data Fetching ---
   React.useEffect(() => {
     const fetchHistory = async () => {
       setLoading(true);
@@ -75,12 +63,11 @@ export default function IAClient({
         const fetchedSummaries = summariesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as WeeklySummaryDoc));
         fetchedSummaries.sort((a, b) => {
             if (a.year !== b.year) return a.year - b.year;
-            return a.week - b.week;
+            return a.week - a.week;
         });
         setAllSummaries(fetchedSummaries);
 
         const fetchedPlans = plansSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        // Sort client-side to avoid complex queries
         fetchedPlans.sort((a, b) => {
             if (!a.id || !b.id) return 0;
             return a.id.localeCompare(b.id);
@@ -97,7 +84,6 @@ export default function IAClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  // --- Memoized Derived Data ---
   const historicalTrendData = React.useMemo(() => {
     return allSummaries.slice(-12).map(summary => ({
         name: `S${summary.week}`,
@@ -106,7 +92,6 @@ export default function IAClient({
     }));
   }, [allSummaries]);
 
-  // --- AI Flow Handlers ---
   const handleForecastDemand = async () => {
     setIsForecasting(true);
     setForecast(null);
@@ -137,23 +122,20 @@ export default function IAClient({
         <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
           <div className="flex items-center gap-3">
             <Sparkles className="h-8 w-8 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">Análisis con IA</h1>
+            <h1 className="text-2xl font-bold text-foreground">Centro de Operaciones</h1>
           </div>
           <Link href="/"><Button variant="outline"><ChevronLeft />Volver</Button></Link>
         </header>
         
         <main className="p-4 md:p-8 space-y-6">
-            <Tabs defaultValue="simulator" className="w-full">
+            <Tabs defaultValue="silo-simulator" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="simulator"><HardHat className="mr-2" />Simulador</TabsTrigger>
-                    <TabsTrigger value="forecast"><TrendingUp className="mr-2" />Pronóstico</TabsTrigger>
+                    <TabsTrigger value="silo-simulator"><Database className="mr-2" />Simulador de Silo</TabsTrigger>
+                    <TabsTrigger value="forecast"><TrendingUp className="mr-2" />Pronóstico de Demanda</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="simulator" className="mt-6">
-                    <SimulatorTab 
-                      products={prefetchedProducts} 
-                      categories={prefetchedCategories} 
-                    />
+                <TabsContent value="silo-simulator" className="mt-6">
+                    <SiloSimulatorTab products={prefetchedProducts} categories={prefetchedCategories} />
                 </TabsContent>
                 <TabsContent value="forecast" className="mt-6">
                     <ForecastTab onForecast={handleForecastDemand} isForecasting={isForecasting} forecast={forecast} trendData={historicalTrendData} isLoading={loading} />
@@ -165,236 +147,170 @@ export default function IAClient({
   );
 }
 
-// --- Tab Components ---
-
-function SimulatorTab({ products, categories }: {
+function SiloSimulatorTab({ products, categories }: {
     products: ProductDefinition[];
     categories: CategoryDefinition[];
 }) {
-    type SimInputState = {
-        productId: string;
-        machineSpeed: number; // fundas/min
-        performanceLoss: number; // percentage
-        unitsPerSack: number;
-        numberOfMachines: number;
-        hoursPerDayShift: number;
-        hoursPerNightShift: number;
-        activeDays: { mon: boolean; tue: boolean; wed: boolean; thu: boolean; fri: boolean; sat: boolean; sun: boolean; };
-    }
-
-    const dayTranslations: { [key: string]: string } = {
-        mon: 'Lun',
-        tue: 'Mar',
-        wed: 'Mié',
-        thu: 'Jue',
-        fri: 'Vie',
-        sat: 'Sáb',
-        sun: 'Dom'
-    };
-
+    const [siloMass, setSiloMass] = React.useState(25000); // Default 25 tons in kg
     const categoryMap = React.useMemo(() => new Map(categories.map(c => [c.id, c])), [categories]);
     const plannableProducts = React.useMemo(() => products.filter(p => p.isActive && categoryMap.get(p.categoryId)?.isPlanned), [products, categoryMap]);
-    const [formattedWeeklyProduction, setFormattedWeeklyProduction] = React.useState<string>("...");
-
-
-    const [simInput, setSimInput] = React.useState<SimInputState>({
-        productId: plannableProducts[0]?.id || '',
-        machineSpeed: 40,
-        performanceLoss: 8,
-        unitsPerSack: 50,
-        numberOfMachines: 1,
-        hoursPerDayShift: 11,
-        hoursPerNightShift: 11,
-        activeDays: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: false },
-    });
     
-    React.useEffect(() => {
-      if (!simInput.productId && plannableProducts.length > 0) {
-        setSimInput(prev => ({...prev, productId: plannableProducts[0].id}));
-      }
-    }, [plannableProducts, simInput.productId]);
+    const [machines, setMachines] = React.useState([
+        { id: 1, active: true, productId: plannableProducts[0]?.id || '', speed: 40, loss: 8 },
+        { id: 2, active: true, productId: plannableProducts[1]?.id || '', speed: 40, loss: 8 },
+        { id: 3, active: false, productId: plannableProducts[2]?.id || '', speed: 40, loss: 8 },
+    ]);
 
-    const calculatedValues = React.useMemo(() => {
-        // Optimal (Gross) Calculations
-        const grossUnitsPerMinute = simInput.machineSpeed;
-        const grossUnitsPerHour = grossUnitsPerMinute * 60;
-        const grossSacksPerHour = simInput.unitsPerSack > 0 ? grossUnitsPerHour / simInput.unitsPerSack : 0;
-        const optimalDailyProductionDayShift = grossSacksPerHour * simInput.hoursPerDayShift;
+    const results = React.useMemo(() => {
+        let totalNetSacksPerHour = 0;
+        const machineResults: any[] = [];
 
-        // Realistic (Net) Calculations
-        const netUnitsPerHour = grossUnitsPerHour * (1 - (simInput.performanceLoss / 100));
-        const netSacksPerHour = simInput.unitsPerSack > 0 ? netUnitsPerHour / simInput.unitsPerSack : 0;
-        const realisticDailyProductionDayShift = netSacksPerHour * simInput.hoursPerDayShift;
-        const realisticDailyProductionNightShift = netSacksPerHour * simInput.hoursPerNightShift;
+        machines.forEach(machine => {
+            if (!machine.active || !machine.productId) return;
+
+            const product = products.find(p => p.id === machine.productId);
+            if (!product) return;
+
+            const sackWeight = product.sackWeight || 50;
+            const grossUnitsPerHour = machine.speed * 60;
+            const netSacksPerHour = (grossUnitsPerHour * (1 - machine.loss / 100)) / sackWeight;
+            
+            totalNetSacksPerHour += netSacksPerHour;
+            machineResults.push({
+                machineId: machine.id,
+                productName: product.productName,
+                netSacksPerHour: netSacksPerHour,
+            });
+        });
+
+        if (totalNetSacksPerHour === 0) {
+            return { timeToEmptyHours: 0, totalSacks: 0, totalQuintales: 0, machineContributions: [], pieData: [] };
+        }
+
+        const timeToEmptyHours = siloMass / (totalNetSacksPerHour * 50); // Assuming 50kg per sack for mass calculation
+        const totalSacks = timeToEmptyHours * totalNetSacksPerHour;
+        const totalQuintales = (totalSacks * 50) / KG_PER_QUINTAL;
         
-        const numberOfActiveDays = Object.values(simInput.activeDays).filter(Boolean).length;
-        const weeklyProduction = (realisticDailyProductionDayShift + realisticDailyProductionNightShift) * numberOfActiveDays * simInput.numberOfMachines;
+        const machineContributions = machineResults.map(mr => ({
+            ...mr,
+            totalSacks: mr.netSacksPerHour * timeToEmptyHours,
+        }));
         
-        const dailyBreakdown = Object.entries(simInput.activeDays)
-            .filter(([, isActive]) => isActive)
-            .map(([day]) => ({
-                day: dayTranslations[day] || day.substring(0, 3),
-                optimalProduction: optimalDailyProductionDayShift,
-                realisticProjection: realisticDailyProductionDayShift,
-            }));
+        const pieData = machineContributions.map((mc, index) => ({
+            name: `Máquina ${mc.machineId} (${mc.productName.slice(0,15)}...)`,
+            value: mc.totalSacks,
+            fill: `hsl(var(--chart-${index + 1}))`
+        }));
 
-        return { 
-            grossUnitsPerMinute, 
-            grossUnitsPerHour, 
-            netUnitsPerHour, 
-            netSacksPerHour,
-            realisticDailyProductionDayShift,
-            realisticDailyProductionNightShift,
-            weeklyProduction,
-            dailyBreakdown,
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [simInput]);
+        return { timeToEmptyHours, totalSacks, totalQuintales, machineContributions, pieData };
+    }, [siloMass, machines, products]);
 
-    React.useEffect(() => {
-        setFormattedWeeklyProduction(
-            calculatedValues.weeklyProduction.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-            })
-        );
-    }, [calculatedValues.weeklyProduction]);
-
-    const handleInputChange = (field: keyof Omit<SimInputState, 'activeDays' | 'productId'>, value: string | number) => {
-        setSimInput(prev => ({ ...prev, [field]: Number(value) }));
+    const handleMachineChange = (id: number, field: string, value: any) => {
+        setMachines(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
     };
-    
-    const handleProductChange = (productId: string) => {
-        setSimInput(p => ({...p, productId}));
-    }
 
-    const handleDayChange = (day: keyof SimInputState['activeDays'], checked: boolean) => {
-      setSimInput(prev => ({
-        ...prev,
-        activeDays: {
-          ...prev.activeDays,
-          [day]: checked,
-        },
-      }));
+    const formatTime = (hours: number) => {
+        const h = Math.floor(hours);
+        const m = Math.round((hours - h) * 60);
+        return `${h}h ${m}min`;
     };
+
+    const pieChartConfig = results.pieData.reduce((acc, entry) => {
+        acc[entry.name] = { label: entry.name, color: entry.fill };
+        return acc;
+    }, {} as ChartConfig);
 
     return (
-        <div className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-                <Card>
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+                <Card className="lg:col-span-2">
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2"><HardHat />Parámetros de Simulación</CardTitle>
-                        <CardDescription>Ajusta las variables para proyectar la producción.</CardDescription>
+                        <CardTitle className="flex items-center gap-2"><Database />Parámetros de Simulación de Silo</CardTitle>
+                        <CardDescription>Configura la masa del silo y los parámetros de cada máquina envasadora para estimar el tiempo de proceso.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                        <div className="space-y-2">
-                            <h3 className="font-semibold text-foreground text-xs">1. PARÁMETROS DEL PRODUCTO</h3>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="product-select">Producto a Simular</Label>
-                                <Select value={simInput.productId} onValueChange={handleProductChange} disabled={plannableProducts.length === 0}>
-                                    <SelectTrigger><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
-                                    <SelectContent>
-                                        {plannableProducts.map(p => (
-                                            <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="units-per-sack">Unidades por Saco</Label>
-                                <Input id="units-per-sack" type="number" value={simInput.unitsPerSack} onChange={e => handleInputChange('unitsPerSack', e.target.value)} required />
-                            </div>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="silo-mass">Masa de Azúcar en Silo (kg)</Label>
+                            <Input id="silo-mass" type="number" value={siloMass} onChange={e => setSiloMass(Number(e.target.value))} />
                         </div>
-
-                         <div className="space-y-2">
-                            <h3 className="font-semibold text-foreground text-xs">2. PARÁMETROS DE MAQUINARIA</h3>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="machine-speed">Velocidad (fundas/min)</Label>
-                                    <Input id="machine-speed" type="number" value={simInput.machineSpeed} onChange={e => handleInputChange('machineSpeed', e.target.value)} required />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="performance-loss">Pérdida (%)</Label>
-                                    <Input id="performance-loss" type="number" value={simInput.performanceLoss} onChange={e => handleInputChange('performanceLoss', e.target.value)} required />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="number-of-machines">Número de Máquinas a Simular</Label>
-                                <Input id="number-of-machines" type="number" value={simInput.numberOfMachines} onChange={e => handleInputChange('numberOfMachines', e.target.value)} required min="1" />
-                            </div>
-                        </div>
-
-                        <div className="space-y-2">
-                            <h3 className="font-semibold text-foreground text-xs">3. HORARIO DE PRODUCCIÓN</h3>
-                             <div className="grid grid-cols-2 gap-2">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="day-shift">Horas Turno Día</Label>
-                                    <Input id="day-shift" type="number" value={simInput.hoursPerDayShift} onChange={e => handleInputChange('hoursPerDayShift', e.target.value)} required />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="night-shift">Horas Turno Noche</Label>
-                                    <Input id="night-shift" type="number" value={simInput.hoursPerNightShift} onChange={e => handleInputChange('hoursPerNightShift', e.target.value)} required />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5 pt-1">
-                                <Label className="font-semibold text-xs">Días Activos</Label>
-                                <div className="flex flex-wrap gap-x-3 gap-y-1">
-                                    {Object.keys(simInput.activeDays).map(day => (
-                                        <div key={day} className="flex items-center space-x-1.5">
-                                            <Checkbox id={day} checked={simInput.activeDays[day as keyof typeof simInput.activeDays]} onCheckedChange={(checked) => handleDayChange(day as keyof typeof simInput.activeDays, !!checked)} />
-                                            <Label htmlFor={day} className="capitalize text-sm font-normal">{dayTranslations[day]}</Label>
+                        <div className="space-y-4">
+                            {machines.map(machine => (
+                                <div key={machine.id} className="border p-3 rounded-md bg-muted/50 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="font-semibold text-sm">Máquina Envasadora {machine.id}</h3>
+                                        <div className="flex items-center gap-2">
+                                            <Label htmlFor={`active-${machine.id}`} className="text-xs">Activa</Label>
+                                            <Checkbox id={`active-${machine.id}`} checked={machine.active} onCheckedChange={(checked) => handleMachineChange(machine.id, 'active', !!checked)} />
                                         </div>
-                                    ))}
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                        <div className="space-y-1">
+                                            <Label htmlFor={`product-${machine.id}`} className="text-xs">Producto</Label>
+                                            <Select value={machine.productId} onValueChange={(val) => handleMachineChange(machine.id, 'productId', val)} disabled={!machine.active}>
+                                                <SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                                <SelectContent>
+                                                    {plannableProducts.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (unid/min)</Label>
+                                            <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={(e) => handleMachineChange(machine.id, 'speed', Number(e.target.value))} disabled={!machine.active} />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label htmlFor={`loss-${machine.id}`} className="text-xs">Pérdida (%)</Label>
+                                            <Input id={`loss-${machine.id}`} type="number" value={machine.loss} onChange={(e) => handleMachineChange(machine.id, 'loss', Number(e.target.value))} disabled={!machine.active} />
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            ))}
                         </div>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader>
-                        <CardTitle>Cálculo de Tasa de Producción</CardTitle>
-                        <CardDescription>Desglose de la capacidad por máquina.</CardDescription>
+                        <CardTitle>Resultados de la Simulación</CardTitle>
+                        <CardDescription>Estimaciones basadas en los parámetros configurados.</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                         <div className="grid grid-cols-2 gap-2">
-                            <KpiCard title="Unidades/Minuto" value={calculatedValues.grossUnitsPerMinute} icon={FileDigit} description="Velocidad de la máquina en fundas por minuto." />
-                            <KpiCard title="Unidades/Hora (Bruto)" value={calculatedValues.grossUnitsPerHour} icon={Clock} description="Producción teórica por hora sin considerar pérdidas." />
-                            <KpiCard title="Unidades/Hora (Neto)" value={calculatedValues.netUnitsPerHour} icon={Percent} description="Producción por hora ajustada por la pérdida de rendimiento." />
-                            <KpiCard title="Sacos por Hora (Neto)" value={calculatedValues.netSacksPerHour} fractionDigits={2} icon={Package} description="Tasa de producción final que se usará para la simulación de la IA." valueColor="text-primary" />
-                            <KpiCard title="Producción Turno Día" value={calculatedValues.realisticDailyProductionDayShift} icon={Sun} description="Producción neta estimada para un solo turno de día." />
-                            <KpiCard title="Producción Turno Noche" value={calculatedValues.realisticDailyProductionNightShift} icon={Moon} description="Producción neta estimada para un solo turno de noche." />
-                         </div>
-                         <div className="border-t pt-3 mt-3">
-                            <p className="text-sm text-muted-foreground">Producción Semanal Estimada (Total)</p>
-                            <p className="text-2xl font-bold text-primary">{formattedWeeklyProduction} Sacos</p>
-                            <p className="text-xs text-muted-foreground">Considerando {simInput.numberOfMachines} máquina(s) y los días activos seleccionados.</p>
+                    <CardContent className="space-y-4">
+                        <KpiCard title="Tiempo para Vaciar Silo" value={formatTime(results.timeToEmptyHours)} icon={Clock} description="Tiempo total estimado para procesar toda la masa del silo con las máquinas activas." />
+                        <KpiCard title="Producción Total (Sacos)" value={results.totalSacks.toLocaleString(undefined, {maximumFractionDigits: 0})} icon={Package} description="Cantidad total de sacos que se producirán." />
+                        <KpiCard title="Producción Total (QQ)" value={results.totalQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={FileDigit} description="Cantidad total de quintales que se producirán." />
+                        
+                        <div className="border-t pt-4">
+                            <h4 className="font-semibold text-sm mb-2 flex items-center gap-2"><Donut />Contribución por Máquina</h4>
+                            {results.pieData.length > 0 ? (
+                                <ChartContainer config={pieChartConfig} className="w-full h-48">
+                                    <PieChart>
+                                        <RechartsTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                                        <Pie data={results.pieData} dataKey="value" nameKey="name" innerRadius={30} outerRadius={50} labelLine={false} label={({
+                                                cx,
+                                                cy,
+                                                midAngle,
+                                                innerRadius,
+                                                outerRadius,
+                                                percent,
+                                            }) => {
+                                                const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                                                const x = cx + radius * Math.cos(-midAngle * (Math.PI / 180));
+                                                const y = cy + radius * Math.sin(-midAngle * (Math.PI / 180));
+                                                return <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize="12">{`${(percent * 100).toFixed(0)}%`}</text>;
+                                            }}>
+                                        </Pie>
+                                        <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+                                    </PieChart>
+                                </ChartContainer>
+                            ) : (
+                                <p className="text-xs text-muted-foreground text-center py-4">Active al menos una máquina para ver los resultados.</p>
+                            )}
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
-            <div className="space-y-4">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Desglose de Producción Diaria (1 Turno)</CardTitle>
-                         <CardDescription>Comparación de la producción óptima vs. la realista para un turno de día en los días activos.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ChartContainer config={simulationChartConfig} className="w-full h-[260px]">
-                            <ComposedChart data={calculatedValues.dailyBreakdown}>
-                                <CartesianGrid vertical={false} />
-                                <XAxis dataKey="day" tickMargin={5} fontSize={10} />
-                                <YAxis fontSize={10}/>
-                                <RechartsTooltip content={<ChartTooltipContent />} />
-                                <Legend content={<ChartLegendContent />} />
-                                <Bar dataKey="optimalProduction" fill="var(--color-optimalProduction)" radius={4} />
-                                <Bar dataKey="realisticProjection" fill="var(--color-realisticProjection)" radius={4} />
-                            </ComposedChart>
-                        </ChartContainer>
                     </CardContent>
                 </Card>
             </div>
         </div>
     );
 }
+
 
 function ForecastTab({ onForecast, isForecasting, forecast, trendData, isLoading }: {
     onForecast: () => void;

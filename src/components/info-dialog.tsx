@@ -4,7 +4,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText } from 'lucide-react';
+import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -82,12 +82,12 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
             </div>
 
              <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Centro de Análisis con IA</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Centro de Operaciones</h3>
                 <div className="space-y-4">
                      <FeatureItem 
-                        icon={HardHat}
-                        title="Simulador de Producción"
-                        description="En 'Análisis IA', usa el simulador para proyectar la capacidad de producción. Ajusta parámetros como velocidad de máquina, pérdidas y horas por turno para calcular la tasa de producción final en sacos por hora."
+                        icon={Database}
+                        title="Simulador de Silo"
+                        description="En 'Operaciones', proyecta cuánto tiempo tomará procesar una cantidad de materia prima del silo, utilizando múltiples máquinas en simultáneo."
                     />
                     <FeatureItem 
                         icon={TrendingUp}
@@ -108,12 +108,12 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                     <FeatureItem 
                         icon={FileText}
                         title="Página de Reportes Profesionales"
-                        description="Navega a /report para generar un reporte visual profesional de un rango de semanas. Incluye KPIs, tabla de cumplimiento, y gráficos consolidados, listo para imprimir o guardar como PDF."
+                        description="Usa el botón 'Exportar' para generar un reporte visual profesional de un rango de semanas. Incluye KPIs, tabla de cumplimiento, y gráficos consolidados, listo para imprimir o guardar como PDF."
                     />
                     <FeatureItem 
                         icon={Download}
-                        title="Exportación Centralizada"
-                        description="Usa el botón 'Exportar / Reportes' para abrir un diálogo donde podrás seleccionar un rango de fechas y elegir entre generar el reporte visual o descargar un CSV detallado."
+                        title="Exportación a CSV"
+                        description="Desde el mismo diálogo de 'Exportar', puedes descargar un CSV detallado con todos los datos de producción del rango de semanas que elijas."
                     />
                 </div>
             </div>

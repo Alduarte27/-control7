@@ -84,7 +84,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
               </Tooltip>
           </TooltipProvider>
           
-          <NavButton href="/ia" icon={Sparkles} label="Análisis IA" />
+          <NavButton href="/ia" icon={Sparkles} label="Operaciones" />
           <NavButton href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
           <NavButton href="/history" icon={History} label="Historial" />
           <NavButton href="/admin" icon={Settings} label="Admin" />
@@ -132,7 +132,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild><Link href="/ia" className="flex items-center"><Sparkles className="mr-2 h-4 w-4" />Análisis IA</Link></DropdownMenuItem>
+                    <DropdownMenuItem asChild><Link href="/ia" className="flex items-center"><Sparkles className="mr-2 h-4 w-4" />Operaciones</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/dashboard" className="flex items-center"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/admin" className="flex items-center"><Settings className="mr-2 h-4 w-4" />Admin</Link></DropdownMenuItem>
