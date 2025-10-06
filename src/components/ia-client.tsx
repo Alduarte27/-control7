@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, SlidersHorizontal, PackageCheck, Clock, Percent, Hash } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, SlidersHorizontal, PackageCheck, Clock, Percent, Hash, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
@@ -12,7 +12,6 @@ import { Input } from '@/components/ui/input';
 import KpiCard from '@/components/kpi-card';
 import { Separator } from '@/components/ui/separator';
 import { Pie, Cell, ResponsiveContainer, PieChart, Tooltip as RechartsTooltip } from 'recharts';
-
 
 const KG_PER_QUINTAL = 50;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
@@ -30,10 +29,10 @@ export default function OperationsClient({
     // Global state for the entire operations panel
     const [siloAmount, setSiloAmount] = React.useState(25000);
     const [machines, setMachines] = React.useState([
-        { id: 1, productId: products[0]?.id || 'inactive', speed: 2000, loss: 2 },
-        { id: 2, productId: 'inactive', speed: 2000, loss: 2 },
-        { id: 3, productId: 'inactive', speed: 2000, loss: 2 },
-        { id: 4, productId: 'inactive', speed: 2000, loss: 2 },
+        { id: 1, productId: products[0]?.id || 'inactive', speed: 2400, loss: 2 },
+        { id: 2, productId: 'inactive', speed: 2400, loss: 2 },
+        { id: 3, productId: 'inactive', speed: 2400, loss: 2 },
+        { id: 4, productId: 'inactive', speed: 2400, loss: 2 },
     ]);
     const [wrapperScenario, setWrapperScenario] = React.useState<'single' | 'dual'>('single');
     const [wrapper1Speed, setWrapper1Speed] = React.useState(8000);
@@ -42,9 +41,8 @@ export default function OperationsClient({
 
     React.useEffect(() => {
         setIsClient(true);
-        // Ensure the first machine has a valid product on load if available
-        if (products.length > 0 && machines[0].productId === 'inactive') {
-            handleMachineChange(1, 'productId', products[0].id);
+        if (products.length > 0 && machines.find(m => m.productId === 'inactive')) {
+             setMachines(prev => prev.map(m => m.id === 1 ? { ...m, productId: products[0].id } : m));
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [products]);
@@ -88,9 +86,15 @@ export default function OperationsClient({
 
             return { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour };
         };
+        
+        let totalSacksPerHourFromAllPackers = 0;
+        let effectiveWrapperSacksPerHour = 0;
 
         if (wrapperScenario === 'single') {
             const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines, wrapper1Speed);
+            totalSacksPerHourFromAllPackers = totalSacksPerHourFromPackers;
+            effectiveWrapperSacksPerHour = wrapperSacksPerHour;
+
             const timeToEmptyHours = effectiveKgPerHour > 0 ? siloAmount / effectiveKgPerHour : 0;
             const totalSacksProduced = effectiveSacksPerHour * timeToEmptyHours;
             const totalQuintales = (siloAmount) / KG_PER_QUINTAL;
@@ -110,10 +114,12 @@ export default function OperationsClient({
                 machineProduction: packingCapacity.map(m => ({
                     id: m.machineId,
                     productName: m.productName,
-                    sacks: m.sacksPerHour / totalSacksPerHourFromPackers * totalSacksProduced,
-                    weight: m.sacksPerHour / totalSacksPerHourFromPackers * siloAmount
+                    sacks: (totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / totalSacksPerHourFromPackers : 0) * totalSacksProduced,
+                    weight: (totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / totalSacksPerHourFromPackers : 0) * siloAmount
                 })),
                 machineContribution,
+                totalSacksPerHourFromAllPackers,
+                effectiveWrapperSacksPerHour,
             };
 
         } else { // dual wrapper scenario
@@ -123,6 +129,9 @@ export default function OperationsClient({
             const result1 = calculateProduction(machinesForWrapper1, wrapper1Speed);
             const result2 = calculateProduction(machinesForWrapper2, wrapper2Speed);
 
+            totalSacksPerHourFromAllPackers = result1.totalSacksPerHourFromPackers + result2.totalSacksPerHourFromPackers;
+            effectiveWrapperSacksPerHour = result1.wrapperSacksPerHour + result2.wrapperSacksPerHour;
+
             const totalEffectiveKgPerHour = result1.effectiveKgPerHour + result2.effectiveKgPerHour;
             const timeToEmptyHours = totalEffectiveKgPerHour > 0 ? siloAmount / totalEffectiveKgPerHour : 0;
             
@@ -130,8 +139,8 @@ export default function OperationsClient({
             const totalQuintales = siloAmount / KG_PER_QUINTAL;
             
             const combinedMachineProd = [
-                ...result1.packingCapacity.map(m => ({ id: m.machineId, productName: m.productName, sacks: (m.sacksPerHour / (result1.totalSacksPerHourFromPackers || 1)) * (result1.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (m.kgPerHour / (result1.totalKgPerHourFromPackers || 1)) * (result1.effectiveKgPerHour * timeToEmptyHours) || 0 })),
-                ...result2.packingCapacity.map(m => ({ id: m.machineId, productName: m.productName, sacks: (m.sacksPerHour / (result2.totalSacksPerHourFromPackers || 1)) * (result2.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (m.kgPerHour / (result2.totalKgPerHourFromPackers || 1)) * (result2.effectiveKgPerHour * timeToEmptyHours) || 0 }))
+                ...result1.packingCapacity.map(m => ({ id: m.machineId, productName: m.productName, sacks: (result1.totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / result1.totalSacksPerHourFromPackers : 0) * (result1.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (result1.totalKgPerHourFromPackers > 0 ? m.kgPerHour / result1.totalKgPerHourFromPackers : 0) * (result1.effectiveKgPerHour * timeToEmptyHours) || 0 })),
+                ...result2.packingCapacity.map(m => ({ id: m.machineId, productName: m.productName, sacks: (result2.totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / result2.totalSacksPerHourFromPackers : 0) * (result2.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (result2.totalKgPerHourFromPackers > 0 ? m.kgPerHour / result2.totalKgPerHourFromPackers : 0) * (result2.effectiveKgPerHour * timeToEmptyHours) || 0 }))
             ];
              const machineContribution = combinedMachineProd.map(m => ({
                 name: `Máq. ${m.id} (${m.productName})`, value: isNaN(m.sacks) ? 0 : m.sacks
@@ -142,10 +151,12 @@ export default function OperationsClient({
                 totalSacksProduced,
                 totalQuintales,
                 isWrapperBottleneck: result1.isWrapperBottleneck || result2.isWrapperBottleneck,
-                bottleneckDescription: `Línea 1: ${result1.isWrapperBottleneck ? 'Enfardadora es cuello de botella.' : 'OK.'} Línea 2: ${result2.isWrapperBottleneck ? 'Enfardadora es cuello de botella.' : 'OK.'}`,
+                bottleneckDescription: `Línea 1: ${result1.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'} Línea 2: ${result2.isWrapperBottleneck ? 'Cuello de botella.' : 'OK.'}`,
                 noBottleneckDescription: `Ambas líneas operan dentro de su capacidad.`,
                 machineProduction: combinedMachineProd.filter(m => m.sacks > 0),
                 machineContribution,
+                totalSacksPerHourFromAllPackers,
+                effectiveWrapperSacksPerHour,
             }
         }
     }, [siloAmount, machines, products, wrapperScenario, wrapper1Speed, wrapper2Speed, sacksPerBundle]);
@@ -168,6 +179,7 @@ export default function OperationsClient({
       </header>
       
       <main className="p-4 md:p-8 space-y-8">
+        
         <Card>
             <CardHeader>
                 <CardTitle className="flex items-center gap-3">
@@ -178,23 +190,45 @@ export default function OperationsClient({
                     Modela tu línea de producción completa en una sola vista. Ajusta los parámetros en cada etapa para ver el impacto en tiempo real e identificar cuellos de botella.
                 </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-8">
+            <CardContent>
+                {/* Visual Flow Diagram */}
+                <div className="mb-8">
+                    <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Producción</h3>
+                    <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30">
+                        {/* Step 1: Silo */}
+                        <div className="flex flex-col items-center gap-2 text-center">
+                            <Warehouse className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold">1. Silo</h4>
+                            {isClient ? <p className="text-sm text-muted-foreground">{siloAmount.toLocaleString()} Kg</p> : <p className="text-sm text-muted-foreground">- Kg</p>}
+                        </div>
+                        <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
+
+                        {/* Step 2: Packers */}
+                        <div className="flex flex-col items-center gap-2 text-center">
+                            <Package className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold">2. Envasadoras</h4>
+                             {isClient ? <p className="text-sm text-muted-foreground">{simulationResults.totalSacksPerHourFromAllPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p> : <p className="text-sm text-muted-foreground">- fundas/hr</p>}
+                        </div>
+                        <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
+
+                        {/* Step 3: Wrapper */}
+                        <div className="flex flex-col items-center gap-2 text-center">
+                            <PackageCheck className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold">3. Enfardadora</h4>
+                            {isClient ? <p className="text-sm text-muted-foreground">{simulationResults.effectiveWrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p> : <p className="text-sm text-muted-foreground">- fundas/hr</p>}
+                        </div>
+                    </div>
+                </div>
+
+                <Separator className="my-8" />
+                
                 {/* Configuration Section */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     {/* Left Side: Parameters */}
                     <div className="space-y-6">
-                        {/* Step 1: Silo */}
+                        {/* Step 1: Packers Config */}
                         <div className="p-4 border rounded-lg bg-muted/30">
-                            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Warehouse className="h-5 w-5" />1. Materia Prima</h3>
-                             <div className="space-y-1.5">
-                                <Label htmlFor="silo-amount">Cantidad en Silo (Kg)</Label>
-                                <Input id="silo-amount" type="number" value={siloAmount} onChange={e => setSiloAmount(Number(e.target.value))}/>
-                            </div>
-                        </div>
-
-                        {/* Step 2: Packers */}
-                        <div className="p-4 border rounded-lg bg-muted/30">
-                            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Package className="h-5 w-5" />2. Envasadoras</h3>
+                            <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Package className="h-5 w-5" />Parámetros de las Envasadoras</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {machines.map((machine) => (
                                     <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background">
@@ -222,21 +256,25 @@ export default function OperationsClient({
                             </div>
                         </div>
 
-                        {/* Step 3: Wrapper */}
+                        {/* Step 2: Silo & Wrapper Config */}
                         <div className="p-4 border rounded-lg bg-muted/30">
-                             <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><PackageCheck className="h-5 w-5" />3. Empaque</h3>
+                             <h3 className="font-semibold text-lg mb-4 flex items-center gap-2"><Warehouse className="h-5 w-5" />Materia Prima y Empaque</h3>
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="silo-amount">Cantidad en Silo (Kg)</Label>
+                                    <Input id="silo-amount" type="number" value={siloAmount} onChange={e => setSiloAmount(Number(e.target.value))}/>
+                                </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="sacks-per-bundle">Sacos por Paquete</Label>
                                     <Input id="sacks-per-bundle" type="number" value={sacksPerBundle} onChange={e => setSacksPerBundle(Number(e.target.value))}/>
                                 </div>
-                                <div className="space-y-1.5">
+                                <div className="space-y-1.5 md:col-span-2">
                                     <Label>Escenario de Enfardado</Label>
                                     <Select value={wrapperScenario} onValueChange={(val: 'single' | 'dual') => setWrapperScenario(val)}>
                                         <SelectTrigger><SelectValue/></SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="single">1 Enfardadora Central</SelectItem>
-                                            <SelectItem value="dual">2 Líneas Paralelas (1-2 y 3-4)</SelectItem>
+                                            <SelectItem value="dual">2 Líneas Paralelas (Máq. 1-2 y 3-4)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
