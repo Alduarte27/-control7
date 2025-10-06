@@ -13,8 +13,9 @@ import KpiCard from '@/components/kpi-card';
 import { Separator } from '@/components/ui/separator';
 import { Pie, Cell, ResponsiveContainer, PieChart, Tooltip as RechartsTooltip } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
-const KG_PER_QUINTAL = 45.3592; // Usando una conversión más estándar
+const KG_PER_QUINTAL = 45.3592;
 const QQ_PER_MASA = 350;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
@@ -140,7 +141,6 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
     );
 }
 
-
 export default function OperationsClient({ 
   prefetchedProducts,
 }: { 
@@ -166,8 +166,6 @@ export default function OperationsClient({
 
     // Etapa 3: Enfardadora
     const [wrapperScenario, setWrapperScenario] = React.useState<'single' | 'dual'>('single');
-    const [wrapper1FardosPerMin, setWrapper1FardosPerMin] = React.useState(4);
-    const [wrapper2FardosPerMin, setWrapper2FardosPerMin] = React.useState(4);
     const [sacksPerBundle, setSacksPerBundle] = React.useState(1);
 
     React.useEffect(() => {
@@ -186,7 +184,7 @@ export default function OperationsClient({
     const simulationResults = React.useMemo(() => {
         const activeMachines = machines.filter(m => m.productId !== 'inactive');
 
-        const calculateProduction = (machineList: typeof activeMachines, wrapperFardosPerMin: number) => {
+        const calculateProduction = (machineList: typeof activeMachines) => {
             const packingCapacity = machineList.map(machine => {
                 const product = products.find(p => p.id === machine.productId);
                 if (!product) return { machineId: machine.id, sacksPerHour: 0, kgPerHour: 0, productName: 'N/A' };
@@ -202,16 +200,10 @@ export default function OperationsClient({
             const totalSacksPerHourFromPackers = packingCapacity.reduce((sum, m) => sum + m.sacksPerHour, 0);
             const totalKgPerHourFromPackers = packingCapacity.reduce((sum, m) => sum + m.kgPerHour, 0);
 
-            // La velocidad de la enfardadora se ajusta dinámicamente
             let fardosPerMin = 0;
-            if (machineList.length > 0) {
-                fardosPerMin = machineList.length === 1 ? wrapperFardosPerMin : 6;
-            }
-             if (machineList.length > 1) { //Si hay mas de una maquina, se usa la velocidad de 6 fardos/min
-                fardosPerMin = 6
-            }
-
-
+            if (machineList.length === 1) fardosPerMin = 4;
+            if (machineList.length > 1) fardosPerMin = 6;
+            
             const wrapperSacksPerHour = fardosPerMin * sacksPerBundle * 60;
             const isWrapperBottleneck = totalSacksPerHourFromPackers > wrapperSacksPerHour;
             const effectiveSacksPerHour = Math.min(totalSacksPerHourFromPackers, wrapperSacksPerHour);
@@ -229,7 +221,7 @@ export default function OperationsClient({
         let effectiveWrapperSacksPerHour = 0;
 
         if (wrapperScenario === 'single') {
-            const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines, wrapper1FardosPerMin);
+            const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines);
             totalSacksPerHourFromAllPackers = totalSacksPerHourFromPackers;
             effectiveWrapperSacksPerHour = wrapperSacksPerHour;
 
@@ -264,8 +256,8 @@ export default function OperationsClient({
             const machinesForWrapper1 = machines.filter(m => m.id <= 2 && m.productId !== 'inactive');
             const machinesForWrapper2 = machines.filter(m => m.id > 2 && m.productId !== 'inactive');
             
-            const result1 = calculateProduction(machinesForWrapper1, wrapper1FardosPerMin);
-            const result2 = calculateProduction(machinesForWrapper2, wrapper2FardosPerMin);
+            const result1 = calculateProduction(machinesForWrapper1);
+            const result2 = calculateProduction(machinesForWrapper2);
 
             totalSacksPerHourFromAllPackers = result1.totalSacksPerHourFromPackers + result2.totalSacksPerHourFromPackers;
             effectiveWrapperSacksPerHour = result1.wrapperSacksPerHour + result2.wrapperSacksPerHour;
@@ -297,7 +289,7 @@ export default function OperationsClient({
                 effectiveWrapperSacksPerHour,
             }
         }
-    }, [siloAmount, machines, products, wrapperScenario, wrapper1FardosPerMin, wrapper2FardosPerMin, sacksPerBundle]);
+    }, [siloAmount, machines, products, wrapperScenario, sacksPerBundle]);
     
     const formatTime = (hours: number) => {
         if (!isFinite(hours) || hours <= 0) return '0h 0m';
@@ -317,7 +309,31 @@ export default function OperationsClient({
       </header>
       
       <main className="p-4 md:p-8 space-y-8">
-        
+
+        {/* Visual Flow Diagram */}
+        <div className="mb-8">
+            <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Producción</h3>
+            <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30">
+                <div className="flex flex-col items-center gap-2 text-center">
+                    <Warehouse className="h-10 w-10 text-primary" />
+                    <h4 className="font-semibold">Silo</h4>
+                    {isClient ? <p className="text-sm text-muted-foreground">{totalQuintales.toLocaleString()} QQ</p> : <p className="text-sm text-muted-foreground">- QQ</p>}
+                </div>
+                <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
+                <div className="flex flex-col items-center gap-2 text-center">
+                    <Package className="h-10 w-10 text-primary" />
+                    <h4 className="font-semibold">Envasadoras</h4>
+                      {isClient ? <p className="text-sm text-muted-foreground">{simulationResults.totalSacksPerHourFromAllPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p> : <p className="text-sm text-muted-foreground">- fundas/hr</p>}
+                </div>
+                <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
+                <div className="flex flex-col items-center gap-2 text-center">
+                    <PackageCheck className="h-10 w-10 text-primary" />
+                    <h4 className="font-semibold">Enfardadora</h4>
+                    {isClient ? <p className="text-sm text-muted-foreground">{simulationResults.effectiveWrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p> : <p className="text-sm text-muted-foreground">- fundas/hr</p>}
+                </div>
+            </div>
+        </div>
+
         {/* Etapa 1: Materia Prima */}
         <Card>
             <CardHeader>
@@ -351,32 +367,6 @@ export default function OperationsClient({
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                {/* Visual Flow Diagram */}
-                <div className="mb-8">
-                    <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Producción</h3>
-                    <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30">
-                        <div className="flex flex-col items-center gap-2 text-center">
-                            <Warehouse className="h-10 w-10 text-primary" />
-                            <h4 className="font-semibold">Silo</h4>
-                            {isClient ? <p className="text-sm text-muted-foreground">{totalQuintales.toLocaleString()} QQ</p> : <p className="text-sm text-muted-foreground">- QQ</p>}
-                        </div>
-                        <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
-                        <div className="flex flex-col items-center gap-2 text-center">
-                            <Package className="h-10 w-10 text-primary" />
-                            <h4 className="font-semibold">Envasadoras</h4>
-                             {isClient ? <p className="text-sm text-muted-foreground">{simulationResults.totalSacksPerHourFromAllPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p> : <p className="text-sm text-muted-foreground">- fundas/hr</p>}
-                        </div>
-                        <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
-                        <div className="flex flex-col items-center gap-2 text-center">
-                            <PackageCheck className="h-10 w-10 text-primary" />
-                            <h4 className="font-semibold">Enfardadora</h4>
-                            {isClient ? <p className="text-sm text-muted-foreground">{simulationResults.effectiveWrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr</p> : <p className="text-sm text-muted-foreground">- fundas/hr</p>}
-                        </div>
-                    </div>
-                </div>
-
-                <Separator className="my-8" />
-                
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                     <div className="space-y-6">
                         {/* Parámetros Envasadoras */}
@@ -468,7 +458,7 @@ export default function OperationsClient({
                                         <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
                                     </CardHeader>
                                     <CardContent>
-                                        <p className={`text-sm p-3 rounded-md ${simulationResults.isWrapperBottleneck ? 'bg-destructive/10 text-destructive' : 'bg-green-600/10 text-green-700'}`}>
+                                        <p className={cn("text-sm p-3 rounded-md", simulationResults.isWrapperBottleneck ? 'bg-destructive/10 text-destructive' : 'bg-green-600/10 text-green-700')}>
                                             {simulationResults.isWrapperBottleneck ? simulationResults.bottleneckDescription : simulationResults.noBottleneckDescription}
                                         </p>
                                     </CardContent>
