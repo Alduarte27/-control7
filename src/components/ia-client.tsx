@@ -205,7 +205,7 @@ function SiloSimulator({ products, isClient }: { products: ProductDefinition[], 
                                         </Select>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (sacos/hr)</Label>
+                                        <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/hr)</Label>
                                         <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={e => handleMachineChange(machine.id, 'speed', Number(e.target.value))}/>
                                     </div>
                                      <div className="space-y-1.5">
@@ -413,7 +413,7 @@ function ProductionSimulator({ products, isClient }: { products: ProductDefiniti
                     {/* Product Parameters */}
                     <div className="space-y-4 p-4 border rounded-lg">
                         <h3 className="font-semibold text-md">1. Parámetros del Producto</h3>
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             <div className="space-y-1.5 col-span-2">
                                 <Label htmlFor="sim-product">Producto a Simular</Label>
                                 <Select value={selectedProductId} onValueChange={setSelectedProductId}>
@@ -429,27 +429,10 @@ function ProductionSimulator({ products, isClient }: { products: ProductDefiniti
                             </div>
                         </div>
                     </div>
-                     {/* Machinery Parameters */}
-                    <div className="space-y-4 p-4 border rounded-lg">
-                        <h3 className="font-semibold text-md">2. Parámetros de Maquinaria</h3>
-                         <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="sim-speed">Velocidad (fundas/min)</Label>
-                                <Input id="sim-speed" type="number" value={speed} onChange={e => setSpeed(Number(e.target.value))}/>
-                            </div>
-                             <div className="space-y-1.5">
-                                <Label htmlFor="sim-loss">Pérdida (%)</Label>
-                                <Input id="sim-loss" type="number" value={loss} onChange={e => setLoss(Number(e.target.value))}/>
-                            </div>
-                             <div className="space-y-1.5 col-span-2">
-                                <Label htmlFor="sim-machines">Número de Máquinas a Simular</Label>
-                                <Input id="sim-machines" type="number" value={numMachines} onChange={e => setNumMachines(Number(e.target.value))}/>
-                            </div>
-                        </div>
-                    </div>
+                   
                     {/* Schedule Parameters */}
                     <div className="space-y-4 p-4 border rounded-lg">
-                        <h3 className="font-semibold text-md">3. Horario de Producción</h3>
+                        <h3 className="font-semibold text-md">2. Horario de Producción</h3>
                          <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="sim-day-hours">Horas Turno Día</Label>
