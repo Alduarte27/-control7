@@ -29,10 +29,11 @@ export default function OperationsClient({
   prefetchedProducts: ProductDefinition[]
 }) {
     const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
+    const [isClient, setIsClient] = React.useState(false);
     
     const [siloAmount, setSiloAmount] = React.useState(25000); // Default 25 Ton
     const [machines, setMachines] = React.useState<MachineState[]>([
-        { ...initialMachineState, productId: products[0]?.id || '', speed: 2000 },
+        { ...initialMachineState, productId: products[0]?.id || '', speed: 2000, loss: 0 },
         { ...initialMachineState },
         { ...initialMachineState },
         { ...initialMachineState },
@@ -41,6 +42,10 @@ export default function OperationsClient({
     const [balerScenario, setBalerScenario] = React.useState('scenario1');
     const [baler1Capacity, setBaler1Capacity] = React.useState(4000); // sacks per hour
     const [baler2Capacity, setBaler2Capacity] = React.useState(4000); // sacks per hour
+
+    React.useEffect(() => {
+        setIsClient(true);
+    }, []);
 
     const handleMachineChange = (index: number, field: keyof MachineState, value: any) => {
         const newMachines = [...machines];
@@ -140,7 +145,7 @@ export default function OperationsClient({
                     <div className="flex flex-col items-center gap-2 text-center">
                         <Warehouse className="h-12 w-12 text-primary" />
                         <h3 className="font-semibold">Silo</h3>
-                        <p className="text-xs text-muted-foreground">{siloAmount.toLocaleString()} Kg</p>
+                        <p className="text-xs text-muted-foreground">{isClient ? siloAmount.toLocaleString() : '...'} Kg</p>
                     </div>
                     <ArrowRight className="h-8 w-8 text-muted-foreground hidden md:block" />
                     <div className="flex flex-wrap items-center justify-center gap-4">
@@ -223,40 +228,46 @@ export default function OperationsClient({
 
                     {/* OUTPUTS */}
                     <div className="space-y-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Resultados de la Simulación</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <KpiCard title="Tiempo para Vaciar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Clock} description="Tiempo estimado para consumir toda la materia prima." />
-                                    <KpiCard title="Producción Total (Sacos)" value={Math.floor(simulationResults.totalSacks).toLocaleString()} icon={Package} description="Total de sacos producidos por todas las máquinas." />
-                                    <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={Factory} description="Total de quintales producidos." />
-                                    <KpiCard 
-                                      title="Cuello de Botella" 
-                                      value={simulationResults.bottleneck === 'OK' ? 'OK' : 'Detectado'}
-                                      icon={simulationResults.bottleneck === 'OK' ? CheckCircle2 : AlertTriangle}
-                                      valueColor={simulationResults.bottleneck === 'OK' ? 'text-green-600' : 'text-destructive'}
-                                      description={simulationResults.bottleneck === 'OK' ? 'La capacidad de las enfardadoras es suficiente.' : `La capacidad de la enfardadora es superada: ${simulationResults.bottleneck}`}
-                                    />
-                                </div>
-                                <Separator />
-                                <div>
-                                    <h4 className="font-semibold mb-2">Desglose de Producción</h4>
-                                    <div className="space-y-2">
-                                        {simulationResults.productionPerMachine.length > 0 ? simulationResults.productionPerMachine.map((p, i) => (
-                                            <div key={i} className="flex justify-between items-center text-sm p-2 bg-muted/30 rounded-md">
-                                                <span className="font-medium">{p.productName}</span>
-                                                <div className="text-right">
-                                                    <p>{p.sacks.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos</p>
-                                                    <p className="text-xs text-muted-foreground">{p.quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} QQ</p>
-                                                </div>
+                         <Card>
+                             <CardHeader>
+                                 <CardTitle>Resultados de la Simulación</CardTitle>
+                             </CardHeader>
+                             <CardContent className="space-y-4">
+                                {isClient ? (
+                                    <>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <KpiCard title="Tiempo para Vaciar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Clock} description="Tiempo estimado para consumir toda la materia prima." />
+                                            <KpiCard title="Producción Total (Sacos)" value={Math.floor(simulationResults.totalSacks).toLocaleString()} icon={Package} description="Total de sacos producidos por todas las máquinas." />
+                                            <KpiCard title="Producción Total (QQ)" value={simulationResults.totalQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} icon={Factory} description="Total de quintales producidos." />
+                                            <KpiCard 
+                                              title="Cuello de Botella" 
+                                              value={simulationResults.bottleneck === 'OK' ? 'OK' : 'Detectado'}
+                                              icon={simulationResults.bottleneck === 'OK' ? CheckCircle2 : AlertTriangle}
+                                              valueColor={simulationResults.bottleneck === 'OK' ? 'text-green-600' : 'text-destructive'}
+                                              description={simulationResults.bottleneck === 'OK' ? 'La capacidad de las enfardadoras es suficiente.' : `La capacidad de la enfardadora es superada: ${simulationResults.bottleneck}`}
+                                            />
+                                        </div>
+                                        <Separator />
+                                        <div>
+                                            <h4 className="font-semibold mb-2">Desglose de Producción</h4>
+                                            <div className="space-y-2">
+                                                {simulationResults.productionPerMachine.length > 0 ? simulationResults.productionPerMachine.map((p, i) => (
+                                                    <div key={i} className="flex justify-between items-center text-sm p-2 bg-muted/30 rounded-md">
+                                                        <span className="font-medium">{p.productName}</span>
+                                                        <div className="text-right">
+                                                            <p>{p.sacks.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos</p>
+                                                            <p className="text-xs text-muted-foreground">{p.quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} QQ</p>
+                                                        </div>
+                                                    </div>
+                                                )) : <p className="text-sm text-center text-muted-foreground py-4">No hay producción para mostrar.</p>}
                                             </div>
-                                        )) : <p className="text-sm text-center text-muted-foreground py-4">No hay producción para mostrar.</p>}
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
+                                        </div>
+                                    </>
+                                 ) : (
+                                    <p className="text-center text-muted-foreground py-8">Calculando resultados...</p>
+                                 )}
+                             </CardContent>
+                         </Card>
                     </div>
                 </div>
             </CardContent>
