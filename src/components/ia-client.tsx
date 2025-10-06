@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, ToggleLeft, ToggleRight, CheckSquare, Square, AlertTriangle } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
@@ -12,21 +12,14 @@ import { Input } from '@/components/ui/input';
 import KpiCard from '@/components/kpi-card';
 import { Separator } from '@/components/ui/separator';
 import { Pie, Cell, ResponsiveContainer, PieChart, Tooltip as RechartsTooltip } from 'recharts';
-import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-
 
 const KG_PER_QUINTAL = 45.3592;
 const QQ_PER_MASA = 350;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
-const daysOfWeek = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
-const dayLabels: { [key in typeof daysOfWeek[number]]: string } = {
-  mon: 'Lun', tue: 'Mar', wed: 'Mié', thu: 'Jue', fri: 'Vie', sat: 'Sáb', sun: 'Dom'
-};
-
-// --- Componente para el Simulador Detallado de Producción ---
+// --- Componente para el Simulador Detallado de Producción (integrado) ---
 function DetailedProductionSimulator({ products }: { products: ProductDefinition[] }) {
     const [productId, setProductId] = React.useState(products[0]?.id || '');
     const [unitsPerSack, setUnitsPerSack] = React.useState(12);
@@ -40,7 +33,8 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
         const unitsPerMinute = speed;
         const unitsPerHourBruto = unitsPerMinute * 60;
         const unitsPerHourNeto = unitsPerHourBruto * (1 - loss / 100);
-        const sacksPerHourNeto = unitsPerHourNeto / (unitsPerSack || 1);
+        
+        const sacksPerHourNeto = (unitsPerSack > 0) ? (unitsPerHourNeto / unitsPerSack) : 0;
         
         const dayProduction = sacksPerHourNeto * dayHours * machineCount;
         const nightProduction = sacksPerHourNeto * nightHours * machineCount;
@@ -55,16 +49,14 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
     }, [speed, loss, unitsPerSack, dayHours, nightHours, machineCount]);
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center gap-2">Análisis de Rendimiento por Producto</CardTitle>
-                <CardDescription>Calcula el rendimiento detallado para un producto y configuración de maquinaria específicos.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="mt-6 border-t pt-6">
+             <CardTitle className="flex items-center gap-2 mb-2">Análisis de Rendimiento por Producto</CardTitle>
+            <CardDescription className="mb-4">Calcula el rendimiento detallado para un producto y configuración de maquinaria específicos.</CardDescription>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="space-y-6">
                     {/* Parámetros */}
                     <div>
-                        <h4 className="font-semibold mb-2">Parámetros del Producto</h4>
+                        <h4 className="font-semibold mb-2">1. Parámetros del Producto</h4>
                         <div className="grid grid-cols-2 gap-4">
                              <div className="space-y-1.5">
                                 <Label htmlFor="sim-product">Producto a Simular</Label>
@@ -82,7 +74,7 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
                         </div>
                     </div>
                      <div>
-                        <h4 className="font-semibold mb-2">Parámetros de Maquinaria</h4>
+                        <h4 className="font-semibold mb-2">2. Parámetros de Maquinaria</h4>
                         <div className="grid grid-cols-3 gap-4">
                              <div className="space-y-1.5">
                                 <Label htmlFor="sim-speed">Velocidad (fundas/min)</Label>
@@ -99,7 +91,7 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
                         </div>
                     </div>
                      <div>
-                        <h4 className="font-semibold mb-2">Horario de Producción</h4>
+                        <h4 className="font-semibold mb-2">3. Horario de Producción</h4>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="sim-day-hours">Horas Turno Día</Label>
@@ -137,8 +129,8 @@ function DetailedProductionSimulator({ products }: { products: ProductDefinition
                         </div>
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </div>
+        </div>
     );
 }
 
@@ -148,7 +140,6 @@ export default function OperationsClient({
   prefetchedProducts: ProductDefinition[],
   prefetchedCategories: CategoryDefinition[]
 }) {
-    const { toast } = useToast();
     const [isClient, setIsClient] = React.useState(false);
     const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
     
@@ -466,9 +457,10 @@ export default function OperationsClient({
                                     <p className="text-xs text-muted-foreground md:col-span-2">Nota: La velocidad de la enfardadora se ajusta automáticamente. Con 1 envasadora activa, usa 4 fardos/min. Con más de 1, usa 6 fardos/min.</p>
                                 </div>
                             </div>
+                            {/* Simulador detallado integrado */}
+                            <DetailedProductionSimulator products={products} />
                         </CardContent>
                     </Card>
-                    <DetailedProductionSimulator products={products} />
                 </div>
                 
                 {/* Columna de Resultados */}
