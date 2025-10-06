@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, query } from 'firebase/firestore';
 import type { ProductData, CategoryDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
