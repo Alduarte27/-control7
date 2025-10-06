@@ -16,17 +16,20 @@ export type KpiCardProps = {
 };
 
 export default function KpiCard({ title, value, icon: Icon, description, valueColor, subValue, subValueColor, fractionDigits }: KpiCardProps) {
-  const [formattedValue, setFormattedValue] = React.useState<string | number>('-');
+  const [isClient, setIsClient] = React.useState(false);
 
   React.useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const formattedValue = React.useMemo(() => {
     if (typeof value === 'number' && !isNaN(value)) {
-      setFormattedValue(value.toLocaleString(undefined, {
+      return value.toLocaleString(undefined, {
         maximumFractionDigits: fractionDigits,
         minimumFractionDigits: fractionDigits,
-      }));
-    } else {
-      setFormattedValue(value);
+      });
     }
+    return value;
   }, [value, fractionDigits]);
 
   return (
@@ -39,10 +42,19 @@ export default function KpiCard({ title, value, icon: Icon, description, valueCo
               <Icon className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent className="pt-0">
-              <div className={cn("text-2xl font-bold", valueColor)}>{formattedValue}</div>
-              <p className={cn("text-xs font-medium h-[16px]", subValueColor)}>
-                  {subValue || <>&nbsp;</>}
-              </p>
+              {isClient ? (
+                <>
+                  <div className={cn("text-2xl font-bold", valueColor)}>{formattedValue}</div>
+                  <p className={cn("text-xs font-medium h-[16px]", subValueColor)}>
+                    {subValue || <>&nbsp;</>}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">-</div>
+                  <p className="text-xs font-medium h-[16px]">&nbsp;</p>
+                </>
+              )}
             </CardContent>
           </Card>
         </TooltipTrigger>
