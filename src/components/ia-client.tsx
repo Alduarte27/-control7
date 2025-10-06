@@ -26,6 +26,7 @@ function SiloSimulator({ products, isClient }: { products: ProductDefinition[], 
         { id: 1, productId: products[0]?.id || 'inactive', speed: 2000, loss: 2 },
         { id: 2, productId: 'inactive', speed: 2000, loss: 2 },
         { id: 3, productId: 'inactive', speed: 2000, loss: 2 },
+        { id: 4, productId: 'inactive', speed: 2000, loss: 2 },
     ]);
     const [wrapperScenario, setWrapperScenario] = React.useState<'single' | 'dual'>('single');
     const [wrapper1Speed, setWrapper1Speed] = React.useState(8000);
@@ -159,7 +160,7 @@ function SiloSimulator({ products, isClient }: { products: ProductDefinition[], 
                     <div className="flex flex-col items-center gap-2 text-center">
                         <Warehouse className="h-12 w-12 text-primary" />
                         <h3 className="font-semibold">Silo</h3>
-                        <p className="text-xs text-muted-foreground">{siloAmount.toLocaleString()} Kg</p>
+                        {isClient ? <p className="text-xs text-muted-foreground">{siloAmount.toLocaleString()} Kg</p> : <p className="text-xs text-muted-foreground">- Kg</p>}
                     </div>
 
                     <ArrowRight className="h-8 w-8 text-muted-foreground hidden md:block" />
@@ -189,7 +190,7 @@ function SiloSimulator({ products, isClient }: { products: ProductDefinition[], 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     <div className="lg:col-span-2 space-y-4">
                         <h3 className="font-semibold text-lg">Parámetros de las Envasadoras</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             {machines.map((machine) => (
                                 <div key={machine.id} className="p-4 border rounded-lg space-y-3 bg-muted/50">
                                     <Label className="font-bold">Máquina {machine.id}</Label>
@@ -234,7 +235,7 @@ function SiloSimulator({ products, isClient }: { products: ProductDefinition[], 
                                     <SelectTrigger><SelectValue/></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="single">1 Enfardadora Central</SelectItem>
-                                        <SelectItem value="dual">2 Líneas Paralelas (1-2 y 3)</SelectItem>
+                                        <SelectItem value="dual">2 Líneas Paralelas (1-2 y 3-4)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -326,7 +327,6 @@ function ProductionSimulator({ products, isClient }: { products: ProductDefiniti
     
     // Sim Params
     const [selectedProductId, setSelectedProductId] = React.useState<string | undefined>(products[0]?.id);
-    const [unitsPerSack, setUnitsPerSack] = React.useState(50);
     const [speed, setSpeed] = React.useState(40); // Units per minute
     const [loss, setLoss] = React.useState(8); // Percentage
     const [numMachines, setNumMachines] = React.useState(1);
@@ -335,10 +335,24 @@ function ProductionSimulator({ products, isClient }: { products: ProductDefiniti
     const [activeDays, setActiveDays] = React.useState({ mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false });
 
     const results = React.useMemo(() => {
-        const unitsPerMinute = speed;
-        const unitsPerHourGross = unitsPerMinute * 60;
-        const unitsPerHourNet = unitsPerHourGross * (1 - (loss / 100));
-        const sacksPerHourNet = unitsPerHourNet / (unitsPerSack || 1);
+        const selectedProduct = products.find(p => p.id === selectedProductId);
+        if (!selectedProduct) {
+            return {
+                sacksPerMinute: 0,
+                sacksPerHourGross: 0,
+                sacksPerHourNet: 0,
+                productionPerDayShift: 0,
+                productionPerNightShift: 0,
+                dailyProduction: { mon: {day:0, night:0}, tue: {day:0, night:0}, wed: {day:0, night:0}, thu: {day:0, night:0}, fri: {day:0, night:0}, sat: {day:0, night:0}, sun: {day:0, night:0} },
+                totalWeeklySacks: 0,
+                totalWeeklyQuintales: 0,
+            };
+        }
+
+        const sacksPerMinute = speed;
+        const sacksPerHourGross = sacksPerMinute * 60;
+        const sacksPerHourNet = sacksPerHourGross * (1 - (loss / 100));
+        
         const productionPerDayShift = sacksPerHourNet * dayHours;
         const productionPerNightShift = sacksPerHourNet * nightHours;
         
@@ -355,21 +369,19 @@ function ProductionSimulator({ products, isClient }: { products: ProductDefiniti
         }, { mon: {day:0, night:0}, tue: {day:0, night:0}, wed: {day:0, night:0}, thu: {day:0, night:0}, fri: {day:0, night:0}, sat: {day:0, night:0}, sun: {day:0, night:0} });
 
         const totalWeeklySacks = Object.values(dailyProduction).reduce((sum, day) => sum + day.day + day.night, 0) * numMachines;
-        const selectedProduct = products.find(p => p.id === selectedProductId);
         const totalWeeklyQuintales = (totalWeeklySacks * (selectedProduct?.sackWeight || 50)) / KG_PER_QUINTAL;
         
         return {
-            unitsPerMinute,
-            unitsPerHourGross,
-            unitsPerHourNet,
+            sacksPerMinute,
+            sacksPerHourGross,
             sacksPerHourNet,
             productionPerDayShift,
             productionPerNightShift,
             dailyProduction,
             totalWeeklySacks,
-            totalWeeklyQuintales
+            totalWeeklyQuintales,
         };
-    }, [speed, loss, unitsPerSack, dayHours, nightHours, activeDays, numMachines, selectedProductId, products]);
+    }, [speed, loss, dayHours, nightHours, activeDays, numMachines, selectedProductId, products]);
 
     const handleDayToggle = (day: keyof typeof activeDays) => {
         setActiveDays(prev => ({ ...prev, [day]: !prev[day] }));
@@ -411,10 +423,6 @@ function ProductionSimulator({ products, isClient }: { products: ProductDefiniti
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="sim-units-sack">Unidades por Saco</Label>
-                                <Input id="sim-units-sack" type="number" value={unitsPerSack} onChange={e => setUnitsPerSack(Number(e.target.value))}/>
-                            </div>
                              <div className="space-y-1.5">
                                 <Label>Peso por Saco (kg)</Label>
                                 <Input type="number" value={products.find(p => p.id === selectedProductId)?.sackWeight || 50} readOnly disabled/>
@@ -426,7 +434,7 @@ function ProductionSimulator({ products, isClient }: { products: ProductDefiniti
                         <h3 className="font-semibold text-md">2. Parámetros de Maquinaria</h3>
                          <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <Label htmlFor="sim-speed">Velocidad (unidades/min)</Label>
+                                <Label htmlFor="sim-speed">Velocidad (fundas/min)</Label>
                                 <Input id="sim-speed" type="number" value={speed} onChange={e => setSpeed(Number(e.target.value))}/>
                             </div>
                              <div className="space-y-1.5">
@@ -489,9 +497,9 @@ function ProductionSimulator({ products, isClient }: { products: ProductDefiniti
                             <CardTitle>Desglose por Máquina</CardTitle>
                         </CardHeader>
                         <CardContent className="grid grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                           <IndicatorDisplay label="Unidades/Minuto" value={results.unitsPerMinute} icon={Settings}/>
-                           <IndicatorDisplay label="Unidades/Hora (Bruto)" value={results.unitsPerHourGross} icon={Factory} fractionDigits={0}/>
-                           <IndicatorDisplay label="Unidades/Hora (Neto)" value={results.unitsPerHourNet} icon={PackageCheck} fractionDigits={0}/>
+                           <IndicatorDisplay label="Fundas/Minuto" value={results.sacksPerMinute} icon={Settings}/>
+                           <IndicatorDisplay label="Fundas/Hora (Bruto)" value={results.sacksPerHourGross} icon={Factory} fractionDigits={0}/>
+                           <IndicatorDisplay label="Fundas/Hora (Neto)" value={results.sacksPerHourNet} icon={PackageCheck} fractionDigits={0}/>
                            <IndicatorDisplay label="Sacos por Hora (Neto)" value={results.sacksPerHourNet} icon={Hash} fractionDigits={2}/>
                            <IndicatorDisplay label="Producción Turno Día" value={results.productionPerDayShift} icon={Clock} fractionDigits={2}/>
                            <IndicatorDisplay label="Producción Turno Noche" value={results.productionPerNightShift} icon={Clock} fractionDigits={2}/>
