@@ -73,7 +73,7 @@ function SiloSimulator({ products, isClient }: { products: ProductDefinition[], 
         };
 
         if (wrapperScenario === 'single') {
-            const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines, wrapper1Speed);
+            const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines, wrapper1Speed);
             const timeToEmptyHours = effectiveKgPerHour > 0 ? siloAmount / effectiveKgPerHour : 0;
             const totalSacksProduced = effectiveSacksPerHour * timeToEmptyHours;
             const totalQuintales = (siloAmount) / KG_PER_QUINTAL;
@@ -113,8 +113,8 @@ function SiloSimulator({ products, isClient }: { products: ProductDefinition[], 
             const totalQuintales = siloAmount / KG_PER_QUINTAL;
             
             const combinedMachineProd = [
-                ...result1.packingCapacity.map(m => ({ id: m.machineId, productName: m.productName, sacks: (m.sacksPerHour / result1.totalSacksPerHourFromPackers) * (result1.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (m.kgPerHour / result1.totalKgPerHourFromPackers) * (result1.effectiveKgPerHour * timeToEmptyHours) || 0 })),
-                ...result2.packingCapacity.map(m => ({ id: m.id, productName: m.productName, sacks: (m.sacksPerHour / result2.totalSacksPerHourFromPackers) * (result2.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (m.kgPerHour / result2.totalKgPerHourFromPackers) * (result2.effectiveKgPerHour * timeToEmptyHours) || 0 }))
+                ...result1.packingCapacity.map(m => ({ id: m.machineId, productName: m.productName, sacks: (m.sacksPerHour / (result1.totalSacksPerHourFromPackers || 1)) * (result1.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (m.kgPerHour / (result1.totalKgPerHourFromPackers || 1)) * (result1.effectiveKgPerHour * timeToEmptyHours) || 0 })),
+                ...result2.packingCapacity.map(m => ({ id: m.machineId, productName: m.productName, sacks: (m.sacksPerHour / (result2.totalSacksPerHourFromPackers || 1)) * (result2.effectiveSacksPerHour * timeToEmptyHours) || 0, weight: (m.kgPerHour / (result2.totalKgPerHourFromPackers || 1)) * (result2.effectiveKgPerHour * timeToEmptyHours) || 0 }))
             ];
              const machineContribution = combinedMachineProd.map(m => ({
                 name: `Máq. ${m.id} (${m.productName})`, value: isNaN(m.sacks) ? 0 : m.sacks
