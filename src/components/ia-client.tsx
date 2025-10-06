@@ -13,8 +13,6 @@ import KpiCard from '@/components/kpi-card';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { simulateProduction, type SimulateProductionInput } from '@/ai/flows/simulate-production-flow';
-import { forecastDemand, type ForecastDemandInput } from '@/ai/flows/forecast-demand-flow';
 import { Bar as RechartsBar, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -376,107 +374,6 @@ function SiloSimulatorTab({ products }: { products: ProductDefinition[] }) {
   );
 }
 
-
-function DemandForecastingTab({ products, categories }: { products: ProductDefinition[], categories: CategoryDefinition[] }) {
-    const { toast } = useToast();
-    const [isForecasting, setIsForecasting] = React.useState(false);
-    const [forecastResult, setForecastResult] = React.useState<any>(null);
-
-    const [selectedCategoryId, setSelectedCategoryId] = React.useState(categories[0]?.id || '');
-
-    const handleForecast = async () => {
-        setIsForecasting(true);
-        setForecastResult(null);
-
-        try {
-            const input: ForecastDemandInput = {
-                categoryId: selectedCategoryId,
-                products,
-                categories,
-            };
-            const result = await forecastDemand(input);
-            setForecastResult(result);
-            toast({ title: "Pronóstico generado", description: "Se ha analizado la tendencia de la demanda." });
-        } catch (error) {
-            console.error('Error forecasting demand:', error);
-            toast({ title: 'Error en el pronóstico', description: 'No se pudo generar la predicción.', variant: 'destructive' });
-        } finally {
-            setIsForecasting(false);
-        }
-    };
-
-    return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><BrainCircuit />Pronóstico de Demanda</CardTitle>
-                    <CardDescription>
-                        Utiliza IA para analizar el historial de producción y pronosticar la tendencia de la demanda para una categoría de productos.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="forecast-category">Categoría a Analizar</Label>
-                        <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-                            <SelectTrigger id="forecast-category">
-                                <SelectValue placeholder="Seleccionar categoría..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {categories.filter(c => c.isPlanned).map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <Button onClick={handleForecast} disabled={isForecasting}>
-                        {isForecasting ? 'Analizando...' : 'Generar Pronóstico'}
-                    </Button>
-                </CardContent>
-            </Card>
-
-            <Card className={forecastResult ? '' : 'flex items-center justify-center'}>
-                {isForecasting && <p>Analizando datos históricos...</p>}
-                {!isForecasting && !forecastResult && (
-                    <div className="text-center text-muted-foreground p-8">
-                        <Bot className="mx-auto h-12 w-12 mb-4" />
-                        <h3 className="font-semibold">Los resultados del análisis aparecerán aquí.</h3>
-                        <p className="text-sm">Selecciona una categoría y haz clic en "Generar Pronóstico".</p>
-                    </div>
-                )}
-                {forecastResult && (
-                    <>
-                        <CardHeader>
-                            <CardTitle>Resultados del Pronóstico</CardTitle>
-                             <CardDescription>
-                                Tendencia y producción recomendada para <span className="font-bold">{categories.find(c=>c.id === selectedCategoryId)?.name}</span>.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <KpiCard title="Tendencia General" value={forecastResult.overallTrend} icon={BarChart} description="Tendencia general de la demanda para esta categoría." />
-                                <KpiCard title="Producción Sugerida" value={forecastResult.totalSuggestedProduction.toLocaleString()} icon={Package} description="Sacos totales sugeridos para la próxima semana." />
-                            </div>
-                            <div className="space-y-2">
-                                <h4 className="font-semibold">Plan de Producción Sugerido (Sacos)</h4>
-                                <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                {forecastResult.productSuggestions.map((p: any) => (
-                                    <div key={p.productId} className="flex justify-between items-center text-sm p-2 bg-muted/30 rounded-md">
-                                        <span className="font-medium">{products.find(prod => prod.id === p.productId)?.productName}</span>
-                                        <span className="font-bold">{p.suggestedPlan.toLocaleString()}</span>
-                                    </div>
-                                ))}
-                                </div>
-                            </div>
-                             <div className="space-y-2">
-                                <h4 className="font-semibold flex items-center gap-2"><Info /> Justificación de la IA</h4>
-                                <p className="text-sm text-muted-foreground p-3 bg-muted/30 rounded-md border">{forecastResult.justification}</p>
-                            </div>
-                        </CardContent>
-                    </>
-                )}
-            </Card>
-        </div>
-    );
-}
-
 export default function OperationsClient({ 
   prefetchedProducts,
   prefetchedCategories
@@ -506,15 +403,12 @@ export default function OperationsClient({
             </CardHeader>
             <CardContent>
                 <Tabs defaultValue="production-simulator" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="production-simulator">
                             <CalendarClock className="mr-2" /> Simulador de Producción
                         </TabsTrigger>
                          <TabsTrigger value="silo-simulator">
                             <Warehouse className="mr-2" /> Simulador de Silo
-                        </TabsTrigger>
-                        <TabsTrigger value="demand-forecast">
-                           <BrainCircuit className="mr-2" /> Pronóstico de Demanda
                         </TabsTrigger>
                     </TabsList>
                     <TabsContent value="production-simulator" className="pt-6">
@@ -522,9 +416,6 @@ export default function OperationsClient({
                     </TabsContent>
                     <TabsContent value="silo-simulator" className="pt-6">
                        <SiloSimulatorTab products={products} />
-                    </TabsContent>
-                    <TabsContent value="demand-forecast" className="pt-6">
-                        <DemandForecastingTab products={products} categories={prefetchedCategories} />
                     </TabsContent>
                 </Tabs>
             </CardContent>
