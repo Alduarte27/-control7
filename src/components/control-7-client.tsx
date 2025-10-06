@@ -68,7 +68,7 @@ export default function Control7Client({
   const planIdFromUrl = searchParams.get('planId');
 
   const [date, setDate] = React.useState<Date | undefined>(
-    planIdFromUrl ? getDateFromPlanId(planIdFromUrl) : undefined
+    planIdFromUrl ? getDateFromPlanId(planIdFromUrl) : new Date()
   );
   
   const [loading, setLoading] = React.useState(true);
