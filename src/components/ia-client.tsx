@@ -863,6 +863,7 @@ export default function OperationsClient({
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
                                 const sacksPerMinuteNeto = (machine.unitsPerSack > 0) ? (unitsPerMinuteNeto / machine.unitsPerSack) : 0;
                                 const unitsProducedByMachine = simulationState.machineTotals[machine.id] || 0;
+                                const sacksProducedByMachine = (machine.unitsPerSack > 0) ? unitsProducedByMachine / machine.unitsPerSack : 0;
 
                                 return (
                                     <div key={machine.id} className={cn("p-3 border rounded-lg space-y-3 bg-background relative transition-all", machine.isSimulatingActive && "ring-2 ring-green-500")}>
