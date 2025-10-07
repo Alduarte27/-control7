@@ -18,7 +18,6 @@ import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 const KG_PER_QUINTAL = 45.3592;
-const QQ_PER_MASA = 350;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
 type MachineState = {
@@ -148,8 +147,11 @@ export default function OperationsClient({
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     
     // Etapa 1: Materia Prima
-    const [masaCount, setMasaCount] = React.useState(2);
-    const totalQuintales = masaCount * QQ_PER_MASA;
+    const [tachosQQ, setTachosQQ] = React.useState(0);
+    const [familiarQQ, setFamiliarQQ] = React.useState(0);
+    const [granelQQ, setGranelQQ] = React.useState(700);
+
+    const totalQuintales = tachosQQ + familiarQQ + granelQQ;
     const siloAmount = totalQuintales * KG_PER_QUINTAL;
 
     // Etapa 2: Envasadoras
@@ -385,14 +387,18 @@ export default function OperationsClient({
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                         <div className="space-y-1.5">
-                            <Label htmlFor="masa-count">Cantidad de Masa Recibida</Label>
-                            <Input id="masa-count" type="number" value={masaCount} onChange={e => setMasaCount(Number(e.target.value))} min="0" />
+                            <Label htmlFor="tachos-qq">Tachos (QQ)</Label>
+                            <Input id="tachos-qq" type="number" value={tachosQQ} onChange={e => setTachosQQ(Number(e.target.value))} min="0" />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="familiar-qq">Silo Familiar (QQ)</Label>
+                            <Input id="familiar-qq" type="number" value={familiarQQ} onChange={e => setFamiliarQQ(Number(e.target.value))} min="0" />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Equivalente por Masa</Label>
-                            <p className="text-lg font-semibold p-2 border rounded-md bg-muted/50">{QQ_PER_MASA} QQ</p>
+                            <Label htmlFor="granel-qq">Silo a Granel (QQ)</Label>
+                            <Input id="granel-qq" type="number" value={granelQQ} onChange={e => setGranelQQ(Number(e.target.value))} min="0" />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Total en Silo</Label>
