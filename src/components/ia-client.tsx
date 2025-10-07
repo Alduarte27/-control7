@@ -484,19 +484,19 @@ export default function OperationsClient({
                 
                 const wrapperUnitsPerSecond = currentWrapperCapacity / 60;
 
+                // 1. Packers produce and fill the buffer
                 activeMachinesConfig.forEach(m => {
                     const unitsProducedThisTick = m.unitsPerSecond * elapsedIncrement;
                     newMachineTotals[m.id] += unitsProducedThisTick;
                     newWrapperBuffer += unitsProducedThisTick;
                 });
 
-                let unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
-                const unitsAvailable = newWrapperBuffer + newCurrentBundleProgress;
-                unitsToProcessThisTick = Math.min(unitsToProcessThisTick, unitsAvailable);
+                // 2. Wrapper processes from the buffer
+                const unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
+                const unitsToTakeFromBuffer = Math.min(unitsToProcessThisTick, newWrapperBuffer);
                 
-                const consumedFromBuffer = Math.min(newWrapperBuffer, unitsToProcessThisTick);
-                newWrapperBuffer -= consumedFromBuffer;
-                newCurrentBundleProgress += unitsToProcessThisTick;
+                newWrapperBuffer -= unitsToTakeFromBuffer;
+                newCurrentBundleProgress += unitsToTakeFromBuffer;
 
                 if (newCurrentBundleProgress >= currentUnitsPerBundle && currentUnitsPerBundle > 0) {
                     const bundlesCreated = Math.floor(newCurrentBundleProgress / currentUnitsPerBundle);
@@ -846,8 +846,8 @@ export default function OperationsClient({
                                                 </div>
                                             </div>
                                             <div className="space-y-1">
-                                                <Label className="text-xs">Producción Total (Unidades)</Label>
-                                                <p className="text-lg font-bold text-center text-primary">{Math.floor(simulationState.machineTotals[machine.id] || 0).toLocaleString()}</p>
+                                                <Label className="text-xs">Producción Total (Sacos)</Label>
+                                                <p className="text-lg font-bold text-center text-primary">{Math.floor(simulationState.machineTotals[machine.id] / (product?.unitsPerSack || 1) || 0).toLocaleString()}</p>
                                                 <Progress value={((simulationState.machineTotals[machine.id] || 0) % machine.speed) / machine.speed * 100} className="h-1" />
                                             </div>
                                           </>
