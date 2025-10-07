@@ -23,7 +23,6 @@ import { Slider } from '@/components/ui/slider';
 const KG_PER_QUINTAL = 50;
 const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
-const CONVEYOR_DELAY_SECONDS = 6;
 
 type MachineState = {
     id: number;
@@ -243,6 +242,7 @@ export default function OperationsClient({
 
     const [wrapperCapacity, setWrapperCapacity] = React.useState(110);
     const [unitsPerBundle, setUnitsPerBundle] = React.useState(12);
+    const [conveyorDelay, setConveyorDelay] = React.useState(6);
     const [wrapperImageUrl, setWrapperImageUrl] = React.useState<string | null>(null);
 
     const handleWrapperImageUpload = (file: File) => {
@@ -283,6 +283,9 @@ export default function OperationsClient({
 
     const unitsPerBundleRef = React.useRef(unitsPerBundle);
     React.useEffect(() => { unitsPerBundleRef.current = unitsPerBundle; }, [unitsPerBundle]);
+    
+    const conveyorDelayRef = React.useRef(conveyorDelay);
+    React.useEffect(() => { conveyorDelayRef.current = conveyorDelay; }, [conveyorDelay]);
 
 
     const staticSimulationResults = React.useMemo(() => {
@@ -395,58 +398,58 @@ export default function OperationsClient({
         setSimulationState(prev => ({...prev, isFinished: false}));
 
         simulationIntervalRef.current = setInterval(() => {
-            const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
-            
-            const currentMachines = machinesRef.current;
-            const currentProducts = productsRef.current;
-            const currentWrapperCapacity = wrapperCapacityRef.current;
-            const currentUnitsPerBundle = unitsPerBundleRef.current;
-            const currentSilos = silosRef.current;
-            
-            let currentTotalSiloQQ = currentSilos.reduce((sum, s) => sum + s.currentQQ, 0);
-            let silosAreEmpty = currentTotalSiloQQ <= 0;
-
-            const activeMachinesConfig = currentMachines
-                .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
-                .map(m => {
-                    const product = currentProducts.find(p => p.id === m.productId);
-                    const unitsPerMinute = m.speed * (1 - m.loss / 100);
-                    const unitsPerSack = product?.unitsPerSack || 1;
-                    const kgPerUnit = unitsPerSack > 0 ? (product?.sackWeight || 50) / unitsPerSack : 0;
-                    return {
-                        id: m.id,
-                        unitsPerSecond: unitsPerMinute / 60,
-                        kgPerSecond: (unitsPerMinute / 60) * kgPerUnit,
-                    };
-                });
-            
-            const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
-            const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
-            
-            if (kgConsumedThisTick > 0 && !silosAreEmpty) {
-                setSilos(prevSilos => {
-                    const newSilos = JSON.parse(JSON.stringify(prevSilos));
-                    const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
-                    const granel = newSilos.find((s: SiloState) => s.id === 'granel');
-                    
-                    let consumption = kgConsumedThisTick;
-                    
-                    const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL;
-                    const consumedFromFamiliar = Math.min(kgInFamiliar, consumption);
-                    familiar.currentQQ -= consumedFromFamiliar / KG_PER_QUINTAL;
-                    consumption -= consumedFromFamiliar;
-
-                    if (consumption > 0) {
-                        const kgInGranel = granel.currentQQ * KG_PER_QUINTAL;
-                        const consumedFromGranel = Math.min(kgInGranel, consumption);
-                        granel.currentQQ -= consumedFromGranel / KG_PER_QUINTAL;
-                    }
-                    
-                    return newSilos;
-                });
-            }
-            
             setSimulationState(prev => {
+                const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
+                
+                const currentMachines = machinesRef.current;
+                const currentProducts = productsRef.current;
+                const currentWrapperCapacity = wrapperCapacityRef.current;
+                const currentUnitsPerBundle = unitsPerBundleRef.current;
+                const currentConveyorDelay = conveyorDelayRef.current;
+                
+                let currentTotalSiloQQ = silosRef.current.reduce((sum, s) => sum + s.currentQQ, 0);
+                let silosAreEmpty = currentTotalSiloQQ <= 0;
+
+                const activeMachinesConfig = currentMachines
+                    .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
+                    .map(m => {
+                        const product = currentProducts.find(p => p.id === m.productId);
+                        const unitsPerMinute = m.speed * (1 - m.loss / 100);
+                        const unitsPerSack = product?.unitsPerSack || 1;
+                        const kgPerUnit = unitsPerSack > 0 ? (product?.sackWeight || 50) / unitsPerSack : 0;
+                        return {
+                            id: m.id,
+                            unitsPerSecond: unitsPerMinute / 60,
+                            kgPerSecond: (unitsPerMinute / 60) * kgPerUnit,
+                        };
+                    });
+                
+                const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
+                const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
+                
+                if (kgConsumedThisTick > 0 && !silosAreEmpty) {
+                    setSilos(prevSilos => {
+                        const newSilos = JSON.parse(JSON.stringify(prevSilos));
+                        const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
+                        const granel = newSilos.find((s: SiloState) => s.id === 'granel');
+                        
+                        let consumption = kgConsumedThisTick;
+                        
+                        const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL;
+                        const consumedFromFamiliar = Math.min(kgInFamiliar, consumption);
+                        familiar.currentQQ -= consumedFromFamiliar / KG_PER_QUINTAL;
+                        consumption -= consumedFromFamiliar;
+
+                        if (consumption > 0) {
+                            const kgInGranel = granel.currentQQ * KG_PER_QUINTAL;
+                            const consumedFromGranel = Math.min(kgInGranel, consumption);
+                            granel.currentQQ -= consumedFromGranel / KG_PER_QUINTAL;
+                        }
+                        
+                        return newSilos;
+                    });
+                }
+
                 if (prev.isFinished || (silosAreEmpty && totalKgConsumedPerSecond > 0)) {
                     pauseClock();
                     return {...prev, isFinished: true };
@@ -472,7 +475,7 @@ export default function OperationsClient({
                 const arrivedItems: ConveyorItem[] = [];
                 const remainingOnBelt: ConveyorItem[] = [];
                 newConveyorBelt.forEach(item => {
-                    if (newElapsedTime >= item.producedAt + CONVEYOR_DELAY_SECONDS) {
+                    if (newElapsedTime >= item.producedAt + currentConveyorDelay) {
                         arrivedItems.push(item);
                     } else {
                         remainingOnBelt.push(item);
@@ -887,6 +890,10 @@ export default function OperationsClient({
                             <div className="space-y-1.5">
                                 <Label htmlFor="units-per-bundle">Unidades por Fardo</Label>
                                 <Input id="units-per-bundle" type="number" value={unitsPerBundle} onChange={e => setUnitsPerBundle(Number(e.target.value))}/>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="conveyor-delay">Retraso de Banda (segundos)</Label>
+                                <Input id="conveyor-delay" type="number" value={conveyorDelay} onChange={e => setConveyorDelay(Number(e.target.value))}/>
                             </div>
                              <div className="sm:col-span-2 space-y-4 rounded-lg bg-muted/30 p-3 border">
                                  <div className="grid grid-cols-3 gap-2 text-center">
