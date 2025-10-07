@@ -385,8 +385,7 @@ export default function OperationsClient({
     
     const tachosQQ = 0; // Tachos is now a process, not a storage
     const familiarSilo = silos.find(s => s.id === 'familiar');
-    const granelSilo = silos.find(s => s.id === 'granel');
-    const totalSiloQQ = (familiarSilo?.currentQQ || 0); // Only familiar silo counts for production
+    const totalSiloQQ = (familiarSilo?.currentQQ || 0);
     const familiarSiloQQ = familiarSilo?.currentQQ || 0;
 
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
@@ -557,7 +556,7 @@ export default function OperationsClient({
         setIsSimulating(true);
     
         const familiarSilo = silos.find(s => s.id === 'familiar');
-        if (isTachosAuto && familiarSilo?.currentQQ === 0) {
+        if (isTachosAuto && (familiarSilo?.currentQQ || 0) <= 0) {
             sendMasasToSilosRef.current(1);
         }
         
@@ -573,15 +572,15 @@ export default function OperationsClient({
             const currentSimState = simulationStateRef.current;
             
             if (isTachosAuto && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
-                const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
+                 const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
                 if (!goalMet) {
                     sendMasasToSilosRef.current(1);
-                    setSimulationState(prev => ({
-                        ...prev,
-                        nextAutoTachosSendTime: prev.elapsedTime + (autoTachosInterval * 60),
-                    }));
+                    simulationStateRef.current = {
+                        ...simulationStateRef.current,
+                        nextAutoTachosSendTime: simulationStateRef.current.elapsedTime + (autoTachosInterval * 60),
+                    };
                 } else {
-                    setIsTachosAuto(false);
+                     setIsTachosAuto(false);
                 }
             }
 
@@ -591,7 +590,7 @@ export default function OperationsClient({
                     return prev;
                 }
 
-                const speedMultiplier = simulationSpeed * 60; // 1 = real-time (1 sim second per 1 real second)
+                const speedMultiplier = simulationSpeed;
                 const elapsedIncrement = (tickRateMs / 1000) * speedMultiplier;
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
 
