@@ -755,7 +755,9 @@ export default function OperationsClient({
                                 const product = products.find(p => p.id === machine.productId);
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
                                 const sacksPerMinuteNeto = (machine.unitsPerSack > 0) ? (unitsPerMinuteNeto / machine.unitsPerSack) : 0;
-                                const cycleProgress = isSimulating ? (simulationState.elapsedTime * 1000 / TICK_RATE_MS * ((unitsPerMinuteNeto/60) * (TICK_RATE_MS/1000)) % unitsPerMinuteNeto) / unitsPerMinuteNeto * 100 : 0;
+                                const cycleProgress = (machine.speed > 0 && isSimulating) 
+                                    ? ((simulationState.machineTotals[machine.id] || 0) % (machine.speed / 60 * simulationState.elapsedTime)) / (machine.speed / 60 * simulationState.elapsedTime) * 100
+                                    : 0;
 
                                 return (
                                     <div key={machine.id} className={cn("p-3 border rounded-lg space-y-3 bg-background relative transition-all", machine.isSimulatingActive && "ring-2 ring-green-500")}>
@@ -838,7 +840,7 @@ export default function OperationsClient({
                                             <div className="space-y-1">
                                                 <Label className="text-xs">Producción Total (Sacos)</Label>
                                                 <p className="text-lg font-bold text-center text-primary">{Math.floor(simulationState.machineTotals[machine.id] || 0).toLocaleString()}</p>
-                                                <Progress value={cycleProgress} className="h-1" />
+                                                <Progress value={(simulationState.machineTotals[machine.id] || 0) * (machine.unitsPerSack > 0 ? 1/machine.unitsPerSack : 0) % 100} className="h-1" />
                                             </div>
                                           </>
                                         )}
