@@ -476,6 +476,7 @@ export default function OperationsClient({
         setIsSimulating(true);
 
         if (isTachosAuto) {
+            // Fill familiar silo on start
             setSilos(prevSilos => {
                 const newSilos = JSON.parse(JSON.stringify(prevSilos));
                 const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
@@ -484,7 +485,7 @@ export default function OperationsClient({
                 }
                 return newSilos;
             });
-            setTotalMasasSent(prev => Math.max(prev, 1)); // Assume at least one masa to fill it
+            setTotalMasasSent(prev => Math.max(prev, 1));
         }
         
         setSimulationState(prev => ({
@@ -497,7 +498,18 @@ export default function OperationsClient({
 
         simulationIntervalRef.current = setInterval(() => {
             const currentMachines = machinesRef.current;
+            const currentSimState = simulationState; // Use a ref or read from state right before set
             
+            // --- Automatic Tachos Logic ---
+            const elapsedTimeForCheck = simulationStateRef.current.elapsedTime + (tickRateMs / 1000) * (simulationSpeed * simulationSpeed * 60);
+            if (isTachosAuto && elapsedTimeForCheck >= simulationStateRef.current.nextAutoTachosSendTime) {
+                sendMasasToSilos(1);
+                setSimulationState(prev => ({
+                    ...prev,
+                    nextAutoTachosSendTime: prev.nextAutoTachosSendTime + (autoTachosInterval * 60),
+                }));
+            }
+
             setSimulationState(prev => {
                 if (prev.isFinished) {
                     pauseClock();
@@ -507,19 +519,6 @@ export default function OperationsClient({
                 const speedMultiplier = simulationSpeed * simulationSpeed * 60; // Base speed * multiplier
                 const elapsedIncrement = (tickRateMs / 1000) * speedMultiplier;
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
-                
-                let sendMasaNow = false;
-                let newNextSendTime = prev.nextAutoTachosSendTime;
-
-                // --- Automatic Tachos Logic ---
-                if (isTachosAuto && newElapsedTime >= prev.nextAutoTachosSendTime) {
-                    sendMasaNow = true;
-                    newNextSendTime = prev.nextAutoTachosSendTime + (autoTachosInterval * 60);
-                }
-
-                if(sendMasaNow) {
-                  sendMasasToSilos(1);
-                }
 
                 // --- Production Logic ---
                 const activeMachinesConfig = currentMachines
@@ -545,7 +544,7 @@ export default function OperationsClient({
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
                     pauseClock();
-                    return {...prev, elapsedTime: newElapsedTime, isFinished: true, nextAutoTachosSendTime: newNextSendTime };
+                    return {...prev, elapsedTime: newElapsedTime, isFinished: true };
                 }
 
                 const newMachineTotals = { ...prev.machineTotals };
@@ -616,13 +615,17 @@ export default function OperationsClient({
                     wrapperBuffer: newWrapperBuffer,
                     currentBundleProgress: newCurrentBundleProgress,
                     totalBundles: newTotalBundles,
-                    nextAutoTachosSendTime: newNextSendTime,
                 };
             });
         }, tickRateMs);
     };
 
+    const simulationStateRef = React.useRef(simulationState);
+    React.useEffect(() => {
+        simulationStateRef.current = simulationState;
+    }, [simulationState]);
     
+
     const resetSimulation = (resetMaterial = true) => {
         pauseClock();
         setSimulationState(initialSimState);
