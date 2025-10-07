@@ -165,6 +165,89 @@ function MachineEditDialog({
     );
 }
 
+function SiloEditDialog({
+    silo,
+    isTachos,
+    open,
+    onOpenChange,
+    onSave,
+}: {
+    silo: SiloState;
+    isTachos?: boolean;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSave: (updatedSilo: SiloState) => void;
+}) {
+    const [editedSilo, setEditedSilo] = React.useState(silo);
+
+    React.useEffect(() => {
+        setEditedSilo(silo);
+    }, [silo]);
+
+    const handleFieldChange = (field: keyof SiloState, value: any) => {
+        setEditedSilo(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleImageUpload = (file: File) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            handleFieldChange('imageUrl', reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const fileInputId = `silo-modal-image-upload-${silo.id}`;
+    
+    const handleSaveChanges = () => {
+        onSave(editedSilo);
+        onOpenChange(false);
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar {silo.name}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
+                     <div className="space-y-2">
+                        <Label>Previsualización de la Imagen</Label>
+                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                            <Image 
+                                src={editedSilo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
+                                alt={editedSilo.name}
+                                width={600}
+                                height={400}
+                                className="object-contain w-full h-full"
+                            />
+                        </div>
+                        <input
+                            type="file"
+                            id={fileInputId}
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])}
+                        />
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()}>
+                            <Upload className="mr-2 h-3 w-3" />
+                            Cambiar Foto
+                        </Button>
+                    </div>
+                    {!isTachos && (
+                        <div className="space-y-1.5">
+                            <Label htmlFor={`silo-cap-${silo.id}`}>Capacidad Máx. (QQ)</Label>
+                            <Input id={`silo-cap-${silo.id}`} type="number" value={editedSilo.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                    <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
 
 export default function OperationsClient({ 
   prefetchedProducts,
@@ -174,6 +257,7 @@ export default function OperationsClient({
     const [isClient, setIsClient] = React.useState(false);
     const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
+    const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
     
     // --- Raw Material State ---
     const [masasToSend, setMasasToSend] = React.useState(1);
@@ -182,26 +266,16 @@ export default function OperationsClient({
         { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: null },
         { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: null },
     ]);
-    const [tachosImageUrl, setTachosImageUrl] = React.useState<string | null>(null);
+    const [tachosState, setTachosState] = React.useState<SiloState>({
+        id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: null,
+    });
 
-    const handleSiloChange = (id: string, field: 'capacityQQ' | 'imageUrl', value: any) => {
-        setSilos(prev => prev.map(silo => silo.id === id ? { ...silo, [field]: value } : silo));
-    };
-
-    const handleSiloImageUpload = (id: string, file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            handleSiloChange(id, 'imageUrl', reader.result as string);
-        };
-        reader.readAsDataURL(file);
-    };
-
-    const handleTachosImageUpload = (file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setTachosImageUrl(reader.result as string);
-        };
-        reader.readAsDataURL(file);
+    const handleSiloSave = (updatedSilo: SiloState) => {
+        if (updatedSilo.id === 'tachos') {
+            setTachosState(updatedSilo);
+        } else {
+            setSilos(prev => prev.map(s => s.id === updatedSilo.id ? updatedSilo : s));
+        }
     };
 
     const handleSendMasas = () => {
@@ -213,28 +287,21 @@ export default function OperationsClient({
           const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
 
           const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-          const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-
-          // Strategy: Prioritize filling one silo completely with the new batch.
-          // 1. Try to put the entire batch in Familiar silo.
           if (spaceInFamiliar >= qqToDistribute) {
               familiarSilo.currentQQ += qqToDistribute;
-              qqToDistribute = 0;
-          } 
-          // 2. If not enough space in Familiar, try to put the entire batch in Granel silo.
-          else if (spaceInGranel >= qqToDistribute) {
-              granelSilo.currentQQ += qqToDistribute;
-              qqToDistribute = 0;
-          } 
-          // 3. If neither can take the full batch, then do overflow logic.
-          else {
-              const toAddInFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
-              familiarSilo.currentQQ += toAddInFamiliar;
-              qqToDistribute -= toAddInFamiliar;
+          } else {
+              const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+              if (spaceInGranel >= qqToDistribute) {
+                  granelSilo.currentQQ += qqToDistribute;
+              } else {
+                  const toAddInFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
+                  familiarSilo.currentQQ += toAddInFamiliar;
+                  qqToDistribute -= toAddInFamiliar;
 
-              if (qqToDistribute > 0) {
-                  const toAddInGranel = Math.min(qqToDistribute, spaceInGranel);
-                  granelSilo.currentQQ += toAddInGranel;
+                  if (qqToDistribute > 0) {
+                      const toAddInGranel = Math.min(qqToDistribute, spaceInGranel);
+                      granelSilo.currentQQ += toAddInGranel;
+                  }
               }
           }
           
@@ -722,15 +789,16 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                           <div>
-                               <Label className="font-bold text-primary">Tachos</Label>
-                               <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-3">
-                                   <Image src={tachosImageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" />
+                           <div className='relative'>
+                               <div className='flex justify-between items-center'>
+                                <Label className="font-bold text-primary">{tachosState.name}</Label>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
                                </div>
-                               <input type="file" id="tachos-image-upload" className="hidden" accept="image/*" onChange={(e) => e.target.files && handleTachosImageUpload(e.target.files[0])} />
-                               <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById('tachos-image-upload')?.click()}>
-                                   <Upload className="mr-2 h-3 w-3" /> Cambiar Foto
-                               </Button>
+                               <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-3">
+                                   <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" />
+                               </div>
                            </div>
                            <div className="space-y-3 pt-4">
                                 <div className='text-center border bg-muted/30 rounded-lg p-2'>
@@ -755,17 +823,17 @@ export default function OperationsClient({
                             const fillColorClass = getSiloFillColor(fillPercentage);
                             return (
                                 <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
-                                    <Label className="font-bold text-primary">{silo.name}</Label>
+                                     <div className='flex justify-between items-center'>
+                                        <Label className="font-bold text-primary">{silo.name}</Label>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                     <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                                         <Image src={silo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt={silo.name} width={600} height={400} className="object-contain w-full h-full" />
                                     </div>
-                                    <input type="file" id={`silo-image-upload-${silo.id}`} className="hidden" accept="image/*" onChange={(e) => e.target.files && handleSiloImageUpload(silo.id, e.target.files[0])} />
-                                    <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(`silo-image-upload-${silo.id}`)?.click()}>
-                                        <Upload className="mr-2 h-3 w-3" /> Cambiar Foto
-                                    </Button>
                                     <div className="space-y-1.5">
-                                        <Label htmlFor={`silo-cap-${silo.id}`}>Capacidad Máx. (QQ)</Label>
-                                        <Input id={`silo-cap-${silo.id}`} type="number" value={silo.capacityQQ} onChange={(e) => handleSiloChange(silo.id, 'capacityQQ', Number(e.target.value))} min="0" />
+                                        <Label className='text-xs text-muted-foreground'>Capacidad: {silo.capacityQQ.toLocaleString()} QQ</Label>
                                     </div>
                                     <div className="space-y-2 pt-2">
                                         <Label className="text-sm">Nivel: {currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</Label>
@@ -1028,6 +1096,15 @@ export default function OperationsClient({
                     machine={editingMachine}
                     products={products}
                     onSave={handleSaveMachine}
+                />
+            )}
+             {editingSilo && (
+                <SiloEditDialog
+                    open={!!editingSilo}
+                    onOpenChange={(isOpen) => !isOpen && setEditingSilo(null)}
+                    silo={editingSilo}
+                    isTachos={editingSilo.id === 'tachos'}
+                    onSave={handleSiloSave}
                 />
             )}
         </>
