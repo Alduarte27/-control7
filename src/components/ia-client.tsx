@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
+import type { ProductDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -79,7 +79,7 @@ function MachineEditDialog({
                 <DialogHeader>
                     <DialogTitle>Editar Máquina {machine.id}</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
+                <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                      <div className="space-y-2">
                         <Label>Previsualización de la Imagen</Label>
                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
@@ -141,7 +141,6 @@ function MachineEditDialog({
 export default function OperationsClient({ 
   prefetchedProducts,
 }: { 
-  prefetchedCategories: CategoryDefinition[],
   prefetchedProducts: ProductDefinition[],
 }) {
     const [isClient, setIsClient] = React.useState(false);
