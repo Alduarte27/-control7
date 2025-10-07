@@ -18,6 +18,7 @@ import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Slider } from './ui/slider';
+import { Switch } from './ui/switch';
 
 
 const KG_PER_QUINTAL = 50;
@@ -56,6 +57,7 @@ type SimulationState = {
     currentBundleProgress: number;
     totalBundles: number;
     isFinished: boolean;
+    nextAutoTachosSendTime: number;
 };
 
 function MachineEditDialog({
@@ -263,6 +265,8 @@ export default function OperationsClient({
     // --- Raw Material State ---
     const [masasToSend, setMasasToSend] = React.useState(1);
     const [totalMasasSent, setTotalMasasSent] = React.useState(0);
+    const [isTachosAuto, setIsTachosAuto] = React.useState(false);
+    const [autoTachosInterval, setAutoTachosInterval] = React.useState(90); // in minutes
     const [silos, setSilos] = React.useState<SiloState[]>([
         { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: null },
         { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: null },
@@ -279,8 +283,8 @@ export default function OperationsClient({
         }
     };
 
-    const handleSendMasas = () => {
-      let qqToDistribute = masasToSend * MASA_QQ_AMOUNT;
+    const sendMasasToSilos = React.useCallback((amount: number) => {
+      let qqToDistribute = amount * MASA_QQ_AMOUNT;
       
       setSilos(prevSilos => {
           const newSilos = JSON.parse(JSON.stringify(prevSilos));
@@ -288,19 +292,16 @@ export default function OperationsClient({
           const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
 
           const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-          const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
           
           let qqForFamiliar = 0;
-          let qqForGranel = 0;
-
-          // Fill familiar first
           qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
           familiarSilo.currentQQ += qqForFamiliar;
           
           const remainder = qqToDistribute - qqForFamiliar;
           
-          // Put the rest in granel
           if (remainder > 0) {
+            const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+            let qqForGranel = 0;
             qqForGranel = Math.min(remainder, spaceInGranel);
             granelSilo.currentQQ += qqForGranel;
           }
@@ -308,8 +309,12 @@ export default function OperationsClient({
           return newSilos;
       });
 
-      setTotalMasasSent(prev => prev + masasToSend);
-      setMasasToSend(1);
+      setTotalMasasSent(prev => prev + amount);
+    }, []);
+
+    const handleManualSendMasas = () => {
+        sendMasasToSilos(masasToSend);
+        setMasasToSend(1);
     };
     
     const tachosQQ = 0; // Tachos is now a process, not a storage
@@ -351,6 +356,7 @@ export default function OperationsClient({
         currentBundleProgress: 0,
         totalBundles: 0,
         isFinished: false,
+        nextAutoTachosSendTime: autoTachosInterval * 60,
     };
     const [simulationState, setSimulationState] = React.useState<SimulationState>(initialSimState);
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -468,7 +474,11 @@ export default function OperationsClient({
         if (simulationIntervalRef.current) return;
         setIsSimulating(true);
         
-        setSimulationState(prev => ({...prev, isFinished: false}));
+        setSimulationState(prev => ({
+            ...prev,
+            isFinished: false,
+            nextAutoTachosSendTime: autoTachosInterval > 0 ? autoTachosInterval * 60 : Infinity,
+        }));
         
         const tickRateMs = 50; 
 
@@ -483,7 +493,16 @@ export default function OperationsClient({
 
                 const speedMultiplier = simulationSpeed * simulationSpeed * 60; // Base speed * multiplier
                 const elapsedIncrement = (tickRateMs / 1000) * speedMultiplier;
-                
+                const newElapsedTime = prev.elapsedTime + elapsedIncrement;
+
+                // --- Automatic Tachos Logic ---
+                if (isTachosAuto && newElapsedTime >= prev.nextAutoTachosSendTime) {
+                    sendMasasToSilos(1);
+                    const newNextSendTime = prev.nextAutoTachosSendTime + (autoTachosInterval * 60);
+                    return { ...prev, nextAutoTachosSendTime: newNextSendTime };
+                }
+
+                // --- Production Logic ---
                 const activeMachinesConfig = currentMachines
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .map(m => {
@@ -507,10 +526,9 @@ export default function OperationsClient({
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
                     pauseClock();
-                    return {...prev, isFinished: true };
+                    return {...prev, elapsedTime: newElapsedTime, isFinished: true };
                 }
 
-                const newElapsedTime = prev.elapsedTime + elapsedIncrement;
                 const newMachineTotals = { ...prev.machineTotals };
                 let newWrapperBuffer = prev.wrapperBuffer;
                 let newCurrentBundleProgress = prev.currentBundleProgress;
@@ -572,13 +590,13 @@ export default function OperationsClient({
                 }
 
                 return {
+                    ...prev,
                     elapsedTime: newElapsedTime,
                     machineTotals: newMachineTotals,
                     conveyorBelt: newConveyorBelt,
                     wrapperBuffer: newWrapperBuffer,
                     currentBundleProgress: newCurrentBundleProgress,
                     totalBundles: newTotalBundles,
-                    isFinished: prev.isFinished,
                 };
             });
         }, tickRateMs);
@@ -801,18 +819,43 @@ export default function OperationsClient({
                                    <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" />
                                </div>
                            </div>
-                           <div className="space-y-3 pt-4">
-                                <div className='text-center border bg-muted/30 rounded-lg p-2'>
-                                  <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
-                                  <p className="text-lg font-bold text-primary">{totalMasasSent}</p>
+                           <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="auto-mode-switch" className="text-sm font-medium">Modo Automático</Label>
+                                    <Switch
+                                        id="auto-mode-switch"
+                                        checked={isTachosAuto}
+                                        onCheckedChange={setIsTachosAuto}
+                                        disabled={isSimulating}
+                                    />
                                 </div>
-                                <Label className="text-center block">Masas a Enviar ({MASA_QQ_AMOUNT} QQ c/u)</Label>
-                                <div className="flex items-center justify-center gap-2">
-                                    <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => Math.max(1, p - 1))}><Minus className="h-4 w-4" /></Button>
-                                    <span className="text-xl font-bold w-12 text-center">{masasToSend}</span>
-                                    <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)}><Plus className="h-4 w-4" /></Button>
-                                </div>
-                                <Button className="w-full" onClick={handleSendMasas}>Enviar a Silos</Button>
+                                {isTachosAuto && (
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
+                                        <Input
+                                            id="auto-interval"
+                                            type="number"
+                                            value={autoTachosInterval}
+                                            onChange={(e) => setAutoTachosInterval(Number(e.target.value))}
+                                            disabled={isSimulating}
+                                            min="1"
+                                        />
+                                    </div>
+                                )}
+                                <Separator />
+                                <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
+                                    <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                      <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
+                                      <p className="text-lg font-bold text-primary">{totalMasasSent}</p>
+                                    </div>
+                                    <Label className="text-center block">Masas a Enviar ({MASA_QQ_AMOUNT} QQ c/u)</Label>
+                                    <div className="flex items-center justify-center gap-2">
+                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => Math.max(1, p - 1))} disabled={isTachosAuto}><Minus className="h-4 w-4" /></Button>
+                                        <span className="text-xl font-bold w-12 text-center">{masasToSend}</span>
+                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)} disabled={isTachosAuto}><Plus className="h-4 w-4" /></Button>
+                                    </div>
+                                    <Button className="w-full" onClick={handleManualSendMasas} disabled={isTachosAuto || isSimulating}>Enviar a Silos</Button>
+                               </div>
                            </div>
                         </div>
 
