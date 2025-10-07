@@ -443,6 +443,24 @@ export default function OperationsClient({
                                         </div>
 
                                         {machine.productId !== 'inactive' && (
+                                          <>
+                                            <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
+                                                <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
+                                                <div className="grid grid-cols-3 gap-1 text-center">
+                                                    <div className="bg-background p-1 rounded-md border">
+                                                        <p className="text-muted-foreground">Velocidad</p>
+                                                        <p className="font-bold text-sm">{machine.speed} <span className="text-xs font-normal">f/min</span></p>
+                                                    </div>
+                                                    <div className="bg-background p-1 rounded-md border">
+                                                        <p className="text-muted-foreground">Merma</p>
+                                                        <p className="font-bold text-sm">{machine.loss}%</p>
+                                                    </div>
+                                                    <div className="bg-background p-1 rounded-md border">
+                                                        <p className="text-muted-foreground">Unidades</p>
+                                                        <p className="font-bold text-sm">{machine.unitsPerSack}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
                                             <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
                                                 <h3 className="font-semibold text-center text-muted-foreground">Indicadores de Rendimiento</h3>
                                                 <div className="grid grid-cols-2 gap-2 text-center">
@@ -456,6 +474,7 @@ export default function OperationsClient({
                                                     </div>
                                                 </div>
                                             </div>
+                                          </>
                                         )}
                                     </div>
                                 )
