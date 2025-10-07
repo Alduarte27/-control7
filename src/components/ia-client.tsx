@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -172,7 +172,9 @@ export default function OperationsClient({
         reader.readAsDataURL(file);
     };
 
-    const totalQuintales = rawMaterials.reduce((sum, rm) => sum + rm.quantityQQ, 0);
+    const tachosQQ = rawMaterials.find(rm => rm.id === 'tachos')?.quantityQQ || 0;
+    const silosQQ = (rawMaterials.find(rm => rm.id === 'familiar')?.quantityQQ || 0) + (rawMaterials.find(rm => rm.id === 'granel')?.quantityQQ || 0);
+    const totalQuintales = tachosQQ + silosQQ;
     const siloAmount = totalQuintales * KG_PER_QUINTAL;
 
     // Etapa 2: Envasadoras
@@ -351,13 +353,30 @@ export default function OperationsClient({
                         <Tooltip>
                             <TooltipTrigger>
                                 <div className="flex flex-col items-center gap-2 text-center">
-                                    <Warehouse className="h-10 w-10 text-primary" />
-                                    <h4 className="font-semibold">Silo</h4>
-                                    <p className="text-sm text-muted-foreground">{totalQuintales.toLocaleString()} QQ</p>
+                                    <Beaker className="h-10 w-10 text-primary" />
+                                    <h4 className="font-semibold">Tachos</h4>
+                                    <p className="text-sm text-muted-foreground">{tachosQQ.toLocaleString()} QQ</p>
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Materia prima total disponible para la producción.</p>
+                                <p>Materia prima en etapa inicial.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+
+                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
+
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <div className="flex flex-col items-center gap-2 text-center">
+                                    <Warehouse className="h-10 w-10 text-primary" />
+                                    <h4 className="font-semibold">Silos</h4>
+                                    <p className="text-sm text-muted-foreground">{silosQQ.toLocaleString()} QQ</p>
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Materia prima total en silos (Familiar + Granel).</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
@@ -408,7 +427,7 @@ export default function OperationsClient({
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
                         <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Total en Silo</p>
+                            <p className="text-sm text-muted-foreground">Total Disponible</p>
                             <p className="text-2xl font-bold text-primary">{totalQuintales.toLocaleString()} QQ</p>
                         </div>
                     </CardHeader>
@@ -457,7 +476,7 @@ export default function OperationsClient({
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <h3 className="font-semibold text-lg">Parámetros de las Envasadoras</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                             {machines.map((machine) => {
                                 const product = products.find(p => p.id === machine.productId);
                                 const unitsPerHourNeto = (machine.speed * 60) * (1 - machine.loss / 100);
