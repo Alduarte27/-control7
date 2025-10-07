@@ -2,10 +2,10 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
+import type { ProductDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -15,13 +15,130 @@ import { Pie, Cell, ResponsiveContainer, PieChart, Tooltip as RechartsTooltip } 
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Image from 'next/image';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 
 const KG_PER_QUINTAL = 45.3592;
 const QQ_PER_MASA = 350;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
+type MachineState = {
+    id: number;
+    productId: string;
+    speed: number;
+    loss: number;
+    unitsPerSack: number;
+    imageUrl: string | null;
+};
+
+function MachineEditDialog({
+    machine,
+    products,
+    open,
+    onOpenChange,
+    onSave,
+}: {
+    machine: MachineState;
+    products: ProductDefinition[];
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSave: (updatedMachine: MachineState) => void;
+}) {
+    const [editedMachine, setEditedMachine] = React.useState(machine);
+
+    React.useEffect(() => {
+        setEditedMachine(machine);
+    }, [machine]);
+
+    const handleFieldChange = (field: keyof MachineState, value: any) => {
+        const newMachine = { ...editedMachine, [field]: value };
+        if (field === 'productId') {
+            const product = products.find(p => p.id === value);
+            newMachine.unitsPerSack = product?.unitsPerSack || 1;
+        }
+        setEditedMachine(newMachine);
+    };
+
+    const handleImageUpload = (file: File) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            handleFieldChange('imageUrl', reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const fileInputId = `modal-image-upload-${machine.id}`;
+    
+    const handleSaveChanges = () => {
+        onSave(editedMachine);
+        onOpenChange(false);
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar Máquina {machine.id}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                     <div className="space-y-2">
+                        <Label>Previsualización de la Imagen</Label>
+                        <div className="aspect-video bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                            <Image 
+                                src={editedMachine.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
+                                alt={`Máquina ${editedMachine.id}`}
+                                width={600}
+                                height={400}
+                                className="object-cover w-full h-full"
+                            />
+                        </div>
+                        <input
+                            type="file"
+                            id={fileInputId}
+                            className="hidden"
+                            accept="image/*"
+                            onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])}
+                        />
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()}>
+                            <Upload className="mr-2 h-3 w-3" />
+                            Cambiar Foto
+                        </Button>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor={`product-${machine.id}`}>Producto</Label>
+                        <Select value={editedMachine.productId} onValueChange={(val) => handleFieldChange('productId', val)}>
+                            <SelectTrigger id={`product-${machine.id}`}><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="inactive">-- Inactiva --</SelectItem>
+                                {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor={`speed-${machine.id}`}>Velocidad (fundas/min)</Label>
+                            <Input id={`speed-${machine.id}`} type="number" value={editedMachine.speed} onChange={e => handleFieldChange('speed', Number(e.target.value))}/>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor={`loss-${machine.id}`}>Merma (%)</Label>
+                            <Input id={`loss-${machine.id}`} type="number" value={editedMachine.loss} onChange={e => handleFieldChange('loss', Number(e.target.value))}/>
+                        </div>
+                    </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor={`units-${machine.id}`}>Unidades por Saco</Label>
+                        <Input id={`units-${machine.id}`} type="number" value={editedMachine.unitsPerSack} onChange={e => handleFieldChange('unitsPerSack', Number(e.target.value))}/>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                    <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
 export default function OperationsClient({ 
-  prefetchedCategories,
   prefetchedProducts,
 }: { 
   prefetchedCategories: CategoryDefinition[],
@@ -29,6 +146,7 @@ export default function OperationsClient({
 }) {
     const [isClient, setIsClient] = React.useState(false);
     const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
+    const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     
     // Etapa 1: Materia Prima
     const [masaCount, setMasaCount] = React.useState(2);
@@ -36,11 +154,11 @@ export default function OperationsClient({
     const siloAmount = totalQuintales * KG_PER_QUINTAL;
 
     // Etapa 2: Envasadoras
-    const [machines, setMachines] = React.useState([
-        { id: 1, productId: products[0]?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: products[0]?.unitsPerSack || 1, imageUrl: null as string | null },
-        { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null as string | null },
-        { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null as string | null },
-        { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null as string | null },
+    const [machines, setMachines] = React.useState<MachineState[]>([
+        { id: 1, productId: products[0]?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: products[0]?.unitsPerSack || 1, imageUrl: null },
+        { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
+        { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
+        { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
     ]);
 
     // Etapa 3: Enfardadora
@@ -57,26 +175,8 @@ export default function OperationsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [products]);
 
-    const handleMachineChange = (id: number, field: string, value: any) => {
-        setMachines(prev => prev.map(m => {
-            if (m.id === id) {
-                const updatedMachine = { ...m, [field]: value };
-                if (field === 'productId') {
-                    const product = products.find(p => p.id === value);
-                    updatedMachine.unitsPerSack = product?.unitsPerSack || 1;
-                }
-                return updatedMachine;
-            }
-            return m;
-        }));
-    };
-    
-    const handleImageUpload = (id: number, file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            handleMachineChange(id, 'imageUrl', reader.result as string);
-        };
-        reader.readAsDataURL(file);
+    const handleSaveMachine = (updatedMachine: MachineState) => {
+        setMachines(prev => prev.map(m => m.id === updatedMachine.id ? updatedMachine : m));
     };
 
     // Lógica del Simulador de Línea Completa
@@ -139,12 +239,13 @@ export default function OperationsClient({
                 bottleneckDescription,
                 noBottleneckDescription,
                 machineProduction: packingCapacity.map(m => {
-                    const machineKgShare = totalSacksPerHourFromPackers > 0 ? m.kgPerHour / effectiveKgPerHour * (siloAmount) / totalSacksPerHourFromPackers: 0;
+                    const totalKgProduced = effectiveKgPerHour * timeToEmptyHours;
+                    const machineKgShare = totalSacksPerHourFromPackers > 0 ? m.kgPerHour / totalKgPerHourFromPackers : 0;
                     return {
                         id: m.machineId,
                         productName: m.productName,
                         sacks: (totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / totalSacksPerHourFromPackers : 0) * totalSacksProduced,
-                        weight: isWrapperBottleneck ? m.sacksPerHour/totalSacksPerHourFromPackers * siloAmount : m.sacksPerHour/totalSacksPerHourFromPackers * siloAmount
+                        weight: machineKgShare * totalKgProduced,
                     }
                 }),
                 machineContribution,
@@ -283,148 +384,118 @@ export default function OperationsClient({
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                <div className="lg:col-span-3 space-y-8">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
-                        </CardHeader>
-                        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="masa-count">Cantidad de Masa Recibida</Label>
-                                <Input id="masa-count" type="number" value={masaCount} onChange={e => setMasaCount(Number(e.target.value))} min="0" />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Equivalente por Masa</Label>
-                                <p className="text-lg font-semibold p-2 border rounded-md bg-muted/50">{QQ_PER_MASA} QQ</p>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Total en Silo</Label>
-                                <p className="text-2xl font-bold text-primary p-1 border rounded-md text-center">{totalQuintales.toLocaleString()} QQ</p>
-                            </div>
-                        </CardContent>
-                    </Card>
+            <div className="space-y-8">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="masa-count">Cantidad de Masa Recibida</Label>
+                            <Input id="masa-count" type="number" value={masaCount} onChange={e => setMasaCount(Number(e.target.value))} min="0" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Equivalente por Masa</Label>
+                            <p className="text-lg font-semibold p-2 border rounded-md bg-muted/50">{QQ_PER_MASA} QQ</p>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Total en Silo</Label>
+                            <p className="text-2xl font-bold text-primary p-1 border rounded-md text-center">{totalQuintales.toLocaleString()} QQ</p>
+                        </div>
+                    </CardContent>
+                </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">2. Configuración de Línea de Empaque</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                           <div>
-                                <h3 className="font-semibold text-lg mb-4">Parámetros de las Envasadoras</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-6">
-                                    {machines.map((machine) => {
-                                      const unitsPerMinuteBruto = machine.speed;
-                                      const unitsPerHourBruto = unitsPerMinuteBruto * 60;
-                                      const unitsPerHourNeto = unitsPerHourBruto * (1 - machine.loss / 100);
-                                      const sacksPerHourNeto = (machine.unitsPerSack > 0) ? (unitsPerHourNeto / machine.unitsPerSack) : 0;
-                                      const fileInputId = `image-upload-${machine.id}`;
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">2. Configuración de Línea de Empaque</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
+                        <h3 className="font-semibold text-lg">Parámetros de las Envasadoras</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {machines.map((machine) => {
+                                const product = products.find(p => p.id === machine.productId);
+                                const unitsPerMinuteBruto = machine.speed;
+                                const unitsPerHourBruto = unitsPerMinuteBruto * 60;
+                                const unitsPerHourNeto = unitsPerHourBruto * (1 - machine.loss / 100);
+                                const sacksPerHourNeto = (machine.unitsPerSack > 0) ? (unitsPerHourNeto / machine.unitsPerSack) : 0;
+                                
+                                return (
+                                    <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background relative">
+                                        <div className="flex justify-between items-center">
+                                            <Label className="font-bold text-primary">Máquina {machine.id}</Label>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingMachine(machine)}>
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                        
+                                        <div className="aspect-video bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                                            <Image 
+                                                src={machine.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
+                                                alt={`Máquina ${machine.id}`}
+                                                width={600}
+                                                height={400}
+                                                className="object-cover w-full h-full"
+                                            />
+                                        </div>
 
-                                      return (
-                                        <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background relative">
-                                            <Label className="font-bold absolute -top-3 bg-background px-1 text-primary">Máquina {machine.id}</Label>
-                                            
-                                            <div className="space-y-2">
-                                                <div className="aspect-video bg-muted rounded-md flex items-center justify-center overflow-hidden">
-                                                    <Image 
-                                                        src={machine.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
-                                                        alt={`Máquina ${machine.id}`}
-                                                        width={600}
-                                                        height={400}
-                                                        className="object-cover w-full h-full"
-                                                    />
-                                                </div>
-                                                <input
-                                                    type="file"
-                                                    id={fileInputId}
-                                                    className="hidden"
-                                                    accept="image/*"
-                                                    onChange={(e) => e.target.files && handleImageUpload(machine.id, e.target.files[0])}
-                                                />
-                                                <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()}>
-                                                    <Upload className="mr-2 h-3 w-3" />
-                                                    Cambiar Foto
-                                                </Button>
-                                            </div>
+                                        <div className="space-y-1">
+                                            <p className="text-xs text-muted-foreground">Producto</p>
+                                            <p className="font-semibold truncate" title={product?.productName || 'Inactiva'}>
+                                                {product?.productName || 'Inactiva'}
+                                            </p>
+                                        </div>
 
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor={`product-${machine.id}`} className="text-xs">Producto</Label>
-                                                <Select value={machine.productId} onValueChange={(val) => handleMachineChange(machine.id, 'productId', val)}>
-                                                    <SelectTrigger id={`product-${machine.id}`}><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="inactive">-- Inactiva --</SelectItem>
-                                                        {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/min)</Label>
-                                                    <Input id={`speed-${machine.id}`} type="number" value={machine.speed} onChange={e => handleMachineChange(machine.id, 'speed', Number(e.target.value))}/>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor={`loss-${machine.id}`} className="text-xs">Merma (%)</Label>
-                                                    <Input id={`loss-${machine.id}`} type="number" value={machine.loss} onChange={e => handleMachineChange(machine.id, 'loss', Number(e.target.value))}/>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor={`units-${machine.id}`} className="text-xs">Unidades por Saco</Label>
-                                                <Input id={`units-${machine.id}`} type="number" value={machine.unitsPerSack} onChange={e => handleMachineChange(machine.id, 'unitsPerSack', Number(e.target.value))}/>
-                                            </div>
-                                            
-                                            {machine.productId !== 'inactive' && (
-                                                <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
-                                                    <h3 className="font-semibold text-center text-muted-foreground">Indicadores de Rendimiento</h3>
-                                                    <div className="grid grid-cols-2 gap-2 text-center">
-                                                        <div className="bg-background p-1 rounded-md border">
-                                                            <p className="text-muted-foreground">Unid/Hora (Neto)</p>
-                                                            <p className="font-bold text-sm">{unitsPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-                                                        </div>
-                                                         <div className="bg-background p-1 rounded-md border">
-                                                            <p className="text-muted-foreground">Sacos/Hora (Neto)</p>
-                                                            <p className="font-bold text-sm text-green-600">{sacksPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
-                                                        </div>
+                                        {machine.productId !== 'inactive' && (
+                                            <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
+                                                <h3 className="font-semibold text-center text-muted-foreground">Indicadores de Rendimiento</h3>
+                                                <div className="grid grid-cols-2 gap-2 text-center">
+                                                    <div className="bg-background p-1 rounded-md border">
+                                                        <p className="text-muted-foreground">Unid/Hora (Neto)</p>
+                                                        <p className="font-bold text-sm">{unitsPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                                                    </div>
+                                                    <div className="bg-background p-1 rounded-md border">
+                                                        <p className="text-muted-foreground">Sacos/Hora (Neto)</p>
+                                                        <p className="font-bold text-sm text-green-600">{sacksPerHourNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
                                                     </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                    )})}
-                                </div>
-                            </div>
-                            
-                            <Separator />
-                            
-                            <div>
-                                <h3 className="font-semibold text-lg mb-4">Parámetros de Empaque</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="sacks-per-bundle">Sacos por Paquete (Fardo)</Label>
-                                        <Input id="sacks-per-bundle" type="number" value={sacksPerBundle} onChange={e => setSacksPerBundle(Number(e.target.value))}/>
+                                            </div>
+                                        )}
                                     </div>
-                                    <div className="space-y-1.5 md:col-span-1">
-                                        <Label>Escenario de Enfardado</Label>
-                                        <Select value={wrapperScenario} onValueChange={(val: 'single' | 'dual') => setWrapperScenario(val)}>
-                                            <SelectTrigger><SelectValue/></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="single">1 Enfardadora Central</SelectItem>
-                                                <SelectItem value="dual">2 Líneas Paralelas (Máq. 1-2 y 3-4)</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <p className="text-xs text-muted-foreground md:col-span-2">Nota: La velocidad de la enfardadora se ajusta automáticamente. Con 1 envasadora activa, usa 4 fardos/min. Con 2 o más, usa 6 fardos/min.</p>
+                                )
+                            })}
+                        </div>
+                        
+                        <Separator />
+                        
+                        <div>
+                            <h3 className="font-semibold text-lg mb-4">Parámetros de Empaque</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="sacks-per-bundle">Sacos por Paquete (Fardo)</Label>
+                                    <Input id="sacks-per-bundle" type="number" value={sacksPerBundle} onChange={e => setSacksPerBundle(Number(e.target.value))}/>
                                 </div>
+                                <div className="space-y-1.5 md:col-span-1">
+                                    <Label>Escenario de Enfardado</Label>
+                                    <Select value={wrapperScenario} onValueChange={(val: 'single' | 'dual') => setWrapperScenario(val)}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="single">1 Enfardadora Central</SelectItem>
+                                            <SelectItem value="dual">2 Líneas Paralelas (Máq. 1-2 y 3-4)</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <p className="text-xs text-muted-foreground md:col-span-2">Nota: La velocidad de la enfardadora se ajusta automáticamente. Con 1 envasadora activa, usa 4 fardos/min. Con 2 o más, usa 6 fardos/min.</p>
                             </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                        </div>
+                    </CardContent>
+                </Card>
                 
-                <div className="lg:col-span-3 space-y-6">
+                <div className="space-y-6">
                     <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
                         <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
-                        <KpiCard title="Producción Total (QQ)" value={simulationResults.totalSacksProduced * (products.find(p=>p.id === machines.find(m=>m.productId !== 'inactive')?.productId)?.sackWeight || 50) / KG_PER_QUINTAL} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
+                        <KpiCard title="Producción Total (QQ)" value={simulationResults.machineProduction.reduce((sum, p) => sum + p.weight, 0) / KG_PER_QUINTAL} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
                     </div>
                     <Card>
                         <CardHeader>
@@ -463,6 +534,15 @@ export default function OperationsClient({
                     </Card>
                 </div>
             </div>
+            {editingMachine && (
+                <MachineEditDialog
+                    open={!!editingMachine}
+                    onOpenChange={(isOpen) => !isOpen && setEditingMachine(null)}
+                    machine={editingMachine}
+                    products={products}
+                    onSave={handleSaveMachine}
+                />
+            )}
         </>
         )}
       </main>
