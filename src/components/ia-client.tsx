@@ -348,7 +348,8 @@ export default function OperationsClient({
             bundlesPerMinute,
         };
 
-    }, [silosRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [machines, silos, wrapperCapacity, unitsPerBundle]);
 
     const liveSimulationResults = React.useMemo(() => {
         const totalSacksProduced = Object.values(simulationState.machineTotals).reduce((sum, val) => sum + val, 0);
@@ -402,7 +403,13 @@ export default function OperationsClient({
     const startClock = () => {
         if (isSimulating) return;
         setIsSimulating(true);
-        setSimulationState(prev => ({...prev, isFinished: false}));
+        
+        const activeMachines = machinesRef.current.filter(m => m.isSimulatingActive);
+        if (activeMachines.length === 0 && totalSiloQQ === 0) {
+          setSimulationState(prev => ({...prev, isFinished: false}));
+        } else {
+          setSimulationState(prev => ({...prev, isFinished: false}));
+        }
 
         simulationIntervalRef.current = setInterval(() => {
             const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
@@ -413,51 +420,47 @@ export default function OperationsClient({
             const currentWrapperCapacity = wrapperCapacityRef.current;
             const currentUnitsPerBundle = unitsPerBundleRef.current;
 
-            const activeMachinesConfig = currentMachines
-                .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
-                .map(m => {
-                    const product = currentProducts.find(p => p.id === m.productId);
-                    return {
-                        id: m.id,
-                        bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60,
-                        kgPerSecond: ((m.speed * (1 - m.loss / 100)) / 60) * (product?.sackWeight || 50),
-                    };
-                });
-
-            const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
-            const wrapperBagsPerSecond = currentWrapperCapacity / 60;
-            let currentTotalSiloQQ = 0;
-            
-            setSilos(prevSilos => {
-                const newSilos = JSON.parse(JSON.stringify(prevSilos));
-                const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
-                const granel = newSilos.find((s: SiloState) => s.id === 'granel');
-                let kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
-
-                if (kgConsumedThisTick > 0) {
-                    const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL;
-                    const consumedFromFamiliar = Math.min(kgInFamiliar, kgConsumedThisTick);
-                    familiar.currentQQ -= consumedFromFamiliar / KG_PER_QUINTAL;
-                    kgConsumedThisTick -= consumedFromFamiliar;
+            setSimulationState(prev => {
+                const activeMachinesConfig = currentMachines
+                    .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
+                    .map(m => {
+                        const product = currentProducts.find(p => p.id === m.productId);
+                        return {
+                            id: m.id,
+                            bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60,
+                            kgPerSecond: ((m.speed * (1 - m.loss / 100)) / 60) * (product?.sackWeight || 50),
+                        };
+                    });
+                
+                const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
+                const wrapperBagsPerSecond = currentWrapperCapacity / 60;
+                let currentTotalSiloQQ = 0;
+                
+                let silosAreEmpty = true;
+                setSilos(prevSilos => {
+                    const newSilos = JSON.parse(JSON.stringify(prevSilos));
+                    const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
+                    const granel = newSilos.find((s: SiloState) => s.id === 'granel');
+                    let kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
 
                     if (kgConsumedThisTick > 0) {
-                        const kgInGranel = granel.currentQQ * KG_PER_QUINTAL;
-                        const consumedFromGranel = Math.min(kgInGranel, kgConsumedThisTick);
-                        granel.currentQQ -= consumedFromGranel / KG_PER_QUINTAL;
-                    }
-                }
-                currentTotalSiloQQ = familiar.currentQQ + granel.currentQQ;
-                
-                if (currentTotalSiloQQ <= 0 && totalKgConsumedPerSecond > 0) {
-                    pauseClock();
-                    setSimulationState(prev => ({...prev, isFinished: true}));
-                }
-                return newSilos;
-            });
+                        const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL;
+                        const consumedFromFamiliar = Math.min(kgInFamiliar, kgConsumedThisTick);
+                        familiar.currentQQ -= consumedFromFamiliar / KG_PER_QUINTAL;
+                        kgConsumedThisTick -= consumedFromFamiliar;
 
-            setSimulationState(prev => {
-                // Double check if finished, as setSilos is async
-                if (prev.isFinished || (currentTotalSiloQQ <= 0 && totalKgConsumedPerSecond > 0)) {
+                        if (kgConsumedThisTick > 0) {
+                            const kgInGranel = granel.currentQQ * KG_PER_QUINTAL;
+                            const consumedFromGranel = Math.min(kgInGranel, kgConsumedThisTick);
+                            granel.currentQQ -= consumedFromGranel / KG_PER_QUINTAL;
+                        }
+                    }
+                    currentTotalSiloQQ = familiar.currentQQ + granel.currentQQ;
+                    silosAreEmpty = currentTotalSiloQQ <= 0;
+                    return newSilos;
+                });
+
+                if (prev.isFinished || (silosAreEmpty && totalKgConsumedPerSecond > 0)) {
                     pauseClock();
                     return {...prev, isFinished: true };
                 }
@@ -637,7 +640,7 @@ export default function OperationsClient({
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <CardTitle>Controles de Simulación</CardTitle>
                         <div className="flex items-center gap-2">
-                             <Button onClick={startClock} disabled={isSimulating || simulationState.isFinished} variant="secondary">
+                             <Button onClick={startClock} disabled={isSimulating} variant="secondary">
                                 <Play className="mr-2" /> Iniciar
                             </Button>
                             <Button onClick={pauseClock} disabled={!isSimulating} variant="destructive">
@@ -900,14 +903,7 @@ export default function OperationsClient({
                 
                 <div className="space-y-6">
                     <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <KpiCard 
-                            title="Total Sacos Producidos" 
-                            value={liveSimulationResults.totalSacksProduced} 
-                            icon={Package} 
-                            description="Suma total de sacos que han producido todas las envasadoras activas." 
-                            fractionDigits={0} 
-                        />
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <KpiCard 
                             title="Total Fardos Producidos" 
                             value={simulationState.totalBundles} 
