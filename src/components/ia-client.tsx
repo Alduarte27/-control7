@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -17,6 +17,7 @@ import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/comp
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import { Slider } from '@/components/ui/slider';
 
 
 const KG_PER_QUINTAL = 45.3592;
@@ -39,11 +40,12 @@ type RawMaterialSource = {
 };
 
 type SimulationState = {
-    elapsedTime: number;
+    elapsedTime: number; // in seconds
     machineTotals: { [machineId: number]: number };
     wrapperBuffer: number;
     currentBundleProgress: number;
     totalBundles: number;
+    isFinished: boolean;
 };
 
 function MachineEditDialog({
@@ -216,10 +218,14 @@ export default function OperationsClient({
         wrapperBuffer: 0,
         currentBundleProgress: 0,
         totalBundles: 0,
+        isFinished: false,
     };
     const [simulationState, setSimulationState] = React.useState<SimulationState>(initialSimState);
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-    const TICK_RATE_MS = 100; // Update 10 times per second
+    const [timeMultiplier, setTimeMultiplier] = React.useState(1);
+    const [startTime, setStartTime] = React.useState('08:00');
+    const [endTime, setEndTime] = React.useState('16:00');
+    const TICK_RATE_MS = 100;
 
 
     const simulationResults = React.useMemo(() => {
@@ -291,8 +297,21 @@ export default function OperationsClient({
         setIsClient(true);
     }, []);
 
+    const parseTimeToSeconds = (time: string) => {
+        const [hours, minutes] = time.split(':').map(Number);
+        return (hours * 3600) + (minutes * 60);
+    };
+
+    const formatElapsedTime = (totalSeconds: number) => {
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    };
+    
     const startSimulation = () => {
-        setSimulationState(initialSimState); // Reset on start
+        if (isSimulating) return;
+        setSimulationState(prev => ({...prev, isFinished: false}));
         setIsSimulating(true);
 
         const activeMachinesConfig = machines
@@ -303,34 +322,37 @@ export default function OperationsClient({
             }));
 
         const wrapperBagsPerSecond = wrapperCapacity / 60;
+        const totalDurationSeconds = parseTimeToSeconds(endTime) - parseTimeToSeconds(startTime);
 
         simulationIntervalRef.current = setInterval(() => {
             setSimulationState(prev => {
+                if (prev.elapsedTime >= totalDurationSeconds) {
+                    stopSimulation();
+                    return {...prev, isFinished: true};
+                }
+
+                const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
+                const newElapsedTime = prev.elapsedTime + elapsedIncrement;
+
                 const newMachineTotals = { ...prev.machineTotals };
                 let newWrapperBuffer = prev.wrapperBuffer;
                 let newCurrentBundleProgress = prev.currentBundleProgress;
                 let newTotalBundles = prev.totalBundles;
 
-                // 1. Packers produce and add to buffer
                 activeMachinesConfig.forEach(m => {
-                    const bagsProducedThisTick = m.bagsPerSecond * (TICK_RATE_MS / 1000);
+                    const bagsProducedThisTick = m.bagsPerSecond * elapsedIncrement;
                     newMachineTotals[m.id] += bagsProducedThisTick;
                     newWrapperBuffer += bagsProducedThisTick;
                 });
 
-                // 2. Wrapper consumes from buffer
-                let bagsToProcessThisTick = wrapperBagsPerSecond * (TICK_RATE_MS / 1000);
+                let bagsToProcessThisTick = wrapperBagsPerSecond * elapsedIncrement;
                 const bagsAvailable = newWrapperBuffer + newCurrentBundleProgress;
+                bagsToProcessThisTick = Math.min(bagsToProcessThisTick, bagsAvailable);
                 
-                if (bagsAvailable < bagsToProcessThisTick) {
-                    bagsToProcessThisTick = bagsAvailable;
-                }
-
                 const consumedFromBuffer = Math.min(newWrapperBuffer, bagsToProcessThisTick);
                 newWrapperBuffer -= consumedFromBuffer;
-                newCurrentBundleProgress += consumedFromBuffer;
+                newCurrentBundleProgress += bagsToProcessThisTick;
 
-                // 3. Wrapper creates bundles
                 if (newCurrentBundleProgress >= unitsPerBundle && unitsPerBundle > 0) {
                     const bundlesCreated = Math.floor(newCurrentBundleProgress / unitsPerBundle);
                     newTotalBundles += bundlesCreated;
@@ -338,11 +360,12 @@ export default function OperationsClient({
                 }
 
                 return {
-                    elapsedTime: prev.elapsedTime + (TICK_RATE_MS / 1000),
+                    elapsedTime: newElapsedTime > totalDurationSeconds ? totalDurationSeconds : newElapsedTime,
                     machineTotals: newMachineTotals,
                     wrapperBuffer: newWrapperBuffer,
                     currentBundleProgress: newCurrentBundleProgress,
                     totalBundles: newTotalBundles,
+                    isFinished: newElapsedTime >= totalDurationSeconds,
                 };
             });
         }, TICK_RATE_MS);
@@ -356,8 +379,12 @@ export default function OperationsClient({
         }
     };
     
+    const resetSimulation = () => {
+        stopSimulation();
+        setSimulationState(initialSimState);
+    };
+    
     React.useEffect(() => {
-      // Cleanup on unmount
       return () => stopSimulation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -467,28 +494,55 @@ export default function OperationsClient({
             </div>
             
             <div className="space-y-8">
-                 <Card>
-                    <CardHeader className="flex flex-row items-center justify-between">
+                <Card>
+                    <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <CardTitle>Controles de Simulación</CardTitle>
                         <div className="flex items-center gap-2">
-                             <Button onClick={startSimulation} disabled={isSimulating} variant="secondary">
-                                <Play className="mr-2" /> Iniciar Simulación
+                             <Button onClick={startSimulation} disabled={isSimulating || simulationState.isFinished} variant="secondary">
+                                <Play className="mr-2" /> Iniciar
                             </Button>
                             <Button onClick={stopSimulation} disabled={!isSimulating} variant="destructive">
-                                <Pause className="mr-2" /> Detener Simulación
+                                <Pause className="mr-2" /> Detener
+                            </Button>
+                            <Button onClick={resetSimulation} variant="outline">
+                                <RefreshCw className="mr-2" /> Reiniciar
                             </Button>
                         </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-center">
-                            <p className="text-sm text-muted-foreground">Tiempo Transcurrido</p>
-                            <p className="text-4xl font-bold font-mono">
-                                {Math.floor(simulationState.elapsedTime / 60).toString().padStart(2, '0')}:
-                                {Math.floor(simulationState.elapsedTime % 60).toString().padStart(2, '0')}
-                            </p>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="sim-start-time">Hora de Inicio</Label>
+                                    <Input id="sim-start-time" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} disabled={isSimulating} />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="sim-end-time">Hora de Fin</Label>
+                                    <Input id="sim-end-time" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} disabled={isSimulating} />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="sim-speed">Acelerador de Tiempo ({timeMultiplier}x)</Label>
+                                <Slider
+                                    id="sim-speed"
+                                    min={1}
+                                    max={1000}
+                                    step={1}
+                                    value={[timeMultiplier]}
+                                    onValueChange={(val) => setTimeMultiplier(val[0])}
+                                    disabled={isSimulating}
+                                />
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
+                            <Clock className="h-6 w-6 text-muted-foreground mb-2" />
+                            <p className="text-sm text-muted-foreground">Tiempo de Simulación Transcurrido</p>
+                            <p className="text-4xl font-bold font-mono text-primary">{formatElapsedTime(simulationState.elapsedTime)}</p>
+                            {simulationState.isFinished && <p className="text-green-600 font-semibold mt-2">¡Simulación Completada!</p>}
                         </div>
                     </CardContent>
                 </Card>
+
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
