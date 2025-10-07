@@ -354,6 +354,11 @@ export default function OperationsClient({
         machinesRef.current = machines;
     }, [machines]);
 
+    const silosRef = React.useRef(silos);
+    React.useEffect(() => {
+        silosRef.current = silos;
+    }, [silos]);
+
     const pauseClock = () => {
         setIsSimulating(false);
         if (simulationIntervalRef.current) {
@@ -370,8 +375,9 @@ export default function OperationsClient({
         simulationIntervalRef.current = setInterval(() => {
             const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
             
-            // Access the latest machines state via the ref inside the interval
-            const activeMachinesConfig = machinesRef.current
+            // Access the latest states via refs inside the interval
+            const currentMachines = machinesRef.current;
+            const activeMachinesConfig = currentMachines
                 .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                 .map(m => {
                     const product = products.find(p => p.id === m.productId);
@@ -658,7 +664,7 @@ export default function OperationsClient({
                                     <span className="text-xl font-bold w-12 text-center">{masasToSend}</span>
                                     <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)}><Plus className="h-4 w-4" /></Button>
                                 </div>
-                                <Button className="w-full" onClick={handleSendMasas} disabled={isSimulating}>Enviar a Silos</Button>
+                                <Button className="w-full" onClick={handleSendMasas}>Enviar a Silos</Button>
                            </div>
                         </div>
 
