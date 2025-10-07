@@ -17,7 +17,6 @@ import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/comp
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
-import { Slider } from '@/components/ui/slider';
 
 
 const KG_PER_QUINTAL = 50;
@@ -289,29 +288,27 @@ export default function OperationsClient({
 
           const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
           const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+          
+          let qqForFamiliar = 0;
+          let qqForGranel = 0;
 
-          // If familiar has space for the full amount, it goes there.
+          // Try to put the whole batch in Familiar first
           if (spaceInFamiliar >= qqToDistribute) {
-              familiarSilo.currentQQ += qqToDistribute;
-              qqToDistribute = 0;
+              qqForFamiliar = qqToDistribute;
           } 
-          // If familiar is full, but granel has space, it goes to granel.
+          // If not, try to put the whole batch in Granel
           else if (spaceInGranel >= qqToDistribute) {
-              granelSilo.currentQQ += qqToDistribute;
-              qqToDistribute = 0;
+              qqForGranel = qqToDistribute;
           }
-          // Otherwise, fill familiar and overflow to granel.
+          // Otherwise, overflow: fill Familiar then put the rest in Granel
           else {
-              const toAddInFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
-              familiarSilo.currentQQ += toAddInFamiliar;
-              qqToDistribute -= toAddInFamiliar;
-
-              if (qqToDistribute > 0) {
-                  const toAddInGranel = Math.min(qqToDistribute, spaceInGranel);
-                  granelSilo.currentQQ += toAddInGranel;
-                  qqToDistribute -= toAddInGranel;
-              }
+              qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
+              const remainder = qqToDistribute - qqForFamiliar;
+              qqForGranel = Math.min(remainder, spaceInGranel);
           }
+
+          familiarSilo.currentQQ += qqForFamiliar;
+          granelSilo.currentQQ += qqForGranel;
           
           return newSilos;
       });
@@ -359,9 +356,9 @@ export default function OperationsClient({
     };
     const [simulationState, setSimulationState] = React.useState<SimulationState>(initialSimState);
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-    const [timeMultiplier, setTimeMultiplier] = React.useState(1);
-    const TICK_RATE_MS = 100;
-    
+    const [simHours, setSimHours] = React.useState(8);
+    const TOTAL_SIM_DURATION_MS = 15000; // Run the whole sim over 15 seconds
+
     const machinesRef = React.useRef(machines);
     React.useEffect(() => { machinesRef.current = machines; }, [machines]);
 
@@ -393,12 +390,9 @@ export default function OperationsClient({
                 return sum + effectiveBagsPerMinute;
             }, 0);
         
+        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, currentWrapperCapacity);
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > currentWrapperCapacity;
         
-        // This is the actual throughput of the system in bags/minute
-        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, currentWrapperCapacity);
-        
-        // Bundles/minute is based on the *effective* system throughput
         const bundlesPerMinute = currentUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / currentUnitsPerBundle : 0;
         
         const bottleneckDescription = `La enfardadora (cap: ${currentWrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
@@ -482,18 +476,24 @@ export default function OperationsClient({
         if (simulationIntervalRef.current) return;
         setIsSimulating(true);
         
+        resetSimulation(false); // Reset state but not material
         setSimulationState(prev => ({...prev, isFinished: false}));
+        
+        const simDurationSeconds = simHours * 3600;
+        const tickRateMs = 50; 
+        const totalTicks = TOTAL_SIM_DURATION_MS / tickRateMs;
+        const elapsedIncrementPerTick = simDurationSeconds / totalTicks;
 
         simulationIntervalRef.current = setInterval(() => {
             const currentMachines = machinesRef.current;
             
             setSimulationState(prev => {
-                if (prev.isFinished) {
+                if (prev.isFinished || prev.elapsedTime >= simDurationSeconds) {
                     pauseClock();
-                    return prev;
+                    return {...prev, isFinished: true, elapsedTime: simDurationSeconds};
                 }
 
-                const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
+                const elapsedIncrement = elapsedIncrementPerTick;
                 
                 const activeMachinesConfig = currentMachines
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
@@ -510,9 +510,10 @@ export default function OperationsClient({
                     });
                 
                 const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
-                const kgAvailableInSilos = silosRef.current.reduce((sum, s) => sum + s.currentQQ, 0) * KG_PER_QUINTAL;
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
                 
+                // Use a ref for silo state to get latest value inside interval
+                const kgAvailableInSilos = silosRef.current.reduce((sum, s) => sum + s.currentQQ, 0) * KG_PER_QUINTAL;
                 const canProduce = kgAvailableInSilos >= kgConsumedThisTick;
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
@@ -602,19 +603,21 @@ export default function OperationsClient({
                     isFinished: prev.isFinished,
                 };
             });
-        }, TICK_RATE_MS);
+        }, tickRateMs);
     };
 
     
-    const resetSimulation = () => {
+    const resetSimulation = (resetMaterial = true) => {
         pauseClock();
         setSimulationState(initialSimState);
-        setTotalMasasSent(0);
-        const originalSilos = [
-            { id: 'familiar', name: 'Silo Familiar', capacityQQ: silos.find(s => s.id === 'familiar')?.capacityQQ || 380, currentQQ: 0, imageUrl: silos.find(s => s.id === 'familiar')?.imageUrl || null },
-            { id: 'granel', name: 'Silo a Granel', capacityQQ: silos.find(s => s.id === 'granel')?.capacityQQ || 700, currentQQ: 0, imageUrl: silos.find(s => s.id === 'granel')?.imageUrl || null },
-        ];
-        setSilos(originalSilos);
+        if (resetMaterial) {
+          setTotalMasasSent(0);
+          const originalSilos = [
+              { id: 'familiar', name: 'Silo Familiar', capacityQQ: silos.find(s => s.id === 'familiar')?.capacityQQ || 380, currentQQ: 0, imageUrl: silos.find(s => s.id === 'familiar')?.imageUrl || null },
+              { id: 'granel', name: 'Silo a Granel', capacityQQ: silos.find(s => s.id === 'granel')?.capacityQQ || 700, currentQQ: 0, imageUrl: silos.find(s => s.id === 'granel')?.imageUrl || null },
+          ];
+          setSilos(originalSilos);
+        }
     };
 
     const toggleMachineActive = (machineId: number) => {
@@ -752,44 +755,44 @@ export default function OperationsClient({
                 <Card>
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <CardTitle>Controles de Simulación</CardTitle>
-                        <div className="flex items-center gap-2">
-                             <Button onClick={startClock} disabled={isSimulating} variant="secondary">
-                                <Play className="mr-2" /> Iniciar
-                            </Button>
-                            <Button onClick={pauseClock} disabled={!isSimulating} variant="destructive">
-                                <Pause className="mr-2" /> Detener
-                            </Button>
-                            <Button onClick={resetSimulation} variant="outline">
-                                <RefreshCw className="mr-2" /> Reiniciar
-                            </Button>
-                        </div>
+                         <div className="flex items-center gap-2">
+                            <Button onClick={startClock} disabled={isSimulating} variant="secondary">
+                               <Play className="mr-2" /> Iniciar
+                           </Button>
+                           <Button onClick={pauseClock} disabled={!isSimulating} variant="destructive">
+                               <Pause className="mr-2" /> Detener
+                           </Button>
+                           <Button onClick={() => resetSimulation(true)} variant="outline">
+                               <RefreshCw className="mr-2" /> Reiniciar
+                           </Button>
+                       </div>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
-                             <div className="space-y-1.5">
-                                <Label htmlFor="sim-speed">Acelerador de Tiempo ({timeMultiplier}x)</Label>
-                                <Slider
-                                    id="sim-speed"
-                                    min={1}
-                                    max={1000}
-                                    step={1}
-                                    value={[timeMultiplier]}
-                                    onValueChange={(val) => setTimeMultiplier(val[0])}
-                                />
-                            </div>
-                        </div>
-                        <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
-                            <Clock className="h-6 w-6 text-muted-foreground mb-2" />
-                            <p className="text-sm text-muted-foreground">Tiempo de Simulación Transcurrido</p>
-                            <p className="text-4xl font-bold font-mono text-primary">{formatElapsedTime(simulationState.elapsedTime)}</p>
-                            {simulationState.isFinished && (
-                                <p className="text-destructive font-semibold mt-2 flex items-center gap-2">
-                                    <AlertTriangle className="h-4 w-4" />
-                                    ¡Sin Materia Prima!
-                                </p>
-                            )}
-                        </div>
-                    </CardContent>
+                       <div className="space-y-4">
+                           <div className="space-y-1.5">
+                               <Label htmlFor="sim-hours">Simular Durante (Horas)</Label>
+                               <Input 
+                                   id="sim-hours" 
+                                   type="number" 
+                                   value={simHours} 
+                                   onChange={e => setSimHours(Number(e.target.value))} 
+                                   min="0.1" 
+                                   step="0.5" 
+                               />
+                           </div>
+                       </div>
+                       <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
+                           <Clock className="h-6 w-6 text-muted-foreground mb-2" />
+                           <p className="text-sm text-muted-foreground">Tiempo Transcurrido</p>
+                           <p className="text-4xl font-bold font-mono text-primary">{formatElapsedTime(simulationState.elapsedTime)}</p>
+                           {simulationState.isFinished && simulationState.elapsedTime > 0 && (
+                               <p className="text-destructive font-semibold mt-2 flex items-center gap-2">
+                                   <AlertTriangle className="h-4 w-4" />
+                                   {silos.every(s => s.currentQQ === 0) ? "¡Sin Materia Prima!" : "Simulación Completada"}
+                               </p>
+                           )}
+                       </div>
+                   </CardContent>
                 </Card>
 
 
