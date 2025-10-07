@@ -490,8 +490,7 @@ export default function OperationsClient({
 
         simulationIntervalRef.current = setInterval(() => {
             const currentMachines = machinesRef.current;
-            const currentSilos = silosRef.current;
-
+            
             setSimulationState(prev => {
                 const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
                 
@@ -510,10 +509,12 @@ export default function OperationsClient({
                     });
                 
                 const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
-                const currentTotalSiloQQ = currentSilos.reduce((sum, s) => sum + s.currentQQ, 0);
-                const silosAreEmpty = currentTotalSiloQQ <= 0;
+                const kgAvailableInSilos = silosRef.current.reduce((sum, s) => sum + s.currentQQ, 0) * KG_PER_QUINTAL;
+                const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
 
-                if (prev.isFinished || (silosAreEmpty && totalKgConsumedPerSecond > 0)) {
+                const canProduce = kgAvailableInSilos >= kgConsumedThisTick;
+                
+                if (prev.isFinished || !canProduce && totalKgConsumedPerSecond > 0) {
                     pauseClock();
                     return {...prev, isFinished: true };
                 }
@@ -526,15 +527,13 @@ export default function OperationsClient({
                 let newConveyorBelt = [...prev.conveyorBelt];
 
                 // 1. Packers produce and add to conveyor belt
-                if (!silosAreEmpty) {
-                    const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
+                if (canProduce) {
                     if (kgConsumedThisTick > 0) {
                         setSilos(prevSilos => {
+                            let consumption = kgConsumedThisTick;
                             const newSilos = JSON.parse(JSON.stringify(prevSilos));
                             const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
                             const granel = newSilos.find((s: SiloState) => s.id === 'granel');
-                            
-                            let consumption = kgConsumedThisTick;
                             
                             const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL;
                             const consumedFromFamiliar = Math.min(kgInFamiliar, consumption);
@@ -776,7 +775,12 @@ export default function OperationsClient({
                             <Clock className="h-6 w-6 text-muted-foreground mb-2" />
                             <p className="text-sm text-muted-foreground">Tiempo de Simulación Transcurrido</p>
                             <p className="text-4xl font-bold font-mono text-primary">{formatElapsedTime(simulationState.elapsedTime)}</p>
-                            {simulationState.isFinished && <p className="text-green-600 font-semibold mt-2">¡Materia Prima Agotada!</p>}
+                            {simulationState.isFinished && (
+                                <p className="text-destructive font-semibold mt-2 flex items-center gap-2">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    ¡Sin Materia Prima!
+                                </p>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
