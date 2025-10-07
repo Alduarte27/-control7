@@ -82,7 +82,7 @@ function MachineEditDialog({
                 <div className="space-y-4 py-4">
                      <div className="space-y-2">
                         <Label>Previsualización de la Imagen</Label>
-                        <div className="aspect-video bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                             <Image 
                                 src={editedMachine.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
                                 alt={`Máquina ${editedMachine.id}`}
@@ -423,7 +423,7 @@ export default function OperationsClient({
                                             </Button>
                                         </div>
                                         
-                                        <div className="aspect-video bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                                             <Image 
                                                 src={machine.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
                                                 alt={`Máquina ${machine.id}`}
