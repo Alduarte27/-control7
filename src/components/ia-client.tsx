@@ -260,11 +260,41 @@ export default function OperationsClient({
     const [timeMultiplier, setTimeMultiplier] = React.useState(1);
     const TICK_RATE_MS = 100;
     
-    const simulationResults = React.useMemo(() => {
-        const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
+    // Using refs to hold the latest state for the interval callback
+    const machinesRef = React.useRef(machines);
+    React.useEffect(() => {
+        machinesRef.current = machines;
+    }, [machines]);
 
-        const packingCapacity = machines.filter(m => m.productId !== 'inactive').map(machine => {
-            const product = products.find(p => p.id === machine.productId);
+    const silosRef = React.useRef(silos);
+    React.useEffect(() => {
+        silosRef.current = silos;
+    }, [silos]);
+
+    const productsRef = React.useRef(products);
+    React.useEffect(() => {
+        productsRef.current = products;
+    }, [products]);
+    
+    const wrapperCapacityRef = React.useRef(wrapperCapacity);
+    React.useEffect(() => {
+        wrapperCapacityRef.current = wrapperCapacity;
+    }, [wrapperCapacity]);
+
+    const unitsPerBundleRef = React.useRef(unitsPerBundle);
+    React.useEffect(() => {
+        unitsPerBundleRef.current = unitsPerBundle;
+    }, [unitsPerBundle]);
+
+
+    const simulationResults = React.useMemo(() => {
+        const currentMachines = machinesRef.current;
+        const currentProducts = productsRef.current;
+
+        const activeMachines = currentMachines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
+
+        const packingCapacity = currentMachines.filter(m => m.productId !== 'inactive').map(machine => {
+            const product = currentProducts.find(p => p.id === machine.productId);
             if (!product) return { machineId: machine.id, bagsPerMinute: 0, kgPerMinute: 0, productName: 'N/A' };
             const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
             return {
@@ -276,7 +306,7 @@ export default function OperationsClient({
         });
 
         const activePackingCapacity = activeMachines.map(machine => {
-            const product = products.find(p => p.id === machine.productId);
+            const product = currentProducts.find(p => p.id === machine.productId);
             if (!product) return { machineId: machine.id, bagsPerMinute: 0, kgPerMinute: 0, productName: 'N/A' };
             const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
             return {
@@ -290,52 +320,63 @@ export default function OperationsClient({
         const totalBagsPerMinuteFromPackers = activePackingCapacity.reduce((sum, m) => sum + m.bagsPerMinute, 0);
         const totalKgPerMinuteFromPackers = activePackingCapacity.reduce((sum, m) => sum + m.kgPerMinute, 0);
 
-        const isWrapperBottleneck = totalBagsPerMinuteFromPackers > wrapperCapacity;
+        const currentWrapperCapacity = wrapperCapacityRef.current;
+        const isWrapperBottleneck = totalBagsPerMinuteFromPackers > currentWrapperCapacity;
         
-        const effectiveBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, wrapperCapacity);
-        const bundlesPerMinute = unitsPerBundle > 0 ? Math.floor(effectiveBagsPerMinute / unitsPerBundle) : 0;
+        const effectiveBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, currentWrapperCapacity);
+        const currentUnitsPerBundle = unitsPerBundleRef.current;
+        const bundlesPerMinute = currentUnitsPerBundle > 0 ? Math.floor(effectiveBagsPerMinute / currentUnitsPerBundle) : 0;
         
         let effectiveKgPerMinute = 0;
         if (totalBagsPerMinuteFromPackers > 0) {
-            const reductionFactor = isWrapperBottleneck ? wrapperCapacity / totalBagsPerMinuteFromPackers : 1;
+            const reductionFactor = isWrapperBottleneck ? currentWrapperCapacity / totalBagsPerMinuteFromPackers : 1;
             effectiveKgPerMinute = totalKgPerMinuteFromPackers * reductionFactor;
         }
 
-        const bottleneckDescription = `La enfardadora (cap: ${wrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
+        const bottleneckDescription = `La enfardadora (cap: ${currentWrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
 
         const timeToEmptyHours = effectiveKgPerMinute > 0 ? (siloAmount / effectiveKgPerMinute) / 60 : 0;
-        const totalBagsProduced = effectiveBagsPerMinute * 60 * timeToEmptyHours;
         
-        const machineContribution = packingCapacity.map(m => ({ 
-            name: `Máq. ${m.machineId} (${m.productName})`, 
-            value: isNaN(m.bagsPerMinute / totalBagsPerMinuteFromPackers * totalBagsProduced) ? 0 : (m.bagsPerMinute / totalBagsPerMinuteFromPackers * totalBagsProduced) 
-        }));
-
         return {
             timeToEmptyHours,
-            totalBagsProduced,
             isWrapperBottleneck,
             bottleneckDescription,
             noBottleneckDescription,
-            machineProduction: packingCapacity.map(m => {
-                const totalKgProduced = effectiveKgPerMinute * 60 * timeToEmptyHours;
-                const machineKgShare = totalKgPerMinuteFromPackers > 0 ? m.kgPerMinute / totalKgPerMinuteFromPackers : 0;
-                return {
-                    id: m.machineId,
-                    productName: m.productName,
-                    sacks: (totalBagsPerMinuteFromPackers > 0 ? m.bagsPerMinute / totalBagsPerMinuteFromPackers : 0) * totalBagsProduced,
-                    weight: machineKgShare * totalKgProduced,
-                }
-            }),
-            machineContribution,
             totalBagsPerMinuteFromPackers,
-            totalBagsPerHourFromAllPackers: totalBagsPerMinuteFromPackers * 60,
-            effectiveWrapperBagsPerHour: wrapperCapacity * 60,
             bundlesPerMinute,
         };
 
-    }, [siloAmount, machines, products, wrapperCapacity, unitsPerBundle]);
+    }, [siloAmount]);
+
+    const liveSimulationResults = React.useMemo(() => {
+        const totalSacksProduced = Object.values(simulationState.machineTotals).reduce((sum, val) => sum + val, 0);
+
+        let totalKgProduced = 0;
+        machines.forEach(machine => {
+            const product = products.find(p => p.id === machine.productId);
+            if (product) {
+                const machineSacks = simulationState.machineTotals[machine.id] || 0;
+                totalKgProduced += machineSacks * (product.sackWeight || 50);
+            }
+        });
+
+        const machineContribution = machines.map(m => {
+            const product = products.find(p => p.id === m.productId);
+            return {
+                name: `Máq. ${m.id} (${product?.productName || 'N/A'})`,
+                value: simulationState.machineTotals[m.id] || 0
+            }
+        });
+
+        return {
+            totalSacksProduced,
+            totalKgProduced,
+            totalQuintalesProduced: totalKgProduced / KG_PER_QUINTAL,
+            machineContribution
+        }
+
+    }, [simulationState.machineTotals, machines, products]);
 
     React.useEffect(() => {
         setIsClient(true);
@@ -348,16 +389,6 @@ export default function OperationsClient({
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     };
     
-    // Using a ref to hold the latest state for the interval callback
-    const machinesRef = React.useRef(machines);
-    React.useEffect(() => {
-        machinesRef.current = machines;
-    }, [machines]);
-
-    const silosRef = React.useRef(silos);
-    React.useEffect(() => {
-        silosRef.current = silos;
-    }, [silos]);
 
     const pauseClock = () => {
         setIsSimulating(false);
@@ -377,10 +408,14 @@ export default function OperationsClient({
             
             // Access the latest states via refs inside the interval
             const currentMachines = machinesRef.current;
+            const currentProducts = productsRef.current;
+            const currentWrapperCapacity = wrapperCapacityRef.current;
+            const currentUnitsPerBundle = unitsPerBundleRef.current;
+
             const activeMachinesConfig = currentMachines
                 .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                 .map(m => {
-                    const product = products.find(p => p.id === m.productId);
+                    const product = currentProducts.find(p => p.id === m.productId);
                     return {
                         id: m.id,
                         bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60,
@@ -389,7 +424,7 @@ export default function OperationsClient({
                 });
 
             const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
-            const wrapperBagsPerSecond = wrapperCapacity / 60;
+            const wrapperBagsPerSecond = currentWrapperCapacity / 60;
             let currentTotalSiloQQ = 0;
             
             setSilos(prevSilos => {
@@ -446,10 +481,10 @@ export default function OperationsClient({
                 newWrapperBuffer -= consumedFromBuffer;
                 newCurrentBundleProgress += bagsToProcessThisTick;
 
-                if (newCurrentBundleProgress >= unitsPerBundle && unitsPerBundle > 0) {
-                    const bundlesCreated = Math.floor(newCurrentBundleProgress / unitsPerBundle);
+                if (newCurrentBundleProgress >= currentUnitsPerBundle && currentUnitsPerBundle > 0) {
+                    const bundlesCreated = Math.floor(newCurrentBundleProgress / currentUnitsPerBundle);
                     newTotalBundles += bundlesCreated;
-                    newCurrentBundleProgress %= unitsPerBundle;
+                    newCurrentBundleProgress %= currentUnitsPerBundle;
                 }
 
                 return {
@@ -468,7 +503,6 @@ export default function OperationsClient({
     const resetSimulation = () => {
         pauseClock();
         setSimulationState(initialSimState);
-        setMachines(prev => prev.map(m => ({ ...m, isSimulatingActive: false })));
         const originalSilos = [
             { id: 'familiar', name: 'Silo Familiar', capacityQQ: silos.find(s => s.id === 'familiar')?.capacityQQ || 380, currentQQ: 0, imageUrl: silos.find(s => s.id === 'familiar')?.imageUrl || null },
             { id: 'granel', name: 'Silo a Granel', capacityQQ: silos.find(s => s.id === 'granel')?.capacityQQ || 700, currentQQ: 0, imageUrl: silos.find(s => s.id === 'granel')?.imageUrl || null },
@@ -862,9 +896,9 @@ export default function OperationsClient({
                 <div className="space-y-6">
                     <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
-                        <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalBagsProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
-                        <KpiCard title="Producción Total (QQ)" value={simulationResults.machineProduction.reduce((sum, p) => sum + p.weight, 0) / KG_PER_QUINTAL} icon={Warehouse} description={`Basado en la cantidad del silo (${totalSiloQQ.toLocaleString()} QQ).`} fractionDigits={1}/>
+                        <KpiCard title="Tiempo Restante para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
+                        <KpiCard title="Producción Total (Sacos)" value={liveSimulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se han producido." fractionDigits={0} />
+                        <KpiCard title="Producción Total (QQ)" value={liveSimulationResults.totalQuintalesProduced} icon={Warehouse} description={`Basado en la cantidad del silo (${totalSiloQQ.toLocaleString()} QQ).`} fractionDigits={1}/>
                     </div>
                     <Card>
                         <CardHeader>
@@ -885,13 +919,13 @@ export default function OperationsClient({
                             <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            {simulationResults.machineContribution.every(m => m.value === 0) ? (
+                            {liveSimulationResults.machineContribution.every(m => m.value === 0) ? (
                                 <p className="text-center text-muted-foreground h-[200px] flex items-center justify-center">Activa una máquina para ver la contribución.</p>
                             ) : (
                                 <ResponsiveContainer width="100%" height={200}>
                                     <PieChart>
-                                        <Pie data={simulationResults.machineContribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                                            {simulationResults.machineContribution.map((entry, index) => (
+                                        <Pie data={liveSimulationResults.machineContribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                                            {liveSimulationResults.machineContribution.map((entry, index) => (
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
