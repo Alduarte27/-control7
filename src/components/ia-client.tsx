@@ -571,11 +571,12 @@ export default function OperationsClient({
         
         simulationIntervalRef.current = setInterval(() => {
             const currentSimState = simulationStateRef.current;
-            
             const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
+            
             if (isTachosAuto && !goalMet && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
                 sendMasasToSilosRef.current(1);
-                simulationStateRef.current = {
+                 // We directly modify the ref here to avoid race conditions with setState
+                 simulationStateRef.current = {
                     ...simulationStateRef.current,
                     nextAutoTachosSendTime: simulationStateRef.current.elapsedTime + (autoTachosInterval * 60),
                 };
@@ -862,11 +863,6 @@ export default function OperationsClient({
                                    value={[simulationSpeed]}
                                    onValueChange={(value) => setSimulationSpeed(value[0])}
                                />
-                               <div className="flex justify-between text-xs text-muted-foreground">
-                                   <span>Lento</span>
-                                   <span className='font-semibold'>Tiempo Real (1x)</span>
-                                   <span>Rápido</span>
-                               </div>
                            </div>
                        </div>
                        <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
@@ -895,12 +891,12 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                           <div className='flex justify-between items-center gap-2'>
+                           <div className='flex justify-between items-start'>
                              <div className='flex items-center gap-2'>
                                 <h3 className="font-bold text-primary">{tachosState.name}</h3>
                                 {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                              </div>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 -mt-1" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
                                 <Edit className="h-4 w-4" />
                             </Button>
                            </div>
@@ -933,9 +929,9 @@ export default function OperationsClient({
 
                             return (
                                 <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
-                                     <div className='flex justify-between items-center'>
+                                     <div className='flex justify-between items-start'>
                                         <h3 className="font-bold text-primary">{silo.name}</h3>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7 -mt-1" onClick={() => setEditingSilo(silo)}>
                                             <Edit className="h-4 w-4" />
                                         </Button>
                                     </div>
