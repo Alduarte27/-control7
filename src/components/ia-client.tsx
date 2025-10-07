@@ -171,6 +171,7 @@ export default function OperationsClient({
     
     // --- Raw Material State ---
     const [masasToSend, setMasasToSend] = React.useState(1);
+    const [totalMasasSent, setTotalMasasSent] = React.useState(0);
     const [silos, setSilos] = React.useState<SiloState[]>([
         { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: null },
         { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: null },
@@ -216,6 +217,7 @@ export default function OperationsClient({
             }
             return newSilos;
         });
+        setTotalMasasSent(prev => prev + masasToSend);
         setMasasToSend(1);
     };
     
@@ -336,7 +338,7 @@ export default function OperationsClient({
         const bottleneckDescription = `La enfardadora (cap: ${currentWrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
 
-        const timeToEmptyHours = effectiveKgPerMinute > 0 ? (siloAmount / effectiveKgPerMinute) / 60 : 0;
+        const timeToEmptyHours = effectiveKgPerMinute > 0 ? ((silos.reduce((s,c) => s + (c.currentQQ * KG_PER_QUINTAL), 0)) / effectiveKgPerMinute) / 60 : 0;
         
         return {
             timeToEmptyHours,
@@ -347,7 +349,7 @@ export default function OperationsClient({
             bundlesPerMinute,
         };
 
-    }, [siloAmount]);
+    }, [silos]);
 
     const liveSimulationResults = React.useMemo(() => {
         const totalSacksProduced = Object.values(simulationState.machineTotals).reduce((sum, val) => sum + val, 0);
@@ -503,6 +505,7 @@ export default function OperationsClient({
     const resetSimulation = () => {
         pauseClock();
         setSimulationState(initialSimState);
+        setTotalMasasSent(0);
         const originalSilos = [
             { id: 'familiar', name: 'Silo Familiar', capacityQQ: silos.find(s => s.id === 'familiar')?.capacityQQ || 380, currentQQ: 0, imageUrl: silos.find(s => s.id === 'familiar')?.imageUrl || null },
             { id: 'granel', name: 'Silo a Granel', capacityQQ: silos.find(s => s.id === 'granel')?.capacityQQ || 700, currentQQ: 0, imageUrl: silos.find(s => s.id === 'granel')?.imageUrl || null },
@@ -664,7 +667,7 @@ export default function OperationsClient({
                             <Clock className="h-6 w-6 text-muted-foreground mb-2" />
                             <p className="text-sm text-muted-foreground">Tiempo de Simulación Transcurrido</p>
                             <p className="text-4xl font-bold font-mono text-primary">{formatElapsedTime(simulationState.elapsedTime)}</p>
-                            {simulationState.isFinished && <p className="text-green-600 font-semibold mt-2">¡Simulación Completada!</p>}
+                            {simulationState.isFinished && <p className="text-green-600 font-semibold mt-2">¡Materia Prima Agotada!</p>}
                         </div>
                     </CardContent>
                 </Card>
@@ -692,6 +695,10 @@ export default function OperationsClient({
                                </Button>
                            </div>
                            <div className="space-y-3 pt-4">
+                                <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                  <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
+                                  <p className="text-lg font-bold text-primary">{totalMasasSent}</p>
+                                </div>
                                 <Label className="text-center block">Masas a Enviar ({MASA_QQ_AMOUNT} QQ c/u)</Label>
                                 <div className="flex items-center justify-center gap-2">
                                     <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => Math.max(1, p - 1))}><Minus className="h-4 w-4" /></Button>
@@ -719,7 +726,7 @@ export default function OperationsClient({
                                     </Button>
                                     <div className="space-y-1.5">
                                         <Label htmlFor={`silo-cap-${silo.id}`}>Capacidad Máx. (QQ)</Label>
-                                        <Input id={`silo-cap-${silo.id}`} type="number" value={silo.capacityQQ} onChange={(e) => handleSiloChange(silo.id, 'capacityQQ', Number(e.target.value))} min="0" disabled={isSimulating} />
+                                        <Input id={`silo-cap-${silo.id}`} type="number" value={silo.capacityQQ} onChange={(e) => handleSiloChange(silo.id, 'capacityQQ', Number(e.target.value))} min="0" />
                                     </div>
                                     <div className="space-y-2 pt-2">
                                         <Label className="text-sm">Nivel Actual</Label>
@@ -898,7 +905,7 @@ export default function OperationsClient({
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <KpiCard title="Tiempo Restante para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
                         <KpiCard title="Producción Total (Sacos)" value={liveSimulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se han producido." fractionDigits={0} />
-                        <KpiCard title="Producción Total (QQ)" value={liveSimulationResults.totalQuintalesProduced} icon={Warehouse} description={`Basado en la cantidad del silo (${totalSiloQQ.toLocaleString()} QQ).`} fractionDigits={1}/>
+                        <KpiCard title="Producción Total (QQ)" value={liveSimulationResults.totalQuintalesProduced} icon={Warehouse} description={`Basado en la cantidad del silo (${silos.reduce((s,c) => s + c.currentQQ, 0).toLocaleString()} QQ).`} fractionDigits={1}/>
                     </div>
                     <Card>
                         <CardHeader>
