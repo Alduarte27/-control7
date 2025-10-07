@@ -313,8 +313,9 @@ export default function OperationsClient({
     };
     
     const tachosQQ = 0; // Tachos is now a process, not a storage
-    const totalSiloQQ = silos.reduce((sum, silo) => sum + silo.currentQQ, 0);
     const familiarSilo = silos.find(s => s.id === 'familiar');
+    const granelSilo = silos.find(s => s.id === 'granel');
+    const totalSiloQQ = (familiarSilo?.currentQQ || 0) + (granelSilo?.currentQQ || 0);
     const familiarSiloQQ = familiarSilo?.currentQQ || 0;
 
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
@@ -500,7 +501,6 @@ export default function OperationsClient({
                 const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
                 
-                // Use a ref for silo state to get latest value inside interval
                 const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
                 const kgAvailableInFamiliarSilo = (familiarSiloState?.currentQQ || 0) * KG_PER_QUINTAL;
                 const canProduce = kgAvailableInFamiliarSilo >= kgConsumedThisTick;
@@ -771,7 +771,7 @@ export default function OperationsClient({
                            {simulationState.isFinished && simulationState.elapsedTime > 0 && (
                                <p className="text-destructive font-semibold mt-2 flex items-center gap-2">
                                    <AlertTriangle className="h-4 w-4" />
-                                   {silos.every(s => s.currentQQ === 0) ? "¡Sin Materia Prima!" : "Simulación Detenida"}
+                                   ¡Sin Materia Prima en Silo Familiar!
                                </p>
                            )}
                        </div>
