@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus, Power, PowerOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -31,6 +31,7 @@ type MachineState = {
     loss: number;
     unitsPerSack: number;
     imageUrl: string | null;
+    isSimulatingActive: boolean; // NEW: To control individual machine state
 };
 
 type SiloState = {
@@ -69,7 +70,7 @@ function MachineEditDialog({
         setEditedMachine(machine);
     }, [machine]);
 
-    const handleFieldChange = (field: keyof MachineState, value: any) => {
+    const handleFieldChange = (field: keyof Omit<MachineState, 'isSimulatingActive'>, value: any) => {
         const newMachine = { ...editedMachine, [field]: value };
         if (field === 'productId') {
             const product = products.find(p => p.id === value);
@@ -225,10 +226,10 @@ export default function OperationsClient({
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
         const firstProduct = prefetchedProducts.find(p => p.isActive);
         return [
-            { id: 1, productId: firstProduct?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: firstProduct?.unitsPerSack || 1, imageUrl: null },
-            { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
-            { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
-            { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
+            { id: 1, productId: firstProduct?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: firstProduct?.unitsPerSack || 1, imageUrl: null, isSimulatingActive: false },
+            { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
+            { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
+            { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
         ];
     });
 
@@ -245,7 +246,7 @@ export default function OperationsClient({
     };
 
     // --- Simulation State ---
-    const [isSimulating, setIsSimulating] = React.useState(false);
+    const [isSimulating, setIsSimulating] = React.useState(false); // Represents if the clock is running
     const initialSimState: SimulationState = {
         elapsedTime: 0,
         machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
@@ -260,7 +261,7 @@ export default function OperationsClient({
     const TICK_RATE_MS = 100;
 
     const activeMachinesConfig = React.useMemo(() => machines
-        .filter(m => m.productId !== 'inactive')
+        .filter(m => m.isSimulatingActive && m.productId !== 'inactive') // Filter by new state
         .map(m => {
             const product = products.find(p => p.id === m.productId);
             return {
@@ -283,8 +284,20 @@ export default function OperationsClient({
             };
         });
 
-        const totalBagsPerMinuteFromPackers = packingCapacity.reduce((sum, m) => sum + m.bagsPerMinute, 0);
-        const totalKgPerMinuteFromPackers = packingCapacity.reduce((sum, m) => sum + m.kgPerMinute, 0);
+        const activePackingCapacity = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive').map(machine => {
+            const product = products.find(p => p.id === machine.productId);
+            if (!product) return { machineId: machine.id, bagsPerMinute: 0, kgPerMinute: 0, productName: 'N/A' };
+            const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
+            return {
+                machineId: machine.id,
+                bagsPerMinute: effectiveBagsPerMinute,
+                kgPerMinute: effectiveBagsPerMinute * (product.sackWeight || 50),
+                productName: product.productName,
+            };
+        });
+
+        const totalBagsPerMinuteFromPackers = activePackingCapacity.reduce((sum, m) => sum + m.bagsPerMinute, 0);
+        const totalKgPerMinuteFromPackers = activePackingCapacity.reduce((sum, m) => sum + m.kgPerMinute, 0);
 
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > wrapperCapacity;
         
@@ -297,8 +310,8 @@ export default function OperationsClient({
             effectiveKgPerMinute = totalKgPerMinuteFromPackers * reductionFactor;
         }
 
-        const bottleneckDescription = `La enfardadora (cap: ${wrapperCapacity.toLocaleString()} fundas/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/min).`;
-        const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/min) operan dentro de la capacidad de la enfardadora (${wrapperCapacity.toLocaleString()} fundas/min).`;
+        const bottleneckDescription = `La enfardadora (cap: ${wrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
+        const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
 
         const timeToEmptyHours = effectiveKgPerMinute > 0 ? (siloAmount / effectiveKgPerMinute) / 60 : 0;
         const totalBagsProduced = effectiveBagsPerMinute * 60 * timeToEmptyHours;
@@ -344,17 +357,16 @@ export default function OperationsClient({
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     };
     
-    const startSimulation = () => {
+    const startClock = () => {
         if (isSimulating) return;
-        setSimulationState(prev => ({...prev, isFinished: false}));
         setIsSimulating(true);
 
         const wrapperBagsPerSecond = wrapperCapacity / 60;
-        const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
-
+        
         simulationIntervalRef.current = setInterval(() => {
             const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
             let currentTotalSiloQQ = 0;
+            const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
             
             setSilos(prevSilos => {
                 const newSilos = JSON.parse(JSON.stringify(prevSilos));
@@ -380,7 +392,7 @@ export default function OperationsClient({
 
             setSimulationState(prev => {
                 if (currentTotalSiloQQ <= 0 && totalKgConsumedPerSecond > 0) {
-                    stopSimulation();
+                    pauseClock();
                     return {...prev, isFinished: true};
                 }
 
@@ -422,7 +434,7 @@ export default function OperationsClient({
         }, TICK_RATE_MS);
     };
 
-    const stopSimulation = () => {
+    const pauseClock = () => {
         setIsSimulating(false);
         if (simulationIntervalRef.current) {
             clearInterval(simulationIntervalRef.current);
@@ -431,17 +443,29 @@ export default function OperationsClient({
     };
     
     const resetSimulation = () => {
-        stopSimulation();
+        pauseClock();
         setSimulationState(initialSimState);
+        setMachines(prev => prev.map(m => ({ ...m, isSimulatingActive: false })));
         const originalSilos = [
-            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: silos.find(s => s.id === 'familiar')?.imageUrl || null },
-            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: silos.find(s => s.id === 'granel')?.imageUrl || null },
+            { id: 'familiar', name: 'Silo Familiar', capacityQQ: silos.find(s => s.id === 'familiar')?.capacityQQ || 380, currentQQ: 0, imageUrl: silos.find(s => s.id === 'familiar')?.imageUrl || null },
+            { id: 'granel', name: 'Silo a Granel', capacityQQ: silos.find(s => s.id === 'granel')?.capacityQQ || 700, currentQQ: 0, imageUrl: silos.find(s => s.id === 'granel')?.imageUrl || null },
         ];
         setSilos(originalSilos);
     };
+
+    const toggleMachineActive = (machineId: number) => {
+        setMachines(prev => prev.map(m => {
+            if (m.id === machineId) {
+                // Cannot activate a machine with no product
+                if (m.productId === 'inactive' && !m.isSimulatingActive) return m;
+                return { ...m, isSimulatingActive: !m.isSimulatingActive };
+            }
+            return m;
+        }));
+    };
     
     React.useEffect(() => {
-      return () => stopSimulation();
+      return () => pauseClock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -554,10 +578,10 @@ export default function OperationsClient({
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <CardTitle>Controles de Simulación</CardTitle>
                         <div className="flex items-center gap-2">
-                             <Button onClick={startSimulation} disabled={isSimulating || simulationState.isFinished} variant="secondary">
+                             <Button onClick={startClock} disabled={isSimulating || simulationState.isFinished} variant="secondary">
                                 <Play className="mr-2" /> Iniciar
                             </Button>
-                            <Button onClick={stopSimulation} disabled={!isSimulating} variant="destructive">
+                            <Button onClick={pauseClock} disabled={!isSimulating} variant="destructive">
                                 <Pause className="mr-2" /> Detener
                             </Button>
                             <Button onClick={resetSimulation} variant="outline">
@@ -664,12 +688,32 @@ export default function OperationsClient({
                                 const cycleProgress = isSimulating ? (simulationState.elapsedTime * 1000 / TICK_RATE_MS * ((unitsPerMinuteNeto/60) * (TICK_RATE_MS/1000)) % unitsPerMinuteNeto) / unitsPerMinuteNeto * 100 : 0;
 
                                 return (
-                                    <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background relative">
-                                        <div className="flex justify-between items-center">
+                                    <div key={machine.id} className={cn("p-3 border rounded-lg space-y-3 bg-background relative transition-all", machine.isSimulatingActive && "ring-2 ring-green-500")}>
+                                        <div className="flex justify-between items-start">
                                             <Label className="font-bold text-primary">Máquina {machine.id}</Label>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingMachine(machine)}>
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex items-center gap-1">
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingMachine(machine)}>
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button
+                                                                variant={machine.isSimulatingActive ? 'destructive' : 'secondary'}
+                                                                size="icon"
+                                                                className="h-7 w-7"
+                                                                onClick={() => toggleMachineActive(machine.id)}
+                                                                disabled={machine.productId === 'inactive'}
+                                                            >
+                                                                {machine.isSimulatingActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>
+                                                            <p>{machine.isSimulatingActive ? 'Apagar Máquina' : 'Encender Máquina'}</p>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            </div>
                                         </div>
                                         
                                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
