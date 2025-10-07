@@ -286,29 +286,25 @@ export default function OperationsClient({
     };
 
     const sendMasasToSilos = React.useCallback((amount: number) => {
-      setTotalMasasSent(prev => {
-          const newTotal = prev + amount;
+      setTotalMasasSent(prev => prev + amount);
           
-          let qqToDistribute = amount * MASA_QQ_AMOUNT;
-          setSilos(prevSilos => {
-              const newSilos = JSON.parse(JSON.stringify(prevSilos));
-              const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar')!;
-              const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
+      let qqToDistribute = amount * MASA_QQ_AMOUNT;
+      setSilos(prevSilos => {
+          const newSilos = JSON.parse(JSON.stringify(prevSilos));
+          const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar')!;
+          const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
 
-              const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-              let qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
-              familiarSilo.currentQQ += qqForFamiliar;
-              
-              const remainder = qqToDistribute - qqForFamiliar;
-              if (remainder > 0) {
-                const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-                let qqForGranel = Math.min(remainder, spaceInGranel);
-                granelSilo.currentQQ += qqForGranel;
-              }
-              return newSilos;
-          });
+          const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+          let qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
+          familiarSilo.currentQQ += qqForFamiliar;
           
-          return newTotal;
+          const remainder = qqToDistribute - qqForFamiliar;
+          if (remainder > 0) {
+            const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+            let qqForGranel = Math.min(remainder, spaceInGranel);
+            granelSilo.currentQQ += qqForGranel;
+          }
+          return newSilos;
       });
     }, []);
 
@@ -489,15 +485,12 @@ export default function OperationsClient({
         setIsSimulating(true);
 
         if (isTachosAuto) {
-            setSilos(prevSilos => {
-                const newSilos = JSON.parse(JSON.stringify(prevSilos));
-                const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
-                if (familiarSilo && familiarSilo.currentQQ === 0 && totalMasasSentRef.current === 0) {
-                    familiarSilo.currentQQ = familiarSilo.capacityQQ;
-                    setTotalMasasSent(1);
-                }
-                return newSilos;
-            });
+          const familiarSilo = silosRef.current.find(s => s.id === 'familiar');
+          const isFamiliarSiloEmpty = familiarSilo ? familiarSilo.currentQQ <= 0 : true;
+
+          if (isFamiliarSiloEmpty && totalMasasSentRef.current === 0) {
+              sendMasasToSilos(1);
+          }
         }
         
         setSimulationState(prev => ({
@@ -510,10 +503,10 @@ export default function OperationsClient({
         
         const performTick = () => {
             const currentMachines = machinesRef.current;
+            const simState = simulationStateRef.current;
 
             // --- Automatic Tachos Logic ---
-            if (isTachosAuto && simulationStateRef.current.elapsedTime >= simulationStateRef.current.nextAutoTachosSendTime) {
-                // Check if goal is enabled and not met yet
+            if (isTachosAuto && simState.elapsedTime >= simState.nextAutoTachosSendTime) {
                 const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
                 if (!goalMet) {
                     sendMasasToSilos(1);
@@ -522,7 +515,7 @@ export default function OperationsClient({
                         nextAutoTachosSendTime: prev.nextAutoTachosSendTime + (autoTachosInterval * 60),
                     }));
                 } else if (goalMet) {
-                    setIsTachosAuto(false); // Stop auto mode if goal is met
+                    setIsTachosAuto(false);
                 }
             }
 
@@ -843,16 +836,14 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                           <div className='relative'>
-                               <div className='flex justify-between items-center'>
-                                <Label className="font-bold text-primary">{tachosState.name}</Label>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
-                                    <Edit className="h-4 w-4" />
-                                </Button>
-                               </div>
-                               <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-3">
-                                   <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" />
-                               </div>
+                           <div className='flex justify-between items-center'>
+                            <Label className="font-bold text-primary">{tachosState.name}</Label>
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
+                                <Edit className="h-4 w-4" />
+                            </Button>
+                           </div>
+                           <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                               <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" />
                            </div>
                            <div className="space-y-4">
                                 <div className="flex items-center justify-between">
@@ -932,7 +923,7 @@ export default function OperationsClient({
                                             <Edit className="h-4 w-4" />
                                         </Button>
                                     </div>
-                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
                                         <Image src={silo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt={silo.name} width={600} height={400} className="object-contain w-full h-full" />
                                     </div>
                                     <div className="space-y-1.5">
