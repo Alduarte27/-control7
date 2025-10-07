@@ -287,16 +287,18 @@ export default function OperationsClient({
           const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
 
           const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+          // If familiar has space for the full amount
           if (spaceInFamiliar >= qqToDistribute) {
               familiarSilo.currentQQ += qqToDistribute;
               qqToDistribute = 0;
           } else {
+              // If familiar cannot take the full amount, try granel
               const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
               if (spaceInGranel >= qqToDistribute) {
                   granelSilo.currentQQ += qqToDistribute;
                   qqToDistribute = 0;
               } else {
-                  // Overflow logic if neither can take the full amount
+                  // If neither can take the full amount, fill familiar then overflow to granel
                   const toAddInFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
                   familiarSilo.currentQQ += toAddInFamiliar;
                   qqToDistribute -= toAddInFamiliar;
@@ -379,30 +381,23 @@ export default function OperationsClient({
 
     const staticSimulationResults = React.useMemo(() => {
         const currentMachines = machinesRef.current;
-        const currentProducts = productsRef.current;
-
-        const activeMachines = currentMachines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
-
-        const activePackingCapacity = activeMachines.map(machine => {
-            const product = currentProducts.find(p => p.id === machine.productId);
-            if (!product) return { bagsPerMinute: 0, kgPerMinute: 0 };
-            const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
-            const unitsPerSack = machine.unitsPerSack || 1;
-            const sacksPerMinute = unitsPerSack > 0 ? effectiveBagsPerMinute / unitsPerSack : 0;
-            return {
-                bagsPerMinute: effectiveBagsPerMinute,
-                kgPerMinute: sacksPerMinute * (product.sackWeight || 50),
-            };
-        });
-
-        const totalBagsPerMinuteFromPackers = activePackingCapacity.reduce((sum, m) => sum + m.bagsPerMinute, 0);
+        
+        const totalBagsPerMinuteFromPackers = currentMachines
+            .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
+            .reduce((sum, machine) => {
+                const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
+                return sum + effectiveBagsPerMinute;
+            }, 0);
 
         const currentWrapperCapacity = wrapperCapacityRef.current;
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > currentWrapperCapacity;
         
-        const effectiveBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, currentWrapperCapacity);
+        // This is the actual throughput of the system in bags/minute
+        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, currentWrapperCapacity);
+        
         const currentUnitsPerBundle = unitsPerBundleRef.current;
-        const bundlesPerMinute = currentUnitsPerBundle > 0 ? Math.floor(effectiveBagsPerMinute / currentUnitsPerBundle) : 0;
+        // Bundles/minute is based on the *effective* system throughput
+        const bundlesPerMinute = currentUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / currentUnitsPerBundle : 0;
         
         const bottleneckDescription = `La enfardadora (cap: ${currentWrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
@@ -492,6 +487,11 @@ export default function OperationsClient({
             const currentMachines = machinesRef.current;
             
             setSimulationState(prev => {
+                if (prev.isFinished) {
+                    pauseClock();
+                    return prev;
+                }
+
                 const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
                 
                 const activeMachinesConfig = currentMachines
@@ -511,11 +511,10 @@ export default function OperationsClient({
                 const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
                 const kgAvailableInSilos = silosRef.current.reduce((sum, s) => sum + s.currentQQ, 0) * KG_PER_QUINTAL;
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
-
+                
                 const canProduce = kgAvailableInSilos >= kgConsumedThisTick;
                 
-                if (prev.isFinished || !canProduce && totalKgConsumedPerSecond > 0) {
-                    pauseClock();
+                if (!canProduce && totalKgConsumedPerSecond > 0) {
                     return {...prev, isFinished: true };
                 }
 
