@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { ProductDefinition } from '@/lib/types';
+import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -154,12 +154,15 @@ export default function OperationsClient({
     const siloAmount = totalQuintales * KG_PER_QUINTAL;
 
     // Etapa 2: Envasadoras
-    const [machines, setMachines] = React.useState<MachineState[]>([
-        { id: 1, productId: products[0]?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: products[0]?.unitsPerSack || 1, imageUrl: null },
-        { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
-        { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
-        { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
-    ]);
+    const [machines, setMachines] = React.useState<MachineState[]>(() => {
+        const firstProduct = prefetchedProducts.find(p => p.isActive);
+        return [
+            { id: 1, productId: firstProduct?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: firstProduct?.unitsPerSack || 1, imageUrl: null },
+            { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
+            { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
+            { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null },
+        ];
+    });
 
     // Etapa 3: Enfardadora
     const [wrapperScenario, setWrapperScenario] = React.useState<'single' | 'dual'>('single');
@@ -167,13 +170,7 @@ export default function OperationsClient({
 
     React.useEffect(() => {
         setIsClient(true);
-        // Initialize first machine if no product is selected on any machine
-        if (products.length > 0 && !machines.some(m => m.productId !== 'inactive')) {
-            const firstProduct = products[0];
-            setMachines(prev => prev.map(m => m.id === 1 ? { ...m, productId: firstProduct.id, unitsPerSack: firstProduct.unitsPerSack || 1 } : m));
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [products]);
+    }, []);
 
     const handleSaveMachine = (updatedMachine: MachineState) => {
         setMachines(prev => prev.map(m => m.id === updatedMachine.id ? updatedMachine : m));
@@ -219,7 +216,7 @@ export default function OperationsClient({
         
         if (wrapperScenario === 'single') {
             const activeMachines = machines.filter(m => m.productId !== 'inactive');
-            const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines);
+            const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines);
             
             const bottleneckDescription = `La enfardadora (cap: ${wrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr) limita a las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr).`;
             const noBottleneckDescription = `Las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr) operan dentro de la capacidad de la enfardadora (${wrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr).`;
@@ -240,7 +237,7 @@ export default function OperationsClient({
                 noBottleneckDescription,
                 machineProduction: packingCapacity.map(m => {
                     const totalKgProduced = effectiveKgPerHour * timeToEmptyHours;
-                    const machineKgShare = totalSacksPerHourFromPackers > 0 ? m.kgPerHour / totalKgPerHourFromPackers : 0;
+                    const machineKgShare = totalKgPerHourFromPackers > 0 ? m.kgPerHour / totalKgPerHourFromPackers : 0;
                     return {
                         id: m.machineId,
                         productName: m.productName,
@@ -352,7 +349,7 @@ export default function OperationsClient({
                                     <Package className="h-10 w-10 text-primary" />
                                     <h4 className="font-semibold">Envasadoras</h4>
                                     <p className={cn("text-sm", simulationResults.isWrapperBottleneck ? 'text-destructive font-bold' : 'text-muted-foreground')}>
-                                        {simulationResults.totalSacksPerHourFromAllPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr
+                                        {simulationResults.totalSacksPerHourFromAllPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr
                                     </p>
                                 </div>
                             </TooltipTrigger>
@@ -372,7 +369,7 @@ export default function OperationsClient({
                                     <PackageCheck className="h-10 w-10 text-primary" />
                                     <h4 className="font-semibold">Enfardadora</h4>
                                     <p className={cn("text-sm", simulationResults.isWrapperBottleneck ? 'text-destructive font-bold' : 'text-muted-foreground')}>
-                                        {simulationResults.effectiveWrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/hr
+                                        {simulationResults.effectiveWrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr
                                     </p>
                                 </div>
                             </TooltipTrigger>
