@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition, CategoryDefinition } from '@/lib/types';
@@ -14,6 +14,7 @@ import { Separator } from '@/components/ui/separator';
 import { Pie, Cell, ResponsiveContainer, PieChart, Tooltip as RechartsTooltip } from 'recharts';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import Image from 'next/image';
 
 const KG_PER_QUINTAL = 45.3592;
 const QQ_PER_MASA = 350;
@@ -36,10 +37,10 @@ export default function OperationsClient({
 
     // Etapa 2: Envasadoras
     const [machines, setMachines] = React.useState([
-        { id: 1, productId: products[0]?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
-        { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
-        { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
-        { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 50 },
+        { id: 1, productId: products[0]?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: products[0]?.unitsPerSack || 1, imageUrl: null as string | null },
+        { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null as string | null },
+        { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null as string | null },
+        { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null as string | null },
     ]);
 
     // Etapa 3: Enfardadora
@@ -50,13 +51,32 @@ export default function OperationsClient({
         setIsClient(true);
         // Initialize first machine if no product is selected on any machine
         if (products.length > 0 && !machines.some(m => m.productId !== 'inactive')) {
-            setMachines(prev => prev.map(m => m.id === 1 ? { ...m, productId: products[0].id } : m));
+            const firstProduct = products[0];
+            setMachines(prev => prev.map(m => m.id === 1 ? { ...m, productId: firstProduct.id, unitsPerSack: firstProduct.unitsPerSack || 1 } : m));
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [products]);
 
     const handleMachineChange = (id: number, field: string, value: any) => {
-        setMachines(prev => prev.map(m => m.id === id ? { ...m, [field]: value } : m));
+        setMachines(prev => prev.map(m => {
+            if (m.id === id) {
+                const updatedMachine = { ...m, [field]: value };
+                if (field === 'productId') {
+                    const product = products.find(p => p.id === value);
+                    updatedMachine.unitsPerSack = product?.unitsPerSack || 1;
+                }
+                return updatedMachine;
+            }
+            return m;
+        }));
+    };
+    
+    const handleImageUpload = (id: number, file: File) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            handleMachineChange(id, 'imageUrl', reader.result as string);
+        };
+        reader.readAsDataURL(file);
     };
 
     // Lógica del Simulador de Línea Completa
@@ -90,16 +110,16 @@ export default function OperationsClient({
 
             let effectiveKgPerHour = 0;
             if (effectiveSacksPerHour > 0 && totalSacksPerHourFromPackers > 0) {
-                const reductionFactor = wrapperSacksPerHour / totalSacksPerHourFromPackers;
-                effectiveKgPerHour = isWrapperBottleneck ? totalKgPerHourFromPackers * reductionFactor : totalKgPerHourFromPackers;
+                const reductionFactor = isWrapperBottleneck ? wrapperSacksPerHour / totalSacksPerHourFromPackers : 1;
+                effectiveKgPerHour = totalKgPerHourFromPackers * reductionFactor;
             }
-
+            
             return { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour };
         };
         
         if (wrapperScenario === 'single') {
             const activeMachines = machines.filter(m => m.productId !== 'inactive');
-            const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, totalKgPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines);
+            const { packingCapacity, isWrapperBottleneck, effectiveSacksPerHour, effectiveKgPerHour, totalSacksPerHourFromPackers, wrapperSacksPerHour } = calculateProduction(activeMachines);
             
             const bottleneckDescription = `La enfardadora (cap: ${wrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr) limita a las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr).`;
             const noBottleneckDescription = `Las envasadoras (cap: ${totalSacksPerHourFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr) operan dentro de la capacidad de la enfardadora (${wrapperSacksPerHour.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos/hr).`;
@@ -118,12 +138,15 @@ export default function OperationsClient({
                 isWrapperBottleneck,
                 bottleneckDescription,
                 noBottleneckDescription,
-                machineProduction: packingCapacity.map(m => ({
-                    id: m.machineId,
-                    productName: m.productName,
-                    sacks: (totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / totalSacksPerHourFromPackers : 0) * totalSacksProduced,
-                    weight: (totalKgPerHourFromPackers > 0 ? m.kgPerHour / totalKgPerHourFromPackers : 0) * (effectiveKgPerHour > 0 ? siloAmount * (effectiveKgPerHour/totalKgPerHourFromPackers) : siloAmount)
-                })),
+                machineProduction: packingCapacity.map(m => {
+                    const machineKgShare = totalSacksPerHourFromPackers > 0 ? m.kgPerHour / effectiveKgPerHour * (siloAmount) / totalSacksPerHourFromPackers: 0;
+                    return {
+                        id: m.machineId,
+                        productName: m.productName,
+                        sacks: (totalSacksPerHourFromPackers > 0 ? m.sacksPerHour / totalSacksPerHourFromPackers : 0) * totalSacksProduced,
+                        weight: isWrapperBottleneck ? m.sacksPerHour/totalSacksPerHourFromPackers * siloAmount : m.sacksPerHour/totalSacksPerHourFromPackers * siloAmount
+                    }
+                }),
                 machineContribution,
                 totalSacksPerHourFromAllPackers: totalSacksPerHourFromPackers,
                 effectiveWrapperSacksPerHour: wrapperSacksPerHour,
@@ -295,10 +318,35 @@ export default function OperationsClient({
                                       const unitsPerHourBruto = unitsPerMinuteBruto * 60;
                                       const unitsPerHourNeto = unitsPerHourBruto * (1 - machine.loss / 100);
                                       const sacksPerHourNeto = (machine.unitsPerSack > 0) ? (unitsPerHourNeto / machine.unitsPerSack) : 0;
+                                      const fileInputId = `image-upload-${machine.id}`;
 
                                       return (
-                                        <div key={machine.id} className="p-3 border rounded-lg space-y-4 bg-background relative">
+                                        <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background relative">
                                             <Label className="font-bold absolute -top-3 bg-background px-1 text-primary">Máquina {machine.id}</Label>
+                                            
+                                            <div className="space-y-2">
+                                                <div className="aspect-video bg-muted rounded-md flex items-center justify-center overflow-hidden">
+                                                    <Image 
+                                                        src={machine.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
+                                                        alt={`Máquina ${machine.id}`}
+                                                        width={600}
+                                                        height={400}
+                                                        className="object-cover w-full h-full"
+                                                    />
+                                                </div>
+                                                <input
+                                                    type="file"
+                                                    id={fileInputId}
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={(e) => e.target.files && handleImageUpload(machine.id, e.target.files[0])}
+                                                />
+                                                <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()}>
+                                                    <Upload className="mr-2 h-3 w-3" />
+                                                    Cambiar Foto
+                                                </Button>
+                                            </div>
+
                                             <div className="space-y-1.5">
                                                 <Label htmlFor={`product-${machine.id}`} className="text-xs">Producto</Label>
                                                 <Select value={machine.productId} onValueChange={(val) => handleMachineChange(machine.id, 'productId', val)}>
@@ -309,6 +357,7 @@ export default function OperationsClient({
                                                     </SelectContent>
                                                 </Select>
                                             </div>
+                                            
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div className="space-y-1.5">
                                                     <Label htmlFor={`speed-${machine.id}`} className="text-xs">Velocidad (fundas/min)</Label>
@@ -323,6 +372,7 @@ export default function OperationsClient({
                                                 <Label htmlFor={`units-${machine.id}`} className="text-xs">Unidades por Saco</Label>
                                                 <Input id={`units-${machine.id}`} type="number" value={machine.unitsPerSack} onChange={e => handleMachineChange(machine.id, 'unitsPerSack', Number(e.target.value))}/>
                                             </div>
+                                            
                                             {machine.productId !== 'inactive' && (
                                                 <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
                                                     <h3 className="font-semibold text-center text-muted-foreground">Indicadores de Rendimiento</h3>
