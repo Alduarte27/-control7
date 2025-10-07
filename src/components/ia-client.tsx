@@ -267,6 +267,8 @@ export default function OperationsClient({
     const [totalMasasSent, setTotalMasasSent] = React.useState(0);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
     const [autoTachosInterval, setAutoTachosInterval] = React.useState(90); // in minutes
+    const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
+    const [autoTachosGoal, setAutoTachosGoal] = React.useState(6);
     const [silos, setSilos] = React.useState<SiloState[]>([
         { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: null },
         { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: null },
@@ -284,32 +286,30 @@ export default function OperationsClient({
     };
 
     const sendMasasToSilos = React.useCallback((amount: number) => {
-      let qqToDistribute = amount * MASA_QQ_AMOUNT;
-      
-      setSilos(prevSilos => {
-          const newSilos = JSON.parse(JSON.stringify(prevSilos));
-          const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar')!;
-          const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
+      setTotalMasasSent(prev => {
+          const newTotal = prev + amount;
+          
+          let qqToDistribute = amount * MASA_QQ_AMOUNT;
+          setSilos(prevSilos => {
+              const newSilos = JSON.parse(JSON.stringify(prevSilos));
+              const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar')!;
+              const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
 
-          const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+              const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+              let qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
+              familiarSilo.currentQQ += qqForFamiliar;
+              
+              const remainder = qqToDistribute - qqForFamiliar;
+              if (remainder > 0) {
+                const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+                let qqForGranel = Math.min(remainder, spaceInGranel);
+                granelSilo.currentQQ += qqForGranel;
+              }
+              return newSilos;
+          });
           
-          let qqForFamiliar = 0;
-          qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
-          familiarSilo.currentQQ += qqForFamiliar;
-          
-          const remainder = qqToDistribute - qqForFamiliar;
-          
-          if (remainder > 0) {
-            const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-            let qqForGranel = 0;
-            qqForGranel = Math.min(remainder, spaceInGranel);
-            granelSilo.currentQQ += qqForGranel;
-          }
-          
-          return newSilos;
+          return newTotal;
       });
-
-      setTotalMasasSent(prev => prev + amount);
     }, []);
 
     const handleManualSendMasas = () => {
@@ -379,6 +379,15 @@ export default function OperationsClient({
     
     const conveyorDelayRef = React.useRef(conveyorDelay);
     React.useEffect(() => { conveyorDelayRef.current = conveyorDelay; }, [conveyorDelay]);
+    
+    const totalMasasSentRef = React.useRef(totalMasasSent);
+    React.useEffect(() => {
+        totalMasasSentRef.current = totalMasasSent;
+        // Check if goal is met
+        if (isTachosAuto && isTachosGoalEnabled && totalMasasSent >= autoTachosGoal) {
+            setIsTachosAuto(false); // Stop auto mode
+        }
+    }, [totalMasasSent, isTachosAuto, isTachosGoalEnabled, autoTachosGoal]);
 
 
     const staticSimulationResults = React.useMemo(() => {
@@ -462,30 +471,33 @@ export default function OperationsClient({
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     };
     
+    const simulationStateRef = React.useRef(simulationState);
+    React.useEffect(() => {
+        simulationStateRef.current = simulationState;
+    }, [simulationState]);
 
-    const pauseClock = () => {
+    const pauseClock = React.useCallback(() => {
         setIsSimulating(false);
         if (simulationIntervalRef.current) {
             clearInterval(simulationIntervalRef.current);
             simulationIntervalRef.current = null;
         }
-    };
+    }, []);
 
     const startClock = () => {
         if (simulationIntervalRef.current) return;
         setIsSimulating(true);
 
         if (isTachosAuto) {
-            // Fill familiar silo on start
             setSilos(prevSilos => {
                 const newSilos = JSON.parse(JSON.stringify(prevSilos));
                 const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
-                if (familiarSilo) {
+                if (familiarSilo && familiarSilo.currentQQ === 0 && totalMasasSentRef.current === 0) {
                     familiarSilo.currentQQ = familiarSilo.capacityQQ;
+                    setTotalMasasSent(1);
                 }
                 return newSilos;
             });
-            setTotalMasasSent(prev => Math.max(prev, 1));
         }
         
         setSimulationState(prev => ({
@@ -495,19 +507,23 @@ export default function OperationsClient({
         }));
         
         const tickRateMs = 50; 
-
-        simulationIntervalRef.current = setInterval(() => {
+        
+        const performTick = () => {
             const currentMachines = machinesRef.current;
-            const currentSimState = simulationState; // Use a ref or read from state right before set
-            
+
             // --- Automatic Tachos Logic ---
-            const elapsedTimeForCheck = simulationStateRef.current.elapsedTime + (tickRateMs / 1000) * (simulationSpeed * simulationSpeed * 60);
-            if (isTachosAuto && elapsedTimeForCheck >= simulationStateRef.current.nextAutoTachosSendTime) {
-                sendMasasToSilos(1);
-                setSimulationState(prev => ({
-                    ...prev,
-                    nextAutoTachosSendTime: prev.nextAutoTachosSendTime + (autoTachosInterval * 60),
-                }));
+            if (isTachosAuto && simulationStateRef.current.elapsedTime >= simulationStateRef.current.nextAutoTachosSendTime) {
+                // Check if goal is enabled and not met yet
+                const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
+                if (!goalMet) {
+                    sendMasasToSilos(1);
+                    setSimulationState(prev => ({
+                        ...prev,
+                        nextAutoTachosSendTime: prev.nextAutoTachosSendTime + (autoTachosInterval * 60),
+                    }));
+                } else if (goalMet) {
+                    setIsTachosAuto(false); // Stop auto mode if goal is met
+                }
             }
 
             setSimulationState(prev => {
@@ -617,14 +633,10 @@ export default function OperationsClient({
                     totalBundles: newTotalBundles,
                 };
             });
-        }, tickRateMs);
+        }
+        
+        simulationIntervalRef.current = setInterval(performTick, tickRateMs);
     };
-
-    const simulationStateRef = React.useRef(simulationState);
-    React.useEffect(() => {
-        simulationStateRef.current = simulationState;
-    }, [simulationState]);
-    
 
     const resetSimulation = (resetMaterial = true) => {
         pauseClock();
@@ -652,7 +664,7 @@ export default function OperationsClient({
     React.useEffect(() => {
       return () => pauseClock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [pauseClock]);
 
     const handleSaveMachine = (updatedMachine: MachineState) => {
         setMachines(prev => prev.map(m => m.id === updatedMachine.id ? updatedMachine : m));
@@ -852,7 +864,8 @@ export default function OperationsClient({
                                         disabled={isSimulating}
                                     />
                                 </div>
-                                {isTachosAuto && (
+                                
+                                <div className={cn("space-y-3 transition-opacity", !isTachosAuto && "opacity-50")}>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
                                         <Input
@@ -860,12 +873,36 @@ export default function OperationsClient({
                                             type="number"
                                             value={autoTachosInterval}
                                             onChange={(e) => setAutoTachosInterval(Number(e.target.value))}
-                                            disabled={isSimulating}
+                                            disabled={isSimulating || !isTachosAuto}
                                             min="1"
                                         />
                                     </div>
-                                )}
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
+                                        <Switch
+                                            id="goal-mode-switch"
+                                            checked={isTachosGoalEnabled}
+                                            onCheckedChange={setIsTachosGoalEnabled}
+                                            disabled={isSimulating || !isTachosAuto}
+                                        />
+                                    </div>
+                                     {isTachosGoalEnabled && (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
+                                            <Input
+                                                id="auto-goal"
+                                                type="number"
+                                                value={autoTachosGoal}
+                                                onChange={(e) => setAutoTachosGoal(Number(e.target.value))}
+                                                disabled={isSimulating || !isTachosAuto}
+                                                min="1"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
                                 <Separator />
+
                                 <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
                                     <div className='text-center border bg-muted/30 rounded-lg p-2'>
                                       <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
@@ -1179,3 +1216,5 @@ export default function OperationsClient({
     </div>
   );
 }
+
+    
