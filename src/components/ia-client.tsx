@@ -88,7 +88,7 @@ function MachineEditDialog({
                                 alt={`Máquina ${editedMachine.id}`}
                                 width={600}
                                 height={400}
-                                className="object-cover w-full h-full"
+                                className="object-contain w-full h-full"
                             />
                         </div>
                         <input
@@ -178,7 +178,7 @@ export default function OperationsClient({
 
     // Lógica del Simulador de Línea Completa
     const simulationResults = React.useMemo(() => {
-        const calculateProduction = (machineList: typeof machines) => {
+        const calculateProduction = (machineList: MachineState[]) => {
             const packingCapacity = machineList.map(machine => {
                 const product = products.find(p => p.id === machine.productId);
                 if (!product) return { machineId: machine.id, sacksPerHour: 0, kgPerHour: 0, productName: 'N/A' };
@@ -411,9 +411,7 @@ export default function OperationsClient({
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             {machines.map((machine) => {
                                 const product = products.find(p => p.id === machine.productId);
-                                const unitsPerMinuteBruto = machine.speed;
-                                const unitsPerHourBruto = unitsPerMinuteBruto * 60;
-                                const unitsPerHourNeto = unitsPerHourBruto * (1 - machine.loss / 100);
+                                const unitsPerHourNeto = (machine.speed * 60) * (1 - machine.loss / 100);
                                 const sacksPerHourNeto = (machine.unitsPerSack > 0) ? (unitsPerHourNeto / machine.unitsPerSack) : 0;
                                 
                                 return (
@@ -431,7 +429,7 @@ export default function OperationsClient({
                                                 alt={`Máquina ${machine.id}`}
                                                 width={600}
                                                 height={400}
-                                                className="object-cover w-full h-full"
+                                                className="object-contain w-full h-full"
                                             />
                                         </div>
 
