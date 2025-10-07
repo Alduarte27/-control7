@@ -354,21 +354,32 @@ export default function OperationsClient({
 
     const liveSimulationResults = React.useMemo(() => {
         let totalKgProduced = 0;
+        let totalSacksProduced = 0;
+
         machinesRef.current.forEach(machine => {
             if (machine.isSimulatingActive) {
                 const product = productsRef.current.find(p => p.id === machine.productId);
                 if (product) {
-                    const machineSacks = simulationState.machineTotals[machine.id] || 0;
-                    totalKgProduced += machineSacks * (product.sackWeight || 50);
+                    const machineUnits = simulationState.machineTotals[machine.id] || 0;
+                    if (product.unitsPerSack && product.unitsPerSack > 0) {
+                        const sacksFromMachine = machineUnits / product.unitsPerSack;
+                        totalSacksProduced += sacksFromMachine;
+                        totalKgProduced += sacksFromMachine * (product.sackWeight || 50);
+                    }
                 }
             }
         });
 
         const machineContribution = machinesRef.current.map(m => {
             const product = productsRef.current.find(p => p.id === m.productId);
+            const unitsProduced = simulationState.machineTotals[m.id] || 0;
+            let sacksProduced = 0;
+            if (product?.unitsPerSack && product.unitsPerSack > 0) {
+                sacksProduced = unitsProduced / product.unitsPerSack;
+            }
             return {
                 name: `Máq. ${m.id} (${product?.productName || 'N/A'})`,
-                value: simulationState.machineTotals[m.id] || 0
+                value: sacksProduced,
             }
         });
 
@@ -404,12 +415,7 @@ export default function OperationsClient({
         if (isSimulating) return;
         setIsSimulating(true);
         
-        const activeMachinesOnStart = machinesRef.current.filter(m => m.isSimulatingActive);
-        if (activeMachinesOnStart.length === 0 && totalSiloQQ === 0) {
-          setSimulationState(prev => ({...prev, isFinished: false}));
-        } else {
-          setSimulationState(prev => ({...prev, isFinished: false}));
-        }
+        setSimulationState(prev => ({...prev, isFinished: false}));
 
         simulationIntervalRef.current = setInterval(() => {
             const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
@@ -419,33 +425,36 @@ export default function OperationsClient({
             const currentProducts = productsRef.current;
             const currentWrapperCapacity = wrapperCapacityRef.current;
             const currentUnitsPerBundle = unitsPerBundleRef.current;
+            const currentSilos = silosRef.current;
             
-            let currentTotalSiloQQ = 0;
-            let silosAreEmpty = true;
-            let kgConsumedThisTick = 0;
+            let currentTotalSiloQQ = currentSilos.reduce((sum, s) => sum + s.currentQQ, 0);
+            let silosAreEmpty = currentTotalSiloQQ <= 0;
 
             const activeMachinesConfig = currentMachines
                 .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                 .map(m => {
                     const product = currentProducts.find(p => p.id === m.productId);
+                    const unitsPerSack = product?.unitsPerSack || 1;
+                    const unitsPerMinute = (m.speed * (1 - m.loss / 100));
+                    const kgPerUnit = unitsPerSack > 0 ? (product?.sackWeight || 50) / unitsPerSack : 0;
                     return {
                         id: m.id,
-                        bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60,
-                        kgPerSecond: ((m.speed * (1 - m.loss / 100)) / 60) * (product?.sackWeight || 50),
+                        unitsPerSecond: unitsPerMinute / 60,
+                        kgPerSecond: (unitsPerMinute / 60) * kgPerUnit,
                     };
                 });
             
             const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
-            kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
-
-            setSilos(prevSilos => {
-                const newSilos = JSON.parse(JSON.stringify(prevSilos));
-                const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
-                const granel = newSilos.find((s: SiloState) => s.id === 'granel');
-                
-                let consumption = kgConsumedThisTick;
-
-                if (consumption > 0) {
+            const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
+            
+            if (kgConsumedThisTick > 0 && !silosAreEmpty) {
+                setSilos(prevSilos => {
+                    const newSilos = JSON.parse(JSON.stringify(prevSilos));
+                    const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
+                    const granel = newSilos.find((s: SiloState) => s.id === 'granel');
+                    
+                    let consumption = kgConsumedThisTick;
+                    
                     const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL_MASA;
                     const consumedFromFamiliar = Math.min(kgInFamiliar, consumption);
                     familiar.currentQQ -= consumedFromFamiliar / KG_PER_QUINTAL_MASA;
@@ -456,11 +465,10 @@ export default function OperationsClient({
                         const consumedFromGranel = Math.min(kgInGranel, consumption);
                         granel.currentQQ -= consumedFromGranel / KG_PER_QUINTAL_MASA;
                     }
-                }
-                currentTotalSiloQQ = familiar.currentQQ + granel.currentQQ;
-                silosAreEmpty = currentTotalSiloQQ <= 0;
-                return newSilos;
-            });
+                    
+                    return newSilos;
+                });
+            }
             
             setSimulationState(prev => {
                 if (prev.isFinished || (silosAreEmpty && totalKgConsumedPerSecond > 0)) {
@@ -474,21 +482,21 @@ export default function OperationsClient({
                 let newCurrentBundleProgress = prev.currentBundleProgress;
                 let newTotalBundles = prev.totalBundles;
                 
-                const wrapperBagsPerSecond = currentWrapperCapacity / 60;
+                const wrapperUnitsPerSecond = currentWrapperCapacity / 60;
 
                 activeMachinesConfig.forEach(m => {
-                    const bagsProducedThisTick = m.bagsPerSecond * elapsedIncrement;
-                    newMachineTotals[m.id] += bagsProducedThisTick;
-                    newWrapperBuffer += bagsProducedThisTick;
+                    const unitsProducedThisTick = m.unitsPerSecond * elapsedIncrement;
+                    newMachineTotals[m.id] += unitsProducedThisTick;
+                    newWrapperBuffer += unitsProducedThisTick;
                 });
 
-                let bagsToProcessThisTick = wrapperBagsPerSecond * elapsedIncrement;
-                const bagsAvailable = newWrapperBuffer + newCurrentBundleProgress;
-                bagsToProcessThisTick = Math.min(bagsToProcessThisTick, bagsAvailable);
+                let unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
+                const unitsAvailable = newWrapperBuffer + newCurrentBundleProgress;
+                unitsToProcessThisTick = Math.min(unitsToProcessThisTick, unitsAvailable);
                 
-                const consumedFromBuffer = Math.min(newWrapperBuffer, bagsToProcessThisTick);
+                const consumedFromBuffer = Math.min(newWrapperBuffer, unitsToProcessThisTick);
                 newWrapperBuffer -= consumedFromBuffer;
-                newCurrentBundleProgress += bagsToProcessThisTick;
+                newCurrentBundleProgress += unitsToProcessThisTick;
 
                 if (newCurrentBundleProgress >= currentUnitsPerBundle && currentUnitsPerBundle > 0) {
                     const bundlesCreated = Math.floor(newCurrentBundleProgress / currentUnitsPerBundle);
@@ -838,9 +846,9 @@ export default function OperationsClient({
                                                 </div>
                                             </div>
                                             <div className="space-y-1">
-                                                <Label className="text-xs">Producción Total (Sacos)</Label>
+                                                <Label className="text-xs">Producción Total (Unidades)</Label>
                                                 <p className="text-lg font-bold text-center text-primary">{Math.floor(simulationState.machineTotals[machine.id] || 0).toLocaleString()}</p>
-                                                <Progress value={(simulationState.machineTotals[machine.id] || 0) * (machine.unitsPerSack > 0 ? 1/machine.unitsPerSack : 0) % 100} className="h-1" />
+                                                <Progress value={((simulationState.machineTotals[machine.id] || 0) % machine.speed) / machine.speed * 100} className="h-1" />
                                             </div>
                                           </>
                                         )}
@@ -984,3 +992,5 @@ export default function OperationsClient({
     </div>
   );
 }
+
+    
