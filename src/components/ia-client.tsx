@@ -287,27 +287,28 @@ export default function OperationsClient({
           const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
 
           const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-          // If familiar has space for the full amount
+          const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+
+          // If familiar has space for the full amount, it goes there.
           if (spaceInFamiliar >= qqToDistribute) {
               familiarSilo.currentQQ += qqToDistribute;
               qqToDistribute = 0;
-          } else {
-              // If familiar cannot take the full amount, try granel
-              const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-              if (spaceInGranel >= qqToDistribute) {
-                  granelSilo.currentQQ += qqToDistribute;
-                  qqToDistribute = 0;
-              } else {
-                  // If neither can take the full amount, fill familiar then overflow to granel
-                  const toAddInFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
-                  familiarSilo.currentQQ += toAddInFamiliar;
-                  qqToDistribute -= toAddInFamiliar;
+          } 
+          // If familiar is full, but granel has space, it goes to granel.
+          else if (spaceInGranel >= qqToDistribute) {
+              granelSilo.currentQQ += qqToDistribute;
+              qqToDistribute = 0;
+          }
+          // Otherwise, fill familiar and overflow to granel.
+          else {
+              const toAddInFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
+              familiarSilo.currentQQ += toAddInFamiliar;
+              qqToDistribute -= toAddInFamiliar;
 
-                  if (qqToDistribute > 0) {
-                      const toAddInGranel = Math.min(qqToDistribute, spaceInGranel);
-                      granelSilo.currentQQ += toAddInGranel;
-                      qqToDistribute -= toAddInGranel;
-                  }
+              if (qqToDistribute > 0) {
+                  const toAddInGranel = Math.min(qqToDistribute, spaceInGranel);
+                  granelSilo.currentQQ += toAddInGranel;
+                  qqToDistribute -= toAddInGranel;
               }
           }
           
@@ -381,6 +382,8 @@ export default function OperationsClient({
 
     const staticSimulationResults = React.useMemo(() => {
         const currentMachines = machinesRef.current;
+        const currentWrapperCapacity = wrapperCapacityRef.current;
+        const currentUnitsPerBundle = unitsPerBundleRef.current;
         
         const totalBagsPerMinuteFromPackers = currentMachines
             .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
@@ -388,14 +391,12 @@ export default function OperationsClient({
                 const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
                 return sum + effectiveBagsPerMinute;
             }, 0);
-
-        const currentWrapperCapacity = wrapperCapacityRef.current;
+        
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > currentWrapperCapacity;
         
         // This is the actual throughput of the system in bags/minute
         const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, currentWrapperCapacity);
         
-        const currentUnitsPerBundle = unitsPerBundleRef.current;
         // Bundles/minute is based on the *effective* system throughput
         const bundlesPerMinute = currentUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / currentUnitsPerBundle : 0;
         
@@ -410,7 +411,6 @@ export default function OperationsClient({
             bundlesPerMinute,
         };
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [machines, wrapperCapacity, unitsPerBundle]);
 
     const liveSimulationResults = React.useMemo(() => {
@@ -515,6 +515,7 @@ export default function OperationsClient({
                 const canProduce = kgAvailableInSilos >= kgConsumedThisTick;
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
+                    pauseClock();
                     return {...prev, isFinished: true };
                 }
 
