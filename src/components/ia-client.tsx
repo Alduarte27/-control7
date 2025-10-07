@@ -565,24 +565,24 @@ export default function OperationsClient({
             sendMasasToSilosRef.current(requiredMasas);
         }
         
-        setSimulationState(prev => ({
-            ...prev,
+        simulationStateRef.current = {
+            ...simulationStateRef.current,
             isFinished: false,
-            nextAutoTachosSendTime: autoTachosInterval > 0 ? prev.elapsedTime + (autoTachosInterval * 60) : Infinity,
-        }));
+            nextAutoTachosSendTime: autoTachosInterval > 0 ? simulationStateRef.current.elapsedTime + (autoTachosInterval * 60) : Infinity,
+        };
         
         const tickRateMs = 50; 
         
         simulationIntervalRef.current = setInterval(() => {
             const currentSimState = simulationStateRef.current;
             const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
-            
+
             if (isTachosAuto && !goalMet && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
+                sendMasasToSilosRef.current(1);
                  simulationStateRef.current = {
                     ...simulationStateRef.current,
                     nextAutoTachosSendTime: simulationStateRef.current.elapsedTime + (autoTachosInterval * 60),
                 };
-                 sendMasasToSilosRef.current(1);
             } else if (goalMet) {
                 setIsTachosAuto(false);
             }
@@ -860,7 +860,7 @@ export default function OperationsClient({
                                <Label htmlFor="sim-speed">Acelerador de Tiempo</Label>
                                <Slider
                                    id="sim-speed"
-                                   min={0.2}
+                                   min={1}
                                    max={5}
                                    step={0.1}
                                    value={[simulationSpeed]}
@@ -894,7 +894,7 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                           <div className='flex justify-between items-start'>
+                           <div className='flex justify-between items-start gap-2'>
                              <div className='flex items-center gap-2'>
                                 <h3 className="font-bold text-primary">{tachosState.name}</h3>
                                 {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
@@ -932,7 +932,7 @@ export default function OperationsClient({
 
                             return (
                                 <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
-                                     <div className='flex justify-between items-start'>
+                                     <div className='flex justify-between items-start gap-2'>
                                         <h3 className="font-bold text-primary">{silo.name}</h3>
                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
                                             <Edit className="h-4 w-4" />
