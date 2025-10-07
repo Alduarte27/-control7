@@ -31,7 +31,7 @@ type MachineState = {
     loss: number;
     unitsPerSack: number;
     imageUrl: string | null;
-    isSimulatingActive: boolean; // NEW: To control individual machine state
+    isSimulatingActive: boolean; // To control individual machine state
 };
 
 type SiloState = {
@@ -259,19 +259,10 @@ export default function OperationsClient({
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const [timeMultiplier, setTimeMultiplier] = React.useState(1);
     const TICK_RATE_MS = 100;
-
-    const activeMachinesConfig = React.useMemo(() => machines
-        .filter(m => m.isSimulatingActive && m.productId !== 'inactive') // Filter by new state
-        .map(m => {
-            const product = products.find(p => p.id === m.productId);
-            return {
-                id: m.id,
-                bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60,
-                kgPerSecond: ((m.speed * (1 - m.loss / 100)) / 60) * (product?.sackWeight || 50),
-            };
-    }), [machines, products]);
     
     const simulationResults = React.useMemo(() => {
+        const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
+
         const packingCapacity = machines.filter(m => m.productId !== 'inactive').map(machine => {
             const product = products.find(p => p.id === machine.productId);
             if (!product) return { machineId: machine.id, bagsPerMinute: 0, kgPerMinute: 0, productName: 'N/A' };
@@ -284,7 +275,7 @@ export default function OperationsClient({
             };
         });
 
-        const activePackingCapacity = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive').map(machine => {
+        const activePackingCapacity = activeMachines.map(machine => {
             const product = products.find(p => p.id === machine.productId);
             if (!product) return { machineId: machine.id, bagsPerMinute: 0, kgPerMinute: 0, productName: 'N/A' };
             const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
@@ -360,13 +351,26 @@ export default function OperationsClient({
     const startClock = () => {
         if (isSimulating) return;
         setIsSimulating(true);
+        setSimulationState(prev => ({...prev, isFinished: false}));
 
-        const wrapperBagsPerSecond = wrapperCapacity / 60;
-        
         simulationIntervalRef.current = setInterval(() => {
             const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
-            let currentTotalSiloQQ = 0;
+            
+            // This needs to be calculated inside the loop to react to live changes
+            const activeMachinesConfig = machines
+                .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
+                .map(m => {
+                    const product = products.find(p => p.id === m.productId);
+                    return {
+                        id: m.id,
+                        bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60,
+                        kgPerSecond: ((m.speed * (1 - m.loss / 100)) / 60) * (product?.sackWeight || 50),
+                    };
+                });
+
             const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
+            const wrapperBagsPerSecond = wrapperCapacity / 60;
+            let currentTotalSiloQQ = 0;
             
             setSilos(prevSilos => {
                 const newSilos = JSON.parse(JSON.stringify(prevSilos));
@@ -387,13 +391,19 @@ export default function OperationsClient({
                     }
                 }
                 currentTotalSiloQQ = familiar.currentQQ + granel.currentQQ;
+                
+                if (currentTotalSiloQQ <= 0 && totalKgConsumedPerSecond > 0) {
+                    pauseClock();
+                    setSimulationState(prev => ({...prev, isFinished: true}));
+                }
                 return newSilos;
             });
 
             setSimulationState(prev => {
-                if (currentTotalSiloQQ <= 0 && totalKgConsumedPerSecond > 0) {
+                // Double check if finished, as setSilos is async
+                if (prev.isFinished) {
                     pauseClock();
-                    return {...prev, isFinished: true};
+                    return prev;
                 }
 
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
@@ -428,7 +438,7 @@ export default function OperationsClient({
                     wrapperBuffer: newWrapperBuffer,
                     currentBundleProgress: newCurrentBundleProgress,
                     totalBundles: newTotalBundles,
-                    isFinished: currentTotalSiloQQ <= 0 && totalKgConsumedPerSecond > 0,
+                    isFinished: prev.isFinished,
                 };
             });
         }, TICK_RATE_MS);
