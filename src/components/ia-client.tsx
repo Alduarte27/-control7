@@ -17,6 +17,7 @@ import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/comp
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
+import { Slider } from './ui/slider';
 
 
 const KG_PER_QUINTAL = 50;
@@ -356,9 +357,8 @@ export default function OperationsClient({
     };
     const [simulationState, setSimulationState] = React.useState<SimulationState>(initialSimState);
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-    const [simHours, setSimHours] = React.useState(8);
-    const TOTAL_SIM_DURATION_MS = 15000; // Run the whole sim over 15 seconds
-
+    const [simulationSpeed, setSimulationSpeed] = React.useState(1);
+    
     const machinesRef = React.useRef(machines);
     React.useEffect(() => { machinesRef.current = machines; }, [machines]);
 
@@ -476,24 +476,21 @@ export default function OperationsClient({
         if (simulationIntervalRef.current) return;
         setIsSimulating(true);
         
-        resetSimulation(false); // Reset state but not material
         setSimulationState(prev => ({...prev, isFinished: false}));
         
-        const simDurationSeconds = simHours * 3600;
         const tickRateMs = 50; 
-        const totalTicks = TOTAL_SIM_DURATION_MS / tickRateMs;
-        const elapsedIncrementPerTick = simDurationSeconds / totalTicks;
 
         simulationIntervalRef.current = setInterval(() => {
             const currentMachines = machinesRef.current;
             
             setSimulationState(prev => {
-                if (prev.isFinished || prev.elapsedTime >= simDurationSeconds) {
+                if (prev.isFinished) {
                     pauseClock();
-                    return {...prev, isFinished: true, elapsedTime: simDurationSeconds};
+                    return prev;
                 }
 
-                const elapsedIncrement = elapsedIncrementPerTick;
+                const speedMultiplier = simulationSpeed * simulationSpeed * 60; // Base speed * multiplier
+                const elapsedIncrement = (tickRateMs / 1000) * speedMultiplier;
                 
                 const activeMachinesConfig = currentMachines
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
@@ -770,15 +767,20 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                        <div className="space-y-4">
                            <div className="space-y-1.5">
-                               <Label htmlFor="sim-hours">Simular Durante (Horas)</Label>
-                               <Input 
-                                   id="sim-hours" 
-                                   type="number" 
-                                   value={simHours} 
-                                   onChange={e => setSimHours(Number(e.target.value))} 
-                                   min="0.1" 
-                                   step="0.5" 
+                               <Label htmlFor="sim-speed">Acelerador de Tiempo</Label>
+                               <Slider
+                                   id="sim-speed"
+                                   min={0.1}
+                                   max={5}
+                                   step={0.1}
+                                   value={[simulationSpeed]}
+                                   onValueChange={(value) => setSimulationSpeed(value[0])}
                                />
+                               <div className="flex justify-between text-xs text-muted-foreground">
+                                   <span>Lento</span>
+                                   <span>Normal</span>
+                                   <span>Rápido</span>
+                               </div>
                            </div>
                        </div>
                        <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
@@ -788,7 +790,7 @@ export default function OperationsClient({
                            {simulationState.isFinished && simulationState.elapsedTime > 0 && (
                                <p className="text-destructive font-semibold mt-2 flex items-center gap-2">
                                    <AlertTriangle className="h-4 w-4" />
-                                   {silos.every(s => s.currentQQ === 0) ? "¡Sin Materia Prima!" : "Simulación Completada"}
+                                   {silos.every(s => s.currentQQ === 0) ? "¡Sin Materia Prima!" : "Simulación Detenida"}
                                </p>
                            )}
                        </div>
