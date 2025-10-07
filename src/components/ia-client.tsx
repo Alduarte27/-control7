@@ -449,9 +449,8 @@ export default function OperationsClient({
     const totalMasasSentRef = React.useRef(totalMasasSent);
     React.useEffect(() => {
         totalMasasSentRef.current = totalMasasSent;
-        // Check if goal is met
         if (isTachosAuto && isTachosGoalEnabled && totalMasasSent >= autoTachosGoal) {
-            setIsTachosAuto(false); // Stop auto mode
+            setIsTachosAuto(false); 
         }
     }, [totalMasasSent, isTachosAuto, isTachosGoalEnabled, autoTachosGoal]);
 
@@ -542,6 +541,9 @@ export default function OperationsClient({
         simulationStateRef.current = simulationState;
     }, [simulationState]);
 
+    const sendMasasToSilosRef = React.useRef(sendMasasToSilos);
+    React.useEffect(() => { sendMasasToSilosRef.current = sendMasasToSilos; }, [sendMasasToSilos]);
+
     const pauseClock = React.useCallback(() => {
         setIsSimulating(false);
         if (simulationIntervalRef.current) {
@@ -553,12 +555,10 @@ export default function OperationsClient({
     const startClock = () => {
         if (simulationIntervalRef.current) return;
         setIsSimulating(true);
-
-        if (isTachosAuto) {
-            const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
-            if (familiarSiloState?.currentQQ === 0) {
-                 sendMasasToSilos(1);
-            }
+    
+        const familiarSilo = silos.find(s => s.id === 'familiar');
+        if (isTachosAuto && familiarSilo?.currentQQ === 0) {
+            sendMasasToSilosRef.current(1);
         }
         
         setSimulationState(prev => ({
@@ -569,22 +569,21 @@ export default function OperationsClient({
         
         const tickRateMs = 50; 
         
-        const performTick = () => {
-            const currentMachines = machinesRef.current;
-            const simState = simulationStateRef.current;
-
-            if (isTachosAuto && simState.elapsedTime >= simState.nextAutoTachosSendTime) {
-                 const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
-                 if (!goalMet) {
-                     sendMasasToSilos(1);
-                     setSimulationState(prev => ({
-                         ...prev,
-                         nextAutoTachosSendTime: prev.elapsedTime + (autoTachosInterval * 60),
-                     }));
-                 } else if (goalMet) {
-                     setIsTachosAuto(false);
-                 }
-             }
+        simulationIntervalRef.current = setInterval(() => {
+            const currentSimState = simulationStateRef.current;
+            
+            if (isTachosAuto && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
+                const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
+                if (!goalMet) {
+                    sendMasasToSilosRef.current(1);
+                    setSimulationState(prev => ({
+                        ...prev,
+                        nextAutoTachosSendTime: prev.elapsedTime + (autoTachosInterval * 60),
+                    }));
+                } else {
+                    setIsTachosAuto(false);
+                }
+            }
 
             setSimulationState(prev => {
                 if (prev.isFinished) {
@@ -592,11 +591,11 @@ export default function OperationsClient({
                     return prev;
                 }
 
-                const speedMultiplier = simulationSpeed * simulationSpeed * 60; // Base speed * multiplier
+                const speedMultiplier = simulationSpeed * 60; // 1 = real-time (1 sim second per 1 real second)
                 const elapsedIncrement = (tickRateMs / 1000) * speedMultiplier;
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
 
-                // --- Production Logic ---
+                const currentMachines = machinesRef.current;
                 const activeMachinesConfig = currentMachines
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .map(m => {
@@ -629,7 +628,6 @@ export default function OperationsClient({
                 let newTotalBundles = prev.totalBundles;
                 let newConveyorBelt = [...prev.conveyorBelt];
 
-                // 1. Packers produce and add to conveyor belt
                 if (canProduce) {
                     if (kgConsumedThisTick > 0) {
                         setSilos(prevSilos => {
@@ -649,7 +647,6 @@ export default function OperationsClient({
                     });
                 }
                 
-                // 2. Check conveyor belt for items that have arrived
                 const arrivedItems: ConveyorItem[] = [];
                 const remainingOnBelt: ConveyorItem[] = [];
                 const currentConveyorDelay = conveyorDelayRef.current;
@@ -667,7 +664,6 @@ export default function OperationsClient({
                 newConveyorBelt = remainingOnBelt;
 
 
-                // 3. Wrapper processes from the buffer
                 const currentWrapperCapacity = wrapperCapacityRef.current;
                 const wrapperUnitsPerSecond = currentWrapperCapacity / 60;
                 const unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
@@ -693,9 +689,7 @@ export default function OperationsClient({
                     totalBundles: newTotalBundles,
                 };
             });
-        }
-        
-        simulationIntervalRef.current = setInterval(performTick, tickRateMs);
+        }, tickRateMs);
     };
 
     const resetSimulation = (resetMaterial = true) => {
@@ -872,7 +866,7 @@ export default function OperationsClient({
                                />
                                <div className="flex justify-between text-xs text-muted-foreground">
                                    <span>Lento</span>
-                                   <span>Normal</span>
+                                   <span className='font-semibold'>Tiempo Real (1x)</span>
                                    <span>Rápido</span>
                                </div>
                            </div>
@@ -903,7 +897,7 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                           <div className='flex justify-between items-center'>
+                           <div className='flex justify-between items-center gap-2'>
                             <div className='flex items-center gap-2'>
                                 <Label className="font-bold text-primary">{tachosState.name}</Label>
                                 {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
@@ -1238,7 +1232,3 @@ export default function OperationsClient({
     </div>
   );
 }
-
-    
-
-    
