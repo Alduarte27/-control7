@@ -19,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Progress } from '@/components/ui/progress';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
+import { Badge } from './ui/badge';
 
 
 const KG_PER_QUINTAL = 50;
@@ -174,12 +175,30 @@ function SiloEditDialog({
     open,
     onOpenChange,
     onSave,
+    // New props for Tachos automation
+    isTachosAuto,
+    onIsTachosAutoChange,
+    autoTachosInterval,
+    onAutoTachosIntervalChange,
+    isTachosGoalEnabled,
+    onIsTachosGoalEnabledChange,
+    autoTachosGoal,
+    onAutoTachosGoalChange,
 }: {
     silo: SiloState;
     isTachos?: boolean;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: SiloState) => void;
+    // New props definitions
+    isTachosAuto?: boolean;
+    onIsTachosAutoChange?: (value: boolean) => void;
+    autoTachosInterval?: number;
+    onAutoTachosIntervalChange?: (value: number) => void;
+    isTachosGoalEnabled?: boolean;
+    onIsTachosGoalEnabledChange?: (value: boolean) => void;
+    autoTachosGoal?: number;
+    onAutoTachosGoalChange?: (value: number) => void;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
 
@@ -241,6 +260,57 @@ function SiloEditDialog({
                             <Label htmlFor={`silo-cap-${silo.id}`}>Capacidad Máx. (QQ)</Label>
                             <Input id={`silo-cap-${silo.id}`} type="number" value={editedSilo.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
                         </div>
+                    )}
+                    {isTachos && (
+                        <>
+                            <Separator />
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="auto-mode-switch" className="text-sm font-medium">Modo Automático</Label>
+                                    <Switch
+                                        id="auto-mode-switch"
+                                        checked={isTachosAuto}
+                                        onCheckedChange={onIsTachosAutoChange}
+                                    />
+                                </div>
+                                
+                                <div className={cn("space-y-3 transition-opacity", !isTachosAuto && "opacity-50")}>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
+                                        <Input
+                                            id="auto-interval"
+                                            type="number"
+                                            value={autoTachosInterval}
+                                            onChange={(e) => onAutoTachosIntervalChange?.(Number(e.target.value))}
+                                            disabled={!isTachosAuto}
+                                            min="1"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
+                                        <Switch
+                                            id="goal-mode-switch"
+                                            checked={isTachosGoalEnabled}
+                                            onCheckedChange={onIsTachosGoalEnabledChange}
+                                            disabled={!isTachosAuto}
+                                        />
+                                    </div>
+                                     {isTachosGoalEnabled && (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
+                                            <Input
+                                                id="auto-goal"
+                                                type="number"
+                                                value={autoTachosGoal}
+                                                onChange={(e) => onAutoTachosGoalChange?.(Number(e.target.value))}
+                                                disabled={!isTachosAuto}
+                                                min="1"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </>
                     )}
                 </div>
                 <DialogFooter>
@@ -316,7 +386,7 @@ export default function OperationsClient({
     const tachosQQ = 0; // Tachos is now a process, not a storage
     const familiarSilo = silos.find(s => s.id === 'familiar');
     const granelSilo = silos.find(s => s.id === 'granel');
-    const totalSiloQQ = (familiarSilo?.currentQQ || 0) + (granelSilo?.currentQQ || 0);
+    const totalSiloQQ = (familiarSilo?.currentQQ || 0); // Only familiar silo counts for production
     const familiarSiloQQ = familiarSilo?.currentQQ || 0;
 
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
@@ -485,12 +555,10 @@ export default function OperationsClient({
         setIsSimulating(true);
 
         if (isTachosAuto) {
-          const familiarSilo = silosRef.current.find(s => s.id === 'familiar');
-          const isFamiliarSiloEmpty = familiarSilo ? familiarSilo.currentQQ <= 0 : true;
-
-          if (isFamiliarSiloEmpty && totalMasasSentRef.current === 0) {
-              sendMasasToSilos(1);
-          }
+            const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
+            if (familiarSiloState?.currentQQ === 0) {
+                 sendMasasToSilos(1);
+            }
         }
         
         setSimulationState(prev => ({
@@ -505,19 +573,18 @@ export default function OperationsClient({
             const currentMachines = machinesRef.current;
             const simState = simulationStateRef.current;
 
-            // --- Automatic Tachos Logic ---
             if (isTachosAuto && simState.elapsedTime >= simState.nextAutoTachosSendTime) {
-                const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
-                if (!goalMet) {
-                    sendMasasToSilos(1);
-                    setSimulationState(prev => ({
-                        ...prev,
-                        nextAutoTachosSendTime: prev.nextAutoTachosSendTime + (autoTachosInterval * 60),
-                    }));
-                } else if (goalMet) {
-                    setIsTachosAuto(false);
-                }
-            }
+                 const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
+                 if (!goalMet) {
+                     sendMasasToSilos(1);
+                     setSimulationState(prev => ({
+                         ...prev,
+                         nextAutoTachosSendTime: prev.elapsedTime + (autoTachosInterval * 60),
+                     }));
+                 } else if (goalMet) {
+                     setIsTachosAuto(false);
+                 }
+             }
 
             setSimulationState(prev => {
                 if (prev.isFinished) {
@@ -829,7 +896,7 @@ export default function OperationsClient({
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
                          <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Total en Inventario</p>
+                            <p className="text-sm text-muted-foreground">Inventario para Producción</p>
                             <p className="text-2xl font-bold text-primary">{totalSiloQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                         </div>
                     </CardHeader>
@@ -837,7 +904,10 @@ export default function OperationsClient({
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                            <div className='flex justify-between items-center'>
-                            <Label className="font-bold text-primary">{tachosState.name}</Label>
+                            <div className='flex items-center gap-2'>
+                                <Label className="font-bold text-primary">{tachosState.name}</Label>
+                                {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
+                            </div>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
                                 <Edit className="h-4 w-4" />
                             </Button>
@@ -846,54 +916,6 @@ export default function OperationsClient({
                                <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" />
                            </div>
                            <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <Label htmlFor="auto-mode-switch" className="text-sm font-medium">Modo Automático</Label>
-                                    <Switch
-                                        id="auto-mode-switch"
-                                        checked={isTachosAuto}
-                                        onCheckedChange={setIsTachosAuto}
-                                        disabled={isSimulating}
-                                    />
-                                </div>
-                                
-                                <div className={cn("space-y-3 transition-opacity", !isTachosAuto && "opacity-50")}>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
-                                        <Input
-                                            id="auto-interval"
-                                            type="number"
-                                            value={autoTachosInterval}
-                                            onChange={(e) => setAutoTachosInterval(Number(e.target.value))}
-                                            disabled={isSimulating || !isTachosAuto}
-                                            min="1"
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
-                                        <Switch
-                                            id="goal-mode-switch"
-                                            checked={isTachosGoalEnabled}
-                                            onCheckedChange={setIsTachosGoalEnabled}
-                                            disabled={isSimulating || !isTachosAuto}
-                                        />
-                                    </div>
-                                     {isTachosGoalEnabled && (
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
-                                            <Input
-                                                id="auto-goal"
-                                                type="number"
-                                                value={autoTachosGoal}
-                                                onChange={(e) => setAutoTachosGoal(Number(e.target.value))}
-                                                disabled={isSimulating || !isTachosAuto}
-                                                min="1"
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-
-                                <Separator />
-
                                 <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
                                     <div className='text-center border bg-muted/30 rounded-lg p-2'>
                                       <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
@@ -1199,6 +1221,15 @@ export default function OperationsClient({
                     silo={editingSilo}
                     isTachos={editingSilo.id === 'tachos'}
                     onSave={handleSiloSave}
+                    // Pass Tachos automation state and handlers
+                    isTachosAuto={isTachosAuto}
+                    onIsTachosAutoChange={setIsTachosAuto}
+                    autoTachosInterval={autoTachosInterval}
+                    onAutoTachosIntervalChange={setAutoTachosInterval}
+                    isTachosGoalEnabled={isTachosGoalEnabled}
+                    onIsTachosGoalEnabledChange={setIsTachosGoalEnabled}
+                    autoTachosGoal={autoTachosGoal}
+                    onAutoTachosGoalChange={setAutoTachosGoal}
                 />
             )}
         </>
@@ -1207,5 +1238,7 @@ export default function OperationsClient({
     </div>
   );
 }
+
+    
 
     
