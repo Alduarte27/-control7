@@ -551,6 +551,12 @@ export default function OperationsClient({
         const m = Math.round((hours - h) * 60);
         return `${h}h ${m}m`;
     };
+
+    const getSiloFillColor = (percentage: number): string => {
+        if (percentage < 20) return 'bg-red-500';
+        if (percentage < 60) return 'bg-yellow-500';
+        return 'bg-green-500';
+    };
     
   return (
     <div className="bg-background min-h-screen text-foreground">
@@ -726,6 +732,7 @@ export default function OperationsClient({
                             const currentKg = silo.currentQQ * KG_PER_QUINTAL;
                             const capacityKg = silo.capacityQQ * KG_PER_QUINTAL;
                             const fillPercentage = silo.capacityQQ > 0 ? (silo.currentQQ / silo.capacityQQ) * 100 : 0;
+                            const fillColorClass = getSiloFillColor(fillPercentage);
                             return (
                                 <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
                                     <Label className="font-bold text-primary">{silo.name}</Label>
@@ -742,7 +749,7 @@ export default function OperationsClient({
                                     </div>
                                     <div className="space-y-2 pt-2">
                                         <Label className="text-sm">Nivel: {currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</Label>
-                                        <Progress value={fillPercentage} />
+                                        <Progress value={fillPercentage} indicatorClassName={fillColorClass} />
                                     </div>
                                 </div>
                             )
@@ -1009,5 +1016,3 @@ export default function OperationsClient({
     </div>
   );
 }
-
-    
