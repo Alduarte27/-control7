@@ -348,6 +348,20 @@ export default function OperationsClient({
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     };
     
+    // Using a ref to hold the latest state for the interval callback
+    const machinesRef = React.useRef(machines);
+    React.useEffect(() => {
+        machinesRef.current = machines;
+    }, [machines]);
+
+    const pauseClock = () => {
+        setIsSimulating(false);
+        if (simulationIntervalRef.current) {
+            clearInterval(simulationIntervalRef.current);
+            simulationIntervalRef.current = null;
+        }
+    };
+
     const startClock = () => {
         if (isSimulating) return;
         setIsSimulating(true);
@@ -356,8 +370,8 @@ export default function OperationsClient({
         simulationIntervalRef.current = setInterval(() => {
             const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
             
-            // This needs to be calculated inside the loop to react to live changes
-            const activeMachinesConfig = machines
+            // Access the latest machines state via the ref inside the interval
+            const activeMachinesConfig = machinesRef.current
                 .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                 .map(m => {
                     const product = products.find(p => p.id === m.productId);
@@ -444,13 +458,6 @@ export default function OperationsClient({
         }, TICK_RATE_MS);
     };
 
-    const pauseClock = () => {
-        setIsSimulating(false);
-        if (simulationIntervalRef.current) {
-            clearInterval(simulationIntervalRef.current);
-            simulationIntervalRef.current = null;
-        }
-    };
     
     const resetSimulation = () => {
         pauseClock();
