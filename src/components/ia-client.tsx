@@ -381,9 +381,9 @@ export default function OperationsClient({
 
 
     const staticSimulationResults = React.useMemo(() => {
-        const currentMachines = machinesRef.current;
-        const currentWrapperCapacity = wrapperCapacityRef.current;
-        const currentUnitsPerBundle = unitsPerBundleRef.current;
+        const currentMachines = machines;
+        const currentWrapperCapacity = wrapperCapacity;
+        const currentUnitsPerBundle = unitsPerBundle;
         
         const totalBagsPerMinuteFromPackers = currentMachines
             .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
@@ -728,7 +728,7 @@ export default function OperationsClient({
                                 <div className="flex flex-col items-center gap-2 text-center">
                                     <PackageCheck className="h-10 w-10 text-primary" />
                                     <h4 className="font-semibold">Enfardadora</h4>
-                                    <p className={cn("text-sm", staticSimulationResults.isWrapperBottleneck ? 'text-destructive font-bold' : 'text-muted-foreground')}>
+                                    <p className={cn("text-sm font-semibold", staticSimulationResults.isWrapperBottleneck ? 'text-destructive' : 'text-green-600')}>
                                         {staticSimulationResults.bundlesPerMinute.toLocaleString(undefined, {maximumFractionDigits: 0})} fardos/min
                                     </p>
                                 </div>
@@ -739,6 +739,12 @@ export default function OperationsClient({
                         </Tooltip>
                     </TooltipProvider>
                 </div>
+                 {staticSimulationResults.isWrapperBottleneck && (
+                    <div className="text-center text-destructive text-sm font-semibold mt-2 flex items-center justify-center gap-2">
+                        <AlertTriangle className="h-4 w-4" />
+                        {staticSimulationResults.bottleneckDescription}
+                    </div>
+                )}
             </div>
             
             <div className="space-y-8">
@@ -863,8 +869,7 @@ export default function OperationsClient({
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
                                 const sacksPerMinuteNeto = (machine.unitsPerSack > 0) ? (unitsPerMinuteNeto / machine.unitsPerSack) : 0;
                                 const unitsProducedByMachine = simulationState.machineTotals[machine.id] || 0;
-                                const sacksProducedByMachine = (machine.unitsPerSack > 0) ? unitsProducedByMachine / machine.unitsPerSack : 0;
-
+                                
                                 return (
                                     <div key={machine.id} className={cn("p-3 border rounded-lg space-y-3 bg-background relative transition-all", machine.isSimulatingActive && "ring-2 ring-green-500")}>
                                         <div className="flex justify-between items-start">
