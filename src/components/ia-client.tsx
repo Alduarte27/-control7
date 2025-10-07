@@ -257,8 +257,6 @@ export default function OperationsClient({
     const [simulationState, setSimulationState] = React.useState<SimulationState>(initialSimState);
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const [timeMultiplier, setTimeMultiplier] = React.useState(1);
-    const [startTime, setStartTime] = React.useState('08:00');
-    const [endTime, setEndTime] = React.useState('16:00');
     const TICK_RATE_MS = 100;
 
     const activeMachinesConfig = React.useMemo(() => machines
@@ -339,11 +337,6 @@ export default function OperationsClient({
         setIsClient(true);
     }, []);
 
-    const parseTimeToSeconds = (time: string) => {
-        const [hours, minutes] = time.split(':').map(Number);
-        return (hours * 3600) + (minutes * 60);
-    };
-
     const formatElapsedTime = (totalSeconds: number) => {
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -357,7 +350,6 @@ export default function OperationsClient({
         setIsSimulating(true);
 
         const wrapperBagsPerSecond = wrapperCapacity / 60;
-        const totalDurationSeconds = parseTimeToSeconds(endTime) - parseTimeToSeconds(startTime);
         const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
 
         simulationIntervalRef.current = setInterval(() => {
@@ -387,7 +379,7 @@ export default function OperationsClient({
             });
 
             setSimulationState(prev => {
-                if (prev.elapsedTime >= totalDurationSeconds || currentTotalSiloQQ <= 0) {
+                if (currentTotalSiloQQ <= 0 && totalKgConsumedPerSecond > 0) {
                     stopSimulation();
                     return {...prev, isFinished: true};
                 }
@@ -419,12 +411,12 @@ export default function OperationsClient({
                 }
 
                 return {
-                    elapsedTime: newElapsedTime > totalDurationSeconds ? totalDurationSeconds : newElapsedTime,
+                    elapsedTime: newElapsedTime,
                     machineTotals: newMachineTotals,
                     wrapperBuffer: newWrapperBuffer,
                     currentBundleProgress: newCurrentBundleProgress,
                     totalBundles: newTotalBundles,
-                    isFinished: newElapsedTime >= totalDurationSeconds || currentTotalSiloQQ <= 0,
+                    isFinished: currentTotalSiloQQ <= 0 && totalKgConsumedPerSecond > 0,
                 };
             });
         }, TICK_RATE_MS);
@@ -441,7 +433,11 @@ export default function OperationsClient({
     const resetSimulation = () => {
         stopSimulation();
         setSimulationState(initialSimState);
-        setSilos(prev => prev.map(s => ({ ...s, currentQQ: 0 })));
+        const originalSilos = [
+            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: silos.find(s => s.id === 'familiar')?.imageUrl || null },
+            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: silos.find(s => s.id === 'granel')?.imageUrl || null },
+        ];
+        setSilos(originalSilos);
     };
     
     React.useEffect(() => {
@@ -571,17 +567,7 @@ export default function OperationsClient({
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="sim-start-time">Hora de Inicio</Label>
-                                    <Input id="sim-start-time" type="time" value={startTime} onChange={e => setStartTime(e.target.value)} disabled={isSimulating} />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="sim-end-time">Hora de Fin</Label>
-                                    <Input id="sim-end-time" type="time" value={endTime} onChange={e => setEndTime(e.target.value)} disabled={isSimulating} />
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
+                             <div className="space-y-1.5">
                                 <Label htmlFor="sim-speed">Acelerador de Tiempo ({timeMultiplier}x)</Label>
                                 <Slider
                                     id="sim-speed"
@@ -590,7 +576,6 @@ export default function OperationsClient({
                                     step={1}
                                     value={[timeMultiplier]}
                                     onValueChange={(val) => setTimeMultiplier(val[0])}
-                                    disabled={isSimulating}
                                 />
                             </div>
                         </div>
