@@ -385,7 +385,8 @@ export default function OperationsClient({
     
     const tachosQQ = 0; // Tachos is now a process, not a storage
     const familiarSilo = silos.find(s => s.id === 'familiar');
-    const totalSiloQQ = (familiarSilo?.currentQQ || 0);
+    const granelSilo = silos.find(s => s.id === 'granel');
+    const totalSiloQQ = (familiarSilo?.currentQQ || 0) + (granelSilo?.currentQQ || 0);
     const familiarSiloQQ = familiarSilo?.currentQQ || 0;
 
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
@@ -571,17 +572,15 @@ export default function OperationsClient({
         simulationIntervalRef.current = setInterval(() => {
             const currentSimState = simulationStateRef.current;
             
-            if (isTachosAuto && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
-                 const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
-                if (!goalMet) {
-                    sendMasasToSilosRef.current(1);
-                    simulationStateRef.current = {
-                        ...simulationStateRef.current,
-                        nextAutoTachosSendTime: simulationStateRef.current.elapsedTime + (autoTachosInterval * 60),
-                    };
-                } else {
-                     setIsTachosAuto(false);
-                }
+            const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
+            if (isTachosAuto && !goalMet && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
+                sendMasasToSilosRef.current(1);
+                simulationStateRef.current = {
+                    ...simulationStateRef.current,
+                    nextAutoTachosSendTime: simulationStateRef.current.elapsedTime + (autoTachosInterval * 60),
+                };
+            } else if (goalMet) {
+                setIsTachosAuto(false);
             }
 
             setSimulationState(prev => {
@@ -857,9 +856,9 @@ export default function OperationsClient({
                                <Label htmlFor="sim-speed">Acelerador de Tiempo</Label>
                                <Slider
                                    id="sim-speed"
-                                   min={0.1}
+                                   min={0.2}
                                    max={5}
-                                   step={0.1}
+                                   step={0.2}
                                    value={[simulationSpeed]}
                                    onValueChange={(value) => setSimulationSpeed(value[0])}
                                />
@@ -890,17 +889,17 @@ export default function OperationsClient({
                         <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
                          <div className="text-right">
                             <p className="text-sm text-muted-foreground">Inventario para Producción</p>
-                            <p className="text-2xl font-bold text-primary">{totalSiloQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
+                            <p className="text-2xl font-bold text-primary">{familiarSiloQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                         </div>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                            <div className='flex justify-between items-center gap-2'>
-                            <div className='flex items-center gap-2'>
-                                <Label className="font-bold text-primary">{tachosState.name}</Label>
+                             <div className='flex items-center gap-2'>
+                                <h3 className="font-bold text-primary">{tachosState.name}</h3>
                                 {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
-                            </div>
+                             </div>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
                                 <Edit className="h-4 w-4" />
                             </Button>
@@ -930,10 +929,12 @@ export default function OperationsClient({
                             const currentKg = silo.currentQQ * KG_PER_QUINTAL;
                             const fillPercentage = silo.capacityQQ > 0 ? (silo.currentQQ / silo.capacityQQ) * 100 : 0;
                             const fillColorClass = getSiloFillColor(fillPercentage);
+                            const isProductionSilo = silo.id === 'familiar';
+
                             return (
                                 <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
                                      <div className='flex justify-between items-center'>
-                                        <Label className="font-bold text-primary">{silo.name}</Label>
+                                        <h3 className="font-bold text-primary">{silo.name}</h3>
                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
                                             <Edit className="h-4 w-4" />
                                         </Button>
@@ -948,6 +949,12 @@ export default function OperationsClient({
                                         <Label className="text-sm">Nivel: {currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</Label>
                                         <Progress value={fillPercentage} indicatorClassName={fillColorClass} />
                                     </div>
+                                     {isProductionSilo && (
+                                         <div className="text-center border bg-muted/30 rounded-lg p-2">
+                                              <p className="text-xs text-muted-foreground">Tiempo de Producción Restante</p>
+                                              <p className="text-lg font-bold text-primary">{formatTime(liveSimulationResults.timeToEmptyHours)}</p>
+                                         </div>
+                                     )}
                                 </div>
                             )
                         })}
