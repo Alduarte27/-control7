@@ -438,7 +438,8 @@ export default function OperationsClient({
                 return sum + (kgPerMinute / 60);
             }, 0);
         
-        const familiarSiloKg = (silosRef.current.find(s => s.id === 'familiar')?.currentQQ || 0) * KG_PER_QUINTAL;
+        const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
+        const familiarSiloKg = (familiarSiloState?.currentQQ || 0) * KG_PER_QUINTAL;
         const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : 0;
 
         return {
@@ -473,11 +474,23 @@ export default function OperationsClient({
     const startClock = () => {
         if (simulationIntervalRef.current) return;
         setIsSimulating(true);
+
+        if (isTachosAuto) {
+            setSilos(prevSilos => {
+                const newSilos = JSON.parse(JSON.stringify(prevSilos));
+                const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
+                if (familiarSilo) {
+                    familiarSilo.currentQQ = familiarSilo.capacityQQ;
+                }
+                return newSilos;
+            });
+            setTotalMasasSent(prev => Math.max(prev, 1)); // Assume at least one masa to fill it
+        }
         
         setSimulationState(prev => ({
             ...prev,
             isFinished: false,
-            nextAutoTachosSendTime: autoTachosInterval > 0 ? autoTachosInterval * 60 : Infinity,
+            nextAutoTachosSendTime: autoTachosInterval > 0 ? prev.elapsedTime + (autoTachosInterval * 60) : Infinity,
         }));
         
         const tickRateMs = 50; 
@@ -494,12 +507,18 @@ export default function OperationsClient({
                 const speedMultiplier = simulationSpeed * simulationSpeed * 60; // Base speed * multiplier
                 const elapsedIncrement = (tickRateMs / 1000) * speedMultiplier;
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
+                
+                let sendMasaNow = false;
+                let newNextSendTime = prev.nextAutoTachosSendTime;
 
                 // --- Automatic Tachos Logic ---
                 if (isTachosAuto && newElapsedTime >= prev.nextAutoTachosSendTime) {
-                    sendMasasToSilos(1);
-                    const newNextSendTime = prev.nextAutoTachosSendTime + (autoTachosInterval * 60);
-                    return { ...prev, nextAutoTachosSendTime: newNextSendTime };
+                    sendMasaNow = true;
+                    newNextSendTime = prev.nextAutoTachosSendTime + (autoTachosInterval * 60);
+                }
+
+                if(sendMasaNow) {
+                  sendMasasToSilos(1);
                 }
 
                 // --- Production Logic ---
@@ -526,7 +545,7 @@ export default function OperationsClient({
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
                     pauseClock();
-                    return {...prev, elapsedTime: newElapsedTime, isFinished: true };
+                    return {...prev, elapsedTime: newElapsedTime, isFinished: true, nextAutoTachosSendTime: newNextSendTime };
                 }
 
                 const newMachineTotals = { ...prev.machineTotals };
@@ -597,6 +616,7 @@ export default function OperationsClient({
                     wrapperBuffer: newWrapperBuffer,
                     currentBundleProgress: newCurrentBundleProgress,
                     totalBundles: newTotalBundles,
+                    nextAutoTachosSendTime: newNextSendTime,
                 };
             });
         }, tickRateMs);
