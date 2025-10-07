@@ -20,7 +20,8 @@ import { Progress } from '@/components/ui/progress';
 import { Slider } from '@/components/ui/slider';
 
 
-const KG_PER_QUINTAL = 45.3592;
+const KG_PER_QUINTAL_MASA = 45.3592;
+const KG_PER_QUINTAL = 50;
 const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
@@ -337,7 +338,7 @@ export default function OperationsClient({
         const bottleneckDescription = `La enfardadora (cap: ${currentWrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
 
-        const timeToEmptyHours = effectiveKgPerMinute > 0 ? ((silosRef.current.reduce((s,c) => s + (c.currentQQ * KG_PER_QUINTAL), 0)) / effectiveKgPerMinute) / 60 : 0;
+        const timeToEmptyHours = effectiveKgPerMinute > 0 ? ((silosRef.current.reduce((s,c) => s + (c.currentQQ * KG_PER_QUINTAL_MASA), 0)) / effectiveKgPerMinute) / 60 : 0;
         
         return {
             timeToEmptyHours,
@@ -352,19 +353,19 @@ export default function OperationsClient({
     }, [machines, silos, wrapperCapacity, unitsPerBundle]);
 
     const liveSimulationResults = React.useMemo(() => {
-        const totalSacksProduced = Object.values(simulationState.machineTotals).reduce((sum, val) => sum + val, 0);
-
         let totalKgProduced = 0;
-        machines.forEach(machine => {
-            const product = products.find(p => p.id === machine.productId);
-            if (product) {
-                const machineSacks = simulationState.machineTotals[machine.id] || 0;
-                totalKgProduced += machineSacks * (product.sackWeight || 50);
+        machinesRef.current.forEach(machine => {
+            if (machine.isSimulatingActive) {
+                const product = productsRef.current.find(p => p.id === machine.productId);
+                if (product) {
+                    const machineSacks = simulationState.machineTotals[machine.id] || 0;
+                    totalKgProduced += machineSacks * (product.sackWeight || 50);
+                }
             }
         });
 
-        const machineContribution = machines.map(m => {
-            const product = products.find(p => p.id === m.productId);
+        const machineContribution = machinesRef.current.map(m => {
+            const product = productsRef.current.find(p => p.id === m.productId);
             return {
                 name: `Máq. ${m.id} (${product?.productName || 'N/A'})`,
                 value: simulationState.machineTotals[m.id] || 0
@@ -372,13 +373,12 @@ export default function OperationsClient({
         });
 
         return {
-            totalSacksProduced,
             totalKgProduced,
             totalQuintalesProduced: totalKgProduced / KG_PER_QUINTAL,
             machineContribution
         }
 
-    }, [simulationState.machineTotals, machines, products]);
+    }, [simulationState.machineTotals]);
 
     React.useEffect(() => {
         setIsClient(true);
@@ -404,8 +404,8 @@ export default function OperationsClient({
         if (isSimulating) return;
         setIsSimulating(true);
         
-        const activeMachines = machinesRef.current.filter(m => m.isSimulatingActive);
-        if (activeMachines.length === 0 && totalSiloQQ === 0) {
+        const activeMachinesOnStart = machinesRef.current.filter(m => m.isSimulatingActive);
+        if (activeMachinesOnStart.length === 0 && totalSiloQQ === 0) {
           setSimulationState(prev => ({...prev, isFinished: false}));
         } else {
           setSimulationState(prev => ({...prev, isFinished: false}));
@@ -419,47 +419,50 @@ export default function OperationsClient({
             const currentProducts = productsRef.current;
             const currentWrapperCapacity = wrapperCapacityRef.current;
             const currentUnitsPerBundle = unitsPerBundleRef.current;
+            
+            let currentTotalSiloQQ = 0;
+            let silosAreEmpty = true;
+            let kgConsumedThisTick = 0;
 
-            setSimulationState(prev => {
-                const activeMachinesConfig = currentMachines
-                    .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
-                    .map(m => {
-                        const product = currentProducts.find(p => p.id === m.productId);
-                        return {
-                            id: m.id,
-                            bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60,
-                            kgPerSecond: ((m.speed * (1 - m.loss / 100)) / 60) * (product?.sackWeight || 50),
-                        };
-                    });
-                
-                const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
-                const wrapperBagsPerSecond = currentWrapperCapacity / 60;
-                let currentTotalSiloQQ = 0;
-                
-                let silosAreEmpty = true;
-                setSilos(prevSilos => {
-                    const newSilos = JSON.parse(JSON.stringify(prevSilos));
-                    const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
-                    const granel = newSilos.find((s: SiloState) => s.id === 'granel');
-                    let kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
-
-                    if (kgConsumedThisTick > 0) {
-                        const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL;
-                        const consumedFromFamiliar = Math.min(kgInFamiliar, kgConsumedThisTick);
-                        familiar.currentQQ -= consumedFromFamiliar / KG_PER_QUINTAL;
-                        kgConsumedThisTick -= consumedFromFamiliar;
-
-                        if (kgConsumedThisTick > 0) {
-                            const kgInGranel = granel.currentQQ * KG_PER_QUINTAL;
-                            const consumedFromGranel = Math.min(kgInGranel, kgConsumedThisTick);
-                            granel.currentQQ -= consumedFromGranel / KG_PER_QUINTAL;
-                        }
-                    }
-                    currentTotalSiloQQ = familiar.currentQQ + granel.currentQQ;
-                    silosAreEmpty = currentTotalSiloQQ <= 0;
-                    return newSilos;
+            const activeMachinesConfig = currentMachines
+                .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
+                .map(m => {
+                    const product = currentProducts.find(p => p.id === m.productId);
+                    return {
+                        id: m.id,
+                        bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60,
+                        kgPerSecond: ((m.speed * (1 - m.loss / 100)) / 60) * (product?.sackWeight || 50),
+                    };
                 });
+            
+            const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
+            kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
 
+            setSilos(prevSilos => {
+                const newSilos = JSON.parse(JSON.stringify(prevSilos));
+                const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
+                const granel = newSilos.find((s: SiloState) => s.id === 'granel');
+                
+                let consumption = kgConsumedThisTick;
+
+                if (consumption > 0) {
+                    const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL_MASA;
+                    const consumedFromFamiliar = Math.min(kgInFamiliar, consumption);
+                    familiar.currentQQ -= consumedFromFamiliar / KG_PER_QUINTAL_MASA;
+                    consumption -= consumedFromFamiliar;
+
+                    if (consumption > 0) {
+                        const kgInGranel = granel.currentQQ * KG_PER_QUINTAL_MASA;
+                        const consumedFromGranel = Math.min(kgInGranel, consumption);
+                        granel.currentQQ -= consumedFromGranel / KG_PER_QUINTAL_MASA;
+                    }
+                }
+                currentTotalSiloQQ = familiar.currentQQ + granel.currentQQ;
+                silosAreEmpty = currentTotalSiloQQ <= 0;
+                return newSilos;
+            });
+            
+            setSimulationState(prev => {
                 if (prev.isFinished || (silosAreEmpty && totalKgConsumedPerSecond > 0)) {
                     pauseClock();
                     return {...prev, isFinished: true };
@@ -470,6 +473,8 @@ export default function OperationsClient({
                 let newWrapperBuffer = prev.wrapperBuffer;
                 let newCurrentBundleProgress = prev.currentBundleProgress;
                 let newTotalBundles = prev.totalBundles;
+                
+                const wrapperBagsPerSecond = currentWrapperCapacity / 60;
 
                 activeMachinesConfig.forEach(m => {
                     const bagsProducedThisTick = m.bagsPerSecond * elapsedIncrement;
@@ -713,8 +718,8 @@ export default function OperationsClient({
 
                         {/* Silo Cards */}
                         {silos.map((silo) => {
-                            const currentKg = silo.currentQQ * KG_PER_QUINTAL;
-                            const capacityKg = silo.capacityQQ * KG_PER_QUINTAL;
+                            const currentKg = silo.currentQQ * KG_PER_QUINTAL_MASA;
+                            const capacityKg = silo.capacityQQ * KG_PER_QUINTAL_MASA;
                             const fillPercentage = silo.capacityQQ > 0 ? (silo.currentQQ / silo.capacityQQ) * 100 : 0;
                             return (
                                 <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
@@ -731,7 +736,7 @@ export default function OperationsClient({
                                         <Input id={`silo-cap-${silo.id}`} type="number" value={silo.capacityQQ} onChange={(e) => handleSiloChange(silo.id, 'capacityQQ', Number(e.target.value))} min="0" />
                                     </div>
                                     <div className="space-y-2 pt-2">
-                                        <Label className="text-sm">Nivel Actual: {currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</Label>
+                                        <Label className="text-sm">Nivel: {currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</Label>
                                         <Progress value={fillPercentage} />
                                     </div>
                                 </div>

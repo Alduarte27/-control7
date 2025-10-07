@@ -11,14 +11,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { cn } from '@/lib/utils';
 import { Progress } from './ui/progress';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
 
 type ReportClientProps = {
     initialData: ProductData[];
-    startWeek: number;
-    startYear: number;
-    endWeek: number;
-    endYear: number;
+    week: number;
+    year: number;
 };
 
 const KG_PER_QUINTAL = 50;
@@ -38,31 +35,19 @@ const getComplianceColorClass = (compliance: number): string => {
 };
 
 
-export default function ReportClient({ initialData, startWeek, startYear, endWeek, endYear }: ReportClientProps) {
+export default function ReportClient({ initialData, week, year }: ReportClientProps) {
   const [data] = React.useState(initialData);
-  const searchParams = useSearchParams();
-  const startWeekId = searchParams.get('startWeek');
-  const endWeekId = searchParams.get('endWeek');
-
 
   const handlePrint = () => {
     const originalTitle = document.title;
-    const fileName = startWeek === endWeek 
-      ? `Reporte-S${startWeek}-${startYear}.pdf`
-      : `Reporte-S${startWeek}-a-S${endWeek}-${endYear}.pdf`;
+    const fileName = `Reporte-S${week}-${year}.pdf`;
     document.title = fileName;
     window.print();
     document.title = originalTitle;
   };
-
+  
   const getTitle = () => {
-      if (startYear !== endYear) {
-          return `Semanas ${startWeek}/${startYear} a ${endWeek}/${endYear}`;
-      }
-      if (startWeek === endWeek) {
-          return `Semana ${startWeek}, ${startYear}`;
-      }
-      return `Semanas ${startWeek} a ${endWeek}, ${endYear}`;
+      return `Semana ${week}, ${year}`;
   }
 
   const productsWithActivity = data.filter(item => item.planned > 0 || Object.values(item.actual).some(d => (d.day || 0) + (d.night || 0) > 0));
@@ -73,7 +58,7 @@ export default function ReportClient({ initialData, startWeek, startYear, endWee
             <h1 className="text-xl font-bold">Reporte Semanal</h1>
             <div className="flex items-center gap-2">
                 <Button asChild variant="outline">
-                    <Link href={`/?planId=${startWeekId}`}>
+                    <Link href={`/?planId=${year}-W${week}`}>
                         <ChevronLeft className="mr-2 h-4 w-4" />
                         Volver
                     </Link>

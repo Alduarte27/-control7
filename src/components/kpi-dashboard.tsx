@@ -80,7 +80,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
       <KpiCard 
         title="Total Planificado" 
-        value={totalPlannedSacks.toLocaleString()} 
+        value={totalPlannedForComplianceSacks.toLocaleString()} 
         icon={Target}
         description="Suma total de la producción planificada para todos los productos de categorías planificables."
         subValue={`(${totalPlannedForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
