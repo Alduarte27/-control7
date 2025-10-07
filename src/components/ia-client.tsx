@@ -223,7 +223,6 @@ export default function OperationsClient({
     
     const tachosQQ = 0; // Tachos is now a process, not a storage
     const totalSiloQQ = silos.reduce((sum, silo) => sum + silo.currentQQ, 0);
-    const siloAmount = totalSiloQQ * KG_PER_QUINTAL;
 
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
         const firstProduct = prefetchedProducts.find(p => p.isActive);
@@ -338,7 +337,7 @@ export default function OperationsClient({
         const bottleneckDescription = `La enfardadora (cap: ${currentWrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
 
-        const timeToEmptyHours = effectiveKgPerMinute > 0 ? ((silos.reduce((s,c) => s + (c.currentQQ * KG_PER_QUINTAL), 0)) / effectiveKgPerMinute) / 60 : 0;
+        const timeToEmptyHours = effectiveKgPerMinute > 0 ? ((silosRef.current.reduce((s,c) => s + (c.currentQQ * KG_PER_QUINTAL), 0)) / effectiveKgPerMinute) / 60 : 0;
         
         return {
             timeToEmptyHours,
@@ -349,7 +348,7 @@ export default function OperationsClient({
             bundlesPerMinute,
         };
 
-    }, [silos]);
+    }, [silosRef]);
 
     const liveSimulationResults = React.useMemo(() => {
         const totalSacksProduced = Object.values(simulationState.machineTotals).reduce((sum, val) => sum + val, 0);
@@ -458,9 +457,9 @@ export default function OperationsClient({
 
             setSimulationState(prev => {
                 // Double check if finished, as setSilos is async
-                if (prev.isFinished) {
+                if (prev.isFinished || (currentTotalSiloQQ <= 0 && totalKgConsumedPerSecond > 0)) {
                     pauseClock();
-                    return prev;
+                    return {...prev, isFinished: true };
                 }
 
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
@@ -729,9 +728,8 @@ export default function OperationsClient({
                                         <Input id={`silo-cap-${silo.id}`} type="number" value={silo.capacityQQ} onChange={(e) => handleSiloChange(silo.id, 'capacityQQ', Number(e.target.value))} min="0" />
                                     </div>
                                     <div className="space-y-2 pt-2">
-                                        <Label className="text-sm">Nivel Actual</Label>
+                                        <Label className="text-sm">Nivel Actual: {currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</Label>
                                         <Progress value={fillPercentage} />
-                                        <p className="text-xs text-center text-muted-foreground font-mono">{currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</p>
                                     </div>
                                 </div>
                             )
@@ -830,7 +828,7 @@ export default function OperationsClient({
                                                 </div>
                                             </div>
                                             <div className="space-y-1">
-                                                <Label className="text-xs">Producción Total</Label>
+                                                <Label className="text-xs">Producción Total (Sacos)</Label>
                                                 <p className="text-lg font-bold text-center text-primary">{Math.floor(simulationState.machineTotals[machine.id] || 0).toLocaleString()}</p>
                                                 <Progress value={cycleProgress} className="h-1" />
                                             </div>
@@ -902,10 +900,34 @@ export default function OperationsClient({
                 
                 <div className="space-y-6">
                     <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <KpiCard title="Tiempo Restante para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
-                        <KpiCard title="Producción Total (Sacos)" value={liveSimulationResults.totalSacksProduced} icon={Package} description="Cantidad total de sacos que se han producido." fractionDigits={0} />
-                        <KpiCard title="Producción Total (QQ)" value={liveSimulationResults.totalQuintalesProduced} icon={Warehouse} description={`Basado en la cantidad del silo (${silos.reduce((s,c) => s + c.currentQQ, 0).toLocaleString()} QQ).`} fractionDigits={1}/>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <KpiCard 
+                            title="Total Sacos Producidos" 
+                            value={liveSimulationResults.totalSacksProduced} 
+                            icon={Package} 
+                            description="Suma total de sacos que han producido todas las envasadoras activas." 
+                            fractionDigits={0} 
+                        />
+                        <KpiCard 
+                            title="Total Fardos Producidos" 
+                            value={simulationState.totalBundles} 
+                            icon={PackageCheck} 
+                            description="Suma total de fardos que ha completado la enfardadora." 
+                            fractionDigits={0} 
+                        />
+                        <KpiCard 
+                            title="Total QQ Producidos" 
+                            value={liveSimulationResults.totalQuintalesProduced} 
+                            icon={Warehouse} 
+                            description="Peso total en quintales de todos los sacos producidos." 
+                            fractionDigits={1}
+                        />
+                        <KpiCard 
+                            title="Tiempo Restante para Agotar Silo" 
+                            value={formatTime(simulationResults.timeToEmptyHours)} 
+                            icon={Clock} 
+                            description="Tiempo estimado para consumir toda la materia prima restante al ritmo actual." 
+                        />
                     </div>
                     <Card>
                         <CardHeader>
@@ -923,7 +945,7 @@ export default function OperationsClient({
                     </Card>
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina</CardTitle>
+                            <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina (Sacos)</CardTitle>
                         </CardHeader>
                         <CardContent>
                             {liveSimulationResults.machineContribution.every(m => m.value === 0) ? (
