@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -16,6 +16,8 @@ import { cn } from '@/lib/utils';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
+
 
 const KG_PER_QUINTAL = 45.3592;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
@@ -34,6 +36,14 @@ type RawMaterialSource = {
   name: string;
   quantityQQ: number;
   imageUrl: string | null;
+};
+
+type SimulationState = {
+    elapsedTime: number;
+    machineTotals: { [machineId: number]: number };
+    wrapperBuffer: number;
+    currentBundleProgress: number;
+    totalBundles: number;
 };
 
 function MachineEditDialog({
@@ -153,7 +163,6 @@ export default function OperationsClient({
     const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     
-    // Etapa 1: Materia Prima
     const [rawMaterials, setRawMaterials] = React.useState<RawMaterialSource[]>([
         { id: 'tachos', name: 'Tachos', quantityQQ: 0, imageUrl: null },
         { id: 'familiar', name: 'Silo Familiar', quantityQQ: 0, imageUrl: null },
@@ -177,7 +186,6 @@ export default function OperationsClient({
     const totalQuintales = tachosQQ + silosQQ;
     const siloAmount = totalQuintales * KG_PER_QUINTAL;
 
-    // Etapa 2: Envasadoras
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
         const firstProduct = prefetchedProducts.find(p => p.isActive);
         return [
@@ -188,8 +196,7 @@ export default function OperationsClient({
         ];
     });
 
-    // Etapa 3: Enfardadora
-    const [wrapperCapacity, setWrapperCapacity] = React.useState(110); // fundas/min
+    const [wrapperCapacity, setWrapperCapacity] = React.useState(110);
     const [unitsPerBundle, setUnitsPerBundle] = React.useState(12);
     const [wrapperImageUrl, setWrapperImageUrl] = React.useState<string | null>(null);
 
@@ -201,25 +208,27 @@ export default function OperationsClient({
         reader.readAsDataURL(file);
     };
 
-
-    React.useEffect(() => {
-        setIsClient(true);
-    }, []);
-
-    const handleSaveMachine = (updatedMachine: MachineState) => {
-        setMachines(prev => prev.map(m => m.id === updatedMachine.id ? updatedMachine : m));
+    // --- Simulation State ---
+    const [isSimulating, setIsSimulating] = React.useState(false);
+    const initialSimState: SimulationState = {
+        elapsedTime: 0,
+        machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
+        wrapperBuffer: 0,
+        currentBundleProgress: 0,
+        totalBundles: 0,
     };
+    const [simulationState, setSimulationState] = React.useState<SimulationState>(initialSimState);
+    const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    const TICK_RATE_MS = 100; // Update 10 times per second
 
-    // Lógica del Simulador de Línea Completa
+
     const simulationResults = React.useMemo(() => {
         const activeMachines = machines.filter(m => m.productId !== 'inactive');
         
         const packingCapacity = activeMachines.map(machine => {
             const product = products.find(p => p.id === machine.productId);
             if (!product) return { machineId: machine.id, bagsPerMinute: 0, kgPerMinute: 0, productName: 'N/A' };
-            
             const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
-            
             return {
                 machineId: machine.id,
                 bagsPerMinute: effectiveBagsPerMinute,
@@ -270,12 +279,92 @@ export default function OperationsClient({
                 }
             }),
             machineContribution,
+            totalBagsPerMinuteFromPackers,
             totalBagsPerHourFromAllPackers: totalBagsPerMinuteFromPackers * 60,
             effectiveWrapperBagsPerHour: wrapperCapacity * 60,
             bundlesPerMinute,
         };
 
     }, [siloAmount, machines, products, wrapperCapacity, unitsPerBundle]);
+
+    React.useEffect(() => {
+        setIsClient(true);
+    }, []);
+
+    const startSimulation = () => {
+        setSimulationState(initialSimState); // Reset on start
+        setIsSimulating(true);
+
+        const activeMachinesConfig = machines
+            .filter(m => m.productId !== 'inactive')
+            .map(m => ({
+                id: m.id,
+                bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60
+            }));
+
+        const wrapperBagsPerSecond = wrapperCapacity / 60;
+
+        simulationIntervalRef.current = setInterval(() => {
+            setSimulationState(prev => {
+                const newMachineTotals = { ...prev.machineTotals };
+                let newWrapperBuffer = prev.wrapperBuffer;
+                let newCurrentBundleProgress = prev.currentBundleProgress;
+                let newTotalBundles = prev.totalBundles;
+
+                // 1. Packers produce and add to buffer
+                activeMachinesConfig.forEach(m => {
+                    const bagsProducedThisTick = m.bagsPerSecond * (TICK_RATE_MS / 1000);
+                    newMachineTotals[m.id] += bagsProducedThisTick;
+                    newWrapperBuffer += bagsProducedThisTick;
+                });
+
+                // 2. Wrapper consumes from buffer
+                let bagsToProcessThisTick = wrapperBagsPerSecond * (TICK_RATE_MS / 1000);
+                const bagsAvailable = newWrapperBuffer + newCurrentBundleProgress;
+                
+                if (bagsAvailable < bagsToProcessThisTick) {
+                    bagsToProcessThisTick = bagsAvailable;
+                }
+
+                const consumedFromBuffer = Math.min(newWrapperBuffer, bagsToProcessThisTick);
+                newWrapperBuffer -= consumedFromBuffer;
+                newCurrentBundleProgress += consumedFromBuffer;
+
+                // 3. Wrapper creates bundles
+                if (newCurrentBundleProgress >= unitsPerBundle && unitsPerBundle > 0) {
+                    const bundlesCreated = Math.floor(newCurrentBundleProgress / unitsPerBundle);
+                    newTotalBundles += bundlesCreated;
+                    newCurrentBundleProgress %= unitsPerBundle;
+                }
+
+                return {
+                    elapsedTime: prev.elapsedTime + (TICK_RATE_MS / 1000),
+                    machineTotals: newMachineTotals,
+                    wrapperBuffer: newWrapperBuffer,
+                    currentBundleProgress: newCurrentBundleProgress,
+                    totalBundles: newTotalBundles,
+                };
+            });
+        }, TICK_RATE_MS);
+    };
+
+    const stopSimulation = () => {
+        setIsSimulating(false);
+        if (simulationIntervalRef.current) {
+            clearInterval(simulationIntervalRef.current);
+            simulationIntervalRef.current = null;
+        }
+    };
+    
+    React.useEffect(() => {
+      // Cleanup on unmount
+      return () => stopSimulation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleSaveMachine = (updatedMachine: MachineState) => {
+        setMachines(prev => prev.map(m => m.id === updatedMachine.id ? updatedMachine : m));
+    };
     
     const formatTime = (hours: number) => {
         if (!isFinite(hours) || hours <= 0) return '0h 0m';
@@ -345,7 +434,7 @@ export default function OperationsClient({
                                     <Package className="h-10 w-10 text-primary" />
                                     <h4 className="font-semibold">Envasadoras</h4>
                                     <p className={cn("text-sm", simulationResults.isWrapperBottleneck ? 'text-destructive font-bold' : 'text-muted-foreground')}>
-                                        {(simulationResults.totalBagsPerHourFromAllPackers / 60).toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/min
+                                        {(simulationResults.totalBagsPerMinuteFromPackers).toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/min
                                     </p>
                                 </div>
                             </TooltipTrigger>
@@ -378,6 +467,29 @@ export default function OperationsClient({
             </div>
             
             <div className="space-y-8">
+                 <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle>Controles de Simulación</CardTitle>
+                        <div className="flex items-center gap-2">
+                             <Button onClick={startSimulation} disabled={isSimulating} variant="secondary">
+                                <Play className="mr-2" /> Iniciar Simulación
+                            </Button>
+                            <Button onClick={stopSimulation} disabled={!isSimulating} variant="destructive">
+                                <Pause className="mr-2" /> Detener Simulación
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-center">
+                            <p className="text-sm text-muted-foreground">Tiempo Transcurrido</p>
+                            <p className="text-4xl font-bold font-mono">
+                                {Math.floor(simulationState.elapsedTime / 60).toString().padStart(2, '0')}:
+                                {Math.floor(simulationState.elapsedTime % 60).toString().padStart(2, '0')}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
@@ -435,7 +547,8 @@ export default function OperationsClient({
                                 const product = products.find(p => p.id === machine.productId);
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
                                 const sacksPerMinuteNeto = (machine.unitsPerSack > 0) ? (unitsPerMinuteNeto / machine.unitsPerSack) : 0;
-                                
+                                const cycleProgress = isSimulating ? (simulationState.elapsedTime * 1000 / TICK_RATE_MS * ((unitsPerMinuteNeto/60) * (TICK_RATE_MS/1000)) % unitsPerMinuteNeto) / unitsPerMinuteNeto * 100 : 0;
+
                                 return (
                                     <div key={machine.id} className="p-3 border rounded-lg space-y-3 bg-background relative">
                                         <div className="flex justify-between items-center">
@@ -494,6 +607,11 @@ export default function OperationsClient({
                                                     </div>
                                                 </div>
                                             </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Producción Total</Label>
+                                                <p className="text-lg font-bold text-center text-primary">{Math.floor(simulationState.machineTotals[machine.id] || 0).toLocaleString()}</p>
+                                                <Progress value={cycleProgress} className="h-1" />
+                                            </div>
                                           </>
                                         )}
                                     </div>
@@ -540,18 +658,21 @@ export default function OperationsClient({
                                 <Label htmlFor="units-per-bundle">Unidades por Fardo</Label>
                                 <Input id="units-per-bundle" type="number" value={unitsPerBundle} onChange={e => setUnitsPerBundle(Number(e.target.value))}/>
                             </div>
-                            <div className="sm:col-span-2 space-y-2 rounded-lg bg-muted/30 p-3 border text-sm">
-                                <h3 className="font-semibold text-center text-muted-foreground">Indicadores de Rendimiento Efectivo</h3>
-                                <div className="grid grid-cols-2 gap-2 text-center">
-                                    <div className="bg-background p-2 rounded-md border">
-                                        <p className="text-muted-foreground">Rendimiento Efectivo</p>
-                                        <p className="font-bold text-base">{(simulationResults.totalBagsPerHourFromAllPackers / 60).toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-xs font-normal">fundas/min</span></p>
+                             <div className="sm:col-span-2 space-y-4 rounded-lg bg-muted/30 p-3 border">
+                                 <div className="grid grid-cols-2 gap-2 text-center">
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">Buffer de Entrada</p>
+                                        <p className="font-bold text-lg text-blue-600">{Math.floor(simulationState.wrapperBuffer).toLocaleString()} <span className="text-sm font-normal">fundas</span></p>
                                     </div>
-                                    <div className="bg-background p-2 rounded-md border">
-                                        <p className="text-muted-foreground">Producción de Fardos</p>
-                                        <p className="font-bold text-base text-green-600">{simulationResults.bundlesPerMinute.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-xs font-normal">fardos/min</span></p>
+                                     <div>
+                                        <p className="text-xs text-muted-foreground">Total Fardos</p>
+                                        <p className="font-bold text-lg text-green-600">{simulationState.totalBundles.toLocaleString()}</p>
                                     </div>
-                                </div>
+                                 </div>
+                                 <div>
+                                     <Label className="text-xs">Fardo Actual ({Math.floor(simulationState.currentBundleProgress)}/{unitsPerBundle} fundas)</Label>
+                                     <Progress value={(simulationState.currentBundleProgress / (unitsPerBundle || 1)) * 100} />
+                                 </div>
                             </div>
                         </div>
                     </CardContent>
