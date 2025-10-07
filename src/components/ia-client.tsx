@@ -293,23 +293,17 @@ export default function OperationsClient({
           let qqForFamiliar = 0;
           let qqForGranel = 0;
 
-          // Try to put the whole batch in Familiar first
-          if (spaceInFamiliar >= qqToDistribute) {
-              qqForFamiliar = qqToDistribute;
-          } 
-          // If not, try to put the whole batch in Granel
-          else if (spaceInGranel >= qqToDistribute) {
-              qqForGranel = qqToDistribute;
-          }
-          // Otherwise, overflow: fill Familiar then put the rest in Granel
-          else {
-              qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
-              const remainder = qqToDistribute - qqForFamiliar;
-              qqForGranel = Math.min(remainder, spaceInGranel);
-          }
-
+          // Fill familiar first
+          qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
           familiarSilo.currentQQ += qqForFamiliar;
-          granelSilo.currentQQ += qqForGranel;
+          
+          const remainder = qqToDistribute - qqForFamiliar;
+          
+          // Put the rest in granel
+          if (remainder > 0) {
+            qqForGranel = Math.min(remainder, spaceInGranel);
+            granelSilo.currentQQ += qqForGranel;
+          }
           
           return newSilos;
       });
@@ -320,6 +314,8 @@ export default function OperationsClient({
     
     const tachosQQ = 0; // Tachos is now a process, not a storage
     const totalSiloQQ = silos.reduce((sum, silo) => sum + silo.currentQQ, 0);
+    const familiarSilo = silos.find(s => s.id === 'familiar');
+    const familiarSiloQQ = familiarSilo?.currentQQ || 0;
 
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
         const firstProduct = prefetchedProducts.find(p => p.isActive);
@@ -379,23 +375,19 @@ export default function OperationsClient({
 
 
     const staticSimulationResults = React.useMemo(() => {
-        const currentMachines = machines;
-        const currentWrapperCapacity = wrapperCapacity;
-        const currentUnitsPerBundle = unitsPerBundle;
+        const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
         
-        const totalBagsPerMinuteFromPackers = currentMachines
-            .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
-            .reduce((sum, machine) => {
-                const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
-                return sum + effectiveBagsPerMinute;
-            }, 0);
+        const totalBagsPerMinuteFromPackers = activeMachines.reduce((sum, machine) => {
+            const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
+            return sum + effectiveBagsPerMinute;
+        }, 0);
         
-        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, currentWrapperCapacity);
-        const isWrapperBottleneck = totalBagsPerMinuteFromPackers > currentWrapperCapacity;
+        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, wrapperCapacity);
+        const isWrapperBottleneck = totalBagsPerMinuteFromPackers > wrapperCapacity;
         
-        const bundlesPerMinute = currentUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / currentUnitsPerBundle : 0;
+        const bundlesPerMinute = unitsPerBundle > 0 ? effectiveSystemBagsPerMinute / unitsPerBundle : 0;
         
-        const bottleneckDescription = `La enfardadora (cap: ${currentWrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
+        const bottleneckDescription = `La enfardadora (cap: ${wrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
 
         return {
@@ -439,9 +431,8 @@ export default function OperationsClient({
                 return sum + (kgPerMinute / 60);
             }, 0);
         
-        const totalSilosKg = silosRef.current.reduce((s,c) => s + (c.currentQQ * KG_PER_QUINTAL), 0);
-        const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? totalSilosKg / totalKgConsumedPerSecond : 0;
-
+        const familiarSiloKg = (silosRef.current.find(s => s.id === 'familiar')?.currentQQ || 0) * KG_PER_QUINTAL;
+        const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : 0;
 
         return {
             totalKgProduced,
@@ -450,7 +441,7 @@ export default function OperationsClient({
             unitsInTransit: simulationState.conveyorBelt.reduce((sum, item) => sum + item.units, 0),
         }
 
-    }, [simulationState.machineTotals, simulationState.conveyorBelt, silos]);
+    }, [simulationState.machineTotals, simulationState.conveyorBelt]);
 
     React.useEffect(() => {
         setIsClient(true);
@@ -510,8 +501,9 @@ export default function OperationsClient({
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
                 
                 // Use a ref for silo state to get latest value inside interval
-                const kgAvailableInSilos = silosRef.current.reduce((sum, s) => sum + s.currentQQ, 0) * KG_PER_QUINTAL;
-                const canProduce = kgAvailableInSilos >= kgConsumedThisTick;
+                const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
+                const kgAvailableInFamiliarSilo = (familiarSiloState?.currentQQ || 0) * KG_PER_QUINTAL;
+                const canProduce = kgAvailableInFamiliarSilo >= kgConsumedThisTick;
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
                     pauseClock();
@@ -529,22 +521,11 @@ export default function OperationsClient({
                 if (canProduce) {
                     if (kgConsumedThisTick > 0) {
                         setSilos(prevSilos => {
-                            let consumption = kgConsumedThisTick;
                             const newSilos = JSON.parse(JSON.stringify(prevSilos));
-                            const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
-                            const granel = newSilos.find((s: SiloState) => s.id === 'granel');
-                            
-                            const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL;
-                            const consumedFromFamiliar = Math.min(kgInFamiliar, consumption);
-                            familiar.currentQQ -= consumedFromFamiliar / KG_PER_QUINTAL;
-                            consumption -= consumedFromFamiliar;
-
-                            if (consumption > 0) {
-                                const kgInGranel = granel.currentQQ * KG_PER_QUINTAL;
-                                const consumedFromGranel = Math.min(kgInGranel, consumption);
-                                granel.currentQQ -= consumedFromGranel / KG_PER_QUINTAL;
+                            const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
+                            if (familiarSilo) {
+                                familiarSilo.currentQQ -= kgConsumedThisTick / KG_PER_QUINTAL;
                             }
-                            
                             return newSilos;
                         });
                     }
@@ -691,12 +672,12 @@ export default function OperationsClient({
                             <TooltipTrigger>
                                 <div className="flex flex-col items-center gap-2 text-center">
                                     <Warehouse className="h-10 w-10 text-primary" />
-                                    <h4 className="font-semibold">Silos</h4>
-                                    <p className="text-sm text-muted-foreground">{totalSiloQQ.toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
+                                    <h4 className="font-semibold">Silo Familiar</h4>
+                                    <p className="text-sm text-muted-foreground">{familiarSiloQQ.toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Materia prima total en silos (Familiar + Granel).</p>
+                                <p>Materia prima disponible para la producción.</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
@@ -802,7 +783,7 @@ export default function OperationsClient({
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
                          <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Total en Silos</p>
+                            <p className="text-sm text-muted-foreground">Total en Inventario</p>
                             <p className="text-2xl font-bold text-primary">{totalSiloQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                         </div>
                     </CardHeader>
