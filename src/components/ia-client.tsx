@@ -23,6 +23,7 @@ import { Slider } from '@/components/ui/slider';
 const KG_PER_QUINTAL = 50;
 const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
+const FUNDAS_PER_SACO = 50;
 
 type MachineState = {
     id: number;
@@ -152,7 +153,7 @@ function MachineEditDialog({
                         </div>
                     </div>
                      <div className="space-y-1.5">
-                        <Label htmlFor={`units-${machine.id}`}>Unidades por Saco/Fardo</Label>
+                        <Label htmlFor={`units-${machine.id}`}>Unidades por Fardo</Label>
                         <Input id={`units-${machine.id}`} type="number" value={editedMachine.unitsPerSack} onChange={e => handleFieldChange('unitsPerSack', Number(e.target.value))}/>
                     </div>
                 </div>
@@ -943,7 +944,7 @@ export default function OperationsClient({
                                                         <p className="font-bold text-sm">{unitsPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
                                                     </div>
                                                     <div className="bg-background p-1 rounded-md border">
-                                                        <p className="text-muted-foreground">Sacos/Min</p>
+                                                        <p className="text-muted-foreground">Fardos/Min</p>
                                                         <p className="font-bold text-sm text-green-600">{sacksPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
                                                     </div>
                                                 </div>
@@ -1080,7 +1081,7 @@ export default function OperationsClient({
                                               .map(([machineId, totalUnits]) => {
                                                   const machine = machines.find(m => m.id === parseInt(machineId));
                                                   const product = machine ? products.find(p => p.id === machine.productId) : undefined;
-                                                  const sacksProduced = (machine?.unitsPerSack && machine.unitsPerSack > 0) ? totalUnits / machine.unitsPerSack : 0;
+                                                  const sacksProduced = totalUnits / FUNDAS_PER_SACO;
                                                   return {
                                                       name: `Máq. ${machineId} (${product?.productName || 'N/A'})`,
                                                       value: sacksProduced,
@@ -1094,7 +1095,7 @@ export default function OperationsClient({
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
-                                        <RechartsTooltip formatter={(value: number) => `${value.toLocaleString(undefined, {maximumFractionDigits: 0})} sacos`} />
+                                        <RechartsTooltip formatter={(value: number) => `${value.toLocaleString(undefined, {maximumFractionDigits: 1})} sacos`} />
                                     </PieChart>
                                 </ResponsiveContainer>
                             )}

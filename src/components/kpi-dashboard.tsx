@@ -79,14 +79,14 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
       <KpiCard 
-        title="Total Planificado" 
+        title="Total Planificado (Sacos)" 
         value={totalPlannedForComplianceSacks.toLocaleString()} 
         icon={Target}
         description="Suma total de la producción planificada para todos los productos de categorías planificables."
         subValue={`(${totalPlannedForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
       />
       <KpiCard 
-        title="Real s/Plan" 
+        title="Real s/Plan (Sacos)" 
         value={totalActualForComplianceSacks.toLocaleString()} 
         icon={CheckCircle2}
         description="Suma de la producción real que responde directamente a un plan (productos de categorías planificables con plan > 0)."
@@ -94,14 +94,14 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         subValueColor={getVarianceColor(varianceForComplianceSacks)}
       />
       <KpiCard
-        title="No Programado"
+        title="No Programado (Sacos)"
         value={totalUnplannedProductionSacks.toLocaleString()}
         icon={ClipboardPlus}
         description="Producción real de productos de categorías planificables que NO tenían un plan para la semana (plan = 0)."
         subValue={`(${totalUnplannedProductionQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
       />
       <KpiCard 
-        title="Producción Total Real" 
+        title="Producción Total Real (Sacos)" 
         value={totalActualSacks.toLocaleString()} 
         icon={PackageCheck}
         description="Suma total de toda la producción real, incluyendo planificada, no programada y de categorías no planificadas."

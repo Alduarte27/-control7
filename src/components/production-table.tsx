@@ -211,9 +211,9 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
             <TableHeader>
               <TableRow>
                 <TableHead className="min-w-[200px] sticky left-0 bg-card z-10">Producto</TableHead>
-                <TableHead className="text-right min-w-[110px]">Plan Semanal</TableHead>
+                <TableHead className="text-right min-w-[110px]">Plan (Sacos)</TableHead>
                 {days.map(day => <TableHead key={day} className="text-right min-w-[90px] capitalize">{dayNames[day]}</TableHead>)}
-                <TableHead className="text-right min-w-[110px]">Total Real</TableHead>
+                <TableHead className="text-right min-w-[110px]">Total Real (Sacos)</TableHead>
                 <TableHead className="text-right min-w-[90px]">QQ</TableHead>
                 <TableHead className="text-right min-w-[110px]">Varianza</TableHead>
                 <TableHead className="min-w-[120px]">Cumplimiento</TableHead>

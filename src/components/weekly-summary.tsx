@@ -12,18 +12,18 @@ type WeeklySummaryProps = {
 
 const productChartConfig = {
   planned: {
-    label: 'Planificado',
+    label: 'Planificado (Sacos)',
     color: 'hsl(var(--accent))',
   },
   actual: {
-    label: 'Real',
+    label: 'Real (Sacos)',
     color: 'hsl(var(--primary))',
   },
 } satisfies ChartConfig;
 
 const dailyChartConfig = {
     total: {
-        label: "Producción Total",
+        label: "Producción Total (Sacos)",
         color: "hsl(var(--chart-2))",
     }
 } satisfies ChartConfig;
@@ -171,7 +171,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-            <CardTitle>Producción Total por Día</CardTitle>
+            <CardTitle>Producción Total por Día (Sacos)</CardTitle>
             <CardDescription>Suma de toda la producción para cada día de la semana.</CardDescription>
         </CardHeader>
         <CardContent>
