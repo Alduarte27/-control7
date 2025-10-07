@@ -289,11 +289,14 @@ export default function OperationsClient({
           const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
           if (spaceInFamiliar >= qqToDistribute) {
               familiarSilo.currentQQ += qqToDistribute;
+              qqToDistribute = 0;
           } else {
               const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
               if (spaceInGranel >= qqToDistribute) {
                   granelSilo.currentQQ += qqToDistribute;
+                  qqToDistribute = 0;
               } else {
+                  // Overflow logic if neither can take the full amount
                   const toAddInFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
                   familiarSilo.currentQQ += toAddInFamiliar;
                   qqToDistribute -= toAddInFamiliar;
@@ -301,6 +304,7 @@ export default function OperationsClient({
                   if (qqToDistribute > 0) {
                       const toAddInGranel = Math.min(qqToDistribute, spaceInGranel);
                       granelSilo.currentQQ += toAddInGranel;
+                      qqToDistribute -= toAddInGranel;
                   }
               }
           }
@@ -792,7 +796,7 @@ export default function OperationsClient({
                            <div className='relative'>
                                <div className='flex justify-between items-center'>
                                 <Label className="font-bold text-primary">{tachosState.name}</Label>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
                                     <Edit className="h-4 w-4" />
                                 </Button>
                                </div>
@@ -818,7 +822,6 @@ export default function OperationsClient({
                         {/* Silo Cards */}
                         {silos.map((silo) => {
                             const currentKg = silo.currentQQ * KG_PER_QUINTAL;
-                            const capacityKg = silo.capacityQQ * KG_PER_QUINTAL;
                             const fillPercentage = silo.capacityQQ > 0 ? (silo.currentQQ / silo.capacityQQ) * 100 : 0;
                             const fillColorClass = getSiloFillColor(fillPercentage);
                             return (
