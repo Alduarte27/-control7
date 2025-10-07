@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -21,6 +21,7 @@ import { Slider } from '@/components/ui/slider';
 
 
 const KG_PER_QUINTAL = 45.3592;
+const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 
 type MachineState = {
@@ -32,10 +33,11 @@ type MachineState = {
     imageUrl: string | null;
 };
 
-type RawMaterialSource = {
+type SiloState = {
   id: string;
   name: string;
-  quantityQQ: number;
+  capacityQQ: number;
+  currentQQ: number;
   imageUrl: string | null;
 };
 
@@ -71,6 +73,7 @@ function MachineEditDialog({
         const newMachine = { ...editedMachine, [field]: value };
         if (field === 'productId') {
             const product = products.find(p => p.id === value);
+            // @ts-ignore
             newMachine.unitsPerSack = product?.unitsPerSack || 1;
         }
         setEditedMachine(newMachine);
@@ -165,28 +168,59 @@ export default function OperationsClient({
     const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     
-    const [rawMaterials, setRawMaterials] = React.useState<RawMaterialSource[]>([
-        { id: 'tachos', name: 'Tachos', quantityQQ: 0, imageUrl: null },
-        { id: 'familiar', name: 'Silo Familiar', quantityQQ: 0, imageUrl: null },
-        { id: 'granel', name: 'Silo a Granel', quantityQQ: 700, imageUrl: null },
+    // --- Raw Material State ---
+    const [masasToSend, setMasasToSend] = React.useState(1);
+    const [silos, setSilos] = React.useState<SiloState[]>([
+        { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: null },
+        { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: null },
     ]);
+    const [tachosImageUrl, setTachosImageUrl] = React.useState<string | null>(null);
 
-    const handleRawMaterialChange = (id: string, field: 'quantityQQ' | 'imageUrl', value: any) => {
-        setRawMaterials(prev => prev.map(rm => rm.id === id ? { ...rm, [field]: value } : rm));
+    const handleSiloChange = (id: string, field: 'capacityQQ' | 'imageUrl', value: any) => {
+        setSilos(prev => prev.map(silo => silo.id === id ? { ...silo, [field]: value } : silo));
     };
 
-    const handleRawMaterialImageUpload = (id: string, file: File) => {
+    const handleSiloImageUpload = (id: string, file: File) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-            handleRawMaterialChange(id, 'imageUrl', reader.result as string);
+            handleSiloChange(id, 'imageUrl', reader.result as string);
         };
         reader.readAsDataURL(file);
     };
 
-    const tachosQQ = rawMaterials.find(rm => rm.id === 'tachos')?.quantityQQ || 0;
-    const silosQQ = (rawMaterials.find(rm => rm.id === 'familiar')?.quantityQQ || 0) + (rawMaterials.find(rm => rm.id === 'granel')?.quantityQQ || 0);
-    const totalQuintales = tachosQQ + silosQQ;
-    const siloAmount = totalQuintales * KG_PER_QUINTAL;
+    const handleTachosImageUpload = (file: File) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setTachosImageUrl(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleSendMasas = () => {
+        let qqToDistribute = masasToSend * MASA_QQ_AMOUNT;
+        setSilos(prevSilos => {
+            const newSilos = [...prevSilos];
+            
+            const familiarSilo = newSilos.find(s => s.id === 'familiar')!;
+            const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+            const toAddInFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
+            familiarSilo.currentQQ += toAddInFamiliar;
+            qqToDistribute -= toAddInFamiliar;
+
+            if (qqToDistribute > 0) {
+                const granelSilo = newSilos.find(s => s.id === 'granel')!;
+                const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+                const toAddInGranel = Math.min(qqToDistribute, spaceInGranel);
+                granelSilo.currentQQ += toAddInGranel;
+            }
+            return newSilos;
+        });
+        setMasasToSend(1);
+    };
+    
+    const tachosQQ = 0; // Tachos is now a process, not a storage
+    const totalSiloQQ = silos.reduce((sum, silo) => sum + silo.currentQQ, 0);
+    const siloAmount = totalSiloQQ * KG_PER_QUINTAL;
 
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
         const firstProduct = prefetchedProducts.find(p => p.isActive);
@@ -227,11 +261,19 @@ export default function OperationsClient({
     const [endTime, setEndTime] = React.useState('16:00');
     const TICK_RATE_MS = 100;
 
-
+    const activeMachinesConfig = React.useMemo(() => machines
+        .filter(m => m.productId !== 'inactive')
+        .map(m => {
+            const product = products.find(p => p.id === m.productId);
+            return {
+                id: m.id,
+                bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60,
+                kgPerSecond: ((m.speed * (1 - m.loss / 100)) / 60) * (product?.sackWeight || 50),
+            };
+    }), [machines, products]);
+    
     const simulationResults = React.useMemo(() => {
-        const activeMachines = machines.filter(m => m.productId !== 'inactive');
-        
-        const packingCapacity = activeMachines.map(machine => {
+        const packingCapacity = machines.filter(m => m.productId !== 'inactive').map(machine => {
             const product = products.find(p => p.id === machine.productId);
             if (!product) return { machineId: machine.id, bagsPerMinute: 0, kgPerMinute: 0, productName: 'N/A' };
             const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
@@ -314,26 +356,43 @@ export default function OperationsClient({
         setSimulationState(prev => ({...prev, isFinished: false}));
         setIsSimulating(true);
 
-        const activeMachinesConfig = machines
-            .filter(m => m.productId !== 'inactive')
-            .map(m => ({
-                id: m.id,
-                bagsPerSecond: (m.speed * (1 - m.loss / 100)) / 60
-            }));
-
         const wrapperBagsPerSecond = wrapperCapacity / 60;
         const totalDurationSeconds = parseTimeToSeconds(endTime) - parseTimeToSeconds(startTime);
+        const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
 
         simulationIntervalRef.current = setInterval(() => {
+            const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
+            let currentTotalSiloQQ = 0;
+            
+            setSilos(prevSilos => {
+                const newSilos = JSON.parse(JSON.stringify(prevSilos));
+                const familiar = newSilos.find((s: SiloState) => s.id === 'familiar');
+                const granel = newSilos.find((s: SiloState) => s.id === 'granel');
+                let kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
+
+                if (kgConsumedThisTick > 0) {
+                    const kgInFamiliar = familiar.currentQQ * KG_PER_QUINTAL;
+                    const consumedFromFamiliar = Math.min(kgInFamiliar, kgConsumedThisTick);
+                    familiar.currentQQ -= consumedFromFamiliar / KG_PER_QUINTAL;
+                    kgConsumedThisTick -= consumedFromFamiliar;
+
+                    if (kgConsumedThisTick > 0) {
+                        const kgInGranel = granel.currentQQ * KG_PER_QUINTAL;
+                        const consumedFromGranel = Math.min(kgInGranel, kgConsumedThisTick);
+                        granel.currentQQ -= consumedFromGranel / KG_PER_QUINTAL;
+                    }
+                }
+                currentTotalSiloQQ = familiar.currentQQ + granel.currentQQ;
+                return newSilos;
+            });
+
             setSimulationState(prev => {
-                if (prev.elapsedTime >= totalDurationSeconds) {
+                if (prev.elapsedTime >= totalDurationSeconds || currentTotalSiloQQ <= 0) {
                     stopSimulation();
                     return {...prev, isFinished: true};
                 }
 
-                const elapsedIncrement = (TICK_RATE_MS / 1000) * timeMultiplier;
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
-
                 const newMachineTotals = { ...prev.machineTotals };
                 let newWrapperBuffer = prev.wrapperBuffer;
                 let newCurrentBundleProgress = prev.currentBundleProgress;
@@ -365,7 +424,7 @@ export default function OperationsClient({
                     wrapperBuffer: newWrapperBuffer,
                     currentBundleProgress: newCurrentBundleProgress,
                     totalBundles: newTotalBundles,
-                    isFinished: newElapsedTime >= totalDurationSeconds,
+                    isFinished: newElapsedTime >= totalDurationSeconds || currentTotalSiloQQ <= 0,
                 };
             });
         }, TICK_RATE_MS);
@@ -382,6 +441,7 @@ export default function OperationsClient({
     const resetSimulation = () => {
         stopSimulation();
         setSimulationState(initialSimState);
+        setSilos(prev => prev.map(s => ({ ...s, currentQQ: 0 })));
     };
     
     React.useEffect(() => {
@@ -430,7 +490,7 @@ export default function OperationsClient({
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Materia prima en etapa inicial.</p>
+                                <p>Proceso de donde se genera la materia prima.</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
@@ -443,7 +503,7 @@ export default function OperationsClient({
                                 <div className="flex flex-col items-center gap-2 text-center">
                                     <Warehouse className="h-10 w-10 text-primary" />
                                     <h4 className="font-semibold">Silos</h4>
-                                    <p className="text-sm text-muted-foreground">{silosQQ.toLocaleString()} QQ</p>
+                                    <p className="text-sm text-muted-foreground">{totalSiloQQ.toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -547,47 +607,62 @@ export default function OperationsClient({
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
-                        <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Total Disponible</p>
-                            <p className="text-2xl font-bold text-primary">{totalQuintales.toLocaleString()} QQ</p>
+                         <div className="text-right">
+                            <p className="text-sm text-muted-foreground">Total en Silos</p>
+                            <p className="text-2xl font-bold text-primary">{totalSiloQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                         </div>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {rawMaterials.map((rm) => (
-                            <div key={rm.id} className="p-4 border rounded-lg space-y-3 bg-background">
-                                <Label className="font-bold text-primary">{rm.name}</Label>
-                                <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                                    <Image
-                                        src={rm.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
-                                        alt={rm.name}
-                                        width={600}
-                                        height={400}
-                                        className="object-contain w-full h-full"
-                                    />
+                        {/* Tachos Control Panel */}
+                        <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                           <div>
+                               <Label className="font-bold text-primary">Tachos</Label>
+                               <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-3">
+                                   <Image src={tachosImageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" />
+                               </div>
+                               <input type="file" id="tachos-image-upload" className="hidden" accept="image/*" onChange={(e) => e.target.files && handleTachosImageUpload(e.target.files[0])} />
+                               <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById('tachos-image-upload')?.click()}>
+                                   <Upload className="mr-2 h-3 w-3" /> Cambiar Foto
+                               </Button>
+                           </div>
+                           <div className="space-y-3 pt-4">
+                                <Label className="text-center block">Masas a Enviar ({MASA_QQ_AMOUNT} QQ c/u)</Label>
+                                <div className="flex items-center justify-center gap-2">
+                                    <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => Math.max(1, p - 1))}><Minus className="h-4 w-4" /></Button>
+                                    <span className="text-xl font-bold w-12 text-center">{masasToSend}</span>
+                                    <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)}><Plus className="h-4 w-4" /></Button>
                                 </div>
-                                 <input
-                                    type="file"
-                                    id={`rm-image-upload-${rm.id}`}
-                                    className="hidden"
-                                    accept="image/*"
-                                    onChange={(e) => e.target.files && handleRawMaterialImageUpload(rm.id, e.target.files[0])}
-                                />
-                                <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(`rm-image-upload-${rm.id}`)?.click()}>
-                                    <Upload className="mr-2 h-3 w-3" />
-                                    Cambiar Foto
-                                </Button>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor={`rm-qq-${rm.id}`}>Cantidad (QQ)</Label>
-                                    <Input
-                                        id={`rm-qq-${rm.id}`}
-                                        type="number"
-                                        value={rm.quantityQQ}
-                                        onChange={(e) => handleRawMaterialChange(rm.id, 'quantityQQ', Number(e.target.value))}
-                                        min="0"
-                                    />
+                                <Button className="w-full" onClick={handleSendMasas} disabled={isSimulating}>Enviar a Silos</Button>
+                           </div>
+                        </div>
+
+                        {/* Silo Cards */}
+                        {silos.map((silo) => {
+                            const currentKg = silo.currentQQ * KG_PER_QUINTAL;
+                            const capacityKg = silo.capacityQQ * KG_PER_QUINTAL;
+                            const fillPercentage = silo.capacityQQ > 0 ? (silo.currentQQ / silo.capacityQQ) * 100 : 0;
+                            return (
+                                <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
+                                    <Label className="font-bold text-primary">{silo.name}</Label>
+                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                        <Image src={silo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt={silo.name} width={600} height={400} className="object-contain w-full h-full" />
+                                    </div>
+                                    <input type="file" id={`silo-image-upload-${silo.id}`} className="hidden" accept="image/*" onChange={(e) => e.target.files && handleSiloImageUpload(silo.id, e.target.files[0])} />
+                                    <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(`silo-image-upload-${silo.id}`)?.click()}>
+                                        <Upload className="mr-2 h-3 w-3" /> Cambiar Foto
+                                    </Button>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor={`silo-cap-${silo.id}`}>Capacidad Máx. (QQ)</Label>
+                                        <Input id={`silo-cap-${silo.id}`} type="number" value={silo.capacityQQ} onChange={(e) => handleSiloChange(silo.id, 'capacityQQ', Number(e.target.value))} min="0" disabled={isSimulating} />
+                                    </div>
+                                    <div className="space-y-2 pt-2">
+                                        <Label className="text-sm">Nivel Actual</Label>
+                                        <Progress value={fillPercentage} />
+                                        <p className="text-xs text-center text-muted-foreground font-mono">{currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</p>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        })}
                     </CardContent>
                 </Card>
 
@@ -737,7 +812,7 @@ export default function OperationsClient({
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <KpiCard title="Tiempo para Agotar Silo" value={formatTime(simulationResults.timeToEmptyHours)} icon={Factory} description="Tiempo total estimado para procesar toda la materia prima." />
                         <KpiCard title="Producción Total (Sacos)" value={simulationResults.totalBagsProduced} icon={Package} description="Cantidad total de sacos que se producirán." fractionDigits={0} />
-                        <KpiCard title="Producción Total (QQ)" value={simulationResults.machineProduction.reduce((sum, p) => sum + p.weight, 0) / KG_PER_QUINTAL} icon={Warehouse} description={`Basado en la cantidad del silo (${totalQuintales.toLocaleString()} QQ).`} fractionDigits={1}/>
+                        <KpiCard title="Producción Total (QQ)" value={simulationResults.machineProduction.reduce((sum, p) => sum + p.weight, 0) / KG_PER_QUINTAL} icon={Warehouse} description={`Basado en la cantidad del silo (${totalSiloQQ.toLocaleString()} QQ).`} fractionDigits={1}/>
                     </div>
                     <Card>
                         <CardHeader>
