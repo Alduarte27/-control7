@@ -29,6 +29,13 @@ type MachineState = {
     imageUrl: string | null;
 };
 
+type RawMaterialSource = {
+  id: string;
+  name: string;
+  quantityQQ: number;
+  imageUrl: string | null;
+};
+
 function MachineEditDialog({
     machine,
     products,
@@ -147,11 +154,25 @@ export default function OperationsClient({
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     
     // Etapa 1: Materia Prima
-    const [tachosQQ, setTachosQQ] = React.useState(0);
-    const [familiarQQ, setFamiliarQQ] = React.useState(0);
-    const [granelQQ, setGranelQQ] = React.useState(700);
+    const [rawMaterials, setRawMaterials] = React.useState<RawMaterialSource[]>([
+        { id: 'tachos', name: 'Tachos', quantityQQ: 0, imageUrl: null },
+        { id: 'familiar', name: 'Silo Familiar', quantityQQ: 0, imageUrl: null },
+        { id: 'granel', name: 'Silo a Granel', quantityQQ: 700, imageUrl: null },
+    ]);
 
-    const totalQuintales = tachosQQ + familiarQQ + granelQQ;
+    const handleRawMaterialChange = (id: string, field: 'quantityQQ' | 'imageUrl', value: any) => {
+        setRawMaterials(prev => prev.map(rm => rm.id === id ? { ...rm, [field]: value } : rm));
+    };
+
+    const handleRawMaterialImageUpload = (id: string, file: File) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            handleRawMaterialChange(id, 'imageUrl', reader.result as string);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const totalQuintales = rawMaterials.reduce((sum, rm) => sum + rm.quantityQQ, 0);
     const siloAmount = totalQuintales * KG_PER_QUINTAL;
 
     // Etapa 2: Envasadoras
@@ -384,26 +405,49 @@ export default function OperationsClient({
             
             <div className="space-y-8">
                 <Card>
-                    <CardHeader>
+                    <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
+                        <div className="text-right">
+                            <p className="text-sm text-muted-foreground">Total en Silo</p>
+                            <p className="text-2xl font-bold text-primary">{totalQuintales.toLocaleString()} QQ</p>
+                        </div>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="tachos-qq">Tachos (QQ)</Label>
-                            <Input id="tachos-qq" type="number" value={tachosQQ} onChange={e => setTachosQQ(Number(e.target.value))} min="0" />
-                        </div>
-                         <div className="space-y-1.5">
-                            <Label htmlFor="familiar-qq">Silo Familiar (QQ)</Label>
-                            <Input id="familiar-qq" type="number" value={familiarQQ} onChange={e => setFamiliarQQ(Number(e.target.value))} min="0" />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="granel-qq">Silo a Granel (QQ)</Label>
-                            <Input id="granel-qq" type="number" value={granelQQ} onChange={e => setGranelQQ(Number(e.target.value))} min="0" />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label>Total en Silo</Label>
-                            <p className="text-2xl font-bold text-primary p-1 border rounded-md text-center">{totalQuintales.toLocaleString()} QQ</p>
-                        </div>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {rawMaterials.map((rm) => (
+                            <div key={rm.id} className="p-4 border rounded-lg space-y-3 bg-background">
+                                <Label className="font-bold text-primary">{rm.name}</Label>
+                                <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                    <Image
+                                        src={rm.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                        alt={rm.name}
+                                        width={600}
+                                        height={400}
+                                        className="object-contain w-full h-full"
+                                    />
+                                </div>
+                                 <input
+                                    type="file"
+                                    id={`rm-image-upload-${rm.id}`}
+                                    className="hidden"
+                                    accept="image/*"
+                                    onChange={(e) => e.target.files && handleRawMaterialImageUpload(rm.id, e.target.files[0])}
+                                />
+                                <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(`rm-image-upload-${rm.id}`)?.click()}>
+                                    <Upload className="mr-2 h-3 w-3" />
+                                    Cambiar Foto
+                                </Button>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor={`rm-qq-${rm.id}`}>Cantidad (QQ)</Label>
+                                    <Input
+                                        id={`rm-qq-${rm.id}`}
+                                        type="number"
+                                        value={rm.quantityQQ}
+                                        onChange={(e) => handleRawMaterialChange(rm.id, 'quantityQQ', Number(e.target.value))}
+                                        min="0"
+                                    />
+                                </div>
+                            </div>
+                        ))}
                     </CardContent>
                 </Card>
 
