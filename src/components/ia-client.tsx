@@ -20,6 +20,7 @@ import { Progress } from '@/components/ui/progress';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
+import { Checkbox } from './ui/checkbox';
 
 
 const KG_PER_QUINTAL = 50;
@@ -56,6 +57,7 @@ type WrapperState = {
     unitsPerBundle: number;
     conveyorDelay: number; // seconds
     imageUrl: string | null;
+    machineIds: number[]; // IDs of the machines connected to this wrapper
     
     // Live simulation data
     buffer: number;
@@ -67,7 +69,7 @@ type WrapperState = {
 type SimulationState = {
     elapsedTime: number; // in seconds
     machineTotals: { [machineId: number]: number }; // Total units produced by each machine
-    wrappers: { [wrapperId: string]: Omit<WrapperState, 'id' | 'name' | 'capacity' | 'unitsPerBundle' | 'conveyorDelay' | 'imageUrl'> };
+    wrappers: { [wrapperId: string]: Omit<WrapperState, 'id' | 'name' | 'capacity' | 'unitsPerBundle' | 'conveyorDelay' | 'imageUrl' | 'machineIds'> };
     isFinished: boolean;
     nextAutoTachosSendTime: number;
 };
@@ -333,11 +335,13 @@ function SiloEditDialog({
 
 function WrapperEditDialog({
     wrapper,
+    allMachines,
     open,
     onOpenChange,
     onSave,
 }: {
     wrapper: WrapperState;
+    allMachines: MachineState[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedWrapper: WrapperState) => void;
@@ -350,6 +354,18 @@ function WrapperEditDialog({
 
     const handleFieldChange = (field: keyof WrapperState, value: any) => {
         setEditedWrapper(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleMachineConnectionChange = (machineId: number, checked: boolean) => {
+        setEditedWrapper(prev => {
+            const newMachineIds = new Set(prev.machineIds);
+            if (checked) {
+                newMachineIds.add(machineId);
+            } else {
+                newMachineIds.delete(machineId);
+            }
+            return { ...prev, machineIds: Array.from(newMachineIds) };
+        });
     };
 
     const handleImageUpload = (file: File) => {
@@ -413,6 +429,27 @@ function WrapperEditDialog({
                         <div className="space-y-1.5">
                             <Label htmlFor={`wrapper-delay-${wrapper.id}`} className="text-xs">Retraso (seg)</Label>
                             <Input id={`wrapper-delay-${wrapper.id}`} type="number" value={editedWrapper.conveyorDelay} onChange={e => handleFieldChange('conveyorDelay', Number(e.target.value))}/>
+                        </div>
+                    </div>
+                    <Separator />
+                    <div className="space-y-3">
+                        <Label>Envasadoras Conectadas</Label>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                            {allMachines.map(machine => (
+                                <div key={machine.id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`machine-conn-${wrapper.id}-${machine.id}`}
+                                        checked={editedWrapper.machineIds.includes(machine.id)}
+                                        onCheckedChange={(checked) => handleMachineConnectionChange(machine.id, !!checked)}
+                                    />
+                                    <label
+                                        htmlFor={`machine-conn-${wrapper.id}-${machine.id}`}
+                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                    >
+                                        Máquina {machine.id}
+                                    </label>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -502,8 +539,8 @@ export default function OperationsClient({
     });
 
     const [wrappers, setWrappers] = React.useState<WrapperState[]>([
-        { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-        { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+        { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, machineIds: [1, 2], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+        { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, machineIds: [3, 4], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
     ]);
 
     const handleWrapperSave = (updatedWrapper: WrapperState) => {
@@ -728,7 +765,9 @@ export default function OperationsClient({
                 }
 
                 const newMachineTotals = { ...prev.machineTotals };
-                let totalUnitsProducedThisTick = 0;
+                const unitsProducedByWrapper: { [wrapperId: string]: number } = {};
+                wrappersRef.current.forEach(w => unitsProducedByWrapper[w.id] = 0);
+
 
                 if (canProduce) {
                     if (kgConsumedThisTick > 0) {
@@ -745,18 +784,25 @@ export default function OperationsClient({
                     activeMachinesConfig.forEach(m => {
                         const unitsProducedThisTick = m.unitsPerSecond * elapsedIncrement;
                         newMachineTotals[m.id] += unitsProducedThisTick;
-                        totalUnitsProducedThisTick += unitsProducedThisTick;
+
+                        // Find which wrapper this machine is connected to
+                        const targetWrapper = wrappersRef.current.find(w => w.machineIds.includes(m.id));
+                        if (targetWrapper) {
+                            unitsProducedByWrapper[targetWrapper.id] += unitsProducedThisTick;
+                        }
                     });
                 }
                 
                 const newWrappersState: SimulationState['wrappers'] = JSON.parse(JSON.stringify(prev.wrappers));
                 
-                // 1. Add newly produced items to conveyors
-                const unitsForWrapper1 = totalUnitsProducedThisTick / 2;
-                const unitsForWrapper2 = totalUnitsProducedThisTick / 2;
-                
-                if (unitsForWrapper1 > 0) newWrappersState['1'].conveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsForWrapper1 });
-                if (unitsForWrapper2 > 0) newWrappersState['2'].conveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsForWrapper2 });
+                // 1. Add newly produced items to conveyors based on machine assignment
+                for (const wrapperConfig of wrappersRef.current) {
+                    const wrapperId = wrapperConfig.id;
+                    const unitsForThisWrapper = unitsProducedByWrapper[wrapperId];
+                    if (unitsForThisWrapper > 0) {
+                        newWrappersState[wrapperId].conveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsForThisWrapper });
+                    }
+                }
 
                 // 2. Process each wrapper independently
                 for (const wrapperConfig of wrappersRef.current) {
@@ -1218,6 +1264,14 @@ export default function OperationsClient({
                                                 <p className="font-bold text-sm">{wrapperConfig.conveyorDelay}s</p>
                                             </div>
                                         </div>
+                                         <div className="border-t pt-2 mt-2">
+                                            <h4 className="font-semibold text-center text-muted-foreground mb-1">Envasadoras Conectadas</h4>
+                                            <div className="flex justify-center gap-2 flex-wrap">
+                                                {wrapperConfig.machineIds.length > 0 ? wrapperConfig.machineIds.map(id => (
+                                                    <Badge key={id} variant="secondary">M{id}</Badge>
+                                                )) : <p className="text-muted-foreground">Ninguna</p>}
+                                            </div>
+                                        </div>
                                     </div>
                                     
                                     <div className="space-y-4 rounded-lg bg-muted/30 p-3 border">
@@ -1353,6 +1407,7 @@ export default function OperationsClient({
                     open={!!editingWrapper}
                     onOpenChange={(isOpen) => !isOpen && setEditingWrapper(null)}
                     wrapper={editingWrapper}
+                    allMachines={machines}
                     onSave={handleWrapperSave}
                 />
             )}
