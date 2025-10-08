@@ -401,6 +401,20 @@ function WrapperEditDialog({
                         <Label htmlFor={`wrapper-name-${wrapper.id}`}>Nombre</Label>
                         <Input id={`wrapper-name-${wrapper.id}`} type="text" value={editedWrapper.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
                     </div>
+                     <div className="grid grid-cols-3 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor={`wrapper-capacity-${wrapper.id}`} className="text-xs">Capacidad (f/min)</Label>
+                            <Input id={`wrapper-capacity-${wrapper.id}`} type="number" value={editedWrapper.capacity} onChange={e => handleFieldChange('capacity', Number(e.target.value))}/>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor={`wrapper-units-${wrapper.id}`} className="text-xs">Unidades/Fardo</Label>
+                            <Input id={`wrapper-units-${wrapper.id}`} type="number" value={editedWrapper.unitsPerBundle} onChange={e => handleFieldChange('unitsPerBundle', Number(e.target.value))}/>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor={`wrapper-delay-${wrapper.id}`} className="text-xs">Retraso (seg)</Label>
+                            <Input id={`wrapper-delay-${wrapper.id}`} type="number" value={editedWrapper.conveyorDelay} onChange={e => handleFieldChange('conveyorDelay', Number(e.target.value))}/>
+                        </div>
+                    </div>
                 </div>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
@@ -491,13 +505,9 @@ export default function OperationsClient({
         { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
         { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
     ]);
-    
-    const handleWrapperConfigChange = (id: string, field: keyof Omit<WrapperState, 'id' | 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>, value: any) => {
-        setWrappers(prev => prev.map(w => w.id === id ? { ...w, [field]: value } : w));
-    };
 
     const handleWrapperSave = (updatedWrapper: WrapperState) => {
-        setWrappers(prev => prev.map(w => w.id === updatedWrapper.id ? updatedWrapper : w));
+        setWrappers(prev => prev.map(w => w.id === updatedWrapper.id ? { ...w, ...updatedWrapper } : w));
     };
 
     // --- Simulation State ---
@@ -1192,18 +1202,21 @@ export default function OperationsClient({
                                         />
                                     </div>
                                     
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor={`wrapper${wrapperConfig.id}-capacity`} className="text-xs">Capacidad (f/min)</Label>
-                                            <Input id={`wrapper${wrapperConfig.id}-capacity`} type="number" value={wrapperConfig.capacity} onChange={e => handleWrapperConfigChange(wrapperConfig.id, 'capacity', Number(e.target.value))}/>
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor={`wrapper${wrapperConfig.id}-units-per-bundle`} className="text-xs">Unidades/Fardo</Label>
-                                            <Input id={`wrapper${wrapperConfig.id}-units-per-bundle`} type="number" value={wrapperConfig.unitsPerBundle} onChange={e => handleWrapperConfigChange(wrapperConfig.id, 'unitsPerBundle', Number(e.target.value))}/>
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor={`wrapper${wrapperConfig.id}-conveyor-delay`} className="text-xs">Retraso (seg)</Label>
-                                            <Input id={`wrapper${wrapperConfig.id}-conveyor-delay`} type="number" value={wrapperConfig.conveyorDelay} onChange={e => handleWrapperConfigChange(wrapperConfig.id, 'conveyorDelay', Number(e.target.value))}/>
+                                     <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
+                                        <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
+                                        <div className="grid grid-cols-3 gap-1 text-center">
+                                            <div className="bg-background p-1 rounded-md border">
+                                                <p className="text-muted-foreground">Capacidad</p>
+                                                <p className="font-bold text-sm">{wrapperConfig.capacity} <span className="text-xs font-normal">f/min</span></p>
+                                            </div>
+                                            <div className="bg-background p-1 rounded-md border">
+                                                <p className="text-muted-foreground">Unidades/Fardo</p>
+                                                <p className="font-bold text-sm">{wrapperConfig.unitsPerBundle}</p>
+                                            </div>
+                                            <div className="bg-background p-1 rounded-md border">
+                                                <p className="text-muted-foreground">Retraso</p>
+                                                <p className="font-bold text-sm">{wrapperConfig.conveyorDelay}s</p>
+                                            </div>
                                         </div>
                                     </div>
                                     
