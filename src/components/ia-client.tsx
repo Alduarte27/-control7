@@ -738,9 +738,13 @@ export default function OperationsClient({
             }
             toast({ title: "Imagen actualizada", description: "La nueva imagen se ha guardado correctamente."});
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error during image upload and save:", error);
-            toast({ title: "Error al subir imagen", description: `No se pudo guardar la imagen. Revisa la conexión e inténtalo de nuevo. Error: ${error}`, variant: "destructive"});
+            toast({ 
+                title: "Error al subir imagen", 
+                description: `No se pudo guardar la imagen. Revisa la conexión y los permisos de Firebase Storage. Error: ${error.message}`, 
+                variant: "destructive"
+            });
         } finally {
             setIsUploading(false);
         }
