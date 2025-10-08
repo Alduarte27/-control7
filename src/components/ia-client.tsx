@@ -72,6 +72,8 @@ type SimulationState = {
     wrappers: { [wrapperId: string]: Omit<WrapperState, 'id' | 'name' | 'capacity' | 'unitsPerBundle' | 'conveyorDelay' | 'imageUrl' | 'machineIds'> };
     isFinished: boolean;
     nextAutoTachosSendTime: number;
+    silos: SiloState[]; // Add silos to the simulation state
+    totalMasasSent: number; // Add masas sent to simulation state
 };
 
 function MachineEditDialog({
@@ -475,15 +477,16 @@ export default function OperationsClient({
     
     // --- Raw Material State ---
     const [masasToSend, setMasasToSend] = React.useState(1);
-    const [totalMasasSent, setTotalMasasSent] = React.useState(0);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
     const [autoTachosInterval, setAutoTachosInterval] = React.useState(10); // in minutes
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
     const [autoTachosGoal, setAutoTachosGoal] = React.useState(6);
-    const [silos, setSilos] = React.useState<SiloState[]>([
+    
+    const initialSilosState = React.useMemo(() => ([
         { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: null },
         { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: null },
-    ]);
+    ]), []);
+
     const [tachosState, setTachosState] = React.useState<SiloState>({
         id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: null,
     });
@@ -492,41 +495,45 @@ export default function OperationsClient({
         if (updatedSilo.id === 'tachos') {
             setTachosState(updatedSilo);
         } else {
-            setSilos(prev => prev.map(s => s.id === updatedSilo.id ? updatedSilo : s));
+             setSimulationState(prev => ({
+                ...prev,
+                silos: prev.silos.map(s => s.id === updatedSilo.id ? updatedSilo : s)
+            }));
         }
     };
-
-    const sendMasasToSilos = React.useCallback((amount: number) => {
-      setTotalMasasSent(prev => prev + amount);
-          
+    
+    // This function now takes the current silos state and returns the new state.
+    // It's a pure function, making it reliable.
+    const sendMasasToSilos = (amount: number, currentSilos: SiloState[]): SiloState[] => {
       let qqToDistribute = amount * MASA_QQ_AMOUNT;
-      setSilos(prevSilos => {
-          const newSilos = JSON.parse(JSON.stringify(prevSilos));
-          const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar')!;
-          const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
+      const newSilos = JSON.parse(JSON.stringify(currentSilos)); // Deep copy
+      const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar')!;
+      const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
 
-          const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-          let qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
-          familiarSilo.currentQQ += qqForFamiliar;
-          
-          const remainder = qqToDistribute - qqForFamiliar;
-          if (remainder > 0) {
-            const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-            let qqForGranel = Math.min(remainder, spaceInGranel);
-            granelSilo.currentQQ += qqForGranel;
-          }
-          return newSilos;
-      });
-    }, []);
+      const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+      let qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
+      familiarSilo.currentQQ += qqForFamiliar;
+      
+      const remainder = qqToDistribute - qqForFamiliar;
+      if (remainder > 0) {
+        const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+        let qqForGranel = Math.min(remainder, spaceInGranel);
+        granelSilo.currentQQ += qqForGranel;
+      }
+      return newSilos;
+    };
 
     const handleManualSendMasas = () => {
-        sendMasasToSilos(masasToSend);
+        setSimulationState(prev => {
+            const newSilos = sendMasasToSilos(masasToSend, prev.silos);
+            return {
+                ...prev,
+                silos: newSilos,
+                totalMasasSent: prev.totalMasasSent + masasToSend,
+            }
+        });
         setMasasToSend(1);
     };
-    
-    const familiarSilo = silos.find(s => s.id === 'familiar');
-    const granelSilo = silos.find(s => s.id === 'granel');
-    const familiarSiloQQ = familiarSilo?.currentQQ || 0;
 
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
         const firstProduct = prefetchedProducts.find(p => p.isActive);
@@ -550,7 +557,7 @@ export default function OperationsClient({
     // --- Simulation State ---
     const [isSimulating, setIsSimulating] = React.useState(false); // Represents if the clock is running
     
-    const createInitialSimulationState = (): SimulationState => ({
+    const createInitialSimulationState = React.useCallback((): SimulationState => ({
         elapsedTime: 0,
         machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
         wrappers: {
@@ -559,7 +566,9 @@ export default function OperationsClient({
         },
         isFinished: false,
         nextAutoTachosSendTime: 0,
-    });
+        silos: JSON.parse(JSON.stringify(initialSilosState)),
+        totalMasasSent: 0,
+    }), [initialSilosState]);
     
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -568,24 +577,23 @@ export default function OperationsClient({
     const machinesRef = React.useRef(machines);
     React.useEffect(() => { machinesRef.current = machines; }, [machines]);
 
-    const silosRef = React.useRef(silos);
-    React.useEffect(() => { silosRef.current = silos; }, [silos]);
-
     const productsRef = React.useRef(products);
     React.useEffect(() => { productsRef.current = products; }, [products]);
     
     const wrappersRef = React.useRef(wrappers);
     React.useEffect(() => { wrappersRef.current = wrappers; }, [wrappers]);
 
-    const totalMasasSentRef = React.useRef(totalMasasSent);
     React.useEffect(() => {
-        totalMasasSentRef.current = totalMasasSent;
-        if (isTachosAuto && isTachosGoalEnabled && totalMasasSent >= autoTachosGoal) {
+        if (isTachosAuto && isTachosGoalEnabled && simulationState.totalMasasSent >= autoTachosGoal) {
             setIsTachosAuto(false); 
         }
-    }, [totalMasasSent, isTachosAuto, isTachosGoalEnabled, autoTachosGoal]);
+    }, [simulationState.totalMasasSent, isTachosAuto, isTachosGoalEnabled, autoTachosGoal]);
     
     const totalWrapperCapacity = wrappers.reduce((sum, w) => sum + w.capacity, 0);
+    
+    const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
+    const granelSilo = simulationState.silos.find(s => s.id === 'granel');
+    const familiarSiloQQ = familiarSilo?.currentQQ || 0;
 
     const staticSimulationResults = React.useMemo(() => {
         const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
@@ -645,7 +653,7 @@ export default function OperationsClient({
                 return sum + (kgPerMinute / 60);
             }, 0);
         
-        const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
+        const familiarSiloState = simulationState.silos.find(s => s.id === 'familiar');
         const familiarSiloKg = (familiarSiloState?.currentQQ || 0) * KG_PER_QUINTAL;
         const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
 
@@ -669,9 +677,6 @@ export default function OperationsClient({
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     };
     
-    const sendMasasToSilosRef = React.useRef(sendMasasToSilos);
-    React.useEffect(() => { sendMasasToSilosRef.current = sendMasasToSilos; }, [sendMasasToSilos]);
-
     const pauseClock = React.useCallback(() => {
         setIsSimulating(false);
         if (simulationIntervalRef.current) {
@@ -700,14 +705,16 @@ export default function OperationsClient({
                 
                 const elapsedIncrement = (tickRateMs / 1000) * simulationSpeed;
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
+                
                 let nextAutoSendTime = prev.nextAutoTachosSendTime;
+                let newSilos = prev.silos;
+                let newTotalMasasSent = prev.totalMasasSent;
 
-                const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
-                const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
-                const isSiloEmpty = (familiarSiloState?.currentQQ || 0) <= 0;
-
+                const goalMet = isTachosGoalEnabled && prev.totalMasasSent >= autoTachosGoal;
+                
                 if (isTachosAuto && !goalMet && newElapsedTime >= nextAutoSendTime) {
-                    sendMasasToSilosRef.current(1);
+                    newSilos = sendMasasToSilos(1, prev.silos);
+                    newTotalMasasSent = prev.totalMasasSent + 1;
                     nextAutoSendTime = newElapsedTime + (autoTachosInterval * 60);
                 } else if (goalMet && isTachosAuto) {
                     setIsTachosAuto(false);
@@ -731,20 +738,13 @@ export default function OperationsClient({
                 const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
                 
-                const kgAvailableInFamiliarSilo = (silosRef.current.find(s => s.id === 'familiar')?.currentQQ || 0) * KG_PER_QUINTAL;
+                const kgAvailableInFamiliarSilo = (newSilos.find(s => s.id === 'familiar')?.currentQQ || 0) * KG_PER_QUINTAL;
                 const canProduce = kgAvailableInFamiliarSilo >= kgConsumedThisTick;
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
-                    setSilos(prevSilos => {
-                        const newSilos = JSON.parse(JSON.stringify(prevSilos));
-                        const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
-                        if (familiarSilo) {
-                            familiarSilo.currentQQ = 0;
-                        }
-                        return newSilos;
-                    });
+                    const finalSilos = newSilos.map(s => s.id === 'familiar' ? { ...s, currentQQ: 0 } : s);
                     pauseClock();
-                    return {...prev, elapsedTime: newElapsedTime, isFinished: true, nextAutoTachosSendTime: nextAutoSendTime };
+                    return {...prev, silos: finalSilos, elapsedTime: newElapsedTime, isFinished: true };
                 }
 
                 const newMachineTotals = { ...prev.machineTotals };
@@ -754,13 +754,11 @@ export default function OperationsClient({
 
                 if (canProduce) {
                     if (kgConsumedThisTick > 0) {
-                        setSilos(prevSilos => {
-                            const newSilos = JSON.parse(JSON.stringify(prevSilos));
-                            const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
-                            if (familiarSilo) {
-                                familiarSilo.currentQQ -= kgConsumedThisTick / KG_PER_QUINTAL;
+                         newSilos = newSilos.map(s => {
+                            if (s.id === 'familiar') {
+                                return { ...s, currentQQ: s.currentQQ - (kgConsumedThisTick / KG_PER_QUINTAL) };
                             }
-                            return newSilos;
+                            return s;
                         });
                     }
 
@@ -827,6 +825,8 @@ export default function OperationsClient({
                     machineTotals: newMachineTotals,
                     wrappers: newWrappersState,
                     nextAutoTachosSendTime: nextAutoSendTime,
+                    silos: newSilos,
+                    totalMasasSent: newTotalMasasSent,
                 };
             });
         }, tickRateMs);
@@ -834,14 +834,14 @@ export default function OperationsClient({
 
     const resetSimulation = (resetMaterial = true) => {
         pauseClock();
-        setSimulationState(createInitialSimulationState());
         if (resetMaterial) {
-          setTotalMasasSent(0);
-          const originalSilos = [
-              { id: 'familiar', name: 'Silo Familiar', capacityQQ: silos.find(s => s.id === 'familiar')?.capacityQQ || 380, currentQQ: 0, imageUrl: silos.find(s => s.id === 'familiar')?.imageUrl || null },
-              { id: 'granel', name: 'Silo a Granel', capacityQQ: silos.find(s => s.id === 'granel')?.capacityQQ || 700, currentQQ: 0, imageUrl: silos.find(s => s.id === 'granel')?.imageUrl || null },
-          ];
-          setSilos(originalSilos);
+            setSimulationState(createInitialSimulationState());
+        } else {
+            setSimulationState(prev => ({
+                ...createInitialSimulationState(),
+                silos: prev.silos,
+                totalMasasSent: prev.totalMasasSent,
+            }));
         }
     };
 
@@ -1048,7 +1048,7 @@ export default function OperationsClient({
                                 <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
                                     <div className='text-center border bg-muted/30 rounded-lg p-2'>
                                       <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
-                                      <p className="text-lg font-bold text-primary">{totalMasasSent}</p>
+                                      <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                     </div>
                                     <Label className="text-center block">Masas a Enviar ({MASA_QQ_AMOUNT} QQ c/u)</Label>
                                     <div className="flex items-center justify-center gap-2">
@@ -1062,7 +1062,7 @@ export default function OperationsClient({
                         </div>
 
                         {/* Silo Cards */}
-                        {silos.map((silo) => {
+                        {simulationState.silos.map((silo) => {
                             const currentKg = silo.currentQQ * KG_PER_QUINTAL;
                             const fillPercentage = silo.capacityQQ > 0 ? (silo.currentQQ / silo.capacityQQ) * 100 : 0;
                             const fillColorClass = getSiloFillColor(fillPercentage);
