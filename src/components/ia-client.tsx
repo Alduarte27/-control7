@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus, Power, PowerOff } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus, Power, PowerOff, Settings2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -15,17 +15,21 @@ import { Pie, Cell, ResponsiveContainer, PieChart, Tooltip as RechartsTooltip } 
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Image from 'next/image';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
+import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
 
 const KG_PER_QUINTAL = 50;
 const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
+const LOCAL_STORAGE_KEY = 'control7-simulation-config';
+
 
 type MachineState = {
     id: number;
@@ -59,11 +63,20 @@ type WrapperState = {
     imageUrl: string | null;
     machineIds: number[]; // IDs of the machines connected to this wrapper
     
-    // Live simulation data
+    // Live simulation data - not persisted
     buffer: number;
     currentBundleProgress: number;
     totalBundles: number;
     conveyorBelt: ConveyorItem[];
+};
+
+type SimulationConfig = {
+    machines: MachineState[];
+    wrappers: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>[];
+    silos: SiloState[];
+    tachosState: SiloState;
+    autoTachosInterval: number;
+    autoTachosGoal: number;
 };
 
 type SimulationState = {
@@ -203,7 +216,7 @@ function SiloEditDialog({
     isTachos?: boolean;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (updatedSilo: SiloState) => void;
+    onSave: (updatedSilo: SiloState, tachosConfig?: any) => void;
     isTachosAuto?: boolean;
     onIsTachosAutoChange?: (value: boolean) => void;
     autoTachosInterval?: number;
@@ -214,10 +227,18 @@ function SiloEditDialog({
     onAutoTachosGoalChange?: (value: number) => void;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
+    const [localIsTachosAuto, setLocalIsTachosAuto] = React.useState(isTachosAuto);
+    const [localAutoTachosInterval, setLocalAutoTachosInterval] = React.useState(autoTachosInterval);
+    const [localIsTachosGoalEnabled, setLocalIsTachosGoalEnabled] = React.useState(isTachosGoalEnabled);
+    const [localAutoTachosGoal, setLocalAutoTachosGoal] = React.useState(autoTachosGoal);
 
     React.useEffect(() => {
         setEditedSilo(silo);
-    }, [silo]);
+        setLocalIsTachosAuto(isTachosAuto);
+        setLocalAutoTachosInterval(autoTachosInterval);
+        setLocalIsTachosGoalEnabled(isTachosGoalEnabled);
+        setLocalAutoTachosGoal(autoTachosGoal);
+    }, [silo, isTachosAuto, autoTachosInterval, isTachosGoalEnabled, autoTachosGoal]);
 
     const handleFieldChange = (field: keyof SiloState, value: any) => {
         setEditedSilo(prev => ({ ...prev, [field]: value }));
@@ -234,7 +255,13 @@ function SiloEditDialog({
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
     
     const handleSaveChanges = () => {
-        onSave(editedSilo);
+        const tachosConfig = isTachos ? {
+            isTachosAuto: localIsTachosAuto,
+            autoTachosInterval: localAutoTachosInterval,
+            isTachosGoalEnabled: localIsTachosGoalEnabled,
+            autoTachosGoal: localAutoTachosGoal,
+        } : undefined;
+        onSave(editedSilo, tachosConfig);
         onOpenChange(false);
     }
 
@@ -274,7 +301,7 @@ function SiloEditDialog({
                             <Input id={`silo-cap-${silo.id}`} type="number" value={editedSilo.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
                         </div>
                     )}
-                    {isTachos && onIsTachosAutoChange && (
+                    {isTachos && (
                         <>
                             <Separator />
                             <div className="space-y-4">
@@ -282,20 +309,20 @@ function SiloEditDialog({
                                     <Label htmlFor="auto-mode-switch" className="text-sm font-medium">Modo Automático</Label>
                                     <Switch
                                         id="auto-mode-switch"
-                                        checked={isTachosAuto}
-                                        onCheckedChange={onIsTachosAutoChange}
+                                        checked={localIsTachosAuto}
+                                        onCheckedChange={setLocalIsTachosAuto}
                                     />
                                 </div>
                                 
-                                <div className={cn("space-y-3 transition-opacity", !isTachosAuto && "opacity-50")}>
+                                <div className={cn("space-y-3 transition-opacity", !localIsTachosAuto && "opacity-50")}>
                                     <div className="space-y-1.5">
                                         <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
                                         <Input
                                             id="auto-interval"
                                             type="number"
-                                            value={autoTachosInterval}
-                                            onChange={(e) => onAutoTachosIntervalChange?.(Number(e.target.value))}
-                                            disabled={!isTachosAuto}
+                                            value={localAutoTachosInterval}
+                                            onChange={(e) => setLocalAutoTachosInterval(Number(e.target.value))}
+                                            disabled={!localIsTachosAuto}
                                             min="1"
                                         />
                                     </div>
@@ -303,20 +330,20 @@ function SiloEditDialog({
                                         <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
                                         <Switch
                                             id="goal-mode-switch"
-                                            checked={isTachosGoalEnabled}
-                                            onCheckedChange={onIsTachosGoalEnabledChange}
-                                            disabled={!isTachosAuto}
+                                            checked={localIsTachosGoalEnabled}
+                                            onCheckedChange={setLocalIsTachosGoalEnabled}
+                                            disabled={!localIsTachosAuto}
                                         />
                                     </div>
-                                     {isTachosGoalEnabled && (
+                                     {localIsTachosGoalEnabled && (
                                         <div className="space-y-1.5">
                                             <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
                                             <Input
                                                 id="auto-goal"
                                                 type="number"
-                                                value={autoTachosGoal}
-                                                onChange={(e) => onAutoTachosGoalChange?.(Number(e.target.value))}
-                                                disabled={!isTachosAuto}
+                                                value={localAutoTachosGoal}
+                                                onChange={(e) => setLocalAutoTachosGoal(Number(e.target.value))}
+                                                disabled={!localIsTachosAuto}
                                                 min="1"
                                             />
                                         </div>
@@ -327,7 +354,7 @@ function SiloEditDialog({
                     )}
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
+                    <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
                     <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
                 </DialogFooter>
             </DialogContent>
@@ -346,15 +373,16 @@ function WrapperEditDialog({
     allMachines: MachineState[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (updatedWrapper: WrapperState) => void;
+    onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>) => void;
 }) {
-    const [editedWrapper, setEditedWrapper] = React.useState(wrapper);
+    const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
 
     React.useEffect(() => {
-        setEditedWrapper(wrapper);
+        const { buffer, currentBundleProgress, totalBundles, conveyorBelt, ...configurableProps } = wrapper;
+        setEditedWrapper(configurableProps);
     }, [wrapper]);
 
-    const handleFieldChange = (field: keyof WrapperState, value: any) => {
+    const handleFieldChange = (field: keyof typeof editedWrapper, value: any) => {
         setEditedWrapper(prev => ({ ...prev, [field]: value }));
     };
 
@@ -471,44 +499,159 @@ export default function OperationsClient({
 }) {
     const [isClient, setIsClient] = React.useState(false);
     const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
+    const { toast } = useToast();
+
+    // --- Unified Configuration State ---
+    const [machines, setMachines] = React.useState<MachineState[]>([]);
+    const [wrappers, setWrappers] = React.useState<WrapperState[]>([]);
+    const [silos, setSilos] = React.useState<SiloState[]>([]);
+    const [tachosState, setTachosState] = React.useState<SiloState>({ id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: null });
+    const [autoTachosInterval, setAutoTachosInterval] = React.useState(10);
+    const [autoTachosGoal, setAutoTachosGoal] = React.useState(6);
+    
+    // --- UI State ---
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
-    
-    // --- Raw Material State ---
     const [masasToSend, setMasasToSend] = React.useState(1);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
-    const [autoTachosInterval, setAutoTachosInterval] = React.useState(10); // in minutes
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
-    const [autoTachosGoal, setAutoTachosGoal] = React.useState(6);
-    
-    const initialSilosState = React.useMemo(() => ([
-        { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: null },
-        { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: null },
-    ]), []);
 
-    const [tachosState, setTachosState] = React.useState<SiloState>({
-        id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: null,
+    const getDefaultConfig = (): SimulationConfig => ({
+        machines: [
+            { id: 1, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
+            { id: 2, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
+            { id: 3, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
+            { id: 4, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
+        ],
+        wrappers: [
+            { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, machineIds: [1, 2] },
+            { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, machineIds: [3, 4] },
+        ],
+        silos: [
+            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: null },
+            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: null },
+        ],
+        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: null },
+        autoTachosInterval: 10,
+        autoTachosGoal: 6,
     });
 
-    const handleSiloSave = (updatedSilo: SiloState) => {
+    const saveConfig = (config: SimulationConfig) => {
+        try {
+            const configToSave = {
+                ...config,
+                // Exclude non-config machine properties
+                machines: config.machines.map(({ isSimulatingActive, ...m }) => m),
+            };
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(configToSave));
+        } catch (error) {
+            console.error("Error saving config to localStorage", error);
+            toast({ title: 'Error', description: 'No se pudo guardar la configuración.', variant: 'destructive' });
+        }
+    };
+
+    const loadConfig = React.useCallback(() => {
+        try {
+            const savedConfigRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+            if (savedConfigRaw) {
+                const savedConfig = JSON.parse(savedConfigRaw);
+                setMachines(savedConfig.machines.map((m: any) => ({ ...m, isSimulatingActive: false })));
+                setWrappers(savedConfig.wrappers.map((w: any) => ({ ...w, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
+                setSilos(savedConfig.silos);
+                setTachosState(savedConfig.tachosState);
+                setAutoTachosInterval(savedConfig.autoTachosInterval);
+                setAutoTachosGoal(savedConfig.autoTachosGoal);
+                toast({ title: 'Configuración Cargada', description: 'Se ha cargado tu configuración guardada.' });
+            } else {
+                // Load defaults if no config is saved
+                const defaultConfig = getDefaultConfig();
+                setMachines(defaultConfig.machines);
+                setWrappers(defaultConfig.wrappers.map(w => ({ ...w, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
+                setSilos(defaultConfig.silos);
+                setTachosState(defaultConfig.tachosState);
+                setAutoTachosInterval(defaultConfig.autoTachosInterval);
+                setAutoTachosGoal(defaultConfig.autoTachosGoal);
+            }
+        } catch (error) {
+            console.error("Error loading config from localStorage", error);
+            toast({ title: 'Error de Carga', description: 'No se pudo cargar la configuración. Se usarán los valores por defecto.', variant: 'destructive' });
+            // Fallback to defaults
+            const defaultConfig = getDefaultConfig();
+            setMachines(defaultConfig.machines);
+            setWrappers(defaultConfig.wrappers.map(w => ({ ...w, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
+            setSilos(defaultConfig.silos);
+            setTachosState(defaultConfig.tachosState);
+        }
+    }, [toast]);
+    
+    React.useEffect(() => {
+        setIsClient(true);
+        loadConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleConfigSave = (newConfig: Partial<SimulationConfig>) => {
+        const currentConfig: SimulationConfig = {
+            machines,
+            wrappers,
+            silos,
+            tachosState,
+            autoTachosInterval,
+            autoTachosGoal,
+        };
+        saveConfig({ ...currentConfig, ...newConfig });
+    };
+
+    const handleMachineSave = (updatedMachine: MachineState) => {
+        const newMachines = machines.map(m => m.id === updatedMachine.id ? updatedMachine : m);
+        setMachines(newMachines);
+        handleConfigSave({ machines: newMachines });
+    };
+
+    const handleWrapperSave = (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>) => {
+        const newWrappers = wrappers.map(w => w.id === updatedWrapper.id ? { ...w, ...updatedWrapper } : w);
+        setWrappers(newWrappers);
+        handleConfigSave({ wrappers: newWrappers });
+    };
+
+    const handleSiloSave = (updatedSilo: SiloState, tachosConfig?: any) => {
         if (updatedSilo.id === 'tachos') {
             setTachosState(updatedSilo);
+            if (tachosConfig) {
+                setIsTachosAuto(tachosConfig.isTachosAuto);
+                setAutoTachosInterval(tachosConfig.autoTachosInterval);
+                setIsTachosGoalEnabled(tachosConfig.isTachosGoalEnabled);
+                setAutoTachosGoal(tachosConfig.autoTachosGoal);
+                handleConfigSave({ 
+                    tachosState: updatedSilo,
+                    autoTachosInterval: tachosConfig.autoTachosInterval,
+                    autoTachosGoal: tachosConfig.autoTachosGoal,
+                 });
+            } else {
+                 handleConfigSave({ tachosState: updatedSilo });
+            }
         } else {
-             setSimulationState(prev => ({
-                ...prev,
-                silos: prev.silos.map(s => s.id === updatedSilo.id ? updatedSilo : s)
-            }));
+            const newSilos = silos.map(s => s.id === updatedSilo.id ? updatedSilo : s);
+            setSilos(newSilos);
+            handleConfigSave({ silos: newSilos });
         }
     };
     
-    // This function now takes the current silos state and returns the new state.
-    // It's a pure function, making it reliable.
+    const handleRestoreDefaults = () => {
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        loadConfig();
+        toast({ title: 'Configuración Restaurada', description: 'Se han cargado los valores por defecto.' });
+    };
+    
+    // --- Raw Material State ---
     const sendMasasToSilos = React.useCallback((amount: number, currentSilos: SiloState[]): SiloState[] => {
       let qqToDistribute = amount * MASA_QQ_AMOUNT;
-      const newSilos = JSON.parse(JSON.stringify(currentSilos)); // Deep copy
-      const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar')!;
-      const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel')!;
+      const newSilos: SiloState[] = JSON.parse(JSON.stringify(currentSilos)); // Deep copy
+      const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
+      const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel');
+
+      if (!familiarSilo || !granelSilo) return currentSilos;
 
       const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
       let qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
@@ -525,33 +668,14 @@ export default function OperationsClient({
 
     const handleManualSendMasas = () => {
         setSimulationState(prev => {
-            const newSilos = sendMasasToSilos(masasToSend, prev.silos);
+            const newSilosState = sendMasasToSilos(masasToSend, prev.silos);
             return {
                 ...prev,
-                silos: newSilos,
+                silos: newSilosState,
                 totalMasasSent: prev.totalMasasSent + masasToSend,
             }
         });
         setMasasToSend(1);
-    };
-
-    const [machines, setMachines] = React.useState<MachineState[]>(() => {
-        const firstProduct = prefetchedProducts.find(p => p.isActive);
-        return [
-            { id: 1, productId: firstProduct?.id || 'inactive', speed: 40, loss: 2, unitsPerSack: 12, imageUrl: null, isSimulatingActive: false },
-            { id: 2, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
-            { id: 3, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
-            { id: 4, productId: 'inactive', speed: 40, loss: 2, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
-        ];
-    });
-
-    const [wrappers, setWrappers] = React.useState<WrapperState[]>([
-        { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, machineIds: [1, 2], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-        { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, machineIds: [3, 4], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-    ]);
-
-    const handleWrapperSave = (updatedWrapper: WrapperState) => {
-        setWrappers(prev => prev.map(w => w.id === updatedWrapper.id ? { ...w, ...updatedWrapper } : w));
     };
 
     // --- Simulation State ---
@@ -565,12 +689,20 @@ export default function OperationsClient({
             '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
         },
         isFinished: false,
-        nextAutoTachosSendTime: 0, // Start checking from time 0
-        silos: JSON.parse(JSON.stringify(initialSilosState)),
+        nextAutoTachosSendTime: 0,
+        silos: JSON.parse(JSON.stringify(silos)),
         totalMasasSent: 0,
-    }), [initialSilosState]);
+    }), [silos]);
     
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
+    
+    React.useEffect(() => {
+        setSimulationState(prev => ({
+            ...prev,
+            silos: JSON.parse(JSON.stringify(silos))
+        }));
+    }, [silos]);
+
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const [simulationSpeed, setSimulationSpeed] = React.useState(1);
     
@@ -669,10 +801,6 @@ export default function OperationsClient({
 
     }, [simulationState]);
 
-    React.useEffect(() => {
-        setIsClient(true);
-    }, []);
-
     const formatElapsedTime = (totalSeconds: number) => {
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -716,7 +844,8 @@ export default function OperationsClient({
                 const goalMet = isTachosGoalEnabled && prev.totalMasasSent >= autoTachosGoal;
                 
                 if (isTachosAuto && !goalMet && newElapsedTime >= nextAutoSendTime) {
-                    newSilos = sendMasasToSilosRef.current(1, prev.silos);
+                    const updatedSilos = sendMasasToSilosRef.current(1, prev.silos);
+                    newSilos = updatedSilos;
                     newTotalMasasSent = prev.totalMasasSent + 1;
                     nextAutoSendTime = newElapsedTime + (autoTachosInterval * 60);
                 } else if (goalMet && isTachosAuto) {
@@ -840,7 +969,6 @@ export default function OperationsClient({
         if (resetMaterial) {
             setSimulationState(createInitialSimulationState());
         } else {
-            // Reset simulation time and production, but keep silos and masa count
             setSimulationState(prev => ({
                 ...createInitialSimulationState(),
                 silos: prev.silos,
@@ -863,10 +991,6 @@ export default function OperationsClient({
       return () => pauseClock();
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pauseClock]);
-
-    const handleSaveMachine = (updatedMachine: MachineState) => {
-        setMachines(prev => prev.map(m => m.id === updatedMachine.id ? updatedMachine : m));
-    };
     
     const formatTime = (hours: number) => {
         if (!isFinite(hours) || hours <= 0) return '0h 0m';
@@ -991,8 +1115,8 @@ export default function OperationsClient({
                                <Pause className="mr-2 h-4 w-4" /> Detener
                            </Button>
                            <Separator orientation="vertical" className="h-6 mx-2" />
-                           <Button onClick={() => resetSimulation(true)} variant="outline">
-                               <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Todo
+                           <Button onClick={() => resetSimulation(false)} variant="outline">
+                               <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Simulación
                            </Button>
                        </div>
                     </CardHeader>
@@ -1029,7 +1153,28 @@ export default function OperationsClient({
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
-                        <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
+                        <div className="flex items-center gap-4">
+                            <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7">
+                                        <Settings2 className="h-4 w-4 text-muted-foreground" />
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>Restaurar Configuración</AlertDialogTitle>
+                                        <AlertDialogDescription>
+                                            ¿Estás seguro de que quieres borrar tu configuración guardada? Esto restaurará todos los parámetros de las máquinas, silos y enfardadoras a sus valores por defecto. Esta acción no se puede deshacer.
+                                        </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
                          <div className="text-right">
                             <p className="text-sm text-muted-foreground">Inventario para Producción</p>
                             <p className="text-2xl font-bold text-primary">{familiarSiloQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
@@ -1042,7 +1187,7 @@ export default function OperationsClient({
                                 <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
                                   {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                 </h3>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState })}>
                                     <Edit className="h-4 w-4" />
                                 </Button>
                             </div>
@@ -1371,7 +1516,7 @@ export default function OperationsClient({
                     onOpenChange={(isOpen) => !isOpen && setEditingMachine(null)}
                     machine={editingMachine}
                     products={products}
-                    onSave={handleSaveMachine}
+                    onSave={handleMachineSave}
                 />
             )}
              {editingSilo && (
