@@ -504,7 +504,7 @@ export default function OperationsClient({
     
     // This function now takes the current silos state and returns the new state.
     // It's a pure function, making it reliable.
-    const sendMasasToSilos = (amount: number, currentSilos: SiloState[]): SiloState[] => {
+    const sendMasasToSilos = React.useCallback((amount: number, currentSilos: SiloState[]): SiloState[] => {
       let qqToDistribute = amount * MASA_QQ_AMOUNT;
       const newSilos = JSON.parse(JSON.stringify(currentSilos)); // Deep copy
       const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar')!;
@@ -521,7 +521,7 @@ export default function OperationsClient({
         granelSilo.currentQQ += qqForGranel;
       }
       return newSilos;
-    };
+    }, []);
 
     const handleManualSendMasas = () => {
         setSimulationState(prev => {
@@ -565,7 +565,7 @@ export default function OperationsClient({
             '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
         },
         isFinished: false,
-        nextAutoTachosSendTime: 0,
+        nextAutoTachosSendTime: 0, // Start checking from time 0
         silos: JSON.parse(JSON.stringify(initialSilosState)),
         totalMasasSent: 0,
     }), [initialSilosState]);
@@ -582,6 +582,9 @@ export default function OperationsClient({
     
     const wrappersRef = React.useRef(wrappers);
     React.useEffect(() => { wrappersRef.current = wrappers; }, [wrappers]);
+
+    const sendMasasToSilosRef = React.useRef(sendMasasToSilos);
+    React.useEffect(() => { sendMasasToSilosRef.current = sendMasasToSilos; }, [sendMasasToSilos]);
 
     React.useEffect(() => {
         if (isTachosAuto && isTachosGoalEnabled && simulationState.totalMasasSent >= autoTachosGoal) {
@@ -713,7 +716,7 @@ export default function OperationsClient({
                 const goalMet = isTachosGoalEnabled && prev.totalMasasSent >= autoTachosGoal;
                 
                 if (isTachosAuto && !goalMet && newElapsedTime >= nextAutoSendTime) {
-                    newSilos = sendMasasToSilos(1, prev.silos);
+                    newSilos = sendMasasToSilosRef.current(1, prev.silos);
                     newTotalMasasSent = prev.totalMasasSent + 1;
                     nextAutoSendTime = newElapsedTime + (autoTachosInterval * 60);
                 } else if (goalMet && isTachosAuto) {
@@ -981,18 +984,15 @@ export default function OperationsClient({
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <CardTitle>Controles de Simulación</CardTitle>
                          <div className="flex flex-wrap items-center gap-2">
-                            <Button onClick={startClock} disabled={isSimulating} variant="secondary">
-                               <Play className="mr-2" /> Iniciar
+                           <Button onClick={startClock} disabled={isSimulating} variant="secondary">
+                               <Play className="mr-2 h-4 w-4" /> Iniciar
                            </Button>
                            <Button onClick={pauseClock} disabled={!isSimulating} variant="destructive">
-                               <Pause className="mr-2" /> Detener
+                               <Pause className="mr-2 h-4 w-4" /> Detener
                            </Button>
                            <Separator orientation="vertical" className="h-6 mx-2" />
-                           <Button onClick={() => resetSimulation(false)} variant="outline">
-                               Reiniciar Simulación
-                           </Button>
                            <Button onClick={() => resetSimulation(true)} variant="outline">
-                               <RefreshCw className="mr-2" /> Reiniciar Todo
+                               <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Todo
                            </Button>
                        </div>
                     </CardHeader>
