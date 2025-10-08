@@ -477,7 +477,7 @@ export default function OperationsClient({
     const [masasToSend, setMasasToSend] = React.useState(1);
     const [totalMasasSent, setTotalMasasSent] = React.useState(0);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
-    const [autoTachosInterval, setAutoTachosInterval] = React.useState(90); // in minutes
+    const [autoTachosInterval, setAutoTachosInterval] = React.useState(10); // in minutes
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
     const [autoTachosGoal, setAutoTachosGoal] = React.useState(6);
     const [silos, setSilos] = React.useState<SiloState[]>([
@@ -558,7 +558,7 @@ export default function OperationsClient({
             '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
         },
         isFinished: false,
-        nextAutoTachosSendTime: autoTachosInterval * 60,
+        nextAutoTachosSendTime: 0,
     });
     
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
@@ -706,7 +706,7 @@ export default function OperationsClient({
                 const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
                 const isSiloEmpty = (familiarSiloState?.currentQQ || 0) <= 0;
 
-                if (isTachosAuto && !goalMet && (newElapsedTime >= nextAutoSendTime || isSiloEmpty)) {
+                if (isTachosAuto && !goalMet && newElapsedTime >= nextAutoSendTime) {
                     sendMasasToSilosRef.current(1);
                     nextAutoSendTime = newElapsedTime + (autoTachosInterval * 60);
                 } else if (goalMet && isTachosAuto) {
