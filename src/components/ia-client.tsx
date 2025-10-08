@@ -25,7 +25,6 @@ import { Badge } from './ui/badge';
 const KG_PER_QUINTAL = 50;
 const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
-const FUNDAS_PER_SACO = 50;
 
 type MachineState = {
     id: number;
@@ -51,16 +50,22 @@ type ConveyorItem = {
 };
 
 type WrapperState = {
+    capacity: number; // bags per minute
+    unitsPerBundle: number;
+    conveyorDelay: number; // seconds
+    imageUrl: string | null;
+    
+    // Live simulation data
     buffer: number;
     currentBundleProgress: number;
     totalBundles: number;
+    conveyorBelt: ConveyorItem[];
 };
 
 type SimulationState = {
     elapsedTime: number; // in seconds
     machineTotals: { [machineId: number]: number }; // Total units produced by each machine
-    conveyorBelt: ConveyorItem[]; // Units currently in transit
-    wrappers: { [wrapperId: number]: WrapperState }; // State for each wrapper
+    wrappers: { [wrapperId: string]: WrapperState }; // State for each wrapper
     isFinished: boolean;
     nextAutoTachosSendTime: number;
 };
@@ -179,7 +184,6 @@ function SiloEditDialog({
     open,
     onOpenChange,
     onSave,
-    // New props for Tachos automation
     isTachosAuto,
     onIsTachosAutoChange,
     autoTachosInterval,
@@ -194,7 +198,6 @@ function SiloEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: SiloState) => void;
-    // New props definitions
     isTachosAuto?: boolean;
     onIsTachosAutoChange?: (value: boolean) => void;
     autoTachosInterval?: number;
@@ -265,7 +268,7 @@ function SiloEditDialog({
                             <Input id={`silo-cap-${silo.id}`} type="number" value={editedSilo.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
                         </div>
                     )}
-                    {isTachos && (
+                    {isTachos && onIsTachosAutoChange && (
                         <>
                             <Separator />
                             <div className="space-y-4">
@@ -401,41 +404,44 @@ export default function OperationsClient({
         ];
     });
 
-    const [wrapper1Capacity, setWrapper1Capacity] = React.useState(110);
-    const [wrapper1ImageUrl, setWrapper1ImageUrl] = React.useState<string | null>(null);
-    const [wrapper2Capacity, setWrapper2Capacity] = React.useState(80);
-    const [wrapper2ImageUrl, setWrapper2ImageUrl] = React.useState<string | null>(null);
+    const [wrappers, setWrappers] = React.useState<{ [key: string]: WrapperState }>({
+        '1': { capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+        '2': { capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+    });
 
-    const [unitsPerBundle, setUnitsPerBundle] = React.useState(12);
-    const [conveyorDelay, setConveyorDelay] = React.useState(6);
+    const handleWrapperFieldChange = (id: string, field: keyof Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>, value: any) => {
+        setWrappers(prev => ({
+            ...prev,
+            [id]: {
+                ...prev[id],
+                [field]: value
+            }
+        }));
+    };
 
-
-    const handleWrapperImageUpload = (file: File, wrapperNumber: 1 | 2) => {
+    const handleWrapperImageUpload = (file: File, wrapperId: string) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-            if (wrapperNumber === 1) {
-                setWrapper1ImageUrl(reader.result as string);
-            } else {
-                setWrapper2ImageUrl(reader.result as string);
-            }
+            handleWrapperFieldChange(wrapperId, 'imageUrl', reader.result as string);
         };
         reader.readAsDataURL(file);
     };
 
     // --- Simulation State ---
     const [isSimulating, setIsSimulating] = React.useState(false); // Represents if the clock is running
-    const initialSimState: SimulationState = {
+    
+    const createInitialSimulationState = (): SimulationState => ({
         elapsedTime: 0,
         machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
-        conveyorBelt: [],
         wrappers: {
-            1: { buffer: 0, currentBundleProgress: 0, totalBundles: 0 },
-            2: { buffer: 0, currentBundleProgress: 0, totalBundles: 0 },
+            '1': { ...wrappers['1'], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+            '2': { ...wrappers['2'], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
         },
         isFinished: false,
         nextAutoTachosSendTime: autoTachosInterval * 60,
-    };
-    const [simulationState, setSimulationState] = React.useState<SimulationState>(initialSimState);
+    });
+    
+    const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const [simulationSpeed, setSimulationSpeed] = React.useState(1);
     
@@ -448,18 +454,9 @@ export default function OperationsClient({
     const productsRef = React.useRef(products);
     React.useEffect(() => { productsRef.current = products; }, [products]);
     
-    const wrapper1CapacityRef = React.useRef(wrapper1Capacity);
-    React.useEffect(() => { wrapper1CapacityRef.current = wrapper1Capacity; }, [wrapper1Capacity]);
+    const wrappersRef = React.useRef(wrappers);
+    React.useEffect(() => { wrappersRef.current = wrappers; }, [wrappers]);
 
-    const wrapper2CapacityRef = React.useRef(wrapper2Capacity);
-    React.useEffect(() => { wrapper2CapacityRef.current = wrapper2Capacity; }, [wrapper2Capacity]);
-
-    const unitsPerBundleRef = React.useRef(unitsPerBundle);
-    React.useEffect(() => { unitsPerBundleRef.current = unitsPerBundle; }, [unitsPerBundle]);
-    
-    const conveyorDelayRef = React.useRef(conveyorDelay);
-    React.useEffect(() => { conveyorDelayRef.current = conveyorDelay; }, [conveyorDelay]);
-    
     const totalMasasSentRef = React.useRef(totalMasasSent);
     React.useEffect(() => {
         totalMasasSentRef.current = totalMasasSent;
@@ -467,8 +464,8 @@ export default function OperationsClient({
             setIsTachosAuto(false); 
         }
     }, [totalMasasSent, isTachosAuto, isTachosGoalEnabled, autoTachosGoal]);
-
-    const totalWrapperCapacity = wrapper1Capacity + wrapper2Capacity;
+    
+    const totalWrapperCapacity = Object.values(wrappers).reduce((sum, w) => sum + w.capacity, 0);
 
     const staticSimulationResults = React.useMemo(() => {
         const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
@@ -481,7 +478,9 @@ export default function OperationsClient({
         const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, totalWrapperCapacity);
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > totalWrapperCapacity;
         
-        const bundlesPerMinute = unitsPerBundle > 0 ? effectiveSystemBagsPerMinute / unitsPerBundle : 0;
+        // Note: This bundles/min is an approximation as each wrapper can have different units/bundle
+        const avgUnitsPerBundle = Object.values(wrappers).length > 0 ? Object.values(wrappers).reduce((sum, w) => sum + w.unitsPerBundle, 0) / Object.values(wrappers).length : 1;
+        const bundlesPerMinute = avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0;
         
         const bottleneckDescription = `Las enfardadoras (cap total: ${totalWrapperCapacity.toLocaleString()} f/min) limitan a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
@@ -494,7 +493,7 @@ export default function OperationsClient({
             bundlesPerMinute,
         };
 
-    }, [machines, totalWrapperCapacity, unitsPerBundle]);
+    }, [machines, wrappers, totalWrapperCapacity]);
 
     const liveSimulationResults = React.useMemo(() => {
         let totalKgProduced = 0;
@@ -529,17 +528,16 @@ export default function OperationsClient({
         
         const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
         const familiarSiloKg = (familiarSiloState?.currentQQ || 0) * KG_PER_QUINTAL;
-        const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : 0;
+        const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
 
         return {
             totalKgProduced,
             totalQuintalesProduced: totalKgProduced / KG_PER_QUINTAL,
-            totalBundlesProduced: simulationState.wrappers[1].totalBundles + simulationState.wrappers[2].totalBundles,
+            totalBundlesProduced: Object.values(simulationState.wrappers).reduce((sum, w) => sum + w.totalBundles, 0),
             timeToEmptyHours: timeToEmptySeconds / 3600,
-            unitsInTransit: simulationState.conveyorBelt.reduce((sum, item) => sum + item.units, 0),
         }
 
-    }, [simulationState.machineTotals, simulationState.conveyorBelt, simulationState.wrappers]);
+    }, [simulationState]);
 
     React.useEffect(() => {
         setIsClient(true);
@@ -572,11 +570,11 @@ export default function OperationsClient({
         if (simulationIntervalRef.current) return;
         setIsSimulating(true);
 
-        const familiarSilo = silos.find(s => s.id === 'familiar');
-        const familiarSiloQQ = familiarSilo?.currentQQ || 0;
+        const familiarSiloState = silos.find(s => s.id === 'familiar');
+        const familiarSiloQQ = familiarSiloState?.currentQQ || 0;
     
         if (isTachosAuto && familiarSiloQQ <= 0) {
-            const familiarSiloCapacity = familiarSilo?.capacityQQ || 0;
+            const familiarSiloCapacity = familiarSiloState?.capacityQQ || 0;
             const requiredMasas = Math.ceil(familiarSiloCapacity / MASA_QQ_AMOUNT);
             sendMasasToSilosRef.current(requiredMasas);
         }
@@ -648,7 +646,7 @@ export default function OperationsClient({
                 }
 
                 const newMachineTotals = { ...prev.machineTotals };
-                let newConveyorBelt = [...prev.conveyorBelt];
+                let totalUnitsProducedThisTick = 0;
 
                 if (canProduce) {
                     if (kgConsumedThisTick > 0) {
@@ -665,56 +663,57 @@ export default function OperationsClient({
                     activeMachinesConfig.forEach(m => {
                         const unitsProducedThisTick = m.unitsPerSecond * elapsedIncrement;
                         newMachineTotals[m.id] += unitsProducedThisTick;
-                        newConveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsProducedThisTick });
+                        totalUnitsProducedThisTick += unitsProducedThisTick;
                     });
                 }
                 
-                const arrivedItems: ConveyorItem[] = [];
-                const remainingOnBelt: ConveyorItem[] = [];
-                const currentConveyorDelay = conveyorDelayRef.current;
-
-                newConveyorBelt.forEach(item => {
-                    if (newElapsedTime >= item.producedAt + currentConveyorDelay) {
-                        arrivedItems.push(item);
-                    } else {
-                        remainingOnBelt.push(item);
-                    }
-                });
+                const newWrappers = JSON.parse(JSON.stringify(prev.wrappers));
                 
-                const totalArrivedUnits = arrivedItems.reduce((sum, item) => sum + item.units, 0);
-                newConveyorBelt = remainingOnBelt;
+                // 1. Add newly produced items to conveyors
+                const unitsForWrapper1 = totalUnitsProducedThisTick / 2;
+                const unitsForWrapper2 = totalUnitsProducedThisTick / 2;
                 
-                const newWrappers = { ...prev.wrappers };
-                
-                // Distribute arrived units between wrappers
-                const unitsForWrapper1 = totalArrivedUnits / 2;
-                const unitsForWrapper2 = totalArrivedUnits / 2;
-                newWrappers[1] = { ...newWrappers[1], buffer: newWrappers[1].buffer + unitsForWrapper1 };
-                newWrappers[2] = { ...newWrappers[2], buffer: newWrappers[2].buffer + unitsForWrapper2 };
+                if (unitsForWrapper1 > 0) newWrappers['1'].conveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsForWrapper1 });
+                if (unitsForWrapper2 > 0) newWrappers['2'].conveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsForWrapper2 });
 
-                // Process units in each wrapper
-                [1, 2].forEach(wrapperId => {
-                    const capacity = wrapperId === 1 ? wrapper1CapacityRef.current : wrapper2CapacityRef.current;
-                    const wrapperUnitsPerSecond = capacity / 60;
-                    const unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
-                    const unitsToTakeFromBuffer = Math.min(unitsToProcessThisTick, newWrappers[wrapperId].buffer);
-
-                    newWrappers[wrapperId].buffer -= unitsToTakeFromBuffer;
-                    newWrappers[wrapperId].currentBundleProgress += unitsToTakeFromBuffer;
+                // 2. Process each wrapper independently
+                for (const wrapperId in newWrappers) {
+                    const wrapper = newWrappers[wrapperId];
+                    const config = wrappersRef.current[wrapperId];
                     
-                    const currentUnitsPerBundle = unitsPerBundleRef.current;
-                    if (newWrappers[wrapperId].currentBundleProgress >= currentUnitsPerBundle && currentUnitsPerBundle > 0) {
-                        const bundlesCreated = Math.floor(newWrappers[wrapperId].currentBundleProgress / currentUnitsPerBundle);
-                        newWrappers[wrapperId].totalBundles += bundlesCreated;
-                        newWrappers[wrapperId].currentBundleProgress %= currentUnitsPerBundle;
+                    // Items arrive at buffer
+                    const arrivedItems: ConveyorItem[] = [];
+                    const remainingOnBelt: ConveyorItem[] = [];
+                    wrapper.conveyorBelt.forEach((item: ConveyorItem) => {
+                        if (newElapsedTime >= item.producedAt + config.conveyorDelay) {
+                            arrivedItems.push(item);
+                        } else {
+                            remainingOnBelt.push(item);
+                        }
+                    });
+                    const totalArrivedUnits = arrivedItems.reduce((sum, item) => sum + item.units, 0);
+                    wrapper.conveyorBelt = remainingOnBelt;
+                    wrapper.buffer += totalArrivedUnits;
+
+                    // Process units from buffer
+                    const wrapperUnitsPerSecond = config.capacity / 60;
+                    const unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
+                    const unitsToTakeFromBuffer = Math.min(unitsToProcessThisTick, wrapper.buffer);
+
+                    wrapper.buffer -= unitsToTakeFromBuffer;
+                    wrapper.currentBundleProgress += unitsToTakeFromBuffer;
+                    
+                    if (wrapper.currentBundleProgress >= config.unitsPerBundle && config.unitsPerBundle > 0) {
+                        const bundlesCreated = Math.floor(wrapper.currentBundleProgress / config.unitsPerBundle);
+                        wrapper.totalBundles += bundlesCreated;
+                        wrapper.currentBundleProgress %= config.unitsPerBundle;
                     }
-                });
+                }
 
                 return {
                     ...prev,
                     elapsedTime: newElapsedTime,
                     machineTotals: newMachineTotals,
-                    conveyorBelt: newConveyorBelt,
                     wrappers: newWrappers,
                 };
             });
@@ -723,7 +722,7 @@ export default function OperationsClient({
 
     const resetSimulation = (resetMaterial = true) => {
         pauseClock();
-        setSimulationState(initialSimState);
+        setSimulationState(createInitialSimulationState());
         if (resetMaterial) {
           setTotalMasasSent(0);
           const originalSilos = [
@@ -923,10 +922,9 @@ export default function OperationsClient({
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                             <div className='flex justify-between items-start gap-2'>
-                                <div className='flex items-center gap-2'>
-                                    <h3 className="font-bold text-lg">{tachosState.name}</h3>
-                                    {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
-                                </div>
+                                <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
+                                  {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
+                                </h3>
                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
                                     <Edit className="h-4 w-4" />
                                 </Button>
@@ -1097,19 +1095,16 @@ export default function OperationsClient({
                         <CardTitle className="flex items-center gap-2">3. Enfardadora y Empaque Final</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {[1, 2].map((wrapperId) => {
-                            const wrapperState = simulationState.wrappers[wrapperId as 1 | 2];
-                            const wrapperImageUrl = wrapperId === 1 ? wrapper1ImageUrl : wrapper2ImageUrl;
-                            const handleImageUpload = (file: File) => handleWrapperImageUpload(file, wrapperId as 1 | 2);
-                            const capacity = wrapperId === 1 ? wrapper1Capacity : wrapper2Capacity;
-                            const setCapacity = wrapperId === 1 ? setWrapper1Capacity : setWrapper2Capacity;
+                        {Object.entries(wrappers).map(([wrapperId, config]) => {
+                            const wrapperState = simulationState.wrappers[wrapperId];
+                            const unitsInTransit = wrapperState.conveyorBelt.reduce((sum, item) => sum + item.units, 0);
 
                             return (
                                 <div key={wrapperId} className="p-4 border rounded-lg space-y-3 bg-background">
                                     <Label className="font-bold text-primary">Enfardadora {wrapperId}</Label>
                                     <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                                         <Image
-                                            src={wrapperImageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                            src={config.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
                                             alt={`Enfardadora ${wrapperId}`}
                                             width={600}
                                             height={400}
@@ -1121,7 +1116,7 @@ export default function OperationsClient({
                                         id={`wrapper${wrapperId}-image-upload`}
                                         className="hidden"
                                         accept="image/*"
-                                        onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])}
+                                        onChange={(e) => e.target.files && handleWrapperImageUpload(e.target.files[0], wrapperId)}
                                     />
                                     <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(`wrapper${wrapperId}-image-upload`)?.click()}>
                                         <Upload className="mr-2 h-3 w-3" />
@@ -1129,43 +1124,40 @@ export default function OperationsClient({
                                     </Button>
                                     <div className="space-y-1.5">
                                         <Label htmlFor={`wrapper${wrapperId}-capacity`}>Capacidad Máxima (fundas/min)</Label>
-                                        <Input id={`wrapper${wrapperId}-capacity`} type="number" value={capacity} onChange={e => setCapacity(Number(e.target.value))}/>
+                                        <Input id={`wrapper${wrapperId}-capacity`} type="number" value={config.capacity} onChange={e => handleWrapperFieldChange(wrapperId, 'capacity', Number(e.target.value))}/>
                                     </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor={`wrapper${wrapperId}-units-per-bundle`}>Unidades por Fardo</Label>
+                                        <Input id={`wrapper${wrapperId}-units-per-bundle`} type="number" value={config.unitsPerBundle} onChange={e => handleWrapperFieldChange(wrapperId, 'unitsPerBundle', Number(e.target.value))}/>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor={`wrapper${wrapperId}-conveyor-delay`}>Retraso de Banda (segundos)</Label>
+                                        <Input id={`wrapper${wrapperId}-conveyor-delay`} type="number" value={config.conveyorDelay} onChange={e => handleWrapperFieldChange(wrapperId, 'conveyorDelay', Number(e.target.value))}/>
+                                    </div>
+                                    
                                     <div className="space-y-4 rounded-lg bg-muted/30 p-3 border">
-                                        <div className="grid grid-cols-2 gap-2 text-center">
+                                         <div className="grid grid-cols-2 gap-2 text-center">
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">Fundas en Transporte</p>
+                                                <p className="font-bold text-lg text-orange-500">{Math.floor(unitsInTransit).toLocaleString()}</p>
+                                            </div>
                                             <div>
                                                 <p className="text-xs text-muted-foreground">En Cola</p>
                                                 <p className="font-bold text-lg text-blue-600">{Math.floor(wrapperState.buffer).toLocaleString()}</p>
                                             </div>
-                                             <div>
-                                                <p className="text-xs text-muted-foreground">Total Fardos</p>
-                                                <p className="font-bold text-lg text-green-600">{wrapperState.totalBundles.toLocaleString()}</p>
-                                            </div>
                                         </div>
                                          <div>
-                                             <Label className="text-xs">Fardo Actual ({Math.floor(wrapperState.currentBundleProgress)}/{unitsPerBundle} fundas)</Label>
-                                             <Progress value={(wrapperState.currentBundleProgress / (unitsPerBundle || 1)) * 100} />
+                                            <Label className="text-xs">Fardo Actual ({Math.floor(wrapperState.currentBundleProgress)}/{config.unitsPerBundle} fundas)</Label>
+                                            <Progress value={(wrapperState.currentBundleProgress / (config.unitsPerBundle || 1)) * 100} />
+                                         </div>
+                                         <div className='text-center border bg-background rounded-lg p-2'>
+                                            <p className="text-xs text-muted-foreground">Total Fardos</p>
+                                            <p className="text-lg font-bold text-green-600">{wrapperState.totalBundles.toLocaleString()}</p>
                                          </div>
                                     </div>
                                 </div>
                             );
                         })}
-
-                        {/* Global Wrapper Settings */}
-                        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="units-per-bundle">Unidades por Fardo</Label>
-                                <Input id="units-per-bundle" type="number" value={unitsPerBundle} onChange={e => setUnitsPerBundle(Number(e.target.value))}/>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="conveyor-delay">Retraso de Banda (segundos)</Label>
-                                <Input id="conveyor-delay" type="number" value={conveyorDelay} onChange={e => setConveyorDelay(Number(e.target.value))}/>
-                            </div>
-                             <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-center">
-                                <p className="text-xs text-muted-foreground">Fundas en Transporte</p>
-                                <p className="font-bold text-lg text-orange-500">{Math.floor(liveSimulationResults.unitsInTransit).toLocaleString()}</p>
-                            </div>
-                        </div>
                     </CardContent>
                 </Card>
                 
@@ -1221,8 +1213,9 @@ export default function OperationsClient({
                                           data={Object.entries(simulationState.machineTotals)
                                               .map(([machineId, totalUnits]) => {
                                                   const machine = machines.find(m => m.id === parseInt(machineId));
-                                                  const product = machine ? products.find(p => p.id === machine.productId) : undefined;
-                                                  const sacksProduced = totalUnits / FUNDAS_PER_SACO;
+                                                  if (!machine) return { name: `Máq. ${machineId}`, value: 0 };
+                                                  const product = products.find(p => p.id === machine.productId);
+                                                  const sacksProduced = machine.unitsPerSack > 0 ? totalUnits / machine.unitsPerSack : 0;
                                                   return {
                                                       name: `Máq. ${machineId} (${product?.productName || 'N/A'})`,
                                                       value: sacksProduced,
@@ -1260,7 +1253,6 @@ export default function OperationsClient({
                     silo={editingSilo}
                     isTachos={editingSilo.id === 'tachos'}
                     onSave={handleSiloSave}
-                    // Pass Tachos automation state and handlers
                     isTachosAuto={isTachosAuto}
                     onIsTachosAutoChange={setIsTachosAuto}
                     autoTachosInterval={autoTachosInterval}
