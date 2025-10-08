@@ -109,14 +109,14 @@ function MachineEditDialog({
     open,
     onOpenChange,
     onSave,
-    onImageUpload,
+    onImageSave,
 }: {
     machine: MachineState;
     products: ProductDefinition[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => void;
-    onImageUpload: (file: File) => void;
+    onSave: (updatedMachine: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>) => void;
+    onImageSave: (file: File) => Promise<void>;
 }) {
     const [editedMachine, setEditedMachine] = React.useState(machine);
     const [isUploading, setIsUploading] = React.useState(false);
@@ -125,7 +125,7 @@ function MachineEditDialog({
         setEditedMachine(machine);
     }, [machine]);
 
-    const handleFieldChange = (field: keyof Omit<MachineState, 'isSimulatingActive'>, value: any) => {
+    const handleFieldChange = (field: keyof Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>, value: any) => {
         const newMachine = { ...editedMachine, [field]: value };
         if (field === 'productId') {
             const product = products.find(p => p.id === value);
@@ -140,14 +140,15 @@ function MachineEditDialog({
         if (!file) return;
 
         setIsUploading(true);
-        await onImageUpload(file);
+        await onImageSave(file);
         setIsUploading(false);
+        onOpenChange(false);
     };
 
     const fileInputId = `modal-image-upload-${machine.id}`;
     
     const handleSaveChanges = () => {
-        const { isSimulatingActive, ...configToSave } = editedMachine;
+        const { isSimulatingActive, imageUrl, ...configToSave } = editedMachine;
         onSave(configToSave);
         onOpenChange(false);
     }
@@ -231,7 +232,7 @@ function SiloEditDialog({
     open,
     onOpenChange,
     onSave,
-    onImageUpload,
+    onImageSave,
     isTachos,
     tachosConfig,
     onTachosConfigChange
@@ -240,7 +241,7 @@ function SiloEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<SiloState, 'imageUrl'>) => void;
-    onImageUpload: (file: File) => void;
+    onImageSave: (file: File) => Promise<void>;
     isTachos?: boolean;
     tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
     onTachosConfigChange?: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
@@ -269,8 +270,9 @@ function SiloEditDialog({
         if (!file) return;
 
         setIsUploading(true);
-        await onImageUpload(file);
+        await onImageSave(file);
         setIsUploading(false);
+        onOpenChange(false);
     };
 
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
@@ -401,14 +403,14 @@ function WrapperEditDialog({
     open,
     onOpenChange,
     onSave,
-    onImageUpload,
+    onImageSave,
 }: {
     wrapper: WrapperState;
     allMachines: MachineState[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>) => void;
-    onImageUpload: (file: File) => void;
+    onImageSave: (file: File) => Promise<void>;
 }) {
     const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
     const [isUploading, setIsUploading] = React.useState(false);
@@ -418,7 +420,7 @@ function WrapperEditDialog({
         setEditedWrapper(configurableProps);
     }, [wrapper]);
 
-    const handleFieldChange = (field: keyof Omit<typeof editedWrapper, 'imageUrl'> | 'imageUrl', value: any) => {
+    const handleFieldChange = (field: keyof Omit<typeof editedWrapper, 'imageUrl'>, value: any) => {
         setEditedWrapper(prev => ({ ...prev, [field]: value }));
     };
 
@@ -439,8 +441,9 @@ function WrapperEditDialog({
         if (!file) return;
 
         setIsUploading(true);
-        await onImageUpload(file);
+        await onImageSave(file);
         setIsUploading(false);
+        onOpenChange(false);
     };
 
     const fileInputId = `wrapper-modal-image-upload-${wrapper.id}`;
@@ -546,9 +549,9 @@ export default function OperationsClient({
   prefetchedProducts: ProductDefinition[],
 }) {
     const [isClient, setIsClient] = React.useState(false);
-    const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
     const { toast } = useToast();
-
+    const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
+    
     // --- Unified Configuration State ---
     const [machines, setMachines] = React.useState<MachineState[]>([]);
     const [wrappers, setWrappers] = React.useState<WrapperState[]>([]);
@@ -607,10 +610,10 @@ export default function OperationsClient({
     });
 
     const loadConfig = React.useCallback(async () => {
+        const { params: defaultParams } = getDefaultConfig();
         try {
             // --- Load parameters from LocalStorage ---
             const localConfigStr = window.localStorage.getItem(LOCAL_STORAGE_CONFIG_KEY);
-            const { params: defaultParams, images: defaultImages } = getDefaultConfig();
             let params: SimulationParams;
             if (localConfigStr) {
                 const savedParams = JSON.parse(localConfigStr);
@@ -638,14 +641,15 @@ export default function OperationsClient({
             // --- Load image URLs from Firestore ---
             const docRef = doc(db, FIRESTORE_ASSETS_PATH, 'images');
             const docSnap = await getDoc(docRef);
-            let imageUrls: ImageUrlConfig = defaultImages;
+            let imageUrls: ImageUrlConfig = getDefaultConfig().images;
             if (docSnap.exists()) {
                 const firestoreImages = docSnap.data() as ImageUrlConfig;
+                // Deep merge, preferring firestore images but falling back to defaults
                 imageUrls = {
-                    machines: { ...defaultImages.machines, ...firestoreImages.machines },
-                    wrappers: { ...defaultImages.wrappers, ...firestoreImages.wrappers },
-                    silos: { ...defaultImages.silos, ...firestoreImages.silos },
-                    tachos: firestoreImages.tachos || defaultImages.tachos,
+                    machines: { ...getDefaultConfig().images.machines, ...firestoreImages.machines },
+                    wrappers: { ...getDefaultConfig().images.wrappers, ...firestoreImages.wrappers },
+                    silos: { ...getDefaultConfig().images.silos, ...firestoreImages.silos },
+                    tachos: firestoreImages.tachos || getDefaultConfig().images.tachos,
                 };
             }
 
@@ -680,9 +684,8 @@ export default function OperationsClient({
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
             setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null })));
             setTachosState({ ...params.tachosState, imageUrl: images.tachos });
-            toast({ title: 'Error de Carga', description: 'No se pudo cargar la configuración. Se usarán valores por defecto.', variant: 'destructive' });
         }
-    }, [toast]);
+    }, []);
     
     React.useEffect(() => {
         setIsClient(true);
@@ -714,16 +717,25 @@ export default function OperationsClient({
     
 
     const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => {
+        const imagePath = `sim-images/${type}/${id}/${Date.now()}_${file.name}`;
+        const storageRef = ref(storage, imagePath);
+        
         try {
-            const imagePath = `sim-images/${type}/${id}/${Date.now()}_${file.name}`;
-            const storageRef = ref(storage, imagePath);
             await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(storageRef);
 
             const docRef = doc(db, FIRESTORE_ASSETS_PATH, 'images');
-            const fieldPath = `${type}s.${type === 'tachos' ? 'tachos' : id}`;
-            await setDoc(docRef, { [fieldPath]: downloadURL }, { merge: true });
+            
+            let fieldToUpdate = '';
+            if (type === 'tachos') {
+                fieldToUpdate = 'tachos';
+            } else {
+                fieldToUpdate = `${type}s.${id}`;
+            }
+            
+            await setDoc(docRef, { [fieldToUpdate]: downloadURL }, { merge: true });
 
+            // Update local state to reflect the change immediately
             if (type === 'machine') {
                 setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl: downloadURL } : m));
             } else if (type === 'silo') {
@@ -733,16 +745,17 @@ export default function OperationsClient({
             } else if (type === 'tachos') {
                 setTachosState(prev => ({ ...prev, imageUrl: downloadURL }));
             }
-            
-            toast({ title: 'Imagen Subida', description: 'La imagen ha sido actualizada y guardada.' });
+            toast({ title: "Imagen actualizada", description: "La nueva imagen se ha guardado correctamente."});
 
         } catch (error) {
-            console.error("Error uploading image:", error);
-            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen. Verifica tu conexión a internet.', variant: 'destructive' });
+            console.error("Error during image upload and save:", error);
+            toast({ title: "Error al subir imagen", description: "No se pudo guardar la imagen. Revisa la conexión e inténtalo de nuevo.", variant: "destructive"});
+            throw error;
         }
+
     }, [toast]);
 
-    const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => {
+    const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>) => {
         setMachines(prev => prev.map(m => m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m));
     };
 
@@ -773,9 +786,8 @@ export default function OperationsClient({
         // Reset images in Firestore
         try {
             await setDoc(doc(db, FIRESTORE_ASSETS_PATH, 'images'), images);
-            toast({ title: 'Configuración Restaurada', description: 'Se han cargado y guardado los valores por defecto.' });
         } catch (error) {
-            toast({ title: 'Error al restaurar', description: 'No se pudieron restaurar las imágenes por defecto.', variant: 'destructive' });
+            console.error("Error restoring default images in Firestore", error);
         }
         
         await loadConfig(); // Reload from the newly saved default config
@@ -1307,7 +1319,7 @@ export default function OperationsClient({
                                                 <AlertDialogHeader>
                                                     <AlertDialogTitle>Restaurar Configuración</AlertDialogTitle>
                                                     <AlertDialogDescription>
-                                                        ¿Estás seguro? Esto restaurará todos los parámetros de la simulación a sus valores por defecto (imágenes en Firebase y parámetros en este navegador).
+                                                        ¿Estás seguro? Esto restaurará todos los parámetros de la simulación (en este navegador) y las imágenes (para todos los usuarios) a sus valores por defecto.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
@@ -1667,7 +1679,7 @@ export default function OperationsClient({
                     machine={editingMachine}
                     products={products}
                     onSave={handleMachineSave}
-                    onImageUpload={(file) => handleImageSave('machine', editingMachine.id, file)}
+                    onImageSave={(file) => handleImageSave('machine', editingMachine.id, file)}
                 />
             )}
              {editingSilo && (
@@ -1676,7 +1688,7 @@ export default function OperationsClient({
                     onOpenChange={(isOpen) => !isOpen && setEditingSilo(null)}
                     silo={editingSilo}
                     onSave={handleSiloSave}
-                    onImageUpload={(file) => handleImageSave(editingSilo.id === 'tachos' ? 'tachos' : 'silo', editingSilo.id, file)}
+                    onImageSave={(file) => handleImageSave(editingSilo.id === 'tachos' ? 'tachos' : 'silo', editingSilo.id, file)}
                     isTachos={editingSilo.id === 'tachos'}
                     tachosConfig={{
                         isAuto: isTachosAuto,
@@ -1694,7 +1706,7 @@ export default function OperationsClient({
                     wrapper={editingWrapper}
                     allMachines={machines}
                     onSave={handleWrapperSave}
-                    onImageUpload={(file) => handleImageSave('wrapper', editingWrapper.id, file)}
+                    onImageSave={(file) => handleImageSave('wrapper', editingWrapper.id, file)}
                 />
             )}
         </>
