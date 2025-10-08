@@ -23,8 +23,7 @@ import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 
@@ -708,13 +707,25 @@ export default function OperationsClient({
     
     const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => {
         setIsUploading(true);
-        const imagePath = `sim-images/${type}/${id}/${Date.now()}_${file.name}`;
-        const storageRef = ref(storage, imagePath);
-        
-        try {
-            await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(storageRef);
+        const imagePath = `sim-images/${type}/${id}`;
 
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('path', imagePath);
+
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.details || 'Server error');
+            }
+
+            const { downloadURL } = await response.json();
+            
             const docRef = doc(db, FIRESTORE_ASSETS_PATH, 'images');
             
             let fieldToUpdate = '';
@@ -742,7 +753,7 @@ export default function OperationsClient({
             console.error("Error during image upload and save:", error);
             toast({ 
                 title: "Error al subir imagen", 
-                description: `No se pudo guardar la imagen. Revisa la conexión y los permisos de Firebase Storage. Error: ${error.message}`, 
+                description: `No se pudo guardar la imagen. Error: ${error.message}`, 
                 variant: "destructive"
             });
         } finally {
