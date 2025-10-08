@@ -744,7 +744,6 @@ export default function OperationsClient({
         } finally {
             setIsUploading(false);
         }
-
     }, [toast]);
 
     const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>) => {
