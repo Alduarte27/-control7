@@ -1122,19 +1122,19 @@ export default function OperationsClient({
                                         <Upload className="mr-2 h-3 w-3" />
                                         Cambiar Foto
                                     </Button>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className="grid grid-cols-3 gap-4">
                                         <div className="space-y-1.5">
-                                            <Label htmlFor={`wrapper${wrapperId}-capacity`}>Capacidad Máxima (fundas/min)</Label>
+                                            <Label htmlFor={`wrapper${wrapperId}-capacity`}>Capacidad (f/min)</Label>
                                             <Input id={`wrapper${wrapperId}-capacity`} type="number" value={config.capacity} onChange={e => handleWrapperFieldChange(wrapperId, 'capacity', Number(e.target.value))}/>
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label htmlFor={`wrapper${wrapperId}-units-per-bundle`}>Unidades por Fardo</Label>
+                                            <Label htmlFor={`wrapper${wrapperId}-units-per-bundle`}>Unidades/Fardo</Label>
                                             <Input id={`wrapper${wrapperId}-units-per-bundle`} type="number" value={config.unitsPerBundle} onChange={e => handleWrapperFieldChange(wrapperId, 'unitsPerBundle', Number(e.target.value))}/>
                                         </div>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor={`wrapper${wrapperId}-conveyor-delay`}>Retraso de Banda (segundos)</Label>
-                                        <Input id={`wrapper${wrapperId}-conveyor-delay`} type="number" value={config.conveyorDelay} onChange={e => handleWrapperFieldChange(wrapperId, 'conveyorDelay', Number(e.target.value))}/>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor={`wrapper${wrapperId}-conveyor-delay`}>Retraso (seg)</Label>
+                                            <Input id={`wrapper${wrapperId}-conveyor-delay`} type="number" value={config.conveyorDelay} onChange={e => handleWrapperFieldChange(wrapperId, 'conveyorDelay', Number(e.target.value))}/>
+                                        </div>
                                     </div>
                                     
                                     <div className="space-y-4 rounded-lg bg-muted/30 p-3 border">
