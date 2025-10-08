@@ -383,10 +383,8 @@ export default function OperationsClient({
         setMasasToSend(1);
     };
     
-    const tachosQQ = 0; // Tachos is now a process, not a storage
     const familiarSilo = silos.find(s => s.id === 'familiar');
     const granelSilo = silos.find(s => s.id === 'granel');
-    const totalSiloQQ = (familiarSilo?.currentQQ || 0) + (granelSilo?.currentQQ || 0);
     const familiarSiloQQ = familiarSilo?.currentQQ || 0;
 
     const [machines, setMachines] = React.useState<MachineState[]>(() => {
@@ -399,15 +397,23 @@ export default function OperationsClient({
         ];
     });
 
-    const [wrapperCapacity, setWrapperCapacity] = React.useState(110);
+    const [wrapper1Capacity, setWrapper1Capacity] = React.useState(110);
+    const [wrapper1ImageUrl, setWrapper1ImageUrl] = React.useState<string | null>(null);
+    const [wrapper2Capacity, setWrapper2Capacity] = React.useState(80);
+    const [wrapper2ImageUrl, setWrapper2ImageUrl] = React.useState<string | null>(null);
+
     const [unitsPerBundle, setUnitsPerBundle] = React.useState(12);
     const [conveyorDelay, setConveyorDelay] = React.useState(6);
-    const [wrapperImageUrl, setWrapperImageUrl] = React.useState<string | null>(null);
 
-    const handleWrapperImageUpload = (file: File) => {
+
+    const handleWrapperImageUpload = (file: File, wrapperNumber: 1 | 2) => {
         const reader = new FileReader();
         reader.onloadend = () => {
-            setWrapperImageUrl(reader.result as string);
+            if (wrapperNumber === 1) {
+                setWrapper1ImageUrl(reader.result as string);
+            } else {
+                setWrapper2ImageUrl(reader.result as string);
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -437,8 +443,11 @@ export default function OperationsClient({
     const productsRef = React.useRef(products);
     React.useEffect(() => { productsRef.current = products; }, [products]);
     
-    const wrapperCapacityRef = React.useRef(wrapperCapacity);
-    React.useEffect(() => { wrapperCapacityRef.current = wrapperCapacity; }, [wrapperCapacity]);
+    const wrapper1CapacityRef = React.useRef(wrapper1Capacity);
+    React.useEffect(() => { wrapper1CapacityRef.current = wrapper1Capacity; }, [wrapper1Capacity]);
+
+    const wrapper2CapacityRef = React.useRef(wrapper2Capacity);
+    React.useEffect(() => { wrapper2CapacityRef.current = wrapper2Capacity; }, [wrapper2Capacity]);
 
     const unitsPerBundleRef = React.useRef(unitsPerBundle);
     React.useEffect(() => { unitsPerBundleRef.current = unitsPerBundle; }, [unitsPerBundle]);
@@ -463,12 +472,13 @@ export default function OperationsClient({
             return sum + effectiveBagsPerMinute;
         }, 0);
         
-        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, wrapperCapacity);
-        const isWrapperBottleneck = totalBagsPerMinuteFromPackers > wrapperCapacity;
+        const totalWrapperCapacity = wrapper1Capacity + wrapper2Capacity;
+        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, totalWrapperCapacity);
+        const isWrapperBottleneck = totalBagsPerMinuteFromPackers > totalWrapperCapacity;
         
         const bundlesPerMinute = unitsPerBundle > 0 ? effectiveSystemBagsPerMinute / unitsPerBundle : 0;
         
-        const bottleneckDescription = `La enfardadora (cap: ${wrapperCapacity.toLocaleString()} f/min) limita a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
+        const bottleneckDescription = `Las enfardadoras (cap total: ${totalWrapperCapacity.toLocaleString()} f/min) limitan a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
 
         return {
@@ -479,7 +489,7 @@ export default function OperationsClient({
             bundlesPerMinute,
         };
 
-    }, [machines, wrapperCapacity, unitsPerBundle]);
+    }, [machines, wrapper1Capacity, wrapper2Capacity, unitsPerBundle]);
 
     const liveSimulationResults = React.useMemo(() => {
         let totalKgProduced = 0;
@@ -578,11 +588,11 @@ export default function OperationsClient({
             const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
             
             if (isTachosAuto && !goalMet && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
-                sendMasasToSilosRef.current(1);
                  simulationStateRef.current = {
                     ...currentSimState,
                     nextAutoTachosSendTime: currentSimState.elapsedTime + (autoTachosInterval * 60),
                 };
+                sendMasasToSilosRef.current(1);
             } else if (goalMet && isTachosAuto) {
                 setIsTachosAuto(false);
             }
@@ -674,8 +684,8 @@ export default function OperationsClient({
                 newConveyorBelt = remainingOnBelt;
 
 
-                const currentWrapperCapacity = wrapperCapacityRef.current;
-                const wrapperUnitsPerSecond = currentWrapperCapacity / 60;
+                const totalWrapperCapacity = wrapper1CapacityRef.current + wrapper2CapacityRef.current;
+                const wrapperUnitsPerSecond = totalWrapperCapacity / 60;
                 const unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
                 const unitsToTakeFromBuffer = Math.min(unitsToProcessThisTick, newWrapperBuffer);
                 
@@ -773,7 +783,6 @@ export default function OperationsClient({
                                 <div className="flex flex-col items-center gap-2 text-center">
                                     <Beaker className="h-10 w-10 text-primary" />
                                     <h4 className="font-semibold">Tachos</h4>
-                                    <p className="text-sm text-muted-foreground">{tachosQQ.toLocaleString()} QQ</p>
                                 </div>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -904,15 +913,15 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                           <div className='flex justify-between items-start gap-2'>
-                             <div className='flex items-center gap-2'>
-                                <h3 className="font-bold text-primary">{tachosState.name}</h3>
-                                {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
-                             </div>
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
-                                <Edit className="h-4 w-4" />
-                            </Button>
-                           </div>
+                            <div className='flex justify-between items-start gap-2'>
+                                <div className='flex items-center gap-2'>
+                                    <h3 className="font-bold text-lg">{tachosState.name}</h3>
+                                    {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo({ ...tachosState, isTachos: true } as any)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
+                            </div>
                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
                                <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" />
                            </div>
@@ -924,11 +933,11 @@ export default function OperationsClient({
                                     </div>
                                     <Label className="text-center block">Masas a Enviar ({MASA_QQ_AMOUNT} QQ c/u)</Label>
                                     <div className="flex items-center justify-center gap-2">
-                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => Math.max(1, p - 1))} disabled={isTachosAuto}><Minus className="h-4 w-4" /></Button>
+                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => Math.max(1, p - 1))} disabled={isTachosAuto || isSimulating}><Minus className="h-4 w-4" /></Button>
                                         <span className="text-xl font-bold w-12 text-center">{masasToSend}</span>
-                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)} disabled={isTachosAuto}><Plus className="h-4 w-4" /></Button>
+                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)} disabled={isTachosAuto || isSimulating}><Plus className="h-4 w-4" /></Button>
                                     </div>
-                                    <Button className="w-full" onClick={handleManualSendMasas} disabled={isTachosAuto}>Enviar a Silos</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasas} disabled={isTachosAuto || isSimulating}>Enviar a Silos</Button>
                                </div>
                            </div>
                         </div>
@@ -943,7 +952,7 @@ export default function OperationsClient({
                             return (
                                 <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
                                      <div className='flex justify-between items-start gap-2'>
-                                        <h3 className="font-bold text-primary">{silo.name}</h3>
+                                        <h3 className="font-bold text-lg">{silo.name}</h3>
                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
                                             <Edit className="h-4 w-4" />
                                         </Button>
@@ -1078,13 +1087,14 @@ export default function OperationsClient({
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">3. Enfardadora y Empaque Final</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="p-4 border rounded-lg space-y-3 bg-background md:col-span-1">
-                            <Label className="font-bold text-primary">Enfardadora</Label>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Wrapper 1 */}
+                        <div className="p-4 border rounded-lg space-y-3 bg-background">
+                            <Label className="font-bold text-primary">Enfardadora 1</Label>
                             <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                                 <Image
-                                    src={wrapperImageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
-                                    alt="Enfardadora"
+                                    src={wrapper1ImageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                    alt="Enfardadora 1"
                                     width={600}
                                     height={400}
                                     className="object-contain w-full h-full"
@@ -1092,21 +1102,52 @@ export default function OperationsClient({
                             </div>
                             <input
                                 type="file"
-                                id="wrapper-image-upload"
+                                id="wrapper1-image-upload"
                                 className="hidden"
                                 accept="image/*"
-                                onChange={(e) => e.target.files && handleWrapperImageUpload(e.target.files[0])}
+                                onChange={(e) => e.target.files && handleWrapperImageUpload(e.target.files[0], 1)}
                             />
-                            <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById('wrapper-image-upload')?.click()}>
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById('wrapper1-image-upload')?.click()}>
                                 <Upload className="mr-2 h-3 w-3" />
                                 Cambiar Foto
                             </Button>
-                        </div>
-                        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <Label htmlFor="wrapper-capacity">Capacidad Máxima (fundas/min)</Label>
-                                <Input id="wrapper-capacity" type="number" value={wrapperCapacity} onChange={e => setWrapperCapacity(Number(e.target.value))}/>
+                                <Label htmlFor="wrapper1-capacity">Capacidad Máxima (fundas/min)</Label>
+                                <Input id="wrapper1-capacity" type="number" value={wrapper1Capacity} onChange={e => setWrapper1Capacity(Number(e.target.value))}/>
                             </div>
+                        </div>
+
+                        {/* Wrapper 2 */}
+                        <div className="p-4 border rounded-lg space-y-3 bg-background">
+                            <Label className="font-bold text-primary">Enfardadora 2</Label>
+                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                <Image
+                                    src={wrapper2ImageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                    alt="Enfardadora 2"
+                                    width={600}
+                                    height={400}
+                                    className="object-contain w-full h-full"
+                                />
+                            </div>
+                            <input
+                                type="file"
+                                id="wrapper2-image-upload"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) => e.target.files && handleWrapperImageUpload(e.target.files[0], 2)}
+                            />
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById('wrapper2-image-upload')?.click()}>
+                                <Upload className="mr-2 h-3 w-3" />
+                                Cambiar Foto
+                            </Button>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="wrapper2-capacity">Capacidad Máxima (fundas/min)</Label>
+                                <Input id="wrapper2-capacity" type="number" value={wrapper2Capacity} onChange={e => setWrapper2Capacity(Number(e.target.value))}/>
+                            </div>
+                        </div>
+
+                        {/* Global Wrapper Settings */}
+                        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="units-per-bundle">Unidades por Fardo</Label>
                                 <Input id="units-per-bundle" type="number" value={unitsPerBundle} onChange={e => setUnitsPerBundle(Number(e.target.value))}/>
