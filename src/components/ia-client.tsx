@@ -593,14 +593,14 @@ export default function OperationsClient({
             { id: 4, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: null, isSimulatingActive: false },
         ],
         wrappers: [
-            { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, machineIds: [1, 2], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-            { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: null, machineIds: [3, 4], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+            { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media', machineIds: [1, 2], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+            { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media', machineIds: [3, 4], buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
         ],
         silos: [
-            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: null },
-            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: null },
+            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media' },
+            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.%20Gran.jpeg?alt=media' },
         ],
-        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: null },
+        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media' },
         autoTachosInterval: 10,
         autoTachosGoal: 6,
     });
@@ -641,9 +641,9 @@ export default function OperationsClient({
 
             const mergeConfigWithImages = (config: any) => {
                 setMachines(config.machines.map((m: any) => ({ ...m, imageUrl: getImageUrl('machines', m.id), isSimulatingActive: false })));
-                setWrappers(config.wrappers.map((w: any) => ({ ...w, imageUrl: getImageUrl('wrappers', w.id), buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
-                setSilos(config.silos.map((s: any) => ({ ...s, imageUrl: getImageUrl('silos', s.id) })));
-                setTachosState({ ...config.tachosState, imageUrl: getImageUrl('tachos', 'tachos_main') });
+                setWrappers(config.wrappers.map((w: any) => ({ ...w, imageUrl: getImageUrl('wrappers', w.id) || w.imageUrl, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
+                setSilos(config.silos.map((s: any) => ({ ...s, imageUrl: getImageUrl('silos', s.id) || s.imageUrl })));
+                setTachosState({ ...config.tachosState, imageUrl: getImageUrl('tachos', 'tachos_main') || config.tachosState.imageUrl });
                 setAutoTachosInterval(config.autoTachosInterval || defaultConfig.autoTachosInterval);
                 setAutoTachosGoal(config.autoTachosGoal || defaultConfig.autoTachosGoal);
             };
