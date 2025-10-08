@@ -107,11 +107,10 @@ function MachineEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => void;
-    onImageSave: (type: 'machine', id: number, url: string) => void;
+    onImageSave: (type: 'machine', id: number, file: File) => Promise<void>;
 }) {
     const [editedMachine, setEditedMachine] = React.useState(machine);
     const [isUploading, setIsUploading] = React.useState(false);
-    const { toast } = useToast();
 
     React.useEffect(() => {
         setEditedMachine(machine);
@@ -129,19 +128,8 @@ function MachineEditDialog({
 
     const handleImageUpload = async (file: File) => {
         setIsUploading(true);
-        try {
-            const storageRef = ref(storage, `sim-images/machine-${machine.id}-${Date.now()}`);
-            const snapshot = await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            setEditedMachine(prev => ({ ...prev, imageUrl: downloadURL }));
-            onImageSave('machine', machine.id, downloadURL);
-            toast({ title: 'Imagen Subida', description: 'La imagen de la máquina ha sido actualizada.' });
-        } catch (error) {
-            console.error("Error uploading image:", error);
-            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
-        } finally {
-            setIsUploading(false);
-        }
+        await onImageSave('machine', machine.id, file);
+        setIsUploading(false);
     };
 
     const fileInputId = `modal-image-upload-${machine.id}`;
@@ -240,7 +228,7 @@ function SiloEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: SiloState) => void;
-    onImageSave: (type: 'silo' | 'tachos', id: string, url: string) => void;
+    onImageSave: (type: 'silo' | 'tachos', id: string, file: File) => Promise<void>;
     isTachos?: boolean;
     tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
     onTachosConfigChange?: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
@@ -248,7 +236,6 @@ function SiloEditDialog({
     const [editedSilo, setEditedSilo] = React.useState(silo);
     const [localTachosConfig, setLocalTachosConfig] = React.useState(tachosConfig);
     const [isUploading, setIsUploading] = React.useState(false);
-    const { toast } = useToast();
 
     React.useEffect(() => {
         setEditedSilo(silo);
@@ -268,20 +255,8 @@ function SiloEditDialog({
     const handleImageUpload = async (file: File) => {
         setIsUploading(true);
         const type = isTachos ? 'tachos' : 'silo';
-        try {
-            const imagePath = isTachos ? 'tachos' : `silos/${silo.id}`;
-            const storageRef = ref(storage, `sim-images/${imagePath}-${Date.now()}`);
-            const snapshot = await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            setEditedSilo(prev => ({ ...prev, imageUrl: downloadURL }));
-            onImageSave(type, silo.id, downloadURL);
-            toast({ title: 'Imagen Subida', description: `La imagen de ${silo.name} ha sido actualizada.` });
-        } catch (error) {
-            console.error("Error uploading image:", error);
-            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
-        } finally {
-            setIsUploading(false);
-        }
+        await onImageSave(type, silo.id, file);
+        setIsUploading(false);
     };
 
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
@@ -418,11 +393,10 @@ function WrapperEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>) => void;
-    onImageSave: (type: 'wrapper', id: string, url: string) => void;
+    onImageSave: (type: 'wrapper', id: string, file: File) => Promise<void>;
 }) {
     const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
     const [isUploading, setIsUploading] = React.useState(false);
-    const { toast } = useToast();
 
     React.useEffect(() => {
         const { buffer, currentBundleProgress, totalBundles, conveyorBelt, ...configurableProps } = wrapper;
@@ -447,19 +421,8 @@ function WrapperEditDialog({
 
     const handleImageUpload = async (file: File) => {
         setIsUploading(true);
-        try {
-            const storageRef = ref(storage, `sim-images/wrapper-${wrapper.id}-${Date.now()}`);
-            const snapshot = await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-            setEditedWrapper(prev => ({ ...prev, imageUrl: downloadURL }));
-            onImageSave('wrapper', wrapper.id, downloadURL);
-            toast({ title: 'Imagen Subida', description: `La imagen de ${wrapper.name} ha sido actualizada.` });
-        } catch (error) {
-            console.error("Error uploading image:", error);
-            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
-        } finally {
-            setIsUploading(false);
-        }
+        await onImageSave('wrapper', wrapper.id, file);
+        setIsUploading(false);
     };
 
     const fileInputId = `wrapper-modal-image-upload-${wrapper.id}`;
@@ -591,14 +554,14 @@ export default function OperationsClient({
             { id: 4, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media&token=c1a3f5e3-3b1a-4b1e-9e1a-5a6f7b8c9d0e' },
         ],
         wrappers: [
-            { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media', machineIds: [1, 2] },
-            { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media', machineIds: [3, 4] },
+            { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media&token=b9f29a2b-8a1a-4b9e-8e6a-7e3c1d9b4c6e', machineIds: [1, 2] },
+            { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media&token=b9f29a2b-8a1a-4b9e-8e6a-7e3c1d9b4c6e', machineIds: [3, 4] },
         ],
         silos: [
-            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media' },
-            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.%20Gran.jpeg?alt=media' },
+            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media&token=b9f29a2b-8a1a-4b9e-8e6a-7e3c1d9b4c6e' },
+            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.%20Gran.jpeg?alt=media&token=b9f29a2b-8a1a-4b9e-8e6a-7e3c1d9b4c6e' },
         ],
-        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media' },
+        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media&token=b9f29a2b-8a1a-4b9e-8e6a-7e3c1d9b4c6e' },
         autoTachosInterval: 10,
         autoTachosGoal: 6,
         isTachosAuto: false,
@@ -680,24 +643,42 @@ export default function OperationsClient({
         loadConfig();
     }, [loadConfig]);
 
-    const handleImageSave = React.useCallback((type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, url: string) => {
-        switch (type) {
-            case 'machine':
-                setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl: url } : m));
-                break;
-            case 'silo':
-                setSilos(prev => prev.map(s => s.id === id ? { ...s, imageUrl: url } : s));
-                break;
-            case 'wrapper':
-                setWrappers(prev => prev.map(w => w.id === id ? { ...w, imageUrl: url } : w));
-                break;
-            case 'tachos':
-                setTachosState(prev => ({ ...prev, imageUrl: url }));
-                break;
+    const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => {
+        const { toast } = useToast();
+        try {
+            let imagePath = '';
+            switch (type) {
+                case 'machine': imagePath = `machines/machine-${id}`; break;
+                case 'silo': imagePath = `silos/${id}`; break;
+                case 'wrapper': imagePath = `wrappers/wrapper-${id}`; break;
+                case 'tachos': imagePath = 'tachos'; break;
+            }
+
+            const storageRef = ref(storage, `sim-images/${imagePath}-${Date.now()}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+
+            switch (type) {
+                case 'machine':
+                    setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl: downloadURL } : m));
+                    break;
+                case 'silo':
+                    setSilos(prev => prev.map(s => s.id === id ? { ...s, imageUrl: downloadURL } : s));
+                    break;
+                case 'wrapper':
+                    setWrappers(prev => prev.map(w => w.id === id ? { ...w, imageUrl: downloadURL } : w));
+                    break;
+                case 'tachos':
+                    setTachosState(prev => ({ ...prev, imageUrl: downloadURL }));
+                    break;
+            }
+
+            toast({ title: 'Imagen Subida', description: 'La imagen ha sido actualizada.' });
+        } catch (error) {
+            console.error("Error uploading image:", error);
+            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
         }
-        // Save to localStorage immediately after state update
-        saveConfigToLocalStorage();
-    }, [saveConfigToLocalStorage]);
+    }, []);
 
 
     const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => {
