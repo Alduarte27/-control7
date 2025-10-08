@@ -127,18 +127,14 @@ function MachineEditDialog({
         setEditedMachine(newMachine);
     };
 
-    const handleUrlFieldChange = (url: string) => {
-        setEditedMachine(prev => ({...prev, imageUrl: url }));
-        onImageSave('machine', machine.id, url);
-    };
-
     const handleImageUpload = async (file: File) => {
         setIsUploading(true);
         try {
             const storageRef = ref(storage, `sim-images/machine-${machine.id}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            handleUrlFieldChange(downloadURL); // Use the new handler
+            setEditedMachine(prev => ({ ...prev, imageUrl: downloadURL }));
+            onImageSave('machine', machine.id, downloadURL);
             toast({ title: 'Imagen Subida', description: 'La imagen de la máquina ha sido actualizada.' });
         } catch (error) {
             console.error("Error uploading image:", error);
@@ -194,18 +190,6 @@ function MachineEditDialog({
                             <Upload className="mr-2 h-3 w-3" />
                             {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
-                        <div className="relative">
-                           <div className="absolute inset-0 flex items-center">
-                               <span className="w-full border-t" />
-                           </div>
-                           <div className="relative flex justify-center text-xs uppercase">
-                               <span className="bg-background px-2 text-muted-foreground">O</span>
-                           </div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor={`image-url-${machine.id}`}>o Pega la URL de la Imagen</Label>
-                            <Input id={`image-url-${machine.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedMachine.imageUrl || ''} onChange={e => handleUrlFieldChange(e.target.value)} />
-                        </div>
                     </div>
                     <Separator />
                     <div className="space-y-1.5">
@@ -277,23 +261,20 @@ function SiloEditDialog({
         setEditedSilo(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleUrlFieldChange = (url: string) => {
-        setEditedSilo(prev => ({ ...prev, imageUrl: url }));
-        onImageSave(isTachos ? 'tachos' : 'silo', silo.id, url);
-    };
-
     const handleTachosConfigFieldChange = (field: keyof typeof localTachosConfig, value: any) => {
         setLocalTachosConfig(prev => (prev ? { ...prev, [field]: value } : undefined));
     };
 
     const handleImageUpload = async (file: File) => {
         setIsUploading(true);
+        const type = isTachos ? 'tachos' : 'silo';
         try {
             const imagePath = isTachos ? 'tachos' : `silos/${silo.id}`;
             const storageRef = ref(storage, `sim-images/${imagePath}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            handleUrlFieldChange(downloadURL);
+            setEditedSilo(prev => ({ ...prev, imageUrl: downloadURL }));
+            onImageSave(type, silo.id, downloadURL);
             toast({ title: 'Imagen Subida', description: `La imagen de ${silo.name} ha sido actualizada.` });
         } catch (error) {
             console.error("Error uploading image:", error);
@@ -351,18 +332,6 @@ function SiloEditDialog({
                             <Upload className="mr-2 h-3 w-3" />
                             {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <span className="w-full border-t" />
-                            </div>
-                            <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-background px-2 text-muted-foreground">O</span>
-                            </div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor={`image-url-${silo.id}`}>o Pega la URL de la Imagen</Label>
-                            <Input id={`image-url-${silo.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedSilo.imageUrl || ''} onChange={e => handleUrlFieldChange(e.target.value)} />
-                        </div>
                     </div>
                     <Separator />
                     <div className="space-y-1.5">
@@ -464,11 +433,6 @@ function WrapperEditDialog({
         setEditedWrapper(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleUrlFieldChange = (url: string) => {
-        setEditedWrapper(prev => ({ ...prev, imageUrl: url }));
-        onImageSave('wrapper', wrapper.id, url);
-    };
-
     const handleMachineConnectionChange = (machineId: number, checked: boolean) => {
         setEditedWrapper(prev => {
             const newMachineIds = new Set(prev.machineIds);
@@ -487,7 +451,8 @@ function WrapperEditDialog({
             const storageRef = ref(storage, `sim-images/wrapper-${wrapper.id}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            handleUrlFieldChange(downloadURL);
+            setEditedWrapper(prev => ({ ...prev, imageUrl: downloadURL }));
+            onImageSave('wrapper', wrapper.id, downloadURL);
             toast({ title: 'Imagen Subida', description: `La imagen de ${wrapper.name} ha sido actualizada.` });
         } catch (error) {
             console.error("Error uploading image:", error);
@@ -542,18 +507,6 @@ function WrapperEditDialog({
                             <Upload className="mr-2 h-3 w-3" />
                             {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
-                        <div className="relative">
-                           <div className="absolute inset-0 flex items-center">
-                               <span className="w-full border-t" />
-                           </div>
-                           <div className="relative flex justify-center text-xs uppercase">
-                               <span className="bg-background px-2 text-muted-foreground">O</span>
-                           </div>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor={`image-url-${wrapper.id}`}>o Pega la URL de la Imagen</Label>
-                            <Input id={`image-url-${wrapper.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedWrapper.imageUrl || ''} onChange={e => handleUrlFieldChange(e.target.value)} />
-                        </div>
                     </div>
                     <Separator />
                     <div className="space-y-1.5">
@@ -638,14 +591,14 @@ export default function OperationsClient({
             { id: 4, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media&token=c1a3f5e3-3b1a-4b1e-9e1a-5a6f7b8c9d0e' },
         ],
         wrappers: [
-            { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media&token=e9e8c7b6-3a5f-4b1e-9e1a-5a6f7b8c9d0e', machineIds: [1, 2] },
-            { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media&token=e9e8c7b6-3a5f-4b1e-9e1a-5a6f7b8c9d0e', machineIds: [3, 4] },
+            { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media', machineIds: [1, 2] },
+            { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media', machineIds: [3, 4] },
         ],
         silos: [
-            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media&token=a1b2c3d4-e5f6-7890-1234-567890abcdef' },
-            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Gran.jpeg?alt=media&token=b2c3d4e5-f6a7-8901-2345-67890abcdef1' },
+            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media' },
+            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.%20Gran.jpeg?alt=media' },
         ],
-        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media&token=c3d4e5f6-a7b8-9012-3456-7890abcdef12' },
+        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media' },
         autoTachosInterval: 10,
         autoTachosGoal: 6,
         isTachosAuto: false,
@@ -742,7 +695,10 @@ export default function OperationsClient({
                 setTachosState(prev => ({ ...prev, imageUrl: url }));
                 break;
         }
-    }, []);
+        // Save to localStorage immediately after state update
+        saveConfigToLocalStorage();
+    }, [saveConfigToLocalStorage]);
+
 
     const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => {
         setMachines(prev => prev.map(m => m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m));
