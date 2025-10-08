@@ -24,8 +24,7 @@ import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { app, db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { app } from '@/lib/firebase';
 
 
 const KG_PER_QUINTAL = 50;
@@ -101,12 +100,14 @@ function MachineEditDialog({
     open,
     onOpenChange,
     onSave,
+    onImageSave
 }: {
     machine: MachineState;
     products: ProductDefinition[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => void;
+    onImageSave: (type: 'machine', id: number, url: string) => void;
 }) {
     const [editedMachine, setEditedMachine] = React.useState(machine);
     const [isUploading, setIsUploading] = React.useState(false);
@@ -126,13 +127,18 @@ function MachineEditDialog({
         setEditedMachine(newMachine);
     };
 
+    const handleUrlFieldChange = (url: string) => {
+        setEditedMachine(prev => ({...prev, imageUrl: url }));
+        onImageSave('machine', machine.id, url);
+    };
+
     const handleImageUpload = async (file: File) => {
         setIsUploading(true);
         try {
             const storageRef = ref(storage, `sim-images/machine-${machine.id}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            handleFieldChange('imageUrl', downloadURL);
+            handleUrlFieldChange(downloadURL); // Use the new handler
             toast({ title: 'Imagen Subida', description: 'La imagen de la máquina ha sido actualizada.' });
         } catch (error) {
             console.error("Error uploading image:", error);
@@ -198,7 +204,7 @@ function MachineEditDialog({
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor={`image-url-${machine.id}`}>o Pega la URL de la Imagen</Label>
-                            <Input id={`image-url-${machine.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedMachine.imageUrl || ''} onChange={e => handleFieldChange('imageUrl', e.target.value)} />
+                            <Input id={`image-url-${machine.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedMachine.imageUrl || ''} onChange={e => handleUrlFieldChange(e.target.value)} />
                         </div>
                     </div>
                     <Separator />
@@ -238,20 +244,22 @@ function MachineEditDialog({
 
 function SiloEditDialog({
     silo,
-    isTachos,
-    tachosConfig,
-    onTachosConfigChange,
     open,
     onOpenChange,
     onSave,
+    onImageSave,
+    isTachos,
+    tachosConfig,
+    onTachosConfigChange
 }: {
     silo: SiloState;
-    isTachos?: boolean;
-    tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
-    onTachosConfigChange?: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: SiloState) => void;
+    onImageSave: (type: 'silo' | 'tachos', id: string, url: string) => void;
+    isTachos?: boolean;
+    tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
+    onTachosConfigChange?: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
     const [localTachosConfig, setLocalTachosConfig] = React.useState(tachosConfig);
@@ -265,22 +273,27 @@ function SiloEditDialog({
         }
     }, [silo, tachosConfig, isTachos]);
 
-    const handleFieldChange = (field: keyof Omit<SiloState, 'imageUrl'> | 'imageUrl', value: any) => {
+    const handleFieldChange = (field: keyof SiloState, value: any) => {
         setEditedSilo(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleUrlFieldChange = (url: string) => {
+        setEditedSilo(prev => ({ ...prev, imageUrl: url }));
+        onImageSave(isTachos ? 'tachos' : 'silo', silo.id, url);
     };
 
     const handleTachosConfigFieldChange = (field: keyof typeof localTachosConfig, value: any) => {
         setLocalTachosConfig(prev => (prev ? { ...prev, [field]: value } : undefined));
     };
-    
+
     const handleImageUpload = async (file: File) => {
         setIsUploading(true);
         try {
-            const imageId = `simulation_assets/${isTachos ? 'tachos' : `silos/${silo.id}`}`;
-            const storageRef = ref(storage, `${imageId}-${Date.now()}`);
+            const imagePath = isTachos ? 'tachos' : `silos/${silo.id}`;
+            const storageRef = ref(storage, `sim-images/${imagePath}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            handleFieldChange('imageUrl', downloadURL);
+            handleUrlFieldChange(downloadURL);
             toast({ title: 'Imagen Subida', description: `La imagen de ${silo.name} ha sido actualizada.` });
         } catch (error) {
             console.error("Error uploading image:", error);
@@ -291,14 +304,14 @@ function SiloEditDialog({
     };
 
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
-    
+
     const handleSaveChanges = () => {
         onSave(editedSilo);
         if (isTachos && localTachosConfig && onTachosConfigChange) {
             onTachosConfigChange(localTachosConfig);
         }
         onOpenChange(false);
-    }
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -307,15 +320,15 @@ function SiloEditDialog({
                     <DialogTitle>Editar {silo.name}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
-                     <div className="space-y-2">
+                    <div className="space-y-2">
                         <Label>Previsualización de la Imagen</Label>
                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                             {isUploading ? (
-                               <div className="flex flex-col items-center gap-2">
-                                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                                   <p className="text-sm text-muted-foreground">Subiendo...</p>
-                               </div>
-                           ) : (
+                                <div className="flex flex-col items-center gap-2">
+                                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                                    <p className="text-sm text-muted-foreground">Subiendo...</p>
+                                </div>
+                            ) : (
                                 <Image
                                     src={editedSilo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"}
                                     alt={editedSilo.name}
@@ -324,7 +337,7 @@ function SiloEditDialog({
                                     className="object-contain w-full h-full"
                                     unoptimized
                                 />
-                           )}
+                            )}
                         </div>
                         <input
                             type="file"
@@ -338,23 +351,23 @@ function SiloEditDialog({
                             <Upload className="mr-2 h-3 w-3" />
                             {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
-                         <div className="relative">
-                           <div className="absolute inset-0 flex items-center">
-                               <span className="w-full border-t" />
-                           </div>
-                           <div className="relative flex justify-center text-xs uppercase">
-                               <span className="bg-background px-2 text-muted-foreground">O</span>
-                           </div>
+                        <div className="relative">
+                            <div className="absolute inset-0 flex items-center">
+                                <span className="w-full border-t" />
+                            </div>
+                            <div className="relative flex justify-center text-xs uppercase">
+                                <span className="bg-background px-2 text-muted-foreground">O</span>
+                            </div>
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor={`image-url-${silo.id}`}>o Pega la URL de la Imagen</Label>
-                            <Input id={`image-url-${silo.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedSilo.imageUrl || ''} onChange={e => handleFieldChange('imageUrl', e.target.value)} />
+                            <Input id={`image-url-${silo.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedSilo.imageUrl || ''} onChange={e => handleUrlFieldChange(e.target.value)} />
                         </div>
                     </div>
                     <Separator />
                     <div className="space-y-1.5">
-                      <Label htmlFor={`silo-name-${silo.id}`}>Nombre</Label>
-                      <Input id={`silo-name-${silo.id}`} type="text" value={editedSilo.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
+                        <Label htmlFor={`silo-name-${silo.id}`}>Nombre</Label>
+                        <Input id={`silo-name-${silo.id}`} type="text" value={editedSilo.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
                     </div>
                     {!isTachos && (
                         <div className="space-y-1.5">
@@ -429,12 +442,14 @@ function WrapperEditDialog({
     open,
     onOpenChange,
     onSave,
+    onImageSave
 }: {
     wrapper: WrapperState;
     allMachines: MachineState[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>) => void;
+    onImageSave: (type: 'wrapper', id: string, url: string) => void;
 }) {
     const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
     const [isUploading, setIsUploading] = React.useState(false);
@@ -447,6 +462,11 @@ function WrapperEditDialog({
 
     const handleFieldChange = (field: keyof Omit<typeof editedWrapper, 'imageUrl'> | 'imageUrl', value: any) => {
         setEditedWrapper(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleUrlFieldChange = (url: string) => {
+        setEditedWrapper(prev => ({ ...prev, imageUrl: url }));
+        onImageSave('wrapper', wrapper.id, url);
     };
 
     const handleMachineConnectionChange = (machineId: number, checked: boolean) => {
@@ -467,7 +487,7 @@ function WrapperEditDialog({
             const storageRef = ref(storage, `sim-images/wrapper-${wrapper.id}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            handleFieldChange('imageUrl', downloadURL);
+            handleUrlFieldChange(downloadURL);
             toast({ title: 'Imagen Subida', description: `La imagen de ${wrapper.name} ha sido actualizada.` });
         } catch (error) {
             console.error("Error uploading image:", error);
@@ -532,7 +552,7 @@ function WrapperEditDialog({
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor={`image-url-${wrapper.id}`}>o Pega la URL de la Imagen</Label>
-                            <Input id={`image-url-${wrapper.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedWrapper.imageUrl || ''} onChange={e => handleFieldChange('imageUrl', e.target.value)} />
+                            <Input id={`image-url-${wrapper.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedWrapper.imageUrl || ''} onChange={e => handleUrlFieldChange(e.target.value)} />
                         </div>
                     </div>
                     <Separator />
@@ -707,6 +727,22 @@ export default function OperationsClient({
         loadConfig();
     }, [loadConfig]);
 
+    const handleImageSave = React.useCallback((type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, url: string) => {
+        switch (type) {
+            case 'machine':
+                setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl: url } : m));
+                break;
+            case 'silo':
+                setSilos(prev => prev.map(s => s.id === id ? { ...s, imageUrl: url } : s));
+                break;
+            case 'wrapper':
+                setWrappers(prev => prev.map(w => w.id === id ? { ...w, imageUrl: url } : w));
+                break;
+            case 'tachos':
+                setTachosState(prev => ({ ...prev, imageUrl: url }));
+                break;
+        }
+    }, []);
 
     const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => {
         setMachines(prev => prev.map(m => m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m));
@@ -1297,11 +1333,9 @@ export default function OperationsClient({
                                 <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
                                   {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                 </h3>
-                                <div className="flex items-center gap-1">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
                             </div>
                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
                                <Image src={tachosState.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
@@ -1631,6 +1665,7 @@ export default function OperationsClient({
                     machine={editingMachine}
                     products={products}
                     onSave={handleMachineSave}
+                    onImageSave={handleImageSave}
                 />
             )}
              {editingSilo && (
@@ -1638,6 +1673,8 @@ export default function OperationsClient({
                     open={!!editingSilo}
                     onOpenChange={(isOpen) => !isOpen && setEditingSilo(null)}
                     silo={editingSilo}
+                    onSave={handleSiloSave}
+                    onImageSave={handleImageSave}
                     isTachos={editingSilo.id === 'tachos'}
                     tachosConfig={{
                         isAuto: isTachosAuto,
@@ -1646,7 +1683,6 @@ export default function OperationsClient({
                         goal: autoTachosGoal
                     }}
                     onTachosConfigChange={handleTachosConfigChange}
-                    onSave={handleSiloSave}
                 />
             )}
             {editingWrapper && (
@@ -1656,6 +1692,7 @@ export default function OperationsClient({
                     wrapper={editingWrapper}
                     allMachines={machines}
                     onSave={handleWrapperSave}
+                    onImageSave={handleImageSave}
                 />
             )}
         </>
