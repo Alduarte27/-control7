@@ -260,7 +260,7 @@ function SiloEditDialog({
             const storageRef = ref(storage, `sim-images/${imageId}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            onImageSave(silo.id, downloadURL); // Pass the simple ID
+            onImageSave(silo.id, downloadURL);
             handleFieldChange('imageUrl', downloadURL);
             toast({ title: 'Imagen Subida', description: `La imagen de ${silo.name} ha sido actualizada.` });
         } catch (error) {
@@ -658,12 +658,12 @@ export default function OperationsClient({
         }
     };
     
-    const saveImageUrlToFirestore = async (docId: string, field: string, url: string) => {
+    const saveImageUrlToFirestore = async (docId: string, data: { [key: string]: string }) => {
         try {
             const docRef = doc(db, SIMULATION_ASSETS_COLLECTION, docId);
-            await setDoc(docRef, { [field]: url }, { merge: true });
+            await setDoc(docRef, data, { merge: true });
         } catch (error) {
-            console.error(`Error saving ${field} URL to Firestore`, error);
+            console.error(`Error saving image URL to Firestore for doc ${docId}`, error);
             toast({ title: 'Error', description: 'No se pudo guardar la URL de la imagen.', variant: 'destructive' });
         }
     };
@@ -671,18 +671,17 @@ export default function OperationsClient({
     const loadConfig = React.useCallback(async () => {
         const defaultConfig = getDefaultConfig();
         try {
-            // Fetch all image URL docs from Firestore
             const imageDocsSnapshot = await getDocs(collection(db, SIMULATION_ASSETS_COLLECTION));
-            const allImageUrls: { [docId: string]: ImageUrlMap } = {};
+            const imageUrls: { [key: string]: any } = {};
             imageDocsSnapshot.forEach(doc => {
-                allImageUrls[doc.id] = doc.data() as ImageUrlMap;
+                imageUrls[doc.id] = doc.data();
             });
 
-            const machineUrls = allImageUrls.machines || {};
-            const wrapperUrls = allImageUrls.wrappers || {};
-            const siloUrls = allImageUrls.silos || {};
-            const tachosUrl = (allImageUrls.tachos as any)?.imageUrl || null;
-
+            const machineUrls = imageUrls.machines || {};
+            const wrapperUrls = imageUrls.wrappers || {};
+            const siloUrls = imageUrls.silos || {};
+            const tachosUrl = imageUrls.tachos?.imageUrl || null;
+            
             const savedConfigRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
 
             const mergeConfigWithImages = (config: any) => {
@@ -764,8 +763,7 @@ export default function OperationsClient({
     };
 
     const handleImageSave = async (docId: string, fieldId: string | number, imageUrl: string) => {
-        const fieldKey = String(fieldId);
-        await saveImageUrlToFirestore(docId, fieldKey, imageUrl);
+        await saveImageUrlToFirestore(docId, { [fieldId]: imageUrl });
 
         switch(docId) {
             case 'machines':
@@ -779,6 +777,8 @@ export default function OperationsClient({
                 break;
             case 'tachos':
                 setTachosState(prev => ({...prev, imageUrl}));
+                // For tachos, the fieldId is the property name itself
+                await saveImageUrlToFirestore('tachos', { imageUrl: imageUrl });
                 break;
         }
     };
@@ -786,10 +786,12 @@ export default function OperationsClient({
     const handleRestoreDefaults = async () => {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
         try {
-            // Clear all image URL documents in Firestore
             const batch = writeBatch(db);
-            const docRefs = ['machines', 'wrappers', 'silos', 'tachos'].map(id => doc(db, SIMULATION_ASSETS_COLLECTION, id));
-            docRefs.forEach(ref => batch.set(ref, {})); // Overwrite with empty object
+            const docIds = ['machines', 'wrappers', 'silos', 'tachos'];
+            for (const docId of docIds) {
+                const docRef = doc(db, SIMULATION_ASSETS_COLLECTION, docId);
+                batch.set(docRef, {}); // Overwrite with empty object to clear all fields
+            }
             await batch.commit();
         } catch (error) {
             console.error("Error clearing image URLs in Firestore:", error);
