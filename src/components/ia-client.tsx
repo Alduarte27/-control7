@@ -73,7 +73,6 @@ type WrapperState = {
     conveyorBelt: ConveyorItem[];
 };
 
-// This type represents the data saved in localStorage
 type SimulationParams = {
     machines: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>[];
     wrappers: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>[];
@@ -140,9 +139,14 @@ function MachineEditDialog({
         if (!file) return;
 
         setIsUploading(true);
-        await onImageSave(file);
-        setIsUploading(false);
-        onOpenChange(false);
+        try {
+            await onImageSave(file);
+        } catch (error) {
+             // Error is already toasted in the parent
+        } finally {
+            setIsUploading(false);
+            onOpenChange(false);
+        }
     };
 
     const fileInputId = `modal-image-upload-${machine.id}`;
@@ -270,9 +274,14 @@ function SiloEditDialog({
         if (!file) return;
 
         setIsUploading(true);
-        await onImageSave(file);
-        setIsUploading(false);
-        onOpenChange(false);
+        try {
+            await onImageSave(file);
+        } catch (error) {
+            // Error is already toasted in the parent
+        } finally {
+            setIsUploading(false);
+            onOpenChange(false);
+        }
     };
 
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
@@ -441,9 +450,14 @@ function WrapperEditDialog({
         if (!file) return;
 
         setIsUploading(true);
-        await onImageSave(file);
-        setIsUploading(false);
-        onOpenChange(false);
+        try {
+            await onImageSave(file);
+        } catch (error) {
+            // Error is already toasted in the parent
+        } finally {
+            setIsUploading(false);
+            onOpenChange(false);
+        }
     };
 
     const fileInputId = `wrapper-modal-image-upload-${wrapper.id}`;
