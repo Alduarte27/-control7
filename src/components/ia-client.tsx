@@ -684,6 +684,9 @@ export default function OperationsClient({
         if (simulationIntervalRef.current) return;
         setIsSimulating(true);
 
+        const currentElapsedTime = simulationState.elapsedTime;
+        let nextSendTime = simulationState.nextAutoTachosSendTime;
+
         const familiarSiloState = silos.find(s => s.id === 'familiar');
         const familiarSiloQQ = familiarSiloState?.currentQQ || 0;
     
@@ -691,13 +694,16 @@ export default function OperationsClient({
             const familiarSiloCapacity = familiarSiloState?.capacityQQ || 0;
             const requiredMasas = Math.ceil(familiarSiloCapacity / MASA_QQ_AMOUNT);
             sendMasasToSilosRef.current(requiredMasas);
+            // If we send material, schedule the NEXT send from this point.
+            if (autoTachosInterval > 0) {
+              nextSendTime = currentElapsedTime + (autoTachosInterval * 60);
+            }
         }
         
-        const currentElapsedTime = simulationState.elapsedTime;
         setSimulationState(prev => ({
             ...prev,
             isFinished: false,
-            nextAutoTachosSendTime: autoTachosInterval > 0 ? currentElapsedTime + (autoTachosInterval * 60) : Infinity,
+            nextAutoTachosSendTime: nextSendTime,
         }));
         
         const tickRateMs = 50; 
@@ -709,18 +715,18 @@ export default function OperationsClient({
                     return prev;
                 }
                 
+                const elapsedIncrement = (tickRateMs / 1000) * simulationSpeed;
+                const newElapsedTime = prev.elapsedTime + elapsedIncrement;
                 let nextAutoSendTime = prev.nextAutoTachosSendTime;
+
                 const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
     
-                if (isTachosAuto && !goalMet && prev.elapsedTime >= prev.nextAutoTachosSendTime) {
+                if (isTachosAuto && !goalMet && newElapsedTime >= prev.nextAutoTachosSendTime) {
                     sendMasasToSilosRef.current(1);
-                    nextAutoSendTime = prev.elapsedTime + (autoTachosInterval * 60);
+                    nextAutoSendTime = newElapsedTime + (autoTachosInterval * 60);
                 } else if (goalMet && isTachosAuto) {
                     setIsTachosAuto(false);
                 }
-
-                const elapsedIncrement = (tickRateMs / 1000) * simulationSpeed;
-                const newElapsedTime = prev.elapsedTime + elapsedIncrement;
 
                 const currentMachines = machinesRef.current;
                 const activeMachinesConfig = currentMachines
