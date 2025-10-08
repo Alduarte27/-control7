@@ -837,6 +837,7 @@ export default function OperationsClient({
         if (resetMaterial) {
             setSimulationState(createInitialSimulationState());
         } else {
+            // Reset simulation time and production, but keep silos and masa count
             setSimulationState(prev => ({
                 ...createInitialSimulationState(),
                 silos: prev.silos,
@@ -979,15 +980,19 @@ export default function OperationsClient({
                 <Card>
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <CardTitle>Controles de Simulación</CardTitle>
-                         <div className="flex items-center gap-2">
+                         <div className="flex flex-wrap items-center gap-2">
                             <Button onClick={startClock} disabled={isSimulating} variant="secondary">
                                <Play className="mr-2" /> Iniciar
                            </Button>
                            <Button onClick={pauseClock} disabled={!isSimulating} variant="destructive">
                                <Pause className="mr-2" /> Detener
                            </Button>
+                           <Separator orientation="vertical" className="h-6 mx-2" />
+                           <Button onClick={() => resetSimulation(false)} variant="outline">
+                               Reiniciar Simulación
+                           </Button>
                            <Button onClick={() => resetSimulation(true)} variant="outline">
-                               <RefreshCw className="mr-2" /> Reiniciar
+                               <RefreshCw className="mr-2" /> Reiniciar Todo
                            </Button>
                        </div>
                     </CardHeader>
