@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus, Power, PowerOff, Settings2 } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus, Power, PowerOff } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -233,6 +233,8 @@ function SiloEditDialog({
     onOpenChange,
     onSave,
     onImageSave,
+    tachosConfig,
+    onTachosConfigChange,
 }: {
     silo: SiloState;
     isTachos?: boolean;
@@ -240,24 +242,34 @@ function SiloEditDialog({
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<SiloState, 'imageUrl'>) => void;
     onImageSave: (id: string, imageUrl: string) => void;
+    tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
+    onTachosConfigChange?: (config: { isAuto?: boolean; interval?: number; isGoalEnabled?: boolean; goal?: number }) => void;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
     const [isUploading, setIsUploading] = React.useState(false);
     const { toast } = useToast();
 
+    // Local state for tachos config to manage inside the dialog
+    const [localTachosConfig, setLocalTachosConfig] = React.useState(tachosConfig);
+
     React.useEffect(() => {
         setEditedSilo(silo);
-    }, [silo]);
+        setLocalTachosConfig(tachosConfig);
+    }, [silo, tachosConfig]);
 
     const handleFieldChange = (field: keyof SiloState, value: any) => {
         setEditedSilo(prev => ({ ...prev, [field]: value }));
     };
 
+    const handleTachosFieldChange = (field: keyof typeof localTachosConfig, value: any) => {
+        setLocalTachosConfig(prev => ({ ...prev, [field]: value } as any));
+    };
+
     const handleImageUpload = async (file: File) => {
         setIsUploading(true);
         try {
-            const imageId = isTachos ? 'tachos' : `silo_${silo.id}`;
-            const storageRef = ref(storage, `sim-images/${imageId}-${Date.now()}`);
+            const imageId = `simulation_assets/${isTachos ? 'tachos' : `silos/${silo.id}`}`;
+            const storageRef = ref(storage, `${imageId}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
             onImageSave(silo.id, downloadURL);
@@ -276,6 +288,9 @@ function SiloEditDialog({
     const handleSaveChanges = () => {
         const { imageUrl, ...configToSave } = editedSilo;
         onSave(configToSave);
+        if (isTachos && onTachosConfigChange && localTachosConfig) {
+            onTachosConfigChange(localTachosConfig);
+        }
         onOpenChange(false);
     }
 
@@ -324,6 +339,58 @@ function SiloEditDialog({
                             <Input id={`silo-cap-${silo.id}`} type="number" value={editedSilo.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
                         </div>
                     )}
+                    {isTachos && localTachosConfig && (
+                        <>
+                            <Separator />
+                            <div className="space-y-4">
+                                <h4 className="font-medium text-sm">Configuración de Tachos</h4>
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="auto-mode-switch" className="text-sm">Modo Automático</Label>
+                                    <Switch
+                                        id="auto-mode-switch"
+                                        checked={localTachosConfig.isAuto}
+                                        onCheckedChange={(val) => handleTachosFieldChange('isAuto', val)}
+                                    />
+                                </div>
+                                
+                                <div className={cn("space-y-3 transition-opacity", !localTachosConfig.isAuto && "opacity-50")}>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
+                                        <Input
+                                            id="auto-interval"
+                                            type="number"
+                                            value={localTachosConfig.interval}
+                                            onChange={(e) => handleTachosFieldChange('interval', Number(e.target.value))}
+                                            disabled={!localTachosConfig.isAuto}
+                                            min="1"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
+                                        <Switch
+                                            id="goal-mode-switch"
+                                            checked={localTachosConfig.isGoalEnabled}
+                                            onCheckedChange={(val) => handleTachosFieldChange('isGoalEnabled', val)}
+                                            disabled={!localTachosConfig.isAuto}
+                                        />
+                                    </div>
+                                    {localTachosConfig.isGoalEnabled && (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
+                                            <Input
+                                                id="auto-goal"
+                                                type="number"
+                                                value={localTachosConfig.goal}
+                                                onChange={(e) => handleTachosFieldChange('goal', Number(e.target.value))}
+                                                disabled={!localTachosConfig.isAuto || !localTachosConfig.isGoalEnabled}
+                                                min="1"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
@@ -333,6 +400,7 @@ function SiloEditDialog({
         </Dialog>
     );
 }
+
 
 function WrapperEditDialog({
     wrapper,
@@ -487,117 +555,6 @@ function WrapperEditDialog({
     );
 }
 
-function TachosControlDialog({
-    open,
-    onOpenChange,
-    onSave,
-    isTachosAuto,
-    onIsTachosAutoChange,
-    autoTachosInterval,
-    onAutoTachosIntervalChange,
-    isTachosGoalEnabled,
-    onIsTachosGoalEnabledChange,
-    autoTachosGoal,
-    onAutoTachosGoalChange,
-}: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    onSave: (config: any) => void;
-    isTachosAuto?: boolean;
-    onIsTachosAutoChange?: (value: boolean) => void;
-    autoTachosInterval?: number;
-    onAutoTachosIntervalChange?: (value: number) => void;
-    isTachosGoalEnabled?: boolean;
-    onIsTachosGoalEnabledChange?: (value: boolean) => void;
-    autoTachosGoal?: number;
-    onAutoTachosGoalChange?: (value: number) => void;
-}) {
-    const [localIsTachosAuto, setLocalIsTachosAuto] = React.useState(isTachosAuto);
-    const [localAutoTachosInterval, setLocalAutoTachosInterval] = React.useState(autoTachosInterval);
-    const [localIsTachosGoalEnabled, setLocalIsTachosGoalEnabled] = React.useState(isTachosGoalEnabled);
-    const [localAutoTachosGoal, setLocalAutoTachosGoal] = React.useState(autoTachosGoal);
-
-    React.useEffect(() => {
-        setLocalIsTachosAuto(isTachosAuto);
-        setLocalAutoTachosInterval(autoTachosInterval);
-        setLocalIsTachosGoalEnabled(isTachosGoalEnabled);
-        setLocalAutoTachosGoal(autoTachosGoal);
-    }, [isTachosAuto, autoTachosInterval, isTachosGoalEnabled, autoTachosGoal]);
-    
-    const handleSaveChanges = () => {
-        onSave({
-            isTachosAuto: localIsTachosAuto,
-            autoTachosInterval: localAutoTachosInterval,
-            isTachosGoalEnabled: localIsTachosGoalEnabled,
-            autoTachosGoal: localAutoTachosGoal,
-        });
-        onOpenChange(false);
-    }
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Configuración de Tachos</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="auto-mode-switch" className="text-sm font-medium">Modo Automático</Label>
-                            <Switch
-                                id="auto-mode-switch"
-                                checked={localIsTachosAuto}
-                                onCheckedChange={setLocalIsTachosAuto}
-                            />
-                        </div>
-                        
-                        <div className={cn("space-y-3 transition-opacity", !localIsTachosAuto && "opacity-50")}>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
-                                <Input
-                                    id="auto-interval"
-                                    type="number"
-                                    value={localAutoTachosInterval}
-                                    onChange={(e) => setLocalAutoTachosInterval(Number(e.target.value))}
-                                    disabled={!localIsTachosAuto}
-                                    min="1"
-                                />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
-                                <Switch
-                                    id="goal-mode-switch"
-                                    checked={localIsTachosGoalEnabled}
-                                    onCheckedChange={setLocalIsTachosGoalEnabled}
-                                    disabled={!localIsTachosAuto}
-                                />
-                            </div>
-                                {localIsTachosGoalEnabled && (
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
-                                    <Input
-                                        id="auto-goal"
-                                        type="number"
-                                        value={localAutoTachosGoal}
-                                        onChange={(e) => setLocalAutoTachosGoal(Number(e.target.value))}
-                                        disabled={!localIsTachosAuto || !localIsTachosGoalEnabled}
-                                        min="1"
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
-                <DialogFooter>
-                    <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
-                    <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-
 export default function OperationsClient({ 
   prefetchedProducts,
 }: { 
@@ -619,7 +576,6 @@ export default function OperationsClient({
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
-    const [isEditingTachos, setIsEditingTachos] = React.useState(false);
     const [masasToSend, setMasasToSend] = React.useState(1);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
@@ -658,12 +614,12 @@ export default function OperationsClient({
         }
     };
     
-    const saveImageUrlToFirestore = async (docId: string, data: { [key: string]: string }) => {
+    const saveImageUrlToFirestore = async (docName: string, docId: string, fieldName: string, url: string) => {
         try {
-            const docRef = doc(db, SIMULATION_ASSETS_COLLECTION, docId);
-            await setDoc(docRef, data, { merge: true });
+            const docRef = doc(db, SIMULATION_ASSETS_COLLECTION, docName);
+            await setDoc(docRef, { [docId]: { [fieldName]: url } }, { merge: true });
         } catch (error) {
-            console.error(`Error saving image URL to Firestore for doc ${docId}`, error);
+            console.error(`Error saving image URL to Firestore for doc ${docName}`, error);
             toast({ title: 'Error', description: 'No se pudo guardar la URL de la imagen.', variant: 'destructive' });
         }
     };
@@ -677,18 +633,17 @@ export default function OperationsClient({
                 imageUrls[doc.id] = doc.data();
             });
 
-            const machineUrls = imageUrls.machines || {};
-            const wrapperUrls = imageUrls.wrappers || {};
-            const siloUrls = imageUrls.silos || {};
-            const tachosUrl = imageUrls.tachos?.imageUrl || null;
+            const getImageUrl = (collection: string, docId: string | number, field = 'imageUrl') => {
+                return imageUrls[collection]?.[docId]?.[field] || null;
+            }
             
             const savedConfigRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
 
             const mergeConfigWithImages = (config: any) => {
-                setMachines(config.machines.map((m: any) => ({ ...m, imageUrl: machineUrls[m.id] || null, isSimulatingActive: false })));
-                setWrappers(config.wrappers.map((w: any) => ({ ...w, imageUrl: wrapperUrls[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
-                setSilos(config.silos.map((s: any) => ({ ...s, imageUrl: siloUrls[s.id] || null })));
-                setTachosState({ ...config.tachosState, imageUrl: tachosUrl });
+                setMachines(config.machines.map((m: any) => ({ ...m, imageUrl: getImageUrl('machines', m.id), isSimulatingActive: false })));
+                setWrappers(config.wrappers.map((w: any) => ({ ...w, imageUrl: getImageUrl('wrappers', w.id), buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
+                setSilos(config.silos.map((s: any) => ({ ...s, imageUrl: getImageUrl('silos', s.id) })));
+                setTachosState({ ...config.tachosState, imageUrl: getImageUrl('tachos', 'tachos_main') });
                 setAutoTachosInterval(config.autoTachosInterval || defaultConfig.autoTachosInterval);
                 setAutoTachosGoal(config.autoTachosGoal || defaultConfig.autoTachosGoal);
             };
@@ -750,46 +705,30 @@ export default function OperationsClient({
             handleConfigSave({ silos: newSilos.map(({imageUrl, ...s}) => s) });
         }
     };
-    
+
     const handleTachosControlSave = (config: any) => {
-        setIsTachosAuto(config.isTachosAuto);
-        setAutoTachosInterval(config.autoTachosInterval);
-        setIsTachosGoalEnabled(config.isTachosGoalEnabled);
-        setAutoTachosGoal(config.autoTachosGoal);
-        handleConfigSave({ 
-            autoTachosInterval: config.autoTachosInterval,
-            autoTachosGoal: config.autoTachosGoal,
+        setIsTachosAuto(config.isAuto);
+        setAutoTachosInterval(config.interval);
+        setIsTachosGoalEnabled(config.isGoalEnabled);
+        setAutoTachosGoal(config.goal);
+        handleConfigSave({
+            autoTachosInterval: config.interval,
+            autoTachosGoal: config.goal,
         });
     };
 
-    const handleImageSave = async (docId: string, fieldId: string | number, imageUrl: string) => {
-        await saveImageUrlToFirestore(docId, { [fieldId]: imageUrl });
-
-        switch(docId) {
-            case 'machines':
-                setMachines(prev => prev.map(m => m.id === fieldId ? {...m, imageUrl} : m));
-                break;
-            case 'wrappers':
-                setWrappers(prev => prev.map(w => w.id === fieldId ? {...w, imageUrl} : w));
-                break;
-            case 'silos':
-                setSilos(prev => prev.map(s => s.id === fieldId ? {...s, imageUrl} : s));
-                break;
-            case 'tachos':
-                setTachosState(prev => ({...prev, imageUrl}));
-                // For tachos, the fieldId is the property name itself
-                await saveImageUrlToFirestore('tachos', { imageUrl: imageUrl });
-                break;
-        }
+    const handleImageSave = async (collection: string, docId: string | number, url: string) => {
+        await saveImageUrlToFirestore(collection, String(docId), 'imageUrl', url);
+        loadConfig();
     };
 
     const handleRestoreDefaults = async () => {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
         try {
             const batch = writeBatch(db);
-            const docIds = ['machines', 'wrappers', 'silos', 'tachos'];
-            for (const docId of docIds) {
-                const docRef = doc(db, SIMULATION_ASSETS_COLLECTION, docId);
+            const collections = ['machines', 'wrappers', 'silos', 'tachos'];
+            for (const coll of collections) {
+                const docRef = doc(db, SIMULATION_ASSETS_COLLECTION, coll);
                 batch.set(docRef, {}); // Overwrite with empty object to clear all fields
             }
             await batch.commit();
@@ -1319,7 +1258,7 @@ export default function OperationsClient({
                                         <AlertDialog>
                                             <AlertDialogTrigger asChild>
                                                 <Button variant="ghost" size="icon" className="h-7 w-7">
-                                                    <Settings2 className="h-4 w-4 text-muted-foreground" />
+                                                    <RefreshCw className="h-4 w-4 text-muted-foreground" />
                                                 </Button>
                                             </AlertDialogTrigger>
                                             <AlertDialogContent>
@@ -1337,7 +1276,7 @@ export default function OperationsClient({
                                         </AlertDialog>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                        <p>Gestionar Configuración</p>
+                                        <p>Restaurar valores por defecto</p>
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
@@ -1354,14 +1293,9 @@ export default function OperationsClient({
                                 <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
                                   {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                 </h3>
-                                <div>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditingTachos(true)}>
-                                        <Settings2 className="h-4 w-4" />
-                                    </Button>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
                             </div>
                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
                                <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
@@ -1701,7 +1635,14 @@ export default function OperationsClient({
                     silo={editingSilo}
                     isTachos={editingSilo.id === 'tachos'}
                     onSave={handleSiloSave}
-                    onImageSave={(siloId, url) => handleImageSave(siloId === 'tachos' ? 'tachos' : 'silos', siloId, url)}
+                    onImageSave={(siloId, url) => handleImageSave(siloId === 'tachos' ? 'tachos' : 'silos', siloId === 'tachos' ? 'tachos_main' : siloId, url)}
+                    tachosConfig={{
+                        isAuto: isTachosAuto,
+                        interval: autoTachosInterval,
+                        isGoalEnabled: isTachosGoalEnabled,
+                        goal: autoTachosGoal
+                    }}
+                    onTachosConfigChange={handleTachosControlSave}
                 />
             )}
             {editingWrapper && (
@@ -1712,21 +1653,6 @@ export default function OperationsClient({
                     allMachines={machines}
                     onSave={handleWrapperSave}
                     onImageSave={(wrapperId, url) => handleImageSave('wrappers', wrapperId, url)}
-                />
-            )}
-            {isEditingTachos && (
-                <TachosControlDialog
-                    open={isEditingTachos}
-                    onOpenChange={setIsEditingTachos}
-                    onSave={handleTachosControlSave}
-                    isTachosAuto={isTachosAuto}
-                    onIsTachosAutoChange={setIsTachosAuto}
-                    autoTachosInterval={autoTachosInterval}
-                    onAutoTachosIntervalChange={setAutoTachosInterval}
-                    isTachosGoalEnabled={isTachosGoalEnabled}
-                    onIsTachosGoalEnabledChange={setIsTachosGoalEnabled}
-                    autoTachosGoal={autoTachosGoal}
-                    onAutoTachosGoalChange={setAutoTachosGoal}
                 />
             )}
         </>
