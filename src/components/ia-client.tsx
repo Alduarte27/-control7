@@ -669,11 +669,6 @@ export default function OperationsClient({
         return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     };
     
-    const simulationStateRef = React.useRef(simulationState);
-    React.useEffect(() => {
-        simulationStateRef.current = simulationState;
-    }, [simulationState]);
-
     const sendMasasToSilosRef = React.useRef(sendMasasToSilos);
     React.useEffect(() => { sendMasasToSilosRef.current = sendMasasToSilos; }, [sendMasasToSilos]);
 
@@ -698,11 +693,12 @@ export default function OperationsClient({
             sendMasasToSilosRef.current(requiredMasas);
         }
         
-        simulationStateRef.current = {
-            ...simulationStateRef.current,
+        const currentElapsedTime = simulationState.elapsedTime;
+        setSimulationState(prev => ({
+            ...prev,
             isFinished: false,
-            nextAutoTachosSendTime: autoTachosInterval > 0 ? simulationStateRef.current.elapsedTime + (autoTachosInterval * 60) : Infinity,
-        };
+            nextAutoTachosSendTime: autoTachosInterval > 0 ? currentElapsedTime + (autoTachosInterval * 60) : Infinity,
+        }));
         
         const tickRateMs = 50; 
         
