@@ -24,13 +24,14 @@ import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { app } from '@/lib/firebase';
+import { app, db } from '@/lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 
 const KG_PER_QUINTAL = 50;
 const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
-const LOCAL_STORAGE_KEY = 'control7-simulation-config';
+const CONFIG_DOC_PATH = 'simulation/config';
 
 const storage = getStorage(app);
 
@@ -130,6 +131,7 @@ function MachineEditDialog({
         setIsUploading(true);
         await onImageSave('machine', machine.id, file);
         setIsUploading(false);
+        onOpenChange(false);
     };
 
     const fileInputId = `modal-image-upload-${machine.id}`;
@@ -257,6 +259,7 @@ function SiloEditDialog({
         const type = isTachos ? 'tachos' : 'silo';
         await onImageSave(type, silo.id, file);
         setIsUploading(false);
+        onOpenChange(false);
     };
 
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
@@ -423,6 +426,7 @@ function WrapperEditDialog({
         setIsUploading(true);
         await onImageSave('wrapper', wrapper.id, file);
         setIsUploading(false);
+        onOpenChange(false);
     };
 
     const fileInputId = `wrapper-modal-image-upload-${wrapper.id}`;
@@ -558,44 +562,36 @@ export default function OperationsClient({
             { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media&token=b9f29a2b-8a1a-4b9e-8e6a-7e3c1d9b4c6e', machineIds: [3, 4] },
         ],
         silos: [
-            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media&token=b9f29a2b-8a1a-4b9e-8e6a-7e3c1d9b4c6e' },
-            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.%20Gran.jpeg?alt=media&token=b9f29a2b-8a1a-4b9e-8e6a-7e3c1d9b4c6e' },
+            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media' },
+            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.%20Gran.jpeg?alt=media' },
         ],
-        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media&token=b9f29a2b-8a1a-4b9e-8e6a-7e3c1d9b4c6e' },
+        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media' },
         autoTachosInterval: 10,
         autoTachosGoal: 6,
         isTachosAuto: false,
         isTachosGoalEnabled: false,
     });
 
-    const saveConfigToLocalStorage = React.useCallback(() => {
+    const saveConfigToFirestore = React.useCallback(async (config: SimulationConfig) => {
         try {
-            const configToSave: SimulationConfig = {
-                machines: machines.map(({ isSimulatingActive, ...m }) => m),
-                wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, ...w }) => w),
-                silos: silos,
-                tachosState: tachosState,
-                autoTachosInterval: autoTachosInterval,
-                autoTachosGoal: autoTachosGoal,
-                isTachosAuto: isTachosAuto,
-                isTachosGoalEnabled: isTachosGoalEnabled,
-            };
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(configToSave));
+            const configRef = doc(db, CONFIG_DOC_PATH);
+            await setDoc(configRef, config);
         } catch (error) {
-            console.error("Error saving config to localStorage", error);
-            toast({ title: 'Error', description: 'No se pudo guardar la configuración.', variant: 'destructive' });
+            console.error("Error saving config to Firestore", error);
+            toast({ title: 'Error', description: 'No se pudo guardar la configuración en la nube.', variant: 'destructive' });
         }
-    }, [machines, wrappers, silos, tachosState, autoTachosInterval, autoTachosGoal, isTachosAuto, isTachosGoalEnabled, toast]);
+    }, [toast]);
 
 
-    const loadConfig = React.useCallback(() => {
+    const loadConfig = React.useCallback(async () => {
         try {
-            const savedConfigRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+            const configRef = doc(db, CONFIG_DOC_PATH);
+            const docSnap = await getDoc(configRef);
             const defaultConfig = getDefaultConfig();
 
             let config: SimulationConfig;
-            if (savedConfigRaw) {
-                const savedConfig = JSON.parse(savedConfigRaw);
+            if (docSnap.exists()) {
+                const savedConfig = docSnap.data() as SimulationConfig;
                 // Merge saved config with default to ensure all properties exist
                 config = {
                     ...defaultConfig,
@@ -616,6 +612,7 @@ export default function OperationsClient({
                 };
             } else {
                 config = defaultConfig;
+                await saveConfigToFirestore(config); // Save default if it doesn't exist
             }
             
             setMachines(config.machines.map(m => ({ ...m, isSimulatingActive: false })));
@@ -636,50 +633,55 @@ export default function OperationsClient({
             setTachosState(defaultConfig.tachosState);
             toast({ title: 'Error de Carga', description: 'No se pudo cargar la configuración. Se usarán los valores por defecto.', variant: 'destructive' });
         }
-    }, [toast]);
+    }, [toast, saveConfigToFirestore]);
     
     React.useEffect(() => {
         setIsClient(true);
         loadConfig();
     }, [loadConfig]);
 
+    const handleConfigChangeAndSave = React.useCallback(() => {
+        const configToSave: SimulationConfig = {
+            machines: machines.map(({ isSimulatingActive, ...m }) => m),
+            wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, ...w }) => w),
+            silos: silos,
+            tachosState: tachosState,
+            autoTachosInterval: autoTachosInterval,
+            autoTachosGoal: autoTachosGoal,
+            isTachosAuto: isTachosAuto,
+            isTachosGoalEnabled: isTachosGoalEnabled,
+        };
+        saveConfigToFirestore(configToSave);
+    }, [machines, wrappers, silos, tachosState, autoTachosInterval, autoTachosGoal, isTachosAuto, isTachosGoalEnabled, saveConfigToFirestore]);
+
     const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => {
-        const { toast } = useToast();
         try {
-            let imagePath = '';
-            switch (type) {
-                case 'machine': imagePath = `machines/machine-${id}`; break;
-                case 'silo': imagePath = `silos/${id}`; break;
-                case 'wrapper': imagePath = `wrappers/wrapper-${id}`; break;
-                case 'tachos': imagePath = 'tachos'; break;
+            const imagePath = `sim-images/${type}/${id}/${Date.now()}_${file.name}`;
+            const storageRef = ref(storage, imagePath);
+            await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(storageRef);
+
+            let updatedConfig: SimulationConfig | null = null;
+            
+            if (type === 'machine') {
+                const newMachines = machines.map(m => m.id === id ? { ...m, imageUrl: downloadURL } : m);
+                setMachines(newMachines);
+            } else if (type === 'silo') {
+                const newSilos = silos.map(s => s.id === id ? { ...s, imageUrl: downloadURL } : s);
+                setSilos(newSilos);
+            } else if (type === 'wrapper') {
+                const newWrappers = wrappers.map(w => w.id === id ? { ...w, imageUrl: downloadURL } : w);
+                setWrappers(newWrappers);
+            } else if (type === 'tachos') {
+                setTachosState(prev => ({ ...prev, imageUrl: downloadURL }));
             }
 
-            const storageRef = ref(storage, `sim-images/${imagePath}-${Date.now()}`);
-            const snapshot = await uploadBytes(storageRef, file);
-            const downloadURL = await getDownloadURL(snapshot.ref);
-
-            switch (type) {
-                case 'machine':
-                    setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl: downloadURL } : m));
-                    break;
-                case 'silo':
-                    setSilos(prev => prev.map(s => s.id === id ? { ...s, imageUrl: downloadURL } : s));
-                    break;
-                case 'wrapper':
-                    setWrappers(prev => prev.map(w => w.id === id ? { ...w, imageUrl: downloadURL } : w));
-                    break;
-                case 'tachos':
-                    setTachosState(prev => ({ ...prev, imageUrl: downloadURL }));
-                    break;
-            }
-
-            toast({ title: 'Imagen Subida', description: 'La imagen ha sido actualizada.' });
+            toast({ title: 'Imagen Subida', description: 'La imagen ha sido actualizada y la configuración guardada.' });
         } catch (error) {
             console.error("Error uploading image:", error);
             toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
         }
-    }, []);
-
+    }, [machines, silos, wrappers, toast]);
 
     const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => {
         setMachines(prev => prev.map(m => m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m));
@@ -706,14 +708,15 @@ export default function OperationsClient({
     
     React.useEffect(() => {
         if (isClient) {
-          saveConfigToLocalStorage();
+            handleConfigChangeAndSave();
         }
-    }, [isClient, saveConfigToLocalStorage]);
+    }, [isClient, handleConfigChangeAndSave]);
 
     const handleRestoreDefaults = async () => {
-        localStorage.removeItem(LOCAL_STORAGE_KEY);
-        loadConfig();
-        toast({ title: 'Configuración Restaurada', description: 'Se han cargado los valores por defecto.' });
+        const defaultConfig = getDefaultConfig();
+        await saveConfigToFirestore(defaultConfig);
+        await loadConfig(); // Reload from the newly saved default config
+        toast({ title: 'Configuración Restaurada', description: 'Se han cargado y guardado los valores por defecto en la nube.' });
     };
     
     // --- Raw Material State ---
@@ -1242,7 +1245,7 @@ export default function OperationsClient({
                                                 <AlertDialogHeader>
                                                     <AlertDialogTitle>Restaurar Configuración</AlertDialogTitle>
                                                     <AlertDialogDescription>
-                                                        ¿Estás seguro de que quieres borrar tu configuración guardada? Esto restaurará todos los parámetros de las máquinas, silos y enfardadoras a sus valores por defecto. Esta acción no se puede deshacer.
+                                                        ¿Estás seguro de que quieres borrar tu configuración guardada en la nube? Esto restaurará todos los parámetros de las máquinas, silos y enfardadoras a sus valores por defecto. Esta acción no se puede deshacer.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
@@ -1638,3 +1641,5 @@ export default function OperationsClient({
     </div>
   );
 }
+
+    
