@@ -683,27 +683,10 @@ export default function OperationsClient({
     const startClock = () => {
         if (simulationIntervalRef.current) return;
         setIsSimulating(true);
-
-        const currentElapsedTime = simulationState.elapsedTime;
-        let nextSendTime = simulationState.nextAutoTachosSendTime;
-
-        const familiarSiloState = silos.find(s => s.id === 'familiar');
-        const familiarSiloQQ = familiarSiloState?.currentQQ || 0;
-    
-        if (isTachosAuto && familiarSiloQQ <= 0) {
-            const familiarSiloCapacity = familiarSiloState?.capacityQQ || 0;
-            const requiredMasas = Math.ceil(familiarSiloCapacity / MASA_QQ_AMOUNT);
-            sendMasasToSilosRef.current(requiredMasas);
-            // If we send material, schedule the NEXT send from this point.
-            if (autoTachosInterval > 0) {
-              nextSendTime = currentElapsedTime + (autoTachosInterval * 60);
-            }
-        }
         
         setSimulationState(prev => ({
             ...prev,
             isFinished: false,
-            nextAutoTachosSendTime: nextSendTime,
         }));
         
         const tickRateMs = 50; 
@@ -720,8 +703,10 @@ export default function OperationsClient({
                 let nextAutoSendTime = prev.nextAutoTachosSendTime;
 
                 const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
-    
-                if (isTachosAuto && !goalMet && newElapsedTime >= prev.nextAutoTachosSendTime) {
+                const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
+                const isSiloEmpty = (familiarSiloState?.currentQQ || 0) <= 0;
+
+                if (isTachosAuto && !goalMet && (newElapsedTime >= nextAutoSendTime || isSiloEmpty)) {
                     sendMasasToSilosRef.current(1);
                     nextAutoSendTime = newElapsedTime + (autoTachosInterval * 60);
                 } else if (goalMet && isTachosAuto) {
@@ -746,8 +731,7 @@ export default function OperationsClient({
                 const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
                 
-                const familiarSiloState = silosRef.current.find(s => s.id === 'familiar');
-                const kgAvailableInFamiliarSilo = (familiarSiloState?.currentQQ || 0) * KG_PER_QUINTAL;
+                const kgAvailableInFamiliarSilo = (silosRef.current.find(s => s.id === 'familiar')?.currentQQ || 0) * KG_PER_QUINTAL;
                 const canProduce = kgAvailableInFamiliarSilo >= kgConsumedThisTick;
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
