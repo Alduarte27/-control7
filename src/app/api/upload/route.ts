@@ -19,8 +19,12 @@ export async function POST(request: Request) {
     const imagePath = `${path}/${Date.now()}_${file.name}`;
     const storageRef = ref(storage, imagePath);
     
-    // Subir el archivo
-    const snapshot = await uploadBytes(storageRef, file, {
+    // Convertir el archivo a un buffer para subirlo desde el servidor
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+
+    // Subir el buffer del archivo
+    const snapshot = await uploadBytes(storageRef, buffer, {
       contentType: file.type,
     });
 
