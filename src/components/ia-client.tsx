@@ -1118,6 +1118,9 @@ export default function OperationsClient({
                            <Button onClick={() => resetSimulation(false)} variant="outline">
                                <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Simulación
                            </Button>
+                           <Button onClick={() => resetSimulation(true)} variant="outline">
+                               <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Todo
+                           </Button>
                        </div>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1155,25 +1158,34 @@ export default function OperationsClient({
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-4">
                             <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7">
-                                        <Settings2 className="h-4 w-4 text-muted-foreground" />
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Restaurar Configuración</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            ¿Estás seguro de que quieres borrar tu configuración guardada? Esto restaurará todos los parámetros de las máquinas, silos y enfardadoras a sus valores por defecto. Esta acción no se puede deshacer.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7">
+                                                    <Settings2 className="h-4 w-4 text-muted-foreground" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Restaurar Configuración</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        ¿Estás seguro de que quieres borrar tu configuración guardada? Esto restaurará todos los parámetros de las máquinas, silos y enfardadoras a sus valores por defecto. Esta acción no se puede deshacer.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Gestionar Configuración</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
                         </div>
                          <div className="text-right">
                             <p className="text-sm text-muted-foreground">Inventario para Producción</p>
