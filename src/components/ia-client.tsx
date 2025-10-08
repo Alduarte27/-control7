@@ -928,7 +928,7 @@ export default function OperationsClient({
                                         <span className="text-xl font-bold w-12 text-center">{masasToSend}</span>
                                         <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)} disabled={isTachosAuto}><Plus className="h-4 w-4" /></Button>
                                     </div>
-                                    <Button className="w-full" onClick={handleManualSendMasas} disabled={isTachosAuto || isSimulating}>Enviar a Silos</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasas} disabled={isTachosAuto}>Enviar a Silos</Button>
                                </div>
                            </div>
                         </div>
@@ -1226,7 +1226,7 @@ export default function OperationsClient({
              {editingSilo && (
                 <SiloEditDialog
                     open={!!editingSilo}
-                    onOpen-change={(isOpen) => !isOpen && setEditingSilo(null)}
+                    onOpenChange={(isOpen) => !isOpen && setEditingSilo(null)}
                     silo={editingSilo}
                     isTachos={editingSilo.id === 'tachos'}
                     onSave={handleSiloSave}
