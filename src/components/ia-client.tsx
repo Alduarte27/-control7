@@ -576,13 +576,13 @@ export default function OperationsClient({
         simulationIntervalRef.current = setInterval(() => {
             const currentSimState = simulationStateRef.current;
             const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
-
-            if (isTachosAuto && !goalMet && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
-                sendMasasToSilosRef.current(1);
+            
+            if (isTachosAuto && !goalMet && currentSimState.elapsedTime >= simulationStateRef.current.nextAutoTachosSendTime) {
                  simulationStateRef.current = {
                     ...simulationStateRef.current,
-                    nextAutoTachosSendTime: simulationStateRef.current.elapsedTime + (autoTachosInterval * 60),
+                    nextAutoTachosSendTime: currentSimState.elapsedTime + (autoTachosInterval * 60),
                 };
+                 sendMasasToSilosRef.current(1);
             } else if (goalMet) {
                 setIsTachosAuto(false);
             }
@@ -861,7 +861,7 @@ export default function OperationsClient({
                                <Slider
                                    id="sim-speed"
                                    min={1}
-                                   max={5}
+                                   max={10}
                                    step={0.1}
                                    value={[simulationSpeed]}
                                    onValueChange={(value) => setSimulationSpeed(value[0])}
