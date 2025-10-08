@@ -707,23 +707,20 @@ export default function OperationsClient({
         const tickRateMs = 50; 
         
         simulationIntervalRef.current = setInterval(() => {
-            const currentSimState = simulationStateRef.current;
-            const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
-            
-            if (isTachosAuto && !goalMet && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
-                 simulationStateRef.current = {
-                    ...currentSimState,
-                    nextAutoTachosSendTime: currentSimState.elapsedTime + (autoTachosInterval * 60),
-                };
-                sendMasasToSilosRef.current(1);
-            } else if (goalMet && isTachosAuto) {
-                setIsTachosAuto(false);
-            }
-
             setSimulationState(prev => {
                 if (prev.isFinished) {
                     pauseClock();
                     return prev;
+                }
+                
+                let nextAutoSendTime = prev.nextAutoTachosSendTime;
+                const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
+    
+                if (isTachosAuto && !goalMet && prev.elapsedTime >= prev.nextAutoTachosSendTime) {
+                    sendMasasToSilosRef.current(1);
+                    nextAutoSendTime = prev.elapsedTime + (autoTachosInterval * 60);
+                } else if (goalMet && isTachosAuto) {
+                    setIsTachosAuto(false);
                 }
 
                 const elapsedIncrement = (tickRateMs / 1000) * simulationSpeed;
@@ -761,7 +758,7 @@ export default function OperationsClient({
                         return newSilos;
                     });
                     pauseClock();
-                    return {...prev, elapsedTime: newElapsedTime, isFinished: true };
+                    return {...prev, elapsedTime: newElapsedTime, isFinished: true, nextAutoTachosSendTime: nextAutoSendTime };
                 }
 
                 const newMachineTotals = { ...prev.machineTotals };
@@ -843,6 +840,7 @@ export default function OperationsClient({
                     elapsedTime: newElapsedTime,
                     machineTotals: newMachineTotals,
                     wrappers: newWrappersState,
+                    nextAutoTachosSendTime: nextAutoSendTime,
                 };
             });
         }, tickRateMs);
