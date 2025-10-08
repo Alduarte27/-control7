@@ -24,7 +24,7 @@ import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { app, db, storage } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 
@@ -110,7 +110,6 @@ function MachineEditDialog({
     onOpenChange,
     onSave,
     onImageUpload,
-    isUploading,
 }: {
     machine: MachineState;
     products: ProductDefinition[];
@@ -118,9 +117,9 @@ function MachineEditDialog({
     onOpenChange: (open: boolean) => void;
     onSave: (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => void;
     onImageUpload: (file: File) => void;
-    isUploading: boolean;
 }) {
     const [editedMachine, setEditedMachine] = React.useState(machine);
+    const [isUploading, setIsUploading] = React.useState(false);
 
     React.useEffect(() => {
         setEditedMachine(machine);
@@ -136,10 +135,13 @@ function MachineEditDialog({
         setEditedMachine(newMachine);
     };
     
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        onImageUpload(file);
+
+        setIsUploading(true);
+        await onImageUpload(file);
+        setIsUploading(false);
     };
 
     const fileInputId = `modal-image-upload-${machine.id}`;
@@ -230,7 +232,6 @@ function SiloEditDialog({
     onOpenChange,
     onSave,
     onImageUpload,
-    isUploading,
     isTachos,
     tachosConfig,
     onTachosConfigChange
@@ -240,13 +241,13 @@ function SiloEditDialog({
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<SiloState, 'imageUrl'>) => void;
     onImageUpload: (file: File) => void;
-    isUploading: boolean;
     isTachos?: boolean;
     tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
     onTachosConfigChange?: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
     const [localTachosConfig, setLocalTachosConfig] = React.useState(tachosConfig);
+    const [isUploading, setIsUploading] = React.useState(false);
 
     React.useEffect(() => {
         setEditedSilo(silo);
@@ -263,10 +264,13 @@ function SiloEditDialog({
         setLocalTachosConfig(prev => (prev ? { ...prev, [field]: value } : undefined));
     };
 
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        onImageUpload(file);
+
+        setIsUploading(true);
+        await onImageUpload(file);
+        setIsUploading(false);
     };
 
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
@@ -398,7 +402,6 @@ function WrapperEditDialog({
     onOpenChange,
     onSave,
     onImageUpload,
-    isUploading,
 }: {
     wrapper: WrapperState;
     allMachines: MachineState[];
@@ -406,9 +409,9 @@ function WrapperEditDialog({
     onOpenChange: (open: boolean) => void;
     onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>) => void;
     onImageUpload: (file: File) => void;
-    isUploading: boolean;
 }) {
     const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
+    const [isUploading, setIsUploading] = React.useState(false);
 
     React.useEffect(() => {
         const { buffer, currentBundleProgress, totalBundles, conveyorBelt, ...configurableProps } = wrapper;
@@ -431,10 +434,13 @@ function WrapperEditDialog({
         });
     };
 
-    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        onImageUpload(file);
+
+        setIsUploading(true);
+        await onImageUpload(file);
+        setIsUploading(false);
     };
 
     const fileInputId = `wrapper-modal-image-upload-${wrapper.id}`;
@@ -557,7 +563,6 @@ export default function OperationsClient({
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
-    const [isUploading, setIsUploading] = React.useState(false);
     const [masasToSend, setMasasToSend] = React.useState(1);
 
     const getDefaultConfig = (): { params: SimulationParams; images: ImageUrlConfig } => ({
@@ -708,8 +713,7 @@ export default function OperationsClient({
     }, [saveParamsToLocalStorage]);
     
 
-    const handleImageSave = async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => {
-        setIsUploading(true);
+    const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => {
         try {
             const imagePath = `sim-images/${type}/${id}/${Date.now()}_${file.name}`;
             const storageRef = ref(storage, imagePath);
@@ -734,14 +738,9 @@ export default function OperationsClient({
 
         } catch (error) {
             console.error("Error uploading image:", error);
-            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
-        } finally {
-            setIsUploading(false);
-            if (type === 'machine') setEditingMachine(null);
-            if (type === 'silo' || type === 'tachos') setEditingSilo(null);
-            if (type === 'wrapper') setEditingWrapper(null);
+            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen. Verifica tu conexión a internet.', variant: 'destructive' });
         }
-    };
+    }, [toast]);
 
     const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => {
         setMachines(prev => prev.map(m => m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m));
@@ -1669,7 +1668,6 @@ export default function OperationsClient({
                     products={products}
                     onSave={handleMachineSave}
                     onImageUpload={(file) => handleImageSave('machine', editingMachine.id, file)}
-                    isUploading={isUploading}
                 />
             )}
              {editingSilo && (
@@ -1679,7 +1677,6 @@ export default function OperationsClient({
                     silo={editingSilo}
                     onSave={handleSiloSave}
                     onImageUpload={(file) => handleImageSave(editingSilo.id === 'tachos' ? 'tachos' : 'silo', editingSilo.id, file)}
-                    isUploading={isUploading}
                     isTachos={editingSilo.id === 'tachos'}
                     tachosConfig={{
                         isAuto: isTachosAuto,
@@ -1698,7 +1695,6 @@ export default function OperationsClient({
                     allMachines={machines}
                     onSave={handleWrapperSave}
                     onImageUpload={(file) => handleImageSave('wrapper', editingWrapper.id, file)}
-                    isUploading={isUploading}
                 />
             )}
         </>
@@ -1707,4 +1703,3 @@ export default function OperationsClient({
     </div>
   );
 }
-
