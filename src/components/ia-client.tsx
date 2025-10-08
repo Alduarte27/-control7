@@ -23,8 +23,8 @@ import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { db, storage } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { app } from '@/lib/firebase';
 
 
 const KG_PER_QUINTAL = 50;
@@ -32,6 +32,7 @@ const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 const LOCAL_STORAGE_KEY = 'control7-simulation-config';
 
+const storage = getStorage(app);
 
 type MachineState = {
     id: number;
@@ -114,7 +115,7 @@ function MachineEditDialog({
         setEditedMachine(machine);
     }, [machine]);
 
-    const handleFieldChange = (field: keyof Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>, value: any) => {
+    const handleFieldChange = (field: keyof Omit<MachineState, 'isSimulatingActive'>, value: any) => {
         const newMachine = { ...editedMachine, [field]: value };
         if (field === 'productId') {
             const product = products.find(p => p.id === value);
@@ -187,7 +188,20 @@ function MachineEditDialog({
                             <Upload className="mr-2 h-3 w-3" />
                             {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
+                        <div className="relative">
+                           <div className="absolute inset-0 flex items-center">
+                               <span className="w-full border-t" />
+                           </div>
+                           <div className="relative flex justify-center text-xs uppercase">
+                               <span className="bg-background px-2 text-muted-foreground">O</span>
+                           </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor={`image-url-${machine.id}`}>o Pega la URL de la Imagen</Label>
+                            <Input id={`image-url-${machine.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedMachine.imageUrl || ''} onChange={e => handleFieldChange('imageUrl', e.target.value)} />
+                        </div>
                     </div>
+                    <Separator />
                     <div className="space-y-1.5">
                         <Label htmlFor={`product-${machine.id}`}>Producto</Label>
                         <Select value={editedMachine.productId} onValueChange={(val) => handleFieldChange('productId', val)}>
@@ -229,8 +243,6 @@ function SiloEditDialog({
     onOpenChange,
     onSave,
     onImageSave,
-    tachosConfig,
-    onTachosConfigChange,
 }: {
     silo: SiloState;
     isTachos?: boolean;
@@ -238,29 +250,19 @@ function SiloEditDialog({
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: SiloState) => void;
     onImageSave: (id: string, imageUrl: string) => void;
-    tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
-    onTachosConfigChange?: (config: { isAuto?: boolean; interval?: number; isGoalEnabled?: boolean; goal?: number }) => void;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
     const [isUploading, setIsUploading] = React.useState(false);
     const { toast } = useToast();
 
-    // Local state for tachos config to manage inside the dialog
-    const [localTachosConfig, setLocalTachosConfig] = React.useState(tachosConfig);
-
     React.useEffect(() => {
         setEditedSilo(silo);
-        setLocalTachosConfig(tachosConfig);
-    }, [silo, tachosConfig]);
+    }, [silo]);
 
-    const handleFieldChange = (field: keyof Omit<SiloState, 'imageUrl'>, value: any) => {
+    const handleFieldChange = (field: keyof Omit<SiloState, 'imageUrl'> | 'imageUrl', value: any) => {
         setEditedSilo(prev => ({ ...prev, [field]: value }));
     };
-
-    const handleTachosFieldChange = (field: keyof typeof localTachosConfig, value: any) => {
-        setLocalTachosConfig(prev => ({ ...prev, [field]: value } as any));
-    };
-
+    
     const handleImageUpload = async (file: File) => {
         setIsUploading(true);
         try {
@@ -283,9 +285,6 @@ function SiloEditDialog({
     
     const handleSaveChanges = () => {
         onSave(editedSilo);
-        if (isTachos && onTachosConfigChange && localTachosConfig) {
-            onTachosConfigChange(localTachosConfig);
-        }
         onOpenChange(false);
     }
 
@@ -327,64 +326,29 @@ function SiloEditDialog({
                             <Upload className="mr-2 h-3 w-3" />
                             {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
+                         <div className="relative">
+                           <div className="absolute inset-0 flex items-center">
+                               <span className="w-full border-t" />
+                           </div>
+                           <div className="relative flex justify-center text-xs uppercase">
+                               <span className="bg-background px-2 text-muted-foreground">O</span>
+                           </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor={`image-url-${silo.id}`}>o Pega la URL de la Imagen</Label>
+                            <Input id={`image-url-${silo.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedSilo.imageUrl || ''} onChange={e => handleFieldChange('imageUrl', e.target.value)} />
+                        </div>
+                    </div>
+                    <Separator />
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`silo-name-${silo.id}`}>Nombre</Label>
+                      <Input id={`silo-name-${silo.id}`} type="text" value={editedSilo.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
                     </div>
                     {!isTachos && (
                         <div className="space-y-1.5">
                             <Label htmlFor={`silo-cap-${silo.id}`}>Capacidad Máx. (QQ)</Label>
                             <Input id={`silo-cap-${silo.id}`} type="number" value={editedSilo.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
                         </div>
-                    )}
-                    {isTachos && localTachosConfig && (
-                        <>
-                            <Separator />
-                            <div className="space-y-4">
-                                <h4 className="font-medium text-sm">Configuración de Tachos</h4>
-                                <div className="flex items-center justify-between">
-                                    <Label htmlFor="auto-mode-switch" className="text-sm">Modo Automático</Label>
-                                    <Switch
-                                        id="auto-mode-switch"
-                                        checked={localTachosConfig.isAuto}
-                                        onCheckedChange={(val) => handleTachosFieldChange('isAuto', val)}
-                                    />
-                                </div>
-                                
-                                <div className={cn("space-y-3 transition-opacity", !localTachosConfig.isAuto && "opacity-50")}>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
-                                        <Input
-                                            id="auto-interval"
-                                            type="number"
-                                            value={localTachosConfig.interval}
-                                            onChange={(e) => handleTachosFieldChange('interval', Number(e.target.value))}
-                                            disabled={!localTachosConfig.isAuto}
-                                            min="1"
-                                        />
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
-                                        <Switch
-                                            id="goal-mode-switch"
-                                            checked={localTachosConfig.isGoalEnabled}
-                                            onCheckedChange={(val) => handleTachosFieldChange('isGoalEnabled', val)}
-                                            disabled={!localTachosConfig.isAuto}
-                                        />
-                                    </div>
-                                    {localTachosConfig.isGoalEnabled && (
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
-                                            <Input
-                                                id="auto-goal"
-                                                type="number"
-                                                value={localTachosConfig.goal}
-                                                onChange={(e) => handleTachosFieldChange('goal', Number(e.target.value))}
-                                                disabled={!localTachosConfig.isAuto || !localTachosConfig.isGoalEnabled}
-                                                min="1"
-                                            />
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </>
                     )}
                 </div>
                 <DialogFooter>
@@ -395,7 +359,6 @@ function SiloEditDialog({
         </Dialog>
     );
 }
-
 
 function WrapperEditDialog({
     wrapper,
@@ -421,7 +384,7 @@ function WrapperEditDialog({
         setEditedWrapper(configurableProps);
     }, [wrapper]);
 
-    const handleFieldChange = (field: keyof Omit<typeof editedWrapper, 'imageUrl'>, value: any) => {
+    const handleFieldChange = (field: keyof Omit<typeof editedWrapper, 'imageUrl'> | 'imageUrl', value: any) => {
         setEditedWrapper(prev => ({ ...prev, [field]: value }));
     };
 
@@ -499,7 +462,20 @@ function WrapperEditDialog({
                             <Upload className="mr-2 h-3 w-3" />
                             {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
+                        <div className="relative">
+                           <div className="absolute inset-0 flex items-center">
+                               <span className="w-full border-t" />
+                           </div>
+                           <div className="relative flex justify-center text-xs uppercase">
+                               <span className="bg-background px-2 text-muted-foreground">O</span>
+                           </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor={`image-url-${wrapper.id}`}>o Pega la URL de la Imagen</Label>
+                            <Input id={`image-url-${wrapper.id}`} type="text" placeholder="https://firebasestorage.googleapis.com/..." value={editedWrapper.imageUrl || ''} onChange={e => handleFieldChange('imageUrl', e.target.value)} />
+                        </div>
                     </div>
+                    <Separator />
                     <div className="space-y-1.5">
                         <Label htmlFor={`wrapper-name-${wrapper.id}`}>Nombre</Label>
                         <Input id={`wrapper-name-${wrapper.id}`} type="text" value={editedWrapper.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
@@ -549,6 +525,93 @@ function WrapperEditDialog({
     );
 }
 
+function TachosControlDialog({
+    open,
+    onOpenChange,
+    config,
+    onConfigChange,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
+    onConfigChange: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
+}) {
+    const [localConfig, setLocalConfig] = React.useState(config);
+
+    React.useEffect(() => {
+        setLocalConfig(config);
+    }, [config]);
+
+    const handleFieldChange = (field: keyof typeof config, value: any) => {
+        setLocalConfig(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleSave = () => {
+        onConfigChange(localConfig);
+        onOpenChange(false);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Configuración de Tachos</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="auto-mode-switch" className="text-sm">Modo Automático</Label>
+                        <Switch
+                            id="auto-mode-switch"
+                            checked={localConfig.isAuto}
+                            onCheckedChange={(val) => handleFieldChange('isAuto', val)}
+                        />
+                    </div>
+                    
+                    <div className={cn("space-y-3 transition-opacity", !localConfig.isAuto && "opacity-50")}>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
+                            <Input
+                                id="auto-interval"
+                                type="number"
+                                value={localConfig.interval}
+                                onChange={(e) => handleFieldChange('interval', Number(e.target.value))}
+                                disabled={!localConfig.isAuto}
+                                min="1"
+                            />
+                        </div>
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
+                            <Switch
+                                id="goal-mode-switch"
+                                checked={localConfig.isGoalEnabled}
+                                onCheckedChange={(val) => handleFieldChange('isGoalEnabled', val)}
+                                disabled={!localConfig.isAuto}
+                            />
+                        </div>
+                        {localConfig.isGoalEnabled && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
+                                <Input
+                                    id="auto-goal"
+                                    type="number"
+                                    value={localConfig.goal}
+                                    onChange={(e) => handleFieldChange('goal', Number(e.target.value))}
+                                    disabled={!localConfig.isAuto || !localConfig.isGoalEnabled}
+                                    min="1"
+                                />
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
+                    <Button onClick={handleSave}>Guardar</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function OperationsClient({ 
   prefetchedProducts,
 }: { 
@@ -573,6 +636,7 @@ export default function OperationsClient({
     const [masasToSend, setMasasToSend] = React.useState(1);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
+    const [isTachosControlOpen, setIsTachosControlOpen] = React.useState(false);
 
     const getDefaultConfig = (): SimulationConfig => ({
         machines: [
@@ -594,14 +658,23 @@ export default function OperationsClient({
         autoTachosGoal: 6,
     });
 
-    const saveConfigToLocalStorage = (config: SimulationConfig) => {
+    const saveConfigToLocalStorage = React.useCallback(() => {
         try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(config));
+            const configToSave: SimulationConfig = {
+                machines: machines.map(({ isSimulatingActive, ...m }) => m),
+                wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, ...w }) => w),
+                silos: silos,
+                tachosState: tachosState,
+                autoTachosInterval: autoTachosInterval,
+                autoTachosGoal: autoTachosGoal,
+            };
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(configToSave));
         } catch (error) {
             console.error("Error saving config to localStorage", error);
             toast({ title: 'Error', description: 'No se pudo guardar la configuración.', variant: 'destructive' });
         }
-    };
+    }, [machines, wrappers, silos, tachosState, autoTachosInterval, autoTachosGoal, toast]);
+
 
     const loadConfig = React.useCallback(() => {
         try {
@@ -629,7 +702,6 @@ export default function OperationsClient({
                     }),
                     tachosState: { ...defaultConfig.tachosState, ...savedConfig.tachosState },
                 };
-                toast({ title: 'Configuración Cargada', description: 'Se ha cargado tu configuración guardada.' });
             } else {
                 config = defaultConfig;
             }
@@ -657,26 +729,13 @@ export default function OperationsClient({
         loadConfig();
     }, [loadConfig]);
 
-    const handleConfigSave = () => {
-        const configToSave: SimulationConfig = {
-            machines: machines.map(({ isSimulatingActive, ...m }) => m),
-            wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, ...w }) => w),
-            silos: silos,
-            tachosState: tachosState,
-            autoTachosInterval: autoTachosInterval,
-            autoTachosGoal: autoTachosGoal,
-        };
-        saveConfigToLocalStorage(configToSave);
-    };
 
     const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => {
         setMachines(prev => prev.map(m => m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m));
-        React.useEffect(() => handleConfigSave(), [machines]);
     };
 
     const handleWrapperSave = (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>) => {
         setWrappers(prev => prev.map(w => w.id === updatedWrapper.id ? { ...w, ...updatedWrapper } : w));
-        React.useEffect(() => handleConfigSave(), [wrappers]);
     };
 
     const handleSiloSave = (updatedSilo: SiloState) => {
@@ -685,47 +744,22 @@ export default function OperationsClient({
         } else {
             setSilos(prev => prev.map(s => s.id === updatedSilo.id ? updatedSilo : s));
         }
-        React.useEffect(() => handleConfigSave(), [silos, tachosState]);
     };
     
     const handleImageSave = (id: string | number, imageUrl: string) => {
-        let updated = false;
-        const newMachines = machines.map(m => {
-            if (m.id === id) {
-                updated = true;
-                return { ...m, imageUrl };
-            }
-            return m;
-        });
-        if (updated) { setMachines(newMachines); return; }
-
-        const newWrappers = wrappers.map(w => {
-            if (w.id === id) {
-                updated = true;
-                return { ...w, imageUrl };
-            }
-            return w;
-        });
-        if (updated) { setWrappers(newWrappers); return; }
-
-        const newSilos = silos.map(s => {
-            if (s.id === id) {
-                updated = true;
-                return { ...s, imageUrl };
-            }
-            return s;
-        });
-        if (updated) { setSilos(newSilos); return; }
-
+        setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl } : m));
+        setWrappers(prev => prev.map(w => w.id === id ? { ...w, imageUrl } : w));
+        setSilos(prev => prev.map(s => s.id === id ? { ...s, imageUrl } : s));
         if (tachosState.id === id) {
             setTachosState(prev => ({ ...prev, imageUrl }));
         }
     };
     
     React.useEffect(() => {
-        if (isClient) handleConfigSave();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [machines, wrappers, silos, tachosState, autoTachosInterval, autoTachosGoal]);
+        if (isClient) {
+          saveConfigToLocalStorage();
+        }
+    }, [isClient, saveConfigToLocalStorage]);
 
     const handleTachosControlSave = (config: any) => {
         setIsTachosAuto(config.isAuto);
@@ -1290,13 +1324,18 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                            <div className='flex justify-between items-start'>
+                             <div className='flex justify-between items-start'>
                                 <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
                                   {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                 </h3>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
-                                    <Edit className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-1">
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsTachosControlOpen(true)}>
+                                        <Zap className="h-4 w-4" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
+                                        <Edit className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
                                <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
@@ -1626,7 +1665,7 @@ export default function OperationsClient({
                     machine={editingMachine}
                     products={products}
                     onSave={handleMachineSave}
-                    onImageSave={(machineId, url) => handleImageSave(machineId, url)}
+                    onImageSave={handleImageSave}
                 />
             )}
              {editingSilo && (
@@ -1636,14 +1675,7 @@ export default function OperationsClient({
                     silo={editingSilo}
                     isTachos={editingSilo.id === 'tachos'}
                     onSave={handleSiloSave}
-                    onImageSave={(siloId, url) => handleImageSave(siloId, url)}
-                    tachosConfig={{
-                        isAuto: isTachosAuto,
-                        interval: autoTachosInterval,
-                        isGoalEnabled: isTachosGoalEnabled,
-                        goal: autoTachosGoal
-                    }}
-                    onTachosConfigChange={handleTachosControlSave}
+                    onImageSave={handleImageSave}
                 />
             )}
             {editingWrapper && (
@@ -1653,9 +1685,20 @@ export default function OperationsClient({
                     wrapper={editingWrapper}
                     allMachines={machines}
                     onSave={handleWrapperSave}
-                    onImageSave={(wrapperId, url) => handleImageSave(wrapperId, url)}
+                    onImageSave={handleImageSave}
                 />
             )}
+            <TachosControlDialog 
+                open={isTachosControlOpen}
+                onOpenChange={setIsTachosControlOpen}
+                config={{
+                    isAuto: isTachosAuto,
+                    interval: autoTachosInterval,
+                    isGoalEnabled: isTachosGoalEnabled,
+                    goal: autoTachosGoal
+                }}
+                onConfigChange={handleTachosControlSave}
+            />
         </>
         )}
       </main>
