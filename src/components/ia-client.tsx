@@ -50,13 +50,17 @@ type ConveyorItem = {
     units: number;
 };
 
+type WrapperState = {
+    buffer: number;
+    currentBundleProgress: number;
+    totalBundles: number;
+};
+
 type SimulationState = {
     elapsedTime: number; // in seconds
     machineTotals: { [machineId: number]: number }; // Total units produced by each machine
     conveyorBelt: ConveyorItem[]; // Units currently in transit
-    wrapperBuffer: number; // Units that have arrived and are ready for wrapping
-    currentBundleProgress: number;
-    totalBundles: number;
+    wrappers: { [wrapperId: number]: WrapperState }; // State for each wrapper
     isFinished: boolean;
     nextAutoTachosSendTime: number;
 };
@@ -424,9 +428,10 @@ export default function OperationsClient({
         elapsedTime: 0,
         machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
         conveyorBelt: [],
-        wrapperBuffer: 0,
-        currentBundleProgress: 0,
-        totalBundles: 0,
+        wrappers: {
+            1: { buffer: 0, currentBundleProgress: 0, totalBundles: 0 },
+            2: { buffer: 0, currentBundleProgress: 0, totalBundles: 0 },
+        },
         isFinished: false,
         nextAutoTachosSendTime: autoTachosInterval * 60,
     };
@@ -463,6 +468,7 @@ export default function OperationsClient({
         }
     }, [totalMasasSent, isTachosAuto, isTachosGoalEnabled, autoTachosGoal]);
 
+    const totalWrapperCapacity = wrapper1Capacity + wrapper2Capacity;
 
     const staticSimulationResults = React.useMemo(() => {
         const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
@@ -472,7 +478,6 @@ export default function OperationsClient({
             return sum + effectiveBagsPerMinute;
         }, 0);
         
-        const totalWrapperCapacity = wrapper1Capacity + wrapper2Capacity;
         const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, totalWrapperCapacity);
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > totalWrapperCapacity;
         
@@ -489,7 +494,7 @@ export default function OperationsClient({
             bundlesPerMinute,
         };
 
-    }, [machines, wrapper1Capacity, wrapper2Capacity, unitsPerBundle]);
+    }, [machines, totalWrapperCapacity, unitsPerBundle]);
 
     const liveSimulationResults = React.useMemo(() => {
         let totalKgProduced = 0;
@@ -529,11 +534,12 @@ export default function OperationsClient({
         return {
             totalKgProduced,
             totalQuintalesProduced: totalKgProduced / KG_PER_QUINTAL,
+            totalBundlesProduced: simulationState.wrappers[1].totalBundles + simulationState.wrappers[2].totalBundles,
             timeToEmptyHours: timeToEmptySeconds / 3600,
             unitsInTransit: simulationState.conveyorBelt.reduce((sum, item) => sum + item.units, 0),
         }
 
-    }, [simulationState.machineTotals, simulationState.conveyorBelt]);
+    }, [simulationState.machineTotals, simulationState.conveyorBelt, simulationState.wrappers]);
 
     React.useEffect(() => {
         setIsClient(true);
@@ -603,8 +609,7 @@ export default function OperationsClient({
                     return prev;
                 }
 
-                const speedMultiplier = simulationSpeed;
-                const elapsedIncrement = (tickRateMs / 1000) * speedMultiplier;
+                const elapsedIncrement = (tickRateMs / 1000) * simulationSpeed;
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
 
                 const currentMachines = machinesRef.current;
@@ -643,9 +648,6 @@ export default function OperationsClient({
                 }
 
                 const newMachineTotals = { ...prev.machineTotals };
-                let newWrapperBuffer = prev.wrapperBuffer;
-                let newCurrentBundleProgress = prev.currentBundleProgress;
-                let newTotalBundles = prev.totalBundles;
                 let newConveyorBelt = [...prev.conveyorBelt];
 
                 if (canProduce) {
@@ -680,33 +682,40 @@ export default function OperationsClient({
                 });
                 
                 const totalArrivedUnits = arrivedItems.reduce((sum, item) => sum + item.units, 0);
-                newWrapperBuffer += totalArrivedUnits;
                 newConveyorBelt = remainingOnBelt;
-
-
-                const totalWrapperCapacity = wrapper1CapacityRef.current + wrapper2CapacityRef.current;
-                const wrapperUnitsPerSecond = totalWrapperCapacity / 60;
-                const unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
-                const unitsToTakeFromBuffer = Math.min(unitsToProcessThisTick, newWrapperBuffer);
                 
-                newWrapperBuffer -= unitsToTakeFromBuffer;
-                newCurrentBundleProgress += unitsToTakeFromBuffer;
+                const newWrappers = { ...prev.wrappers };
+                
+                // Distribute arrived units between wrappers
+                const unitsForWrapper1 = totalArrivedUnits / 2;
+                const unitsForWrapper2 = totalArrivedUnits / 2;
+                newWrappers[1] = { ...newWrappers[1], buffer: newWrappers[1].buffer + unitsForWrapper1 };
+                newWrappers[2] = { ...newWrappers[2], buffer: newWrappers[2].buffer + unitsForWrapper2 };
 
-                const currentUnitsPerBundle = unitsPerBundleRef.current;
-                if (newCurrentBundleProgress >= currentUnitsPerBundle && currentUnitsPerBundle > 0) {
-                    const bundlesCreated = Math.floor(newCurrentBundleProgress / currentUnitsPerBundle);
-                    newTotalBundles += bundlesCreated;
-                    newCurrentBundleProgress %= currentUnitsPerBundle;
-                }
+                // Process units in each wrapper
+                [1, 2].forEach(wrapperId => {
+                    const capacity = wrapperId === 1 ? wrapper1CapacityRef.current : wrapper2CapacityRef.current;
+                    const wrapperUnitsPerSecond = capacity / 60;
+                    const unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
+                    const unitsToTakeFromBuffer = Math.min(unitsToProcessThisTick, newWrappers[wrapperId].buffer);
+
+                    newWrappers[wrapperId].buffer -= unitsToTakeFromBuffer;
+                    newWrappers[wrapperId].currentBundleProgress += unitsToTakeFromBuffer;
+                    
+                    const currentUnitsPerBundle = unitsPerBundleRef.current;
+                    if (newWrappers[wrapperId].currentBundleProgress >= currentUnitsPerBundle && currentUnitsPerBundle > 0) {
+                        const bundlesCreated = Math.floor(newWrappers[wrapperId].currentBundleProgress / currentUnitsPerBundle);
+                        newWrappers[wrapperId].totalBundles += bundlesCreated;
+                        newWrappers[wrapperId].currentBundleProgress %= currentUnitsPerBundle;
+                    }
+                });
 
                 return {
                     ...prev,
                     elapsedTime: newElapsedTime,
                     machineTotals: newMachineTotals,
                     conveyorBelt: newConveyorBelt,
-                    wrapperBuffer: newWrapperBuffer,
-                    currentBundleProgress: newCurrentBundleProgress,
-                    totalBundles: newTotalBundles,
+                    wrappers: newWrappers,
                 };
             });
         }, tickRateMs);
@@ -933,11 +942,11 @@ export default function OperationsClient({
                                     </div>
                                     <Label className="text-center block">Masas a Enviar ({MASA_QQ_AMOUNT} QQ c/u)</Label>
                                     <div className="flex items-center justify-center gap-2">
-                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => Math.max(1, p - 1))} disabled={isTachosAuto || isSimulating}><Minus className="h-4 w-4" /></Button>
+                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => Math.max(1, p - 1))} disabled={isTachosAuto}><Minus className="h-4 w-4" /></Button>
                                         <span className="text-xl font-bold w-12 text-center">{masasToSend}</span>
-                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)} disabled={isTachosAuto || isSimulating}><Plus className="h-4 w-4" /></Button>
+                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)} disabled={isTachosAuto}><Plus className="h-4 w-4" /></Button>
                                     </div>
-                                    <Button className="w-full" onClick={handleManualSendMasas} disabled={isTachosAuto || isSimulating}>Enviar a Silos</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasas} disabled={isTachosAuto}>Enviar a Silos</Button>
                                </div>
                            </div>
                         </div>
@@ -1088,66 +1097,62 @@ export default function OperationsClient({
                         <CardTitle className="flex items-center gap-2">3. Enfardadora y Empaque Final</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Wrapper 1 */}
-                        <div className="p-4 border rounded-lg space-y-3 bg-background">
-                            <Label className="font-bold text-primary">Enfardadora 1</Label>
-                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                                <Image
-                                    src={wrapper1ImageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
-                                    alt="Enfardadora 1"
-                                    width={600}
-                                    height={400}
-                                    className="object-contain w-full h-full"
-                                />
-                            </div>
-                            <input
-                                type="file"
-                                id="wrapper1-image-upload"
-                                className="hidden"
-                                accept="image/*"
-                                onChange={(e) => e.target.files && handleWrapperImageUpload(e.target.files[0], 1)}
-                            />
-                            <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById('wrapper1-image-upload')?.click()}>
-                                <Upload className="mr-2 h-3 w-3" />
-                                Cambiar Foto
-                            </Button>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="wrapper1-capacity">Capacidad Máxima (fundas/min)</Label>
-                                <Input id="wrapper1-capacity" type="number" value={wrapper1Capacity} onChange={e => setWrapper1Capacity(Number(e.target.value))}/>
-                            </div>
-                        </div>
+                        {[1, 2].map((wrapperId) => {
+                            const wrapperState = simulationState.wrappers[wrapperId as 1 | 2];
+                            const wrapperImageUrl = wrapperId === 1 ? wrapper1ImageUrl : wrapper2ImageUrl;
+                            const handleImageUpload = (file: File) => handleWrapperImageUpload(file, wrapperId as 1 | 2);
+                            const capacity = wrapperId === 1 ? wrapper1Capacity : wrapper2Capacity;
+                            const setCapacity = wrapperId === 1 ? setWrapper1Capacity : setWrapper2Capacity;
 
-                        {/* Wrapper 2 */}
-                        <div className="p-4 border rounded-lg space-y-3 bg-background">
-                            <Label className="font-bold text-primary">Enfardadora 2</Label>
-                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                                <Image
-                                    src={wrapper2ImageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
-                                    alt="Enfardadora 2"
-                                    width={600}
-                                    height={400}
-                                    className="object-contain w-full h-full"
-                                />
-                            </div>
-                            <input
-                                type="file"
-                                id="wrapper2-image-upload"
-                                className="hidden"
-                                accept="image/*"
-                                onChange={(e) => e.target.files && handleWrapperImageUpload(e.target.files[0], 2)}
-                            />
-                            <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById('wrapper2-image-upload')?.click()}>
-                                <Upload className="mr-2 h-3 w-3" />
-                                Cambiar Foto
-                            </Button>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="wrapper2-capacity">Capacidad Máxima (fundas/min)</Label>
-                                <Input id="wrapper2-capacity" type="number" value={wrapper2Capacity} onChange={e => setWrapper2Capacity(Number(e.target.value))}/>
-                            </div>
-                        </div>
+                            return (
+                                <div key={wrapperId} className="p-4 border rounded-lg space-y-3 bg-background">
+                                    <Label className="font-bold text-primary">Enfardadora {wrapperId}</Label>
+                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                        <Image
+                                            src={wrapperImageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                            alt={`Enfardadora ${wrapperId}`}
+                                            width={600}
+                                            height={400}
+                                            className="object-contain w-full h-full"
+                                        />
+                                    </div>
+                                    <input
+                                        type="file"
+                                        id={`wrapper${wrapperId}-image-upload`}
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])}
+                                    />
+                                    <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(`wrapper${wrapperId}-image-upload`)?.click()}>
+                                        <Upload className="mr-2 h-3 w-3" />
+                                        Cambiar Foto
+                                    </Button>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor={`wrapper${wrapperId}-capacity`}>Capacidad Máxima (fundas/min)</Label>
+                                        <Input id={`wrapper${wrapperId}-capacity`} type="number" value={capacity} onChange={e => setCapacity(Number(e.target.value))}/>
+                                    </div>
+                                    <div className="space-y-4 rounded-lg bg-muted/30 p-3 border">
+                                        <div className="grid grid-cols-2 gap-2 text-center">
+                                            <div>
+                                                <p className="text-xs text-muted-foreground">En Cola</p>
+                                                <p className="font-bold text-lg text-blue-600">{Math.floor(wrapperState.buffer).toLocaleString()}</p>
+                                            </div>
+                                             <div>
+                                                <p className="text-xs text-muted-foreground">Total Fardos</p>
+                                                <p className="font-bold text-lg text-green-600">{wrapperState.totalBundles.toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                         <div>
+                                             <Label className="text-xs">Fardo Actual ({Math.floor(wrapperState.currentBundleProgress)}/{unitsPerBundle} fundas)</Label>
+                                             <Progress value={(wrapperState.currentBundleProgress / (unitsPerBundle || 1)) * 100} />
+                                         </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
 
                         {/* Global Wrapper Settings */}
-                        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
                             <div className="space-y-1.5">
                                 <Label htmlFor="units-per-bundle">Unidades por Fardo</Label>
                                 <Input id="units-per-bundle" type="number" value={unitsPerBundle} onChange={e => setUnitsPerBundle(Number(e.target.value))}/>
@@ -1156,25 +1161,9 @@ export default function OperationsClient({
                                 <Label htmlFor="conveyor-delay">Retraso de Banda (segundos)</Label>
                                 <Input id="conveyor-delay" type="number" value={conveyorDelay} onChange={e => setConveyorDelay(Number(e.target.value))}/>
                             </div>
-                             <div className="sm:col-span-2 space-y-4 rounded-lg bg-muted/30 p-3 border">
-                                 <div className="grid grid-cols-3 gap-2 text-center">
-                                    <div>
-                                        <p className="text-xs text-muted-foreground">En Transporte</p>
-                                        <p className="font-bold text-lg text-orange-500">{Math.floor(liveSimulationResults.unitsInTransit).toLocaleString()}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-xs text-muted-foreground">En Cola</p>
-                                        <p className="font-bold text-lg text-blue-600">{Math.floor(simulationState.wrapperBuffer).toLocaleString()}</p>
-                                    </div>
-                                     <div>
-                                        <p className="text-xs text-muted-foreground">Total Fardos</p>
-                                        <p className="font-bold text-lg text-green-600">{simulationState.totalBundles.toLocaleString()}</p>
-                                    </div>
-                                 </div>
-                                 <div>
-                                     <Label className="text-xs">Fardo Actual ({Math.floor(simulationState.currentBundleProgress)}/{unitsPerBundle} fundas)</Label>
-                                     <Progress value={(simulationState.currentBundleProgress / (unitsPerBundle || 1)) * 100} />
-                                 </div>
+                             <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-center">
+                                <p className="text-xs text-muted-foreground">Fundas en Transporte</p>
+                                <p className="font-bold text-lg text-orange-500">{Math.floor(liveSimulationResults.unitsInTransit).toLocaleString()}</p>
                             </div>
                         </div>
                     </CardContent>
@@ -1185,7 +1174,7 @@ export default function OperationsClient({
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <KpiCard 
                             title="Total Fardos Producidos" 
-                            value={simulationState.totalBundles} 
+                            value={liveSimulationResults.totalBundlesProduced} 
                             icon={PackageCheck} 
                             description="Suma total de fardos que ha completado la enfardadora." 
                             fractionDigits={0} 
