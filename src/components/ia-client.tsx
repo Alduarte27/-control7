@@ -24,7 +24,8 @@ import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { app } from '@/lib/firebase';
+import { app, db } from '@/lib/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 
 const KG_PER_QUINTAL = 50;
@@ -80,6 +81,8 @@ type SimulationConfig = {
     tachosState: SiloState;
     autoTachosInterval: number;
     autoTachosGoal: number;
+    isTachosAuto: boolean;
+    isTachosGoalEnabled: boolean;
 };
 
 type SimulationState = {
@@ -98,14 +101,12 @@ function MachineEditDialog({
     open,
     onOpenChange,
     onSave,
-    onImageSave,
 }: {
     machine: MachineState;
     products: ProductDefinition[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => void;
-    onImageSave: (machineId: number, imageUrl: string) => void;
 }) {
     const [editedMachine, setEditedMachine] = React.useState(machine);
     const [isUploading, setIsUploading] = React.useState(false);
@@ -131,8 +132,7 @@ function MachineEditDialog({
             const storageRef = ref(storage, `sim-images/machine-${machine.id}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            onImageSave(machine.id, downloadURL);
-            setEditedMachine(prev => ({...prev, imageUrl: downloadURL}));
+            handleFieldChange('imageUrl', downloadURL);
             toast({ title: 'Imagen Subida', description: 'La imagen de la máquina ha sido actualizada.' });
         } catch (error) {
             console.error("Error uploading image:", error);
@@ -239,28 +239,38 @@ function MachineEditDialog({
 function SiloEditDialog({
     silo,
     isTachos,
+    tachosConfig,
+    onTachosConfigChange,
     open,
     onOpenChange,
     onSave,
-    onImageSave,
 }: {
     silo: SiloState;
     isTachos?: boolean;
+    tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
+    onTachosConfigChange?: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: SiloState) => void;
-    onImageSave: (id: string, imageUrl: string) => void;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
+    const [localTachosConfig, setLocalTachosConfig] = React.useState(tachosConfig);
     const [isUploading, setIsUploading] = React.useState(false);
     const { toast } = useToast();
 
     React.useEffect(() => {
         setEditedSilo(silo);
-    }, [silo]);
+        if (isTachos) {
+            setLocalTachosConfig(tachosConfig);
+        }
+    }, [silo, tachosConfig, isTachos]);
 
     const handleFieldChange = (field: keyof Omit<SiloState, 'imageUrl'> | 'imageUrl', value: any) => {
         setEditedSilo(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleTachosConfigFieldChange = (field: keyof typeof localTachosConfig, value: any) => {
+        setLocalTachosConfig(prev => (prev ? { ...prev, [field]: value } : undefined));
     };
     
     const handleImageUpload = async (file: File) => {
@@ -270,8 +280,7 @@ function SiloEditDialog({
             const storageRef = ref(storage, `${imageId}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            onImageSave(silo.id, downloadURL);
-            setEditedSilo(prev => ({...prev, imageUrl: downloadURL}));
+            handleFieldChange('imageUrl', downloadURL);
             toast({ title: 'Imagen Subida', description: `La imagen de ${silo.name} ha sido actualizada.` });
         } catch (error) {
             console.error("Error uploading image:", error);
@@ -285,6 +294,9 @@ function SiloEditDialog({
     
     const handleSaveChanges = () => {
         onSave(editedSilo);
+        if (isTachos && localTachosConfig && onTachosConfigChange) {
+            onTachosConfigChange(localTachosConfig);
+        }
         onOpenChange(false);
     }
 
@@ -305,7 +317,7 @@ function SiloEditDialog({
                                </div>
                            ) : (
                                 <Image
-                                    src={editedSilo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                    src={editedSilo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"}
                                     alt={editedSilo.name}
                                     width={600}
                                     height={400}
@@ -350,6 +362,57 @@ function SiloEditDialog({
                             <Input id={`silo-cap-${silo.id}`} type="number" value={editedSilo.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
                         </div>
                     )}
+                    {isTachos && localTachosConfig && (
+                        <>
+                            <Separator />
+                            <div className="space-y-4">
+                                <h4 className="font-medium text-sm">Configuración de Automatización</h4>
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="auto-mode-switch" className="text-sm">Modo Automático</Label>
+                                    <Switch
+                                        id="auto-mode-switch"
+                                        checked={localTachosConfig.isAuto}
+                                        onCheckedChange={(val) => handleTachosConfigFieldChange('isAuto', val)}
+                                    />
+                                </div>
+                                <div className={cn("space-y-3 transition-opacity", !localTachosConfig.isAuto && "opacity-50")}>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
+                                        <Input
+                                            id="auto-interval"
+                                            type="number"
+                                            value={localTachosConfig.interval}
+                                            onChange={(e) => handleTachosConfigFieldChange('interval', Number(e.target.value))}
+                                            disabled={!localTachosConfig.isAuto}
+                                            min="1"
+                                        />
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                        <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
+                                        <Switch
+                                            id="goal-mode-switch"
+                                            checked={localTachosConfig.isGoalEnabled}
+                                            onCheckedChange={(val) => handleTachosConfigFieldChange('isGoalEnabled', val)}
+                                            disabled={!localTachosConfig.isAuto}
+                                        />
+                                    </div>
+                                    {localTachosConfig.isGoalEnabled && (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
+                                            <Input
+                                                id="auto-goal"
+                                                type="number"
+                                                value={localTachosConfig.goal}
+                                                onChange={(e) => handleTachosConfigFieldChange('goal', Number(e.target.value))}
+                                                disabled={!localTachosConfig.isAuto || !localTachosConfig.isGoalEnabled}
+                                                min="1"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
@@ -366,14 +429,12 @@ function WrapperEditDialog({
     open,
     onOpenChange,
     onSave,
-    onImageSave,
 }: {
     wrapper: WrapperState;
     allMachines: MachineState[];
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>) => void;
-    onImageSave: (wrapperId: string, imageUrl: string) => void;
 }) {
     const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
     const [isUploading, setIsUploading] = React.useState(false);
@@ -406,8 +467,7 @@ function WrapperEditDialog({
             const storageRef = ref(storage, `sim-images/wrapper-${wrapper.id}-${Date.now()}`);
             const snapshot = await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(snapshot.ref);
-            onImageSave(wrapper.id, downloadURL);
-            setEditedWrapper(prev => ({...prev, imageUrl: downloadURL}));
+            handleFieldChange('imageUrl', downloadURL);
             toast({ title: 'Imagen Subida', description: `La imagen de ${wrapper.name} ha sido actualizada.` });
         } catch (error) {
             console.error("Error uploading image:", error);
@@ -441,7 +501,7 @@ function WrapperEditDialog({
                                </div>
                            ) : (
                                 <Image
-                                    src={editedWrapper.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                    src={editedWrapper.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media"}
                                     alt={editedWrapper.name}
                                     width={600}
                                     height={400}
@@ -525,93 +585,6 @@ function WrapperEditDialog({
     );
 }
 
-function TachosControlDialog({
-    open,
-    onOpenChange,
-    config,
-    onConfigChange,
-}: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
-    onConfigChange: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
-}) {
-    const [localConfig, setLocalConfig] = React.useState(config);
-
-    React.useEffect(() => {
-        setLocalConfig(config);
-    }, [config]);
-
-    const handleFieldChange = (field: keyof typeof config, value: any) => {
-        setLocalConfig(prev => ({ ...prev, [field]: value }));
-    };
-
-    const handleSave = () => {
-        onConfigChange(localConfig);
-        onOpenChange(false);
-    };
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Configuración de Tachos</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                    <div className="flex items-center justify-between">
-                        <Label htmlFor="auto-mode-switch" className="text-sm">Modo Automático</Label>
-                        <Switch
-                            id="auto-mode-switch"
-                            checked={localConfig.isAuto}
-                            onCheckedChange={(val) => handleFieldChange('isAuto', val)}
-                        />
-                    </div>
-                    
-                    <div className={cn("space-y-3 transition-opacity", !localConfig.isAuto && "opacity-50")}>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
-                            <Input
-                                id="auto-interval"
-                                type="number"
-                                value={localConfig.interval}
-                                onChange={(e) => handleFieldChange('interval', Number(e.target.value))}
-                                disabled={!localConfig.isAuto}
-                                min="1"
-                            />
-                        </div>
-                        <div className="flex items-center justify-between">
-                            <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
-                            <Switch
-                                id="goal-mode-switch"
-                                checked={localConfig.isGoalEnabled}
-                                onCheckedChange={(val) => handleFieldChange('isGoalEnabled', val)}
-                                disabled={!localConfig.isAuto}
-                            />
-                        </div>
-                        {localConfig.isGoalEnabled && (
-                            <div className="space-y-1.5">
-                                <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
-                                <Input
-                                    id="auto-goal"
-                                    type="number"
-                                    value={localConfig.goal}
-                                    onChange={(e) => handleFieldChange('goal', Number(e.target.value))}
-                                    disabled={!localConfig.isAuto || !localConfig.isGoalEnabled}
-                                    min="1"
-                                />
-                            </div>
-                        )}
-                    </div>
-                </div>
-                <DialogFooter>
-                    <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
-                    <Button onClick={handleSave}>Guardar</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
 export default function OperationsClient({ 
   prefetchedProducts,
 }: { 
@@ -628,34 +601,35 @@ export default function OperationsClient({
     const [tachosState, setTachosState] = React.useState<SiloState>({ id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: null });
     const [autoTachosInterval, setAutoTachosInterval] = React.useState(10);
     const [autoTachosGoal, setAutoTachosGoal] = React.useState(6);
+    const [isTachosAuto, setIsTachosAuto] = React.useState(false);
+    const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
     
     // --- UI State ---
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
     const [masasToSend, setMasasToSend] = React.useState(1);
-    const [isTachosAuto, setIsTachosAuto] = React.useState(false);
-    const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
-    const [isTachosControlOpen, setIsTachosControlOpen] = React.useState(false);
 
     const getDefaultConfig = (): SimulationConfig => ({
         machines: [
-            { id: 1, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media' },
-            { id: 2, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media' },
-            { id: 3, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media' },
-            { id: 4, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media' },
+            { id: 1, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media&token=c1a3f5e3-3b1a-4b1e-9e1a-5a6f7b8c9d0e' },
+            { id: 2, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media&token=c1a3f5e3-3b1a-4b1e-9e1a-5a6f7b8c9d0e' },
+            { id: 3, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media&token=c1a3f5e3-3b1a-4b1e-9e1a-5a6f7b8c9d0e' },
+            { id: 4, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media&token=c1a3f5e3-3b1a-4b1e-9e1a-5a6f7b8c9d0e' },
         ],
         wrappers: [
-            { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media', machineIds: [1, 2] },
-            { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media', machineIds: [3, 4] },
+            { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media&token=e9e8c7b6-3a5f-4b1e-9e1a-5a6f7b8c9d0e', machineIds: [1, 2] },
+            { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media&token=e9e8c7b6-3a5f-4b1e-9e1a-5a6f7b8c9d0e', machineIds: [3, 4] },
         ],
         silos: [
-            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media' },
-            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Gran.jpeg?alt=media' },
+            { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media&token=a1b2c3d4-e5f6-7890-1234-567890abcdef' },
+            { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Gran.jpeg?alt=media&token=b2c3d4e5-f6a7-8901-2345-67890abcdef1' },
         ],
-        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media' },
+        tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media&token=c3d4e5f6-a7b8-9012-3456-7890abcdef12' },
         autoTachosInterval: 10,
         autoTachosGoal: 6,
+        isTachosAuto: false,
+        isTachosGoalEnabled: false,
     });
 
     const saveConfigToLocalStorage = React.useCallback(() => {
@@ -667,13 +641,15 @@ export default function OperationsClient({
                 tachosState: tachosState,
                 autoTachosInterval: autoTachosInterval,
                 autoTachosGoal: autoTachosGoal,
+                isTachosAuto: isTachosAuto,
+                isTachosGoalEnabled: isTachosGoalEnabled,
             };
             localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(configToSave));
         } catch (error) {
             console.error("Error saving config to localStorage", error);
             toast({ title: 'Error', description: 'No se pudo guardar la configuración.', variant: 'destructive' });
         }
-    }, [machines, wrappers, silos, tachosState, autoTachosInterval, autoTachosGoal, toast]);
+    }, [machines, wrappers, silos, tachosState, autoTachosInterval, autoTachosGoal, isTachosAuto, isTachosGoalEnabled, toast]);
 
 
     const loadConfig = React.useCallback(() => {
@@ -712,6 +688,8 @@ export default function OperationsClient({
             setTachosState(config.tachosState);
             setAutoTachosInterval(config.autoTachosInterval);
             setAutoTachosGoal(config.autoTachosGoal);
+            setIsTachosAuto(config.isTachosAuto);
+            setIsTachosGoalEnabled(config.isTachosGoalEnabled);
 
         } catch (error) {
             console.error("Error loading config:", error);
@@ -746,13 +724,11 @@ export default function OperationsClient({
         }
     };
     
-    const handleImageSave = (id: string | number, imageUrl: string) => {
-        setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl } : m));
-        setWrappers(prev => prev.map(w => w.id === id ? { ...w, imageUrl } : w));
-        setSilos(prev => prev.map(s => s.id === id ? { ...s, imageUrl } : s));
-        if (tachosState.id === id) {
-            setTachosState(prev => ({ ...prev, imageUrl }));
-        }
+    const handleTachosConfigChange = (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => {
+        setIsTachosAuto(config.isAuto);
+        setAutoTachosInterval(config.interval);
+        setIsTachosGoalEnabled(config.isGoalEnabled);
+        setAutoTachosGoal(config.goal);
     };
     
     React.useEffect(() => {
@@ -760,13 +736,6 @@ export default function OperationsClient({
           saveConfigToLocalStorage();
         }
     }, [isClient, saveConfigToLocalStorage]);
-
-    const handleTachosControlSave = (config: any) => {
-        setIsTachosAuto(config.isAuto);
-        setAutoTachosInterval(config.interval);
-        setIsTachosGoalEnabled(config.isGoalEnabled);
-        setAutoTachosGoal(config.goal);
-    };
 
     const handleRestoreDefaults = async () => {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -1329,16 +1298,13 @@ export default function OperationsClient({
                                   {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                 </h3>
                                 <div className="flex items-center gap-1">
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsTachosControlOpen(true)}>
-                                        <Zap className="h-4 w-4" />
-                                    </Button>
                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
                                         <Edit className="h-4 w-4" />
                                     </Button>
                                 </div>
                             </div>
                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                               <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                               <Image src={tachosState.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
                            </div>
                            <div className="space-y-4">
                                 <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
@@ -1373,7 +1339,7 @@ export default function OperationsClient({
                                         </Button>
                                     </div>
                                     <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                        <Image src={silo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt={silo.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                        <Image src={silo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media"} alt={silo.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className='text-xs text-muted-foreground'>Capacidad: {silo.capacityQQ.toLocaleString()} QQ</Label>
@@ -1437,7 +1403,7 @@ export default function OperationsClient({
                                         
                                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                                             <Image 
-                                                src={machine.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
+                                                src={machine.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} 
                                                 alt={`Máquina ${machine.id}`}
                                                 width={600}
                                                 height={400}
@@ -1521,7 +1487,7 @@ export default function OperationsClient({
 
                                     <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                                         <Image
-                                            src={wrapperConfig.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                            src={wrapperConfig.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media"}
                                             alt={wrapperConfig.name}
                                             width={600}
                                             height={400}
@@ -1573,7 +1539,7 @@ export default function OperationsClient({
                                          </div>
                                          <div className='text-center border bg-background rounded-lg p-2'>
                                             <p className="text-xs text-muted-foreground">Total Fardos</p>
-                                            <p className="text-lg font-bold text-green-600">{wrapperState.totalBundles.toLocaleString()}</p>
+                                            <p className="font-bold text-lg text-green-600">{wrapperState.totalBundles.toLocaleString()}</p>
                                          </div>
                                     </div>
                                 </div>
@@ -1665,7 +1631,6 @@ export default function OperationsClient({
                     machine={editingMachine}
                     products={products}
                     onSave={handleMachineSave}
-                    onImageSave={handleImageSave}
                 />
             )}
              {editingSilo && (
@@ -1674,8 +1639,14 @@ export default function OperationsClient({
                     onOpenChange={(isOpen) => !isOpen && setEditingSilo(null)}
                     silo={editingSilo}
                     isTachos={editingSilo.id === 'tachos'}
+                    tachosConfig={{
+                        isAuto: isTachosAuto,
+                        interval: autoTachosInterval,
+                        isGoalEnabled: isTachosGoalEnabled,
+                        goal: autoTachosGoal
+                    }}
+                    onTachosConfigChange={handleTachosConfigChange}
                     onSave={handleSiloSave}
-                    onImageSave={handleImageSave}
                 />
             )}
             {editingWrapper && (
@@ -1685,20 +1656,8 @@ export default function OperationsClient({
                     wrapper={editingWrapper}
                     allMachines={machines}
                     onSave={handleWrapperSave}
-                    onImageSave={handleImageSave}
                 />
             )}
-            <TachosControlDialog 
-                open={isTachosControlOpen}
-                onOpenChange={setIsTachosControlOpen}
-                config={{
-                    isAuto: isTachosAuto,
-                    interval: autoTachosInterval,
-                    isGoalEnabled: isTachosGoalEnabled,
-                    goal: autoTachosGoal
-                }}
-                onConfigChange={handleTachosControlSave}
-            />
         </>
         )}
       </main>
