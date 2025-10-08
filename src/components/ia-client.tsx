@@ -921,7 +921,7 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         {/* Tachos Control Panel */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                            <div className='flex justify-between items-start gap-2'>
+                            <div className='flex justify-between items-start'>
                                 <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
                                   {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                 </h3>
@@ -958,7 +958,7 @@ export default function OperationsClient({
 
                             return (
                                 <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
-                                     <div className='flex justify-between items-start gap-2'>
+                                     <div className='flex justify-between items-start'>
                                         <h3 className="font-bold text-lg">{silo.name}</h3>
                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
                                             <Edit className="h-4 w-4" />
@@ -1122,13 +1122,15 @@ export default function OperationsClient({
                                         <Upload className="mr-2 h-3 w-3" />
                                         Cambiar Foto
                                     </Button>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor={`wrapper${wrapperId}-capacity`}>Capacidad Máxima (fundas/min)</Label>
-                                        <Input id={`wrapper${wrapperId}-capacity`} type="number" value={config.capacity} onChange={e => handleWrapperFieldChange(wrapperId, 'capacity', Number(e.target.value))}/>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor={`wrapper${wrapperId}-units-per-bundle`}>Unidades por Fardo</Label>
-                                        <Input id={`wrapper${wrapperId}-units-per-bundle`} type="number" value={config.unitsPerBundle} onChange={e => handleWrapperFieldChange(wrapperId, 'unitsPerBundle', Number(e.target.value))}/>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor={`wrapper${wrapperId}-capacity`}>Capacidad Máxima (fundas/min)</Label>
+                                            <Input id={`wrapper${wrapperId}-capacity`} type="number" value={config.capacity} onChange={e => handleWrapperFieldChange(wrapperId, 'capacity', Number(e.target.value))}/>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor={`wrapper${wrapperId}-units-per-bundle`}>Unidades por Fardo</Label>
+                                            <Input id={`wrapper${wrapperId}-units-per-bundle`} type="number" value={config.unitsPerBundle} onChange={e => handleWrapperFieldChange(wrapperId, 'unitsPerBundle', Number(e.target.value))}/>
+                                        </div>
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label htmlFor={`wrapper${wrapperId}-conveyor-delay`}>Retraso de Banda (segundos)</Label>
