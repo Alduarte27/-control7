@@ -28,9 +28,12 @@ export async function POST(request: Request) {
       },
     });
 
-    // Firebase Admin SDK doesn't directly return a download URL with getDownloadURL.
-    // We need to construct the public URL manually.
-    const publicUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(imagePath)}?alt=media`;
+    // Make the file public to get a predictable URL.
+    // This is a common pattern for public assets like profile pictures or product images.
+    await fileUpload.makePublic();
+
+    // Construct the public URL manually.
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${imagePath}`;
 
     return NextResponse.json({ downloadURL: publicUrl });
 
