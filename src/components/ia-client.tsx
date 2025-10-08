@@ -577,13 +577,13 @@ export default function OperationsClient({
             const currentSimState = simulationStateRef.current;
             const goalMet = isTachosGoalEnabled && totalMasasSentRef.current >= autoTachosGoal;
             
-            if (isTachosAuto && !goalMet && currentSimState.elapsedTime >= simulationStateRef.current.nextAutoTachosSendTime) {
+            if (isTachosAuto && !goalMet && currentSimState.elapsedTime >= currentSimState.nextAutoTachosSendTime) {
+                sendMasasToSilosRef.current(1);
                  simulationStateRef.current = {
-                    ...simulationStateRef.current,
+                    ...currentSimState,
                     nextAutoTachosSendTime: currentSimState.elapsedTime + (autoTachosInterval * 60),
                 };
-                 sendMasasToSilosRef.current(1);
-            } else if (goalMet) {
+            } else if (goalMet && isTachosAuto) {
                 setIsTachosAuto(false);
             }
 
@@ -620,6 +620,14 @@ export default function OperationsClient({
                 const canProduce = kgAvailableInFamiliarSilo >= kgConsumedThisTick;
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
+                    setSilos(prevSilos => {
+                        const newSilos = JSON.parse(JSON.stringify(prevSilos));
+                        const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
+                        if (familiarSilo) {
+                            familiarSilo.currentQQ = 0;
+                        }
+                        return newSilos;
+                    });
                     pauseClock();
                     return {...prev, elapsedTime: newElapsedTime, isFinished: true };
                 }
@@ -857,15 +865,17 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                        <div className="space-y-4">
                            <div className="space-y-1.5">
-                               <Label htmlFor="sim-speed">Acelerador de Tiempo</Label>
-                               <Slider
+                                <div className='flex justify-between items-center'>
+                                  <Label htmlFor="sim-speed">Acelerador de Tiempo (x{simulationSpeed.toLocaleString()})</Label>
+                                </div>
+                                <Slider
                                    id="sim-speed"
                                    min={1}
-                                   max={10}
-                                   step={0.1}
+                                   max={1000}
+                                   step={1}
                                    value={[simulationSpeed]}
                                    onValueChange={(value) => setSimulationSpeed(value[0])}
-                               />
+                                />
                            </div>
                        </div>
                        <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
@@ -1216,7 +1226,7 @@ export default function OperationsClient({
              {editingSilo && (
                 <SiloEditDialog
                     open={!!editingSilo}
-                    onOpenChange={(isOpen) => !isOpen && setEditingSilo(null)}
+                    onOpen-change={(isOpen) => !isOpen && setEditingSilo(null)}
                     silo={editingSilo}
                     isTachos={editingSilo.id === 'tachos'}
                     onSave={handleSiloSave}
