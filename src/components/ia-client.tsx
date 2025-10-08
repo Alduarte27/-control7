@@ -23,6 +23,8 @@ import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 
 const KG_PER_QUINTAL = 50;
@@ -103,6 +105,8 @@ function MachineEditDialog({
     onSave: (updatedMachine: MachineState) => void;
 }) {
     const [editedMachine, setEditedMachine] = React.useState(machine);
+    const [isUploading, setIsUploading] = React.useState(false);
+    const { toast } = useToast();
 
     React.useEffect(() => {
         setEditedMachine(machine);
@@ -118,12 +122,20 @@ function MachineEditDialog({
         setEditedMachine(newMachine);
     };
 
-    const handleImageUpload = (file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            handleFieldChange('imageUrl', reader.result as string);
-        };
-        reader.readAsDataURL(file);
+    const handleImageUpload = async (file: File) => {
+        setIsUploading(true);
+        try {
+            const storageRef = ref(storage, `sim-images/machine-${machine.id}-${Date.now()}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            handleFieldChange('imageUrl', downloadURL);
+            toast({ title: 'Imagen Subida', description: 'La imagen de la máquina ha sido actualizada.' });
+        } catch (error) {
+            console.error("Error uploading image:", error);
+            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     const fileInputId = `modal-image-upload-${machine.id}`;
@@ -143,13 +155,21 @@ function MachineEditDialog({
                      <div className="space-y-2">
                         <Label>Previsualización de la Imagen</Label>
                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                            <Image 
-                                src={editedMachine.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
-                                alt={`Máquina ${editedMachine.id}`}
-                                width={600}
-                                height={400}
-                                className="object-contain w-full h-full"
-                            />
+                           {isUploading ? (
+                               <div className="flex flex-col items-center gap-2">
+                                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                                   <p className="text-sm text-muted-foreground">Subiendo...</p>
+                               </div>
+                           ) : (
+                                <Image 
+                                    src={editedMachine.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
+                                    alt={`Máquina ${editedMachine.id}`}
+                                    width={600}
+                                    height={400}
+                                    className="object-contain w-full h-full"
+                                    unoptimized // Important for external URLs
+                                />
+                           )}
                         </div>
                         <input
                             type="file"
@@ -157,10 +177,11 @@ function MachineEditDialog({
                             className="hidden"
                             accept="image/*"
                             onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])}
+                            disabled={isUploading}
                         />
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()}>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()} disabled={isUploading}>
                             <Upload className="mr-2 h-3 w-3" />
-                            Cambiar Foto
+                            {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
                     </div>
                     <div className="space-y-1.5">
@@ -231,6 +252,8 @@ function SiloEditDialog({
     const [localAutoTachosInterval, setLocalAutoTachosInterval] = React.useState(autoTachosInterval);
     const [localIsTachosGoalEnabled, setLocalIsTachosGoalEnabled] = React.useState(isTachosGoalEnabled);
     const [localAutoTachosGoal, setLocalAutoTachosGoal] = React.useState(autoTachosGoal);
+    const [isUploading, setIsUploading] = React.useState(false);
+    const { toast } = useToast();
 
     React.useEffect(() => {
         setEditedSilo(silo);
@@ -244,12 +267,20 @@ function SiloEditDialog({
         setEditedSilo(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleImageUpload = (file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            handleFieldChange('imageUrl', reader.result as string);
-        };
-        reader.readAsDataURL(file);
+    const handleImageUpload = async (file: File) => {
+        setIsUploading(true);
+        try {
+            const storageRef = ref(storage, `sim-images/silo-${silo.id}-${Date.now()}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            handleFieldChange('imageUrl', downloadURL);
+            toast({ title: 'Imagen Subida', description: `La imagen de ${silo.name} ha sido actualizada.` });
+        } catch (error) {
+            console.error("Error uploading image:", error);
+            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
@@ -275,13 +306,21 @@ function SiloEditDialog({
                      <div className="space-y-2">
                         <Label>Previsualización de la Imagen</Label>
                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                            <Image 
-                                src={editedSilo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} 
-                                alt={editedSilo.name}
-                                width={600}
-                                height={400}
-                                className="object-contain w-full h-full"
-                            />
+                            {isUploading ? (
+                               <div className="flex flex-col items-center gap-2">
+                                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                                   <p className="text-sm text-muted-foreground">Subiendo...</p>
+                               </div>
+                           ) : (
+                                <Image
+                                    src={editedSilo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                    alt={editedSilo.name}
+                                    width={600}
+                                    height={400}
+                                    className="object-contain w-full h-full"
+                                    unoptimized
+                                />
+                           )}
                         </div>
                         <input
                             type="file"
@@ -289,10 +328,11 @@ function SiloEditDialog({
                             className="hidden"
                             accept="image/*"
                             onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])}
+                            disabled={isUploading}
                         />
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()}>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()} disabled={isUploading}>
                             <Upload className="mr-2 h-3 w-3" />
-                            Cambiar Foto
+                            {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
                     </div>
                     {!isTachos && (
@@ -376,6 +416,8 @@ function WrapperEditDialog({
     onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>) => void;
 }) {
     const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
+    const [isUploading, setIsUploading] = React.useState(false);
+    const { toast } = useToast();
 
     React.useEffect(() => {
         const { buffer, currentBundleProgress, totalBundles, conveyorBelt, ...configurableProps } = wrapper;
@@ -398,12 +440,20 @@ function WrapperEditDialog({
         });
     };
 
-    const handleImageUpload = (file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            handleFieldChange('imageUrl', reader.result as string);
-        };
-        reader.readAsDataURL(file);
+    const handleImageUpload = async (file: File) => {
+        setIsUploading(true);
+        try {
+            const storageRef = ref(storage, `sim-images/wrapper-${wrapper.id}-${Date.now()}`);
+            const snapshot = await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(snapshot.ref);
+            handleFieldChange('imageUrl', downloadURL);
+            toast({ title: 'Imagen Subida', description: `La imagen de ${wrapper.name} ha sido actualizada.` });
+        } catch (error) {
+            console.error("Error uploading image:", error);
+            toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
+        } finally {
+            setIsUploading(false);
+        }
     };
 
     const fileInputId = `wrapper-modal-image-upload-${wrapper.id}`;
@@ -423,13 +473,21 @@ function WrapperEditDialog({
                     <div className="space-y-2">
                         <Label>Previsualización de la Imagen</Label>
                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                            <Image
-                                src={editedWrapper.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
-                                alt={editedWrapper.name}
-                                width={600}
-                                height={400}
-                                className="object-contain w-full h-full"
-                            />
+                           {isUploading ? (
+                               <div className="flex flex-col items-center gap-2">
+                                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                                   <p className="text-sm text-muted-foreground">Subiendo...</p>
+                               </div>
+                           ) : (
+                                <Image
+                                    src={editedWrapper.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"}
+                                    alt={editedWrapper.name}
+                                    width={600}
+                                    height={400}
+                                    className="object-contain w-full h-full"
+                                    unoptimized
+                                />
+                           )}
                         </div>
                         <input
                             type="file"
@@ -437,10 +495,11 @@ function WrapperEditDialog({
                             className="hidden"
                             accept="image/*"
                             onChange={(e) => e.target.files && handleImageUpload(e.target.files[0])}
+                            disabled={isUploading}
                         />
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()}>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()} disabled={isUploading}>
                             <Upload className="mr-2 h-3 w-3" />
-                            Cambiar Foto
+                            {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
                         </Button>
                     </div>
                     <div className="space-y-1.5">
@@ -1115,9 +1174,6 @@ export default function OperationsClient({
                                <Pause className="mr-2 h-4 w-4" /> Detener
                            </Button>
                            <Separator orientation="vertical" className="h-6 mx-2" />
-                           <Button onClick={() => resetSimulation(false)} variant="outline">
-                               <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Simulación
-                           </Button>
                            <Button onClick={() => resetSimulation(true)} variant="outline">
                                <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Todo
                            </Button>
@@ -1204,7 +1260,7 @@ export default function OperationsClient({
                                 </Button>
                             </div>
                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                               <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" />
+                               <Image src={tachosState.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
                            </div>
                            <div className="space-y-4">
                                 <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
@@ -1239,7 +1295,7 @@ export default function OperationsClient({
                                         </Button>
                                     </div>
                                     <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                        <Image src={silo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt={silo.name} width={600} height={400} className="object-contain w-full h-full" />
+                                        <Image src={silo.imageUrl || "https://placehold.co/600x400/e2e8f0/e2e8f0"} alt={silo.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
                                     </div>
                                     <div className="space-y-1.5">
                                         <Label className='text-xs text-muted-foreground'>Capacidad: {silo.capacityQQ.toLocaleString()} QQ</Label>
@@ -1308,6 +1364,7 @@ export default function OperationsClient({
                                                 width={600}
                                                 height={400}
                                                 className="object-contain w-full h-full"
+                                                unoptimized
                                             />
                                         </div>
 
@@ -1391,6 +1448,7 @@ export default function OperationsClient({
                                             width={600}
                                             height={400}
                                             className="object-contain w-full h-full"
+                                            unoptimized
                                         />
                                     </div>
                                     
