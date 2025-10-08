@@ -1,7 +1,7 @@
 // src/app/api/upload/route.ts
 import { NextResponse } from 'next/server';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase'; // Usamos la instancia de storage ya configurada
+import { storage } from '@/lib/firebase';
 
 export async function POST(request: Request) {
   try {
@@ -19,25 +19,21 @@ export async function POST(request: Request) {
     const imagePath = `${path}/${Date.now()}_${file.name}`;
     const storageRef = ref(storage, imagePath);
     
-    // Convertir el archivo a un buffer para subirlo desde el servidor
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    // Subir el buffer del archivo
     const snapshot = await uploadBytes(storageRef, buffer, {
       contentType: file.type,
     });
 
-    // Obtener la URL de descarga
     const downloadURL = await getDownloadURL(snapshot.ref);
     
     return NextResponse.json({ downloadURL });
 
   } catch (error: any) {
     console.error('Error uploading file:', error);
-    // Devuelve un mensaje de error más detallado
     return NextResponse.json(
-      { error: 'Failed to upload file', details: error.message },
+      { error: 'Failed to upload file', details: error.message || 'Unknown server error' },
       { status: 500 }
     );
   }

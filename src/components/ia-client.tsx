@@ -106,7 +106,6 @@ function MachineEditDialog({
     products,
     open,
     onOpenChange,
-    onSave,
     onImageSave,
     isUploading
 }: {
@@ -707,8 +706,7 @@ export default function OperationsClient({
     
     const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => {
         setIsUploading(true);
-        const imagePath = `sim-images/${type}/${id}`;
-
+        const imagePath = `sim-images/${type}`;
         const formData = new FormData();
         formData.append('file', file);
         formData.append('path', imagePath);
