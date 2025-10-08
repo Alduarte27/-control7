@@ -619,7 +619,7 @@ export default function OperationsClient({
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
-    const [editingTachos, setEditingTachos] = React.useState(false);
+    const [isEditingTachos, setIsEditingTachos] = React.useState(false);
     const [masasToSend, setMasasToSend] = React.useState(1);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
@@ -1355,7 +1355,7 @@ export default function OperationsClient({
                                   {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                 </h3>
                                 <div>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingTachos(true)}>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setIsEditingTachos(true)}>
                                         <Settings2 className="h-4 w-4" />
                                     </Button>
                                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
@@ -1714,10 +1714,10 @@ export default function OperationsClient({
                     onImageSave={(wrapperId, url) => handleImageSave('wrappers', wrapperId, url)}
                 />
             )}
-            {editingTachos && (
+            {isEditingTachos && (
                 <TachosControlDialog
-                    open={editingTachos}
-                    onOpenChange={setEditingTachos}
+                    open={isEditingTachos}
+                    onOpenChange={setIsEditingTachos}
                     onSave={handleTachosControlSave}
                     isTachosAuto={isTachosAuto}
                     onIsTachosAutoChange={setIsTachosAuto}
