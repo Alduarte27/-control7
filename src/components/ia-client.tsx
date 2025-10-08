@@ -24,7 +24,7 @@ import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { app, db } from '@/lib/firebase';
+import { app, db, storage } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 
@@ -33,8 +33,6 @@ const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 const LOCAL_STORAGE_CONFIG_KEY = 'simulationConfig';
 const FIRESTORE_ASSETS_PATH = 'simulation_assets';
-
-const storage = getStorage(app);
 
 type MachineState = {
     id: number;
@@ -76,7 +74,7 @@ type WrapperState = {
 };
 
 // This type represents the data saved in localStorage
-type SimulationConfig = {
+type SimulationParams = {
     machines: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>[];
     wrappers: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>[];
     silos: Omit<SiloState, 'imageUrl'>[];
@@ -112,6 +110,7 @@ function MachineEditDialog({
     onOpenChange,
     onSave,
     onImageUpload,
+    isUploading,
 }: {
     machine: MachineState;
     products: ProductDefinition[];
@@ -119,9 +118,9 @@ function MachineEditDialog({
     onOpenChange: (open: boolean) => void;
     onSave: (updatedMachine: Omit<MachineState, 'isSimulatingActive'>) => void;
     onImageUpload: (file: File) => void;
+    isUploading: boolean;
 }) {
     const [editedMachine, setEditedMachine] = React.useState(machine);
-    const [isUploading, setIsUploading] = React.useState(false);
 
     React.useEffect(() => {
         setEditedMachine(machine);
@@ -137,22 +136,11 @@ function MachineEditDialog({
         setEditedMachine(newMachine);
     };
     
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        setIsUploading(true);
-        try {
-            await onImageUpload(file);
-            // The parent component will handle the state update and closing the dialog
-        } catch (error) {
-            // Error is handled by the parent's toast
-        } finally {
-            setIsUploading(false);
-            onOpenChange(false);
-        }
+        onImageUpload(file);
     };
-
 
     const fileInputId = `modal-image-upload-${machine.id}`;
     
@@ -242,6 +230,7 @@ function SiloEditDialog({
     onOpenChange,
     onSave,
     onImageUpload,
+    isUploading,
     isTachos,
     tachosConfig,
     onTachosConfigChange
@@ -251,13 +240,13 @@ function SiloEditDialog({
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<SiloState, 'imageUrl'>) => void;
     onImageUpload: (file: File) => void;
+    isUploading: boolean;
     isTachos?: boolean;
     tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
     onTachosConfigChange?: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
     const [localTachosConfig, setLocalTachosConfig] = React.useState(tachosConfig);
-    const [isUploading, setIsUploading] = React.useState(false);
 
     React.useEffect(() => {
         setEditedSilo(silo);
@@ -274,16 +263,10 @@ function SiloEditDialog({
         setLocalTachosConfig(prev => (prev ? { ...prev, [field]: value } : undefined));
     };
 
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        setIsUploading(true);
-        try {
-            await onImageUpload(file);
-        } finally {
-            setIsUploading(false);
-            onOpenChange(false);
-        }
+        onImageUpload(file);
     };
 
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
@@ -415,6 +398,7 @@ function WrapperEditDialog({
     onOpenChange,
     onSave,
     onImageUpload,
+    isUploading,
 }: {
     wrapper: WrapperState;
     allMachines: MachineState[];
@@ -422,9 +406,9 @@ function WrapperEditDialog({
     onOpenChange: (open: boolean) => void;
     onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>) => void;
     onImageUpload: (file: File) => void;
+    isUploading: boolean;
 }) {
     const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
-    const [isUploading, setIsUploading] = React.useState(false);
 
     React.useEffect(() => {
         const { buffer, currentBundleProgress, totalBundles, conveyorBelt, ...configurableProps } = wrapper;
@@ -447,19 +431,11 @@ function WrapperEditDialog({
         });
     };
 
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
-
-        setIsUploading(true);
-        try {
-            await onImageUpload(file);
-        } finally {
-            setIsUploading(false);
-            onOpenChange(false);
-        }
+        onImageUpload(file);
     };
-
 
     const fileInputId = `wrapper-modal-image-upload-${wrapper.id}`;
 
@@ -581,10 +557,11 @@ export default function OperationsClient({
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
+    const [isUploading, setIsUploading] = React.useState(false);
     const [masasToSend, setMasasToSend] = React.useState(1);
 
-    const getDefaultConfig = (): { config: SimulationConfig; images: ImageUrlConfig } => ({
-        config: {
+    const getDefaultConfig = (): { params: SimulationParams; images: ImageUrlConfig } => ({
+        params: {
             machines: [
                 { id: 1, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1 },
                 { id: 2, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1 },
@@ -624,138 +601,92 @@ export default function OperationsClient({
         }
     });
 
-    const saveConfigToLocalStorage = React.useCallback((config: SimulationConfig) => {
-        try {
-            window.localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(config));
-        } catch (error) {
-            console.error("Error saving config to localStorage", error);
-            toast({ title: 'Error', description: 'No se pudo guardar la configuración en el navegador.', variant: 'destructive' });
-        }
-    }, [toast]);
-    
-    const saveImageUrlToFirestore = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, url: string) => {
-        try {
-            const docRef = doc(db, FIRESTORE_ASSETS_PATH, type === 'tachos' ? 'tachos' : `${type}s`);
-            const fieldId = type === 'tachos' ? 'imageUrl' : `${type}_${id}.imageUrl`;
-            
-            // To set a field in a document, you must provide the full path.
-            // Firestore doesn't merge nested objects with setDoc unless you read-modify-write.
-            // Using dot notation in updateDoc or here in setDoc with merge is the way.
-            await setDoc(docRef, { [fieldId]: url }, { merge: true });
-
-        } catch (error) {
-            console.error("Error saving image URL to Firestore", error);
-            throw new Error("Failed to save image URL to Firestore.");
-        }
-    }, []);
-
     const loadConfig = React.useCallback(async () => {
         try {
             // --- Load parameters from LocalStorage ---
             const localConfigStr = window.localStorage.getItem(LOCAL_STORAGE_CONFIG_KEY);
-            const { config: defaultConfig, images: defaultImages } = getDefaultConfig();
-            let config: SimulationConfig = defaultConfig;
+            const { params: defaultParams, images: defaultImages } = getDefaultConfig();
+            let params: SimulationParams;
             if (localConfigStr) {
-                const savedConfig = JSON.parse(localConfigStr);
-                // Merge to ensure new properties from defaultConfig are included
-                config = {
-                    ...defaultConfig,
-                    ...savedConfig,
-                     machines: defaultConfig.machines.map(dm => {
-                        const sm = savedConfig.machines?.find((m: any) => m.id === dm.id);
+                const savedParams = JSON.parse(localConfigStr);
+                 params = {
+                    ...defaultParams,
+                    ...savedParams,
+                     machines: defaultParams.machines.map(dm => {
+                        const sm = savedParams.machines?.find((m: any) => m.id === dm.id);
                         return { ...dm, ...sm };
                     }),
-                    wrappers: defaultConfig.wrappers.map(dw => {
-                        const sw = savedConfig.wrappers?.find((w: any) => w.id === dw.id);
+                    wrappers: defaultParams.wrappers.map(dw => {
+                        const sw = savedParams.wrappers?.find((w: any) => w.id === dw.id);
                         return { ...dw, ...sw };
                     }),
-                     silos: defaultConfig.silos.map(ds => {
-                        const ss = savedConfig.silos?.find((s: any) => s.id === ds.id);
+                     silos: defaultParams.silos.map(ds => {
+                        const ss = savedParams.silos?.find((s: any) => s.id === ds.id);
                         return { ...ds, ...ss };
                     }),
-                    tachosState: { ...defaultConfig.tachosState, ...savedConfig.tachosState },
+                    tachosState: { ...defaultParams.tachosState, ...savedParams.tachosState },
                 };
             } else {
-                 saveConfigToLocalStorage(defaultConfig);
+                 params = defaultParams;
             }
 
             // --- Load image URLs from Firestore ---
+            const docRef = doc(db, FIRESTORE_ASSETS_PATH, 'images');
+            const docSnap = await getDoc(docRef);
             let imageUrls: ImageUrlConfig = defaultImages;
-            const types: ('machines' | 'wrappers' | 'silos' | 'tachos')[] = ['machines', 'wrappers', 'silos', 'tachos'];
-            const promises = types.map(type => getDoc(doc(db, FIRESTORE_ASSETS_PATH, type)));
-            const [machinesDoc, wrappersDoc, silosDoc, tachosDoc] = await Promise.all(promises);
-
-            const extractUrls = (docSnap: any, prefix: string) => {
-                 const urls: { [id: string]: string } = {};
-                 if (docSnap.exists()) {
-                     const data = docSnap.data();
-                     for (const key in data) {
-                         if(key.startsWith(`${prefix}_`) && key.endsWith('.imageUrl')) {
-                             const id = key.replace(`${prefix}_`, '').replace('.imageUrl', '');
-                             urls[id] = data[key];
-                         }
-                     }
-                 }
-                 return urls;
+            if (docSnap.exists()) {
+                const firestoreImages = docSnap.data() as ImageUrlConfig;
+                imageUrls = {
+                    machines: { ...defaultImages.machines, ...firestoreImages.machines },
+                    wrappers: { ...defaultImages.wrappers, ...firestoreImages.wrappers },
+                    silos: { ...defaultImages.silos, ...firestoreImages.silos },
+                    tachos: firestoreImages.tachos || defaultImages.tachos,
+                };
             }
 
-            const firestoreImages = {
-                machines: extractUrls(machinesDoc, 'machine'),
-                wrappers: extractUrls(wrappersDoc, 'wrapper'),
-                silos: extractUrls(silosDoc, 'silo'),
-                tachos: tachosDoc.exists() ? tachosDoc.data().imageUrl : defaultImages.tachos,
-            };
-            
-            imageUrls = {
-                machines: { ...defaultImages.machines, ...firestoreImages.machines },
-                wrappers: { ...defaultImages.wrappers, ...firestoreImages.wrappers },
-                silos: { ...defaultImages.silos, ...firestoreImages.silos },
-                tachos: firestoreImages.tachos,
-            };
-
             // --- Combine and set state ---
-            setMachines(config.machines.map(m => ({ 
+            setMachines(params.machines.map(m => ({ 
                 ...m, 
                 imageUrl: imageUrls.machines[m.id] || null, 
                 isSimulatingActive: false 
             })));
-            setWrappers(config.wrappers.map(w => ({ 
+            setWrappers(params.wrappers.map(w => ({ 
                 ...w, 
                 imageUrl: imageUrls.wrappers[w.id] || null, 
                 buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] 
             })));
-            setSilos(config.silos.map(s => ({
+            setSilos(params.silos.map(s => ({
                 ...s,
                 imageUrl: imageUrls.silos[s.id] || null,
             })));
             setTachosState({
-                ...config.tachosState,
+                ...params.tachosState,
                 imageUrl: imageUrls.tachos,
             });
-            setAutoTachosInterval(config.autoTachosInterval);
-            setAutoTachosGoal(config.autoTachosGoal);
-            setIsTachosAuto(config.isTachosAuto);
-            setIsTachosGoalEnabled(config.isTachosGoalEnabled);
+            setAutoTachosInterval(params.autoTachosInterval);
+            setAutoTachosGoal(params.autoTachosGoal);
+            setIsTachosAuto(params.isTachosAuto);
+            setIsTachosGoalEnabled(params.isTachosGoalEnabled);
 
         } catch (error) {
             console.error("Error loading config:", error);
-            const { config, images } = getDefaultConfig();
-            setMachines(config.machines.map(m => ({ ...m, imageUrl: images.machines[m.id] || null, isSimulatingActive: false })));
-            setWrappers(config.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
-            setSilos(config.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null })));
-            setTachosState({ ...config.tachosState, imageUrl: images.tachos });
-            toast({ title: 'Error de Carga', description: 'No se pudo cargar toda la configuración. Se usarán valores por defecto.', variant: 'destructive' });
+            const { params, images } = getDefaultConfig();
+            setMachines(params.machines.map(m => ({ ...m, imageUrl: images.machines[m.id] || null, isSimulatingActive: false })));
+            setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
+            setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null })));
+            setTachosState({ ...params.tachosState, imageUrl: images.tachos });
+            toast({ title: 'Error de Carga', description: 'No se pudo cargar la configuración. Se usarán valores por defecto.', variant: 'destructive' });
         }
-    }, [toast, saveConfigToLocalStorage]);
+    }, [toast]);
     
     React.useEffect(() => {
         setIsClient(true);
         loadConfig();
     }, [loadConfig]);
 
-    const handleConfigChangeAndSave = React.useCallback(() => {
+    const saveParamsToLocalStorage = React.useCallback(() => {
         if (!isClient) return;
-        const configToSave: SimulationConfig = {
+        const paramsToSave: SimulationParams = {
             machines: machines.map(({ isSimulatingActive, imageUrl, ...m }) => m),
             wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, imageUrl, ...w }) => w),
             silos: silos.map(({imageUrl, ...s}) => s),
@@ -765,22 +696,29 @@ export default function OperationsClient({
             isTachosAuto: isTachosAuto,
             isTachosGoalEnabled: isTachosGoalEnabled,
         };
-        saveConfigToLocalStorage(configToSave);
-    }, [isClient, machines, wrappers, silos, tachosState, autoTachosInterval, autoTachosGoal, isTachosAuto, isTachosGoalEnabled, saveConfigToLocalStorage]);
+        try {
+            window.localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(paramsToSave));
+        } catch (error) {
+            console.error("Error saving params to localStorage", error);
+        }
+    }, [isClient, machines, wrappers, silos, tachosState, autoTachosInterval, autoTachosGoal, isTachosAuto, isTachosGoalEnabled]);
 
     React.useEffect(() => {
-        handleConfigChangeAndSave();
-    }, [handleConfigChangeAndSave]);
+        saveParamsToLocalStorage();
+    }, [saveParamsToLocalStorage]);
     
 
     const handleImageSave = async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => {
+        setIsUploading(true);
         try {
             const imagePath = `sim-images/${type}/${id}/${Date.now()}_${file.name}`;
             const storageRef = ref(storage, imagePath);
             await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(storageRef);
 
-            await saveImageUrlToFirestore(type, id, downloadURL);
+            const docRef = doc(db, FIRESTORE_ASSETS_PATH, 'images');
+            const fieldPath = `${type}s.${type === 'tachos' ? 'tachos' : id}`;
+            await setDoc(docRef, { [fieldPath]: downloadURL }, { merge: true });
 
             if (type === 'machine') {
                 setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl: downloadURL } : m));
@@ -791,12 +729,17 @@ export default function OperationsClient({
             } else if (type === 'tachos') {
                 setTachosState(prev => ({ ...prev, imageUrl: downloadURL }));
             }
-
+            
             toast({ title: 'Imagen Subida', description: 'La imagen ha sido actualizada y guardada.' });
+
         } catch (error) {
             console.error("Error uploading image:", error);
             toast({ title: 'Error de Subida', description: 'No se pudo subir la imagen.', variant: 'destructive' });
-            throw error; // Re-throw to be caught in the dialog
+        } finally {
+            setIsUploading(false);
+            if (type === 'machine') setEditingMachine(null);
+            if (type === 'silo' || type === 'tachos') setEditingSilo(null);
+            if (type === 'wrapper') setEditingWrapper(null);
         }
     };
 
@@ -824,26 +767,19 @@ export default function OperationsClient({
     };
 
     const handleRestoreDefaults = async () => {
-        const { config, images } = getDefaultConfig();
-        saveConfigToLocalStorage(config); // Save default params to localStorage
+        const { params, images } = getDefaultConfig();
+        // Save default params to localStorage
+        window.localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(params)); 
         
         // Reset images in Firestore
-        const types: ('machines' | 'wrappers' | 'silos' | 'tachos')[] = ['machines', 'wrappers', 'silos', 'tachos'];
-        const promises = types.map(async (type) => {
-            if (type === 'tachos') {
-                await setDoc(doc(db, FIRESTORE_ASSETS_PATH, 'tachos'), { imageUrl: images.tachos });
-            } else {
-                const firestoreDoc: { [key: string]: string } = {};
-                for (const id in images[type]) {
-                    firestoreDoc[`${type.slice(0, -1)}_${id}.imageUrl`] = images[type][id as any];
-                }
-                await setDoc(doc(db, FIRESTORE_ASSETS_PATH, type), firestoreDoc);
-            }
-        });
-        await Promise.all(promises);
-
+        try {
+            await setDoc(doc(db, FIRESTORE_ASSETS_PATH, 'images'), images);
+            toast({ title: 'Configuración Restaurada', description: 'Se han cargado y guardado los valores por defecto.' });
+        } catch (error) {
+            toast({ title: 'Error al restaurar', description: 'No se pudieron restaurar las imágenes por defecto.', variant: 'destructive' });
+        }
+        
         await loadConfig(); // Reload from the newly saved default config
-        toast({ title: 'Configuración Restaurada', description: 'Se han cargado y guardado los valores por defecto.' });
     };
     
     // --- Raw Material State ---
@@ -1733,6 +1669,7 @@ export default function OperationsClient({
                     products={products}
                     onSave={handleMachineSave}
                     onImageUpload={(file) => handleImageSave('machine', editingMachine.id, file)}
+                    isUploading={isUploading}
                 />
             )}
              {editingSilo && (
@@ -1742,6 +1679,7 @@ export default function OperationsClient({
                     silo={editingSilo}
                     onSave={handleSiloSave}
                     onImageUpload={(file) => handleImageSave(editingSilo.id === 'tachos' ? 'tachos' : 'silo', editingSilo.id, file)}
+                    isUploading={isUploading}
                     isTachos={editingSilo.id === 'tachos'}
                     tachosConfig={{
                         isAuto: isTachosAuto,
@@ -1760,6 +1698,7 @@ export default function OperationsClient({
                     allMachines={machines}
                     onSave={handleWrapperSave}
                     onImageUpload={(file) => handleImageSave('wrapper', editingWrapper.id, file)}
+                    isUploading={isUploading}
                 />
             )}
         </>
@@ -1768,3 +1707,4 @@ export default function OperationsClient({
     </div>
   );
 }
+
