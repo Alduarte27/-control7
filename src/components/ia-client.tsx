@@ -949,22 +949,22 @@ export default function OperationsClient({
         toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros han vuelto a sus valores por defecto.' });
     };
     
-    const sendMasaToReceiver = React.useCallback((currentReceivers: ReceiverState[]): { success: boolean; newReceivers: ReceiverState[] } => {
+    const sendMasaToReceiver = React.useCallback((currentReceivers: ReceiverState[]): { success: boolean; newReceivers: ReceiverState[], sentTo: string | null } => {
         const newReceivers = JSON.parse(JSON.stringify(currentReceivers));
         
         const receiver1 = newReceivers.find((r: ReceiverState) => r.id === 'rec1');
         if (receiver1 && receiver1.currentQQ < (receiver1.capacityQQ * masaQQAmount)) {
             receiver1.currentQQ += masaQQAmount;
-            return { success: true, newReceivers };
+            return { success: true, newReceivers, sentTo: receiver1.id };
         }
 
         const receiver2 = newReceivers.find((r: ReceiverState) => r.id === 'rec2');
         if (receiver2 && receiver2.currentQQ < (receiver2.capacityQQ * masaQQAmount)) {
             receiver2.currentQQ += masaQQAmount;
-            return { success: true, newReceivers };
+            return { success: true, newReceivers, sentTo: receiver2.id };
         }
 
-        return { success: false, newReceivers: currentReceivers };
+        return { success: false, newReceivers: currentReceivers, sentTo: null };
     }, [masaQQAmount]);
 
     const handleManualCook = () => {
@@ -1005,7 +1005,7 @@ export default function OperationsClient({
         });
     };
     
-    const startCentrifugeCycle = (centrifugeId: string) => {
+    const startCentrifugeCycle = (centrifugeId: string, isManual = false) => {
         setSimulationState(prev => {
              const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
              const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
@@ -1017,7 +1017,9 @@ export default function OperationsClient({
             const centrifugeToStart = prev.centrifuges.find(c => c.id === centrifugeId);
 
             if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle') {
-                if (isSimulating) toast({ title: 'No se puede iniciar', description: 'No hay material o la centrífuga está ocupada.', variant: 'destructive'});
+                if (isManual) {
+                    toast({ title: 'No se puede iniciar', description: 'No hay material o la centrífuga está ocupada.', variant: 'destructive'});
+                }
                 return prev;
             }
             
@@ -1036,7 +1038,9 @@ export default function OperationsClient({
                     : c
                 );
                 
-                toast({ title: `Iniciando ciclo manual en ${centrifugeToStart.name}`});
+                if (isManual) {
+                    toast({ title: `Iniciando ciclo manual en ${centrifugeToStart.name}`});
+                }
 
                 return {
                     ...prev,
@@ -1678,8 +1682,8 @@ export default function OperationsClient({
                                 </div>
                                  {!isTachosAuto && (
                                     <div className="grid grid-cols-2 gap-2">
-                                        <Button className="w-full" onClick={handleManualCook} disabled={simTachos.state !== 'idle' || isSimulating}>Cocinar Masa</Button>
-                                        <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'ready' || isSimulating}>Enviar Masa</Button>
+                                       <Button className="w-full" onClick={handleManualCook} disabled={simTachos.state !== 'idle' || isSimulating}>Cocinar Masa</Button>
+                                       <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'ready' || isSimulating}>Enviar Masa</Button>
                                     </div>
                                 )}
                             </div>
@@ -1749,7 +1753,7 @@ export default function OperationsClient({
                                                 <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
                                             </div>
                                             {!isCentrifugesAuto && (
-                                                <Button size="sm" variant="secondary" className="w-full mt-2" onClick={() => startCentrifugeCycle(centrifuge.id)} disabled={simCentrifuge.state !== 'idle' || !isAnyMaterialAvailable || isSimulating}>
+                                                <Button size="sm" variant="secondary" className="w-full mt-2" onClick={() => startCentrifugeCycle(centrifuge.id, true)} disabled={simCentrifuge.state !== 'idle' || !isAnyMaterialAvailable || isSimulating}>
                                                    Iniciar Purga Manual
                                                 </Button>
                                             )}
