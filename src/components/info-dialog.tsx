@@ -4,7 +4,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database } from 'lucide-react';
+import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database, PlayCircle, Edit, Upload } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -82,17 +82,27 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
             </div>
 
              <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Centro de Operaciones</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Centro de Operaciones y Simulación</h3>
                 <div className="space-y-4">
                      <FeatureItem 
-                        icon={Database}
-                        title="Simulador de Silo"
-                        description="En 'Operaciones', proyecta cuánto tiempo tomará procesar una cantidad de materia prima del silo, utilizando múltiples máquinas en simultáneo."
+                        icon={Edit}
+                        title="Configura tu Planta Virtual"
+                        description="En 'Operaciones', haz clic en el icono de lápiz en cada componente (Tachos, Silos, Envasadoras, Enfardadoras) para ajustar sus parámetros como velocidad, capacidad, mermas y más."
+                    />
+                     <FeatureItem 
+                        icon={Upload}
+                        title="Personaliza con tus Propias Imágenes"
+                        description="Puedes subir tus propias fotos para cada máquina y silo. Simplemente edita un componente y haz clic en 'Cambiar Foto' para darle a la simulación un toque realista."
+                    />
+                    <FeatureItem 
+                        icon={PlayCircle}
+                        title="Simulación Dinámica del Proceso"
+                        description="Inicia, pausa y acelera una simulación en tiempo real para visualizar el flujo de producción, desde el consumo de materia prima hasta el empaque final. Ideal para formación y análisis."
                     />
                     <FeatureItem 
                         icon={TrendingUp}
-                        title="Pronóstico de Demanda"
-                        description="La IA puede generar un pronóstico cualitativo de la demanda futura, analizando el historial de producción para identificar tendencias de crecimiento, estabilidad o declive."
+                        title="Detección de Cuellos de Botella"
+                        description="El simulador analiza la configuración de tu línea de producción y te alerta si la capacidad de las enfardadoras está limitando la producción de las envasadoras, ayudándote a optimizar el flujo."
                     />
                 </div>
             </div>
