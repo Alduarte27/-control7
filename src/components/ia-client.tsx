@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus, Power, PowerOff, Droplets, Wind, Hourglass } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -25,8 +25,6 @@ import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import admin from '@/lib/firebase-admin';
-
 
 const KG_PER_QUINTAL = 50;
 const MASA_QQ_AMOUNT = 380;
@@ -584,7 +582,6 @@ export default function OperationsClient({
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
-    const [masasToSend, setMasasToSend] = React.useState(1);
     const [isUploading, setIsUploading] = React.useState(false);
 
     const getDefaultConfig = (): { params: SimulationParams; images: ImageUrlConfig } => ({
@@ -756,7 +753,7 @@ export default function OperationsClient({
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.details || `Server error: ${response.statusText}`);
+                throw new Error(errorData.details || 'Server error');
             }
 
             const { downloadURL } = await response.json();
@@ -829,6 +826,7 @@ export default function OperationsClient({
         }
         
         await loadConfig();
+        toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros han vuelto a sus valores por defecto.' });
     };
     
     const sendMasaToReceiver = React.useCallback((currentReceivers: ReceiverState[]): { success: boolean; newReceivers: ReceiverState[] } => {
