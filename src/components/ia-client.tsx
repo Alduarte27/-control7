@@ -761,8 +761,8 @@ export default function OperationsClient({
             setTachosImageUrl(imageUrls.tachos);
             
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', processingTimeSeconds: 90 * 60, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', processingTimeSeconds: 90 * 60, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', processingTimeSeconds: 15 * 60, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', processingTimeSeconds: 15 * 60, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
             ]);
             
             setTachosCookTime(params.tachosCookTime);
@@ -904,13 +904,19 @@ export default function OperationsClient({
     
     const sendMasaToReceiver = React.useCallback((currentReceivers: ReceiverState[]): { success: boolean; newReceivers: ReceiverState[] } => {
         const newReceivers = JSON.parse(JSON.stringify(currentReceivers));
-        // Find the first receiver that is not full
-        const availableReceiver = newReceivers.find((r: ReceiverState) => r.currentMasas < r.capacityMasas);
-
-        if (availableReceiver) {
-            availableReceiver.currentMasas += 1;
+        
+        const receiver1 = newReceivers.find((r: ReceiverState) => r.id === 'rec1');
+        if (receiver1 && receiver1.currentMasas < receiver1.capacityMasas) {
+            receiver1.currentMasas += 1;
             return { success: true, newReceivers };
         }
+
+        const receiver2 = newReceivers.find((r: ReceiverState) => r.id === 'rec2');
+        if (receiver2 && receiver2.currentMasas < receiver2.capacityMasas) {
+            receiver2.currentMasas += 1;
+            return { success: true, newReceivers };
+        }
+
         return { success: false, newReceivers: currentReceivers };
     }, []);
 
@@ -1141,21 +1147,30 @@ export default function OperationsClient({
                     let updatedCent = { ...cent };
 
                     if (updatedCent.state === 'idle') {
-                        // Prioritized consumption: check rec1 first, then rec2.
+                        let sourceReceiverId: string | null = null;
                         const receiver1 = newReceivers.find(r => r.id === 'rec1');
-                        const receiver2 = newReceivers.find(r => r.id === 'rec2');
-                        let sourceReceiver = null;
-
                         if (receiver1 && receiver1.currentMasas > 0) {
-                            sourceReceiver = receiver1;
-                        } else if (receiver2 && receiver2.currentMasas > 0) {
-                            sourceReceiver = receiver2;
+                            sourceReceiverId = 'rec1';
+                        } else {
+                            const receiver2 = newReceivers.find(r => r.id === 'rec2');
+                            if (receiver2 && receiver2.currentMasas > 0) {
+                                sourceReceiverId = 'rec2';
+                            }
                         }
 
-                        if (sourceReceiver) {
-                            sourceReceiver.currentMasas -= 1; // Consume the masa
-                            updatedCent.state = 'processing';
-                            updatedCent.timeRemaining = updatedCent.processingTimeSeconds;
+                        if (sourceReceiverId) {
+                            const otherCentrifuge = newCentrifuges.find(c => c.id !== cent.id);
+                            const otherCentIsIdle = otherCentrifuge?.state === 'idle';
+                            const otherCentIsHalfway = otherCentrifuge ? (otherCentrifuge.timeRemaining <= otherCentrifuge.processingTimeSeconds / 2) : false;
+
+                            if (otherCentIsIdle || otherCentIsHalfway) {
+                                const sourceReceiver = newReceivers.find(r => r.id === sourceReceiverId);
+                                if (sourceReceiver) {
+                                    sourceReceiver.currentMasas -= 1;
+                                    updatedCent.state = 'processing';
+                                    updatedCent.timeRemaining = updatedCent.processingTimeSeconds;
+                                }
+                            }
                         }
                     }
 
@@ -1279,6 +1294,12 @@ export default function OperationsClient({
                         wrapperState.totalBundles += bundlesCreated;
                         wrapperState.currentBundleProgress %= wrapperConfig.unitsPerBundle;
                     }
+                }
+
+                const areAllCentrifugesIdle = newCentrifuges.every(c => c.state === 'idle');
+                const areAllReceiversEmpty = newReceivers.every(r => r.currentMasas === 0);
+                if (areAllCentrifugesIdle && areAllReceiversEmpty && !isTachosAuto && newTachos.state !== 'ready' ) {
+                    // This could be a place to show an alert
                 }
 
                 return {
@@ -1515,7 +1536,7 @@ export default function OperationsClient({
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
                         {/* Tachos */}
-                        <div className="lg:col-span-1 p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                        <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                             <div className='flex justify-between items-start'>
                                 <h3 className="font-bold text-lg flex items-center gap-2">{simTachos.name}
                                 {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
@@ -1545,7 +1566,7 @@ export default function OperationsClient({
                             </div>
                         </div>
                         
-                        {/* Receivers & Centrifuges Columns */}
+                        {/* Receivers */}
                         <div className="flex flex-col gap-4">
                             {receivers.map((receiver) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
@@ -1557,9 +1578,6 @@ export default function OperationsClient({
                                                 <Edit className="h-4 w-4" />
                                             </Button>
                                         </div>
-                                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                            <Image src={simReceiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={simReceiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                        </div>
                                         <div className='text-center border bg-muted/30 rounded-lg p-2 mt-auto'>
                                             <p className="text-xs text-muted-foreground">Estado</p>
                                             <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
@@ -1570,6 +1588,7 @@ export default function OperationsClient({
                                 )
                             })}
                         </div>
+                        {/* Centrifuges */}
                         <div className="flex flex-col gap-4">
                             {centrifuges.map((centrifuge) => {
                                 const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
@@ -1597,6 +1616,12 @@ export default function OperationsClient({
                                 </div>
                                 )
                             })}
+                             {simulationState.centrifuges.every(c => c.state === 'idle') && simulationState.receivers.every(r => r.currentMasas === 0) && (
+                                <div className="text-center text-amber-600 font-semibold p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm flex items-center justify-center gap-2">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <span>Sin Material</span>
+                                </div>
+                            )}
                         </div>
                     </CardContent>
                 </Card>
