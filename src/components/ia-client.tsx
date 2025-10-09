@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus, Power, PowerOff } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Minus, Plus, Power, PowerOff, Droplets, Wind, Hourglass } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -23,8 +23,9 @@ import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import admin from '@/lib/firebase-admin';
 
 
 const KG_PER_QUINTAL = 50;
@@ -50,6 +51,30 @@ type SiloState = {
   currentQQ: number;
   imageUrl: string | null;
 };
+
+// NUEVOS TIPOS
+type ReceiverState = {
+    id: string;
+    name: string;
+    capacityMasas: number; // Siempre será 1
+    currentMasas: number;
+    imageUrl: string | null;
+};
+
+type CentrifugeState = {
+    id: string;
+    name: string;
+    state: 'idle' | 'purging' | 'sending';
+    purgeTimeSeconds: number; // Tiempo de purga en segundos
+    sendingTimeSeconds: number; // Tiempo que tarda en enviar a silos
+    connectedReceiverId: string;
+    imageUrl: string | null;
+
+    // Live simulation data
+    progress: number;
+    timeRemaining: number;
+};
+
 
 type ConveyorItem = {
     producedAt: number; // The simulation time it was produced
@@ -98,6 +123,8 @@ type SimulationState = {
     isFinished: boolean;
     nextAutoTachosSendTime: number;
     silos: SiloState[]; // Add silos to the simulation state
+    receivers: ReceiverState[]; // NUEVO
+    centrifuges: CentrifugeState[]; // NUEVO
     totalMasasSent: number; // Add masas sent to simulation state
 };
 
@@ -545,6 +572,9 @@ export default function OperationsClient({
     const [wrappers, setWrappers] = React.useState<WrapperState[]>([]);
     const [silos, setSilos] = React.useState<SiloState[]>([]);
     const [tachosState, setTachosState] = React.useState<SiloState>({ id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: null });
+    const [receivers, setReceivers] = React.useState<ReceiverState[]>([]); // NUEVO
+    const [centrifuges, setCentrifuges] = React.useState<CentrifugeState[]>([]); // NUEVO
+    
     const [autoTachosInterval, setAutoTachosInterval] = React.useState(10);
     const [autoTachosGoal, setAutoTachosGoal] = React.useState(6);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
@@ -601,7 +631,6 @@ export default function OperationsClient({
     const loadConfig = React.useCallback(async () => {
         const { params: defaultParams } = getDefaultConfig();
         try {
-            // --- Load parameters from LocalStorage ---
             const localConfigStr = window.localStorage.getItem(LOCAL_STORAGE_CONFIG_KEY);
             let params: SimulationParams;
             if (localConfigStr) {
@@ -627,13 +656,11 @@ export default function OperationsClient({
                  params = defaultParams;
             }
 
-            // --- Load image URLs from Firestore ---
             const docRef = doc(db, FIRESTORE_ASSETS_PATH, 'images');
             const docSnap = await getDoc(docRef);
             let imageUrls: ImageUrlConfig = getDefaultConfig().images;
             if (docSnap.exists()) {
                 const firestoreImages = docSnap.data() as ImageUrlConfig;
-                // Deep merge, preferring firestore images but falling back to defaults
                 imageUrls = {
                     machines: { ...getDefaultConfig().images.machines, ...firestoreImages.machines },
                     wrappers: { ...getDefaultConfig().images.wrappers, ...firestoreImages.wrappers },
@@ -642,7 +669,6 @@ export default function OperationsClient({
                 };
             }
 
-            // --- Combine and set state ---
             setMachines(params.machines.map(m => ({ 
                 ...m, 
                 imageUrl: imageUrls.machines[m.id] || null, 
@@ -661,6 +687,17 @@ export default function OperationsClient({
                 ...params.tachosState,
                 imageUrl: imageUrls.tachos,
             });
+            // --- NUEVA INICIALIZACIÓN ---
+            setReceivers([
+                { id: 'rec1', name: 'Recibidor 1', capacityMasas: 1, currentMasas: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media' },
+                { id: 'rec2', name: 'Recibidor 2', capacityMasas: 1, currentMasas: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media' },
+            ]);
+            setCentrifuges([
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', purgeTimeSeconds: 2 * 3600, sendingTimeSeconds: 3600, connectedReceiverId: 'rec1', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', purgeTimeSeconds: 2 * 3600, sendingTimeSeconds: 3600, connectedReceiverId: 'rec2', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+            ]);
+            // --- FIN NUEVA INICIALIZACIÓN ---
+
             setAutoTachosInterval(params.autoTachosInterval);
             setAutoTachosGoal(params.autoTachosGoal);
             setIsTachosAuto(params.isTachosAuto);
@@ -719,7 +756,7 @@ export default function OperationsClient({
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.details || 'Server error');
+                throw new Error(errorData.details || `Server error: ${response.statusText}`);
             }
 
             const { downloadURL } = await response.json();
@@ -735,7 +772,6 @@ export default function OperationsClient({
             
             await setDoc(docRef, { [fieldToUpdate]: downloadURL }, { merge: true });
 
-            // Update local state to reflect the change immediately
             if (type === 'machine') {
                 setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl: downloadURL } : m));
             } else if (type === 'silo') {
@@ -751,7 +787,7 @@ export default function OperationsClient({
             console.error("Error during image upload and save:", error);
             toast({ 
                 title: "Error al subir imagen", 
-                description: `No se pudo guardar la imagen. Error: ${error.message}`, 
+                description: `No se pudo guardar la imagen. ${error.message}`, 
                 variant: "destructive"
             });
         } finally {
@@ -784,55 +820,46 @@ export default function OperationsClient({
 
     const handleRestoreDefaults = async () => {
         const { params, images } = getDefaultConfig();
-        // Save default params to localStorage
         window.localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(params)); 
         
-        // Reset images in Firestore
         try {
             await setDoc(doc(db, FIRESTORE_ASSETS_PATH, 'images'), images);
         } catch (error) {
             console.error("Error restoring default images in Firestore", error);
         }
         
-        await loadConfig(); // Reload from the newly saved default config
+        await loadConfig();
     };
     
-    // --- Raw Material State ---
-    const sendMasasToSilos = React.useCallback((amount: number, currentSilos: SiloState[]): SiloState[] => {
-      let qqToDistribute = amount * MASA_QQ_AMOUNT;
-      const newSilos: SiloState[] = JSON.parse(JSON.stringify(currentSilos)); // Deep copy
-      const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
-      const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel');
+    const sendMasaToReceiver = React.useCallback((currentReceivers: ReceiverState[]): { success: boolean; newReceivers: ReceiverState[] } => {
+        const newReceivers = JSON.parse(JSON.stringify(currentReceivers));
+        const availableReceiver = newReceivers.find((r: ReceiverState) => r.currentMasas < r.capacityMasas);
 
-      if (!familiarSilo || !granelSilo) return currentSilos;
-
-      const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-      let qqForFamiliar = Math.min(qqToDistribute, spaceInFamiliar);
-      familiarSilo.currentQQ += qqForFamiliar;
-      
-      const remainder = qqToDistribute - qqForFamiliar;
-      if (remainder > 0) {
-        const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-        let qqForGranel = Math.min(remainder, spaceInGranel);
-        granelSilo.currentQQ += qqForGranel;
-      }
-      return newSilos;
+        if (availableReceiver) {
+            availableReceiver.currentMasas += 1;
+            return { success: true, newReceivers };
+        }
+        return { success: false, newReceivers: currentReceivers };
     }, []);
 
-    const handleManualSendMasas = () => {
+    const handleManualSendMasa = () => {
         setSimulationState(prev => {
-            const newSilosState = sendMasasToSilos(masasToSend, prev.silos);
-            return {
-                ...prev,
-                silos: newSilosState,
-                totalMasasSent: prev.totalMasasSent + masasToSend,
+            const { success, newReceivers } = sendMasaToReceiver(prev.receivers);
+            if (success) {
+                toast({ title: 'Masa enviada al recibidor' });
+                return {
+                    ...prev,
+                    receivers: newReceivers,
+                    totalMasasSent: prev.totalMasasSent + 1,
+                };
+            } else {
+                toast({ title: 'Error', description: 'Todos los recibidores están llenos.', variant: 'destructive' });
+                return prev;
             }
         });
-        setMasasToSend(1);
     };
 
-    // --- Simulation State ---
-    const [isSimulating, setIsSimulating] = React.useState(false); // Represents if the clock is running
+    const [isSimulating, setIsSimulating] = React.useState(false);
     
     const createInitialSimulationState = React.useCallback((): SimulationState => ({
         elapsedTime: 0,
@@ -844,8 +871,10 @@ export default function OperationsClient({
         isFinished: false,
         nextAutoTachosSendTime: 0,
         silos: JSON.parse(JSON.stringify(silos)),
+        receivers: JSON.parse(JSON.stringify(receivers)),
+        centrifuges: JSON.parse(JSON.stringify(centrifuges)),
         totalMasasSent: 0,
-    }), [silos]);
+    }), [silos, receivers, centrifuges]);
     
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
     
@@ -868,8 +897,8 @@ export default function OperationsClient({
     const wrappersRef = React.useRef(wrappers);
     React.useEffect(() => { wrappersRef.current = wrappers; }, [wrappers]);
 
-    const sendMasasToSilosRef = React.useRef(sendMasasToSilos);
-    React.useEffect(() => { sendMasasToSilosRef.current = sendMasasToSilos; }, [sendMasasToSilos]);
+    const sendMasaToReceiverRef = React.useRef(sendMasaToReceiver);
+    React.useEffect(() => { sendMasaToReceiverRef.current = sendMasaToReceiver; }, [sendMasaToReceiver]);
 
     React.useEffect(() => {
         if (isTachosAuto && isTachosGoalEnabled && simulationState.totalMasasSent >= autoTachosGoal) {
@@ -991,18 +1020,78 @@ export default function OperationsClient({
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
                 
                 let nextAutoSendTime = prev.nextAutoTachosSendTime;
-                let newSilos = prev.silos;
+                let newReceivers = [...prev.receivers];
+                let newCentrifuges = [...prev.centrifuges];
+                let newSilos = [...prev.silos];
                 let newTotalMasasSent = prev.totalMasasSent;
 
                 const goalMet = isTachosGoalEnabled && prev.totalMasasSent >= autoTachosGoal;
                 
                 if (isTachosAuto && !goalMet && newElapsedTime >= nextAutoSendTime) {
-                    newSilos = sendMasasToSilosRef.current(1, prev.silos);
-                    newTotalMasasSent = prev.totalMasasSent + 1;
-                    nextAutoSendTime = newElapsedTime + (autoTachosInterval * 60);
+                    const { success, newReceivers: updatedReceivers } = sendMasaToReceiverRef.current(newReceivers);
+                    if (success) {
+                        newReceivers = updatedReceivers;
+                        newTotalMasasSent = prev.totalMasasSent + 1;
+                        nextAutoSendTime = newElapsedTime + (autoTachosInterval * 60);
+                    }
                 } else if (goalMet && isTachosAuto) {
                     setIsTachosAuto(false);
                 }
+
+                // Process Centrifuges
+                newCentrifuges = newCentrifuges.map(cent => {
+                    let updatedCent = { ...cent };
+
+                    // 1. Start purging if idle and receiver has masa
+                    if (updatedCent.state === 'idle') {
+                        const connectedReceiver = newReceivers.find(r => r.id === updatedCent.connectedReceiverId);
+                        if (connectedReceiver && connectedReceiver.currentMasas > 0) {
+                            connectedReceiver.currentMasas -= 1;
+                            updatedCent.state = 'purging';
+                            updatedCent.timeRemaining = updatedCent.purgeTimeSeconds;
+                        }
+                    }
+
+                    // 2. Update progress if purging or sending
+                    if (updatedCent.state === 'purging' || updatedCent.state === 'sending') {
+                        updatedCent.timeRemaining -= elapsedIncrement;
+                        const totalTime = updatedCent.state === 'purging' ? updatedCent.purgeTimeSeconds : updatedCent.sendingTimeSeconds;
+                        updatedCent.progress = Math.max(0, 100 * (1 - updatedCent.timeRemaining / totalTime));
+
+                        if (updatedCent.timeRemaining <= 0) {
+                            if (updatedCent.state === 'purging') {
+                                updatedCent.state = 'sending';
+                                updatedCent.timeRemaining = updatedCent.sendingTimeSeconds;
+                            } else { // sending finished
+                                updatedCent.state = 'idle';
+                                updatedCent.progress = 0;
+                            }
+                        }
+                    }
+                    
+                    // 3. If sending, add QQ to silos
+                    if (updatedCent.state === 'sending') {
+                        const qqPerSecond = MASA_QQ_AMOUNT / updatedCent.sendingTimeSeconds;
+                        const qqThisTick = qqPerSecond * elapsedIncrement;
+                        
+                        const familiarSilo = newSilos.find(s => s.id === 'familiar');
+                        const granelSilo = newSilos.find(s => s.id === 'granel');
+
+                        if (familiarSilo && granelSilo) {
+                            const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+                            const qqForFamiliar = Math.min(qqThisTick, spaceInFamiliar);
+                            familiarSilo.currentQQ += qqForFamiliar;
+
+                            const remainder = qqThisTick - qqForFamiliar;
+                            if (remainder > 0) {
+                                const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+                                const qqForGranel = Math.min(remainder, spaceInGranel);
+                                granelSilo.currentQQ += qqForGranel;
+                            }
+                        }
+                    }
+                    return updatedCent;
+                });
 
                 const currentMachines = machinesRef.current;
                 const activeMachinesConfig = currentMachines
@@ -1028,7 +1117,7 @@ export default function OperationsClient({
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
                     const finalSilos = newSilos.map(s => s.id === 'familiar' ? { ...s, currentQQ: 0 } : s);
                     pauseClock();
-                    return {...prev, silos: finalSilos, elapsedTime: newElapsedTime, isFinished: true };
+                    return {...prev, silos: finalSilos, elapsedTime: newElapsedTime, isFinished: true, centrifuges: newCentrifuges, receivers: newReceivers };
                 }
 
                 const newMachineTotals = { ...prev.machineTotals };
@@ -1049,8 +1138,6 @@ export default function OperationsClient({
                     activeMachinesConfig.forEach(m => {
                         const unitsProducedThisTick = m.unitsPerSecond * elapsedIncrement;
                         newMachineTotals[m.id] += unitsProducedThisTick;
-
-                        // Find which wrapper this machine is connected to
                         const targetWrapper = wrappersRef.current.find(w => w.machineIds.includes(m.id));
                         if (targetWrapper) {
                             unitsProducedByWrapper[targetWrapper.id] += unitsProducedThisTick;
@@ -1060,7 +1147,6 @@ export default function OperationsClient({
                 
                 const newWrappersState: SimulationState['wrappers'] = JSON.parse(JSON.stringify(prev.wrappers));
                 
-                // 1. Add newly produced items to conveyors based on machine assignment
                 for (const wrapperConfig of wrappersRef.current) {
                     const wrapperId = wrapperConfig.id;
                     const unitsForThisWrapper = unitsProducedByWrapper[wrapperId];
@@ -1069,12 +1155,10 @@ export default function OperationsClient({
                     }
                 }
 
-                // 2. Process each wrapper independently
                 for (const wrapperConfig of wrappersRef.current) {
                     const wrapperId = wrapperConfig.id;
                     const wrapperState = newWrappersState[wrapperId];
                     
-                    // Items arrive at buffer
                     const arrivedItems: ConveyorItem[] = [];
                     const remainingOnBelt: ConveyorItem[] = [];
                     wrapperState.conveyorBelt.forEach((item: ConveyorItem) => {
@@ -1088,7 +1172,6 @@ export default function OperationsClient({
                     wrapperState.conveyorBelt = remainingOnBelt;
                     wrapperState.buffer += totalArrivedUnits;
 
-                    // Process units from buffer
                     const wrapperUnitsPerSecond = wrapperConfig.capacity / 60;
                     const unitsToProcessThisTick = wrapperUnitsPerSecond * elapsedIncrement;
                     const unitsToTakeFromBuffer = Math.min(unitsToProcessThisTick, wrapperState.buffer);
@@ -1110,6 +1193,8 @@ export default function OperationsClient({
                     wrappers: newWrappersState,
                     nextAutoTachosSendTime: nextAutoSendTime,
                     silos: newSilos,
+                    receivers: newReceivers,
+                    centrifuges: newCentrifuges,
                     totalMasasSent: newTotalMasasSent,
                 };
             });
@@ -1121,7 +1206,6 @@ export default function OperationsClient({
         if (resetMaterial) {
             setSimulationState(createInitialSimulationState());
         } else {
-            // Keep material, reset time and production
             const currentSilos = JSON.parse(JSON.stringify(simulationState.silos));
             const currentMasasSent = simulationState.totalMasasSent;
             setSimulationState({
@@ -1179,76 +1263,49 @@ export default function OperationsClient({
         <>
             <div className="mb-8">
                 <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Producción</h3>
-                <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30">
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                <div className="flex flex-col items-center gap-2 text-center">
-                                    <Beaker className="h-10 w-10 text-primary" />
-                                    <h4 className="font-semibold">Tachos</h4>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Proceso de donde se genera la materia prima.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-
-                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
-
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                <div className="flex flex-col items-center gap-2 text-center">
-                                    <Warehouse className="h-10 w-10 text-primary" />
-                                    <h4 className="font-semibold">Silo Familiar</h4>
-                                    <p className="text-sm text-muted-foreground">{familiarSiloQQ.toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Materia prima disponible para la producción.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-
-                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
-                    
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger>
-                                <div className={cn("flex flex-col items-center gap-2 text-center p-2 rounded-md", staticSimulationResults.isWrapperBottleneck && 'bg-destructive/10')}>
-                                    <Package className="h-10 w-10 text-primary" />
-                                    <h4 className="font-semibold">Envasadoras</h4>
-                                    <p className={cn("text-sm", staticSimulationResults.isWrapperBottleneck ? 'text-destructive font-bold' : 'text-muted-foreground')}>
-                                        {(staticSimulationResults.totalBagsPerMinuteFromPackers).toLocaleString(undefined, {maximumFractionDigits: 0})} fundas/min
-                                    </p>
-                                </div>
-                            </TooltipTrigger>
-                             <TooltipContent>
-                                <p>Producción total de las envasadoras activas.</p>
-                                {staticSimulationResults.isWrapperBottleneck && <p className="text-destructive font-semibold">¡Limitadas por la enfardadora!</p>}
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                    
-                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0" />
-                    
-                    <TooltipProvider>
-                         <Tooltip>
-                            <TooltipTrigger>
-                                <div className="flex flex-col items-center gap-2 text-center">
-                                    <PackageCheck className="h-10 w-10 text-primary" />
-                                    <h4 className="font-semibold">Enfardadora</h4>
-                                    <p className={cn("text-sm font-semibold", staticSimulationResults.isWrapperBottleneck ? 'text-destructive' : 'text-green-600')}>
-                                        {staticSimulationResults.bundlesPerMinute.toLocaleString(undefined, {maximumFractionDigits: 0})} fardos/min
-                                    </p>
-                                </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Producción efectiva de la línea de empaque final.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30 overflow-x-auto">
+                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                        <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
+                            <Beaker className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold">Tachos</h4>
+                        </div>
+                    </TooltipTrigger> <TooltipContent><p>Inicio: Generación de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
+                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                        <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
+                            <Droplets className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold">Recibidores</h4>
+                        </div>
+                    </TooltipTrigger> <TooltipContent><p>Almacenamiento temporal de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
+                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                        <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
+                            <Hourglass className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold">Centrífugas</h4>
+                        </div>
+                    </TooltipTrigger> <TooltipContent><p>Purga y lavado del azúcar.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
+                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                        <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
+                            <Warehouse className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold">Silos</h4>
+                            <p className="text-sm text-muted-foreground">{familiarSiloQQ.toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
+                        </div>
+                    </TooltipTrigger> <TooltipContent><p>Almacenamiento de azúcar seca.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
+                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                        <div className={cn("flex flex-col items-center gap-2 text-center p-2 rounded-md min-w-[90px]", staticSimulationResults.isWrapperBottleneck && 'bg-destructive/10')}>
+                            <Package className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold">Envasado</h4>
+                        </div>
+                    </TooltipTrigger> <TooltipContent><p>Producción de las envasadoras.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
+                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                        <div className="flex flex-col items-center gap-2 text-center min-w-[90px]">
+                            <PackageCheck className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold">Enfardado</h4>
+                        </div>
+                    </TooltipTrigger> <TooltipContent><p>Empaque final en fardos.</p></TooltipContent> </Tooltip> </TooltipProvider>
                 </div>
                  {staticSimulationResults.isWrapperBottleneck && (
                     <div className="text-center text-destructive text-sm font-semibold mt-2 flex items-center justify-center gap-2">
@@ -1339,13 +1396,9 @@ export default function OperationsClient({
                                 </Tooltip>
                             </TooltipProvider>
                         </div>
-                         <div className="text-right">
-                            <p className="text-sm text-muted-foreground">Inventario para Producción</p>
-                            <p className="text-2xl font-bold text-primary">{familiarSiloQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
-                        </div>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {/* Tachos Control Panel */}
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+                        {/* Tachos */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                              <div className='flex justify-between items-start'>
                                 <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
@@ -1364,17 +1417,61 @@ export default function OperationsClient({
                                       <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
                                       <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                     </div>
-                                    <Label className="text-center block">Masas a Enviar ({MASA_QQ_AMOUNT} QQ c/u)</Label>
-                                    <div className="flex items-center justify-center gap-2">
-                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => Math.max(1, p - 1))} disabled={isTachosAuto}><Minus className="h-4 w-4" /></Button>
-                                        <span className="text-xl font-bold w-12 text-center">{masasToSend}</span>
-                                        <Button size="icon" variant="outline" onClick={() => setMasasToSend(p => p + 1)} disabled={isTachosAuto}><Plus className="h-4 w-4" /></Button>
-                                    </div>
-                                    <Button className="w-full" onClick={handleManualSendMasas} disabled={isTachosAuto}>Enviar a Silos</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simulationState.receivers.every(r => r.currentMasas >= r.capacityMasas)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
                                </div>
                            </div>
                         </div>
 
+                        {/* Recibidores */}
+                        {simulationState.receivers.map(receiver => (
+                            <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                                <h3 className="font-bold text-lg">{receiver.name}</h3>
+                                <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                    <Image src={receiver.imageUrl || ""} alt={receiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                </div>
+                                <div className="space-y-2 pt-2">
+                                    <Label className="text-sm">Contenido (Masas)</Label>
+                                    <div className='text-center border bg-muted/30 rounded-lg p-4'>
+                                        <p className="text-3xl font-bold text-primary">{receiver.currentMasas} / {receiver.capacityMasas}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* Centrífugas */}
+                        {simulationState.centrifuges.map(cent => {
+                            const getStateProps = () => {
+                                switch (cent.state) {
+                                    case 'purging': return { color: 'bg-blue-500', label: 'Purgando', icon: <Hourglass className="h-4 w-4" /> };
+                                    case 'sending': return { color: 'bg-green-500', label: 'Enviando a Silos', icon: <Wind className="h-4 w-4" /> };
+                                    default: return { color: 'bg-gray-400', label: 'Libre', icon: <PowerOff className="h-4 w-4" /> };
+                                }
+                            };
+                            const { color, label, icon } = getStateProps();
+                            return (
+                                <div key={cent.id} className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                                    <h3 className="font-bold text-lg">{cent.name}</h3>
+                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                        <Image src={cent.imageUrl || ""} alt={cent.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                    </div>
+                                    <div className="space-y-2 pt-2">
+                                        <div className='flex justify-between items-center text-sm'>
+                                            <Label>Estado</Label>
+                                            <Badge variant="secondary" className={cn(color, "text-white")}>
+                                                {icon}
+                                                <span>{label}</span>
+                                            </Badge>
+                                        </div>
+                                        <Progress value={cent.progress} indicatorClassName={color} />
+                                        <p className="text-xs text-muted-foreground text-center">
+                                            {cent.state !== 'idle' ? `Tiempo restante: ${formatElapsedTime(cent.timeRemaining)}` : 'Esperando masa...'}
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </CardContent>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                         {/* Silo Cards */}
                         {simulationState.silos.map((silo) => {
                             const currentKg = silo.currentQQ * KG_PER_QUINTAL;
