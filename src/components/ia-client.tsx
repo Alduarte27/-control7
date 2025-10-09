@@ -904,6 +904,7 @@ export default function OperationsClient({
     
     const sendMasaToReceiver = React.useCallback((currentReceivers: ReceiverState[]): { success: boolean; newReceivers: ReceiverState[] } => {
         const newReceivers = JSON.parse(JSON.stringify(currentReceivers));
+        // Find the first receiver that is not full
         const availableReceiver = newReceivers.find((r: ReceiverState) => r.currentMasas < r.capacityMasas);
 
         if (availableReceiver) {
@@ -922,7 +923,7 @@ export default function OperationsClient({
                     ...prev,
                     receivers: newReceivers,
                     totalMasasSent: prev.totalMasasSent + 1,
-                    tachos: { ...prev.tachos, state: 'idle' }
+                    tachos: { ...prev.tachos, state: 'idle', progress: 0, timeRemaining: 0 }
                 };
             } else {
                 toast({ title: 'Error', description: 'Todos los recibidores están llenos.', variant: 'destructive' });
@@ -1121,12 +1122,13 @@ export default function OperationsClient({
                     }
 
                     if (newTachos.state === 'ready') {
-                        const availableReceiver = newReceivers.find(r => r.currentMasas < r.capacityMasas);
-                        if (availableReceiver) {
-                            availableReceiver.currentMasas += 1;
+                        const { success, newReceivers: updatedReceivers } = sendMasaToReceiver(newReceivers);
+                        if (success) {
+                            newReceivers = updatedReceivers;
                             newTotalMasasSent += 1;
-                            newTachos.state = 'idle';
+                            newTachos.state = 'idle'; // Reset for next cook cycle
                             newTachos.progress = 0;
+                            newTachos.timeRemaining = 0;
                         }
                     }
                 } else if (goalMet && isTachosAuto) {
@@ -1139,10 +1141,19 @@ export default function OperationsClient({
                     let updatedCent = { ...cent };
 
                     if (updatedCent.state === 'idle') {
-                        // Find any receiver with a masa
-                        const availableReceiver = newReceivers.find(r => r.currentMasas > 0);
-                        if (availableReceiver) {
-                            availableReceiver.currentMasas -= 1; // Consume the masa
+                        // Prioritized consumption: check rec1 first, then rec2.
+                        const receiver1 = newReceivers.find(r => r.id === 'rec1');
+                        const receiver2 = newReceivers.find(r => r.id === 'rec2');
+                        let sourceReceiver = null;
+
+                        if (receiver1 && receiver1.currentMasas > 0) {
+                            sourceReceiver = receiver1;
+                        } else if (receiver2 && receiver2.currentMasas > 0) {
+                            sourceReceiver = receiver2;
+                        }
+
+                        if (sourceReceiver) {
+                            sourceReceiver.currentMasas -= 1; // Consume the masa
                             updatedCent.state = 'processing';
                             updatedCent.timeRemaining = updatedCent.processingTimeSeconds;
                         }
@@ -1535,60 +1546,58 @@ export default function OperationsClient({
                         </div>
                         
                         {/* Receivers & Centrifuges Columns */}
-                        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-                           {/* Receivers Column */}
-                            <div className="flex flex-col gap-4">
-                                {receivers.map((receiver) => {
-                                    const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
-                                    return (
-                                        <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
-                                            <div className='flex justify-between items-start mb-2'>
-                                                <h3 className="font-bold text-lg">{receiver.name}</h3>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <div className='text-center border bg-muted/30 rounded-lg p-2 mt-auto'>
-                                                <p className="text-xs text-muted-foreground">Estado</p>
-                                                <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
-                                                    {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
-                                                </p>
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                            {/* Centrifuges Column */}
-                            <div className="flex flex-col gap-4">
-                                {centrifuges.map((centrifuge) => {
-                                    const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
-                                    const stateConfig = {
-                                        idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
-                                        processing: { text: "Procesando", color: "text-amber-600", icon: Activity },
-                                    };
-                                    const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
-                                    return (
-                                    <div key={centrifuge.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
+                        <div className="flex flex-col gap-4">
+                            {receivers.map((receiver) => {
+                                const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
+                                return (
+                                    <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
                                         <div className='flex justify-between items-start mb-2'>
-                                            <h3 className="font-bold text-lg">{simCentrifuge.name}</h3>
-                                            {/* Future Edit Button */}
+                                            <h3 className="font-bold text-lg">{receiver.name}</h3>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
                                         </div>
                                          <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                            <Image src={simCentrifuge.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media"} alt={simCentrifuge.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                            <Image src={simReceiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={simReceiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
                                         </div>
-                                        <div className="space-y-1 mt-auto">
-                                            <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
-                                                <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
-                                                <span>{formatTimeSeconds(simCentrifuge.timeRemaining)}</span>
-                                            </div>
-                                            <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
+                                        <div className='text-center border bg-muted/30 rounded-lg p-2 mt-auto'>
+                                            <p className="text-xs text-muted-foreground">Estado</p>
+                                            <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
+                                                {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
+                                            </p>
                                         </div>
                                     </div>
-                                    )
-                                })}
-                            </div>
+                                )
+                            })}
                         </div>
-
+                        <div className="flex flex-col gap-4">
+                            {centrifuges.map((centrifuge) => {
+                                const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
+                                const stateConfig = {
+                                    idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
+                                    processing: { text: "Procesando", color: "text-amber-600", icon: Activity },
+                                };
+                                const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
+                                return (
+                                <div key={centrifuge.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
+                                    <div className='flex justify-between items-start mb-2'>
+                                        <h3 className="font-bold text-lg">{simCentrifuge.name}</h3>
+                                        {/* Future Edit Button */}
+                                    </div>
+                                     <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                        <Image src={simCentrifuge.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media"} alt={simCentrifuge.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                    </div>
+                                    <div className="space-y-1 mt-auto">
+                                        <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
+                                            <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
+                                            <span>{formatTimeSeconds(simCentrifuge.timeRemaining)}</span>
+                                        </div>
+                                        <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
+                                    </div>
+                                </div>
+                                )
+                            })}
+                        </div>
                     </CardContent>
                 </Card>
 
