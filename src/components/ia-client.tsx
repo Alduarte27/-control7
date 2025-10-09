@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -761,8 +761,8 @@ export default function OperationsClient({
             });
             // --- NUEVA INICIALIZACIÓN ---
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', purgeTimeSeconds: 2 * 3600, sendingTimeSeconds: 3600, connectedReceiverId: 'rec1', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', purgeTimeSeconds: 2 * 3600, sendingTimeSeconds: 3600, connectedReceiverId: 'rec2', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', purgeTimeSeconds: 2 * 60, sendingTimeSeconds: 1 * 60, connectedReceiverId: 'rec1', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', purgeTimeSeconds: 2 * 60, sendingTimeSeconds: 1 * 60, connectedReceiverId: 'rec2', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
             ]);
             // --- FIN NUEVA INICIALIZACIÓN ---
 
@@ -1317,6 +1317,13 @@ export default function OperationsClient({
         const m = Math.round((hours - h) * 60);
         return `${h}h ${m}m`;
     };
+    
+    const formatTimeSeconds = (totalSeconds: number) => {
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        return `${minutes}m ${seconds}s`;
+    };
+
 
     const getSiloFillColor = (percentage: number): string => {
         if (percentage < 20) return 'bg-red-500';
@@ -1529,9 +1536,37 @@ export default function OperationsClient({
                             })}
                         </div>
                         
-                        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-                           <p>centrifuga 1</p>
-                           <p>centrifuga 2</p>
+                        {/* Centrifuges */}
+                        <div className="lg:col-span-2 grid grid-cols-1 gap-4">
+                            {centrifuges.map(centrifuge => {
+                                const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
+                                const stateConfig = {
+                                    idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
+                                    purging: { text: "Purgando", color: "text-amber-600", icon: Activity },
+                                    sending: { text: "Enviando", color: "text-green-600", icon: CheckCircle2 },
+                                };
+                                const currentConfig = stateConfig[simCentrifuge.state];
+
+                                return (
+                                    <div key={simCentrifuge.id} className="p-4 border rounded-lg space-y-3 bg-background flex items-center gap-4">
+                                        <div className="aspect-square w-24 bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                            <Image src={simCentrifuge.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media"} alt={simCentrifuge.name} width={100} height={100} className="object-contain w-full h-full" unoptimized/>
+                                        </div>
+                                        <div className="flex-1 space-y-2">
+                                            <div className='flex justify-between items-start'>
+                                                <h3 className="font-bold text-lg">{simCentrifuge.name}</h3>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <div className={cn("flex justify-between items-center text-xs font-medium", currentConfig.color)}>
+                                                    <span className="flex items-center gap-1.5"><currentConfig.icon className="h-3 w-3" /> {currentConfig.text}</span>
+                                                    <span>{formatTimeSeconds(simCentrifuge.timeRemaining)}</span>
+                                                </div>
+                                                <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentConfig.color.replace("text-", "bg-"))} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     </CardContent>
                 </Card>
@@ -1542,25 +1577,26 @@ export default function OperationsClient({
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Silo Cards */}
-                        {simulationState.silos.map((silo) => {
-                            const currentKg = silo.currentQQ * KG_PER_QUINTAL;
-                            const fillPercentage = silo.capacityQQ > 0 ? (silo.currentQQ / silo.capacityQQ) * 100 : 0;
+                        {silos.map((silo) => {
+                            const simSilo = simulationState.silos.find(s => s.id === silo.id) || silo;
+                            const currentKg = simSilo.currentQQ * KG_PER_QUINTAL;
+                            const fillPercentage = simSilo.capacityQQ > 0 ? (simSilo.currentQQ / simSilo.capacityQQ) * 100 : 0;
                             const fillColorClass = getSiloFillColor(fillPercentage);
-                            const isProductionSilo = silo.id === 'familiar';
+                            const isProductionSilo = simSilo.id === 'familiar';
 
                             return (
-                                <div key={silo.id} className="p-4 border rounded-lg space-y-3 bg-background">
+                                <div key={simSilo.id} className="p-4 border rounded-lg space-y-3 bg-background">
                                      <div className='flex justify-between items-start'>
-                                        <h3 className="font-bold text-lg">{silo.name}</h3>
+                                        <h3 className="font-bold text-lg">{simSilo.name}</h3>
                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
                                             <Edit className="h-4 w-4" />
                                         </Button>
                                     </div>
                                     <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                        <Image src={silo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media"} alt={silo.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                        <Image src={simSilo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media"} alt={simSilo.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <Label className='text-xs text-muted-foreground'>Capacidad: {silo.capacityQQ.toLocaleString()} QQ</Label>
+                                        <Label className='text-xs text-muted-foreground'>Capacidad: {simSilo.capacityQQ.toLocaleString()} QQ</Label>
                                     </div>
                                     <div className="space-y-2 pt-2">
                                         <Label className="text-sm">Nivel: {currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</Label>
