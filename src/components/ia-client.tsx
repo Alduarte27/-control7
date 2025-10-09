@@ -1363,7 +1363,7 @@ export default function OperationsClient({
 
                 <Card>
                     <CardHeader>
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center justify-between">
                             <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
                             <TooltipProvider>
                                 <Tooltip>
@@ -1398,7 +1398,7 @@ export default function OperationsClient({
                     <CardContent>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
                             {/* Tachos */}
-                            <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                            <div className="lg:col-span-1 p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                                 <div className='flex justify-between items-start'>
                                     <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
                                     {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
@@ -1422,21 +1422,30 @@ export default function OperationsClient({
                             </div>
                             
                             {/* Receivers */}
-                            <div className="col-span-1 lg:col-span-2 grid grid-cols-2 gap-4">
-                                {simulationState.receivers.map((receiver) => (
-                                    <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background">
-                                        <h3 className="font-bold text-lg">{receiver.name}</h3>
-                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                            <Image src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={receiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                            <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+                                {receivers.map((receiver) => {
+                                    const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
+                                    return (
+                                        <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background">
+                                            <h3 className="font-bold text-lg">{receiver.name}</h3>
+                                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                                <Image src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={receiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                            </div>
+                                            <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                                <p className="text-xs text-muted-foreground">Estado</p>
+                                                <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
+                                                    {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
+                                                </p>
+                                            </div>
                                         </div>
-                                        <div className='text-center border bg-muted/30 rounded-lg p-2'>
-                                            <p className="text-xs text-muted-foreground">Estado</p>
-                                            <p className={cn("text-lg font-bold", receiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
-                                                {receiver.currentMasas} / {receiver.capacityMasas} Masas
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
+                            </div>
+
+                            {/* Centrifuges */}
+                            <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+                                <div>centrifuga 1</div>
+                                <div>centrifuga 2</div>
                             </div>
                         </div>
                     </CardContent>
