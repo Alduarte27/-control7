@@ -27,7 +27,6 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 const KG_PER_QUINTAL = 50;
-const MASA_QQ_AMOUNT = 380;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 const LOCAL_STORAGE_CONFIG_KEY = 'simulationConfig';
 const FIRESTORE_ASSETS_PATH = 'simulation_assets';
@@ -53,7 +52,7 @@ type SiloState = {
 type ReceiverState = {
     id: string;
     name: string;
-    capacityQQ: number; // This will represent the number of "masas" it can hold
+    capacityQQ: number; // Represents the number of "masas" it can hold
     currentQQ: number; // The current amount of material in QQ
     imageUrl: string | null;
 };
@@ -109,7 +108,8 @@ type SimulationParams = {
     tachosGoal: number;
     isTachosAuto: boolean;
     isTachosGoalEnabled: boolean;
-    centrifugeCycleTime: number; // Replaces purgeTime
+    masaQQAmount: number;
+    centrifugeCycleTime: number; 
     isCentrifugesAuto: boolean;
 };
 
@@ -261,21 +261,17 @@ function SiloEditDialog({
     open,
     onOpenChange,
     onSave,
-    onImageSave,
     isTachos,
     tachosConfig,
     onTachosConfigChange,
-    isUploading,
 }: {
     silo: SiloState | TachosSimState;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<SiloState, 'imageUrl'>) => void;
-    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => Promise<void>;
     isTachos?: boolean;
-    tachosConfig?: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number };
-    onTachosConfigChange?: (config: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number }) => void;
-    isUploading: boolean;
+    tachosConfig?: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number; masaQQAmount: number };
+    onTachosConfigChange?: (config: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number; masaQQAmount: number }) => void;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
     const [localTachosConfig, setLocalTachosConfig] = React.useState(tachosConfig);
@@ -294,15 +290,7 @@ function SiloEditDialog({
     const handleTachosConfigFieldChange = (field: keyof typeof localTachosConfig, value: any) => {
         setLocalTachosConfig(prev => (prev ? { ...prev, [field]: value } : undefined));
     };
-
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        await onImageSave(isTachos ? 'tachos' : 'silo', silo.id, file);
-    };
-
-    const fileInputId = `silo-modal-image-upload-${silo.id}`;
-
+    
     const handleSaveChanges = () => {
         const { imageUrl, ...configToSave } = editedSilo as any;
         onSave(configToSave);
@@ -319,39 +307,6 @@ function SiloEditDialog({
                     <DialogTitle>Editar {silo.name}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
-                    <div className="space-y-2">
-                        <Label>Previsualización de la Imagen</Label>
-                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                            {isUploading ? (
-                                <div className="flex flex-col items-center gap-2">
-                                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                                    <p className="text-sm text-muted-foreground">Subiendo...</p>
-                                </div>
-                            ) : (
-                                <Image
-                                    src={silo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"}
-                                    alt={silo.name}
-                                    width={600}
-                                    height={400}
-                                    className="object-contain w-full h-full"
-                                    unoptimized
-                                />
-                            )}
-                        </div>
-                        <input
-                            type="file"
-                            id={fileInputId}
-                            className="hidden"
-                            accept="image/*"
-                            onChange={handleFileSelect}
-                            disabled={isUploading}
-                        />
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()} disabled={isUploading}>
-                            <Upload className="mr-2 h-3 w-3" />
-                            {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
-                        </Button>
-                    </div>
-                    <Separator />
                     <div className="space-y-1.5">
                         <Label htmlFor={`silo-name-${silo.id}`}>Nombre</Label>
                         <Input id={`silo-name-${silo.id}`} type="text" value={editedSilo.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
@@ -365,51 +320,61 @@ function SiloEditDialog({
                     {isTachos && localTachosConfig && (
                         <>
                             <Separator />
-                            <div className="space-y-4">
-                                <h4 className="font-medium text-sm">Configuración de Automatización</h4>
-                                <div className="flex items-center justify-between">
-                                    <Label htmlFor="auto-mode-switch" className="text-sm">Modo Automático</Label>
-                                    <Switch
-                                        id="auto-mode-switch"
-                                        checked={localTachosConfig.isAuto}
-                                        onCheckedChange={(val) => handleTachosConfigFieldChange('isAuto', val)}
+                            <h4 className="font-medium text-sm">Configuración de Tachos</h4>
+                             <div className="space-y-1.5">
+                                <Label htmlFor="auto-masa-qq">QQ por Masa</Label>
+                                <Input
+                                    id="auto-masa-qq"
+                                    type="number"
+                                    value={localTachosConfig.masaQQAmount}
+                                    onChange={(e) => handleTachosConfigFieldChange('masaQQAmount', Number(e.target.value))}
+                                    min="1"
+                                />
+                            </div>
+                            <Separator />
+                            <h4 className="font-medium text-sm">Configuración de Automatización</h4>
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="auto-mode-switch" className="text-sm">Modo Automático</Label>
+                                <Switch
+                                    id="auto-mode-switch"
+                                    checked={localTachosConfig.isAuto}
+                                    onCheckedChange={(val) => handleTachosConfigFieldChange('isAuto', val)}
+                                />
+                            </div>
+                            <div className={cn("space-y-3 transition-opacity", !localTachosConfig.isAuto && "opacity-50")}>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="auto-cooktime" className="text-xs">Tiempo de Cocción (minutos)</Label>
+                                    <Input
+                                        id="auto-cooktime"
+                                        type="number"
+                                        value={localTachosConfig.cookTime}
+                                        onChange={(e) => handleTachosConfigFieldChange('cookTime', Number(e.target.value))}
+                                        disabled={!localTachosConfig.isAuto}
+                                        min="1"
                                     />
                                 </div>
-                                <div className={cn("space-y-3 transition-opacity", !localTachosConfig.isAuto && "opacity-50")}>
+                                <div className="flex items-center justify-between">
+                                    <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
+                                    <Switch
+                                        id="goal-mode-switch"
+                                        checked={localTachosConfig.isGoalEnabled}
+                                        onCheckedChange={(val) => handleTachosConfigFieldChange('isGoalEnabled', val)}
+                                        disabled={!localTachosConfig.isAuto}
+                                    />
+                                </div>
+                                {localTachosConfig.isGoalEnabled && (
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="auto-cooktime" className="text-xs">Tiempo de Cocción (minutos)</Label>
+                                        <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
                                         <Input
-                                            id="auto-cooktime"
+                                            id="auto-goal"
                                             type="number"
-                                            value={localTachosConfig.cookTime}
-                                            onChange={(e) => handleTachosConfigFieldChange('cookTime', Number(e.target.value))}
-                                            disabled={!localTachosConfig.isAuto}
+                                            value={localTachosConfig.goal}
+                                            onChange={(e) => handleTachosConfigFieldChange('goal', Number(e.target.value))}
+                                            disabled={!localTachosConfig.isAuto || !localTachosConfig.isGoalEnabled}
                                             min="1"
                                         />
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
-                                        <Switch
-                                            id="goal-mode-switch"
-                                            checked={localTachosConfig.isGoalEnabled}
-                                            onCheckedChange={(val) => handleTachosConfigFieldChange('isGoalEnabled', val)}
-                                            disabled={!localTachosConfig.isAuto}
-                                        />
-                                    </div>
-                                    {localTachosConfig.isGoalEnabled && (
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="auto-goal" className="text-xs">Meta de Masas a Enviar</Label>
-                                            <Input
-                                                id="auto-goal"
-                                                type="number"
-                                                value={localTachosConfig.goal}
-                                                onChange={(e) => handleTachosConfigFieldChange('goal', Number(e.target.value))}
-                                                disabled={!localTachosConfig.isAuto || !localTachosConfig.isGoalEnabled}
-                                                min="1"
-                                            />
-                                        </div>
-                                    )}
-                                </div>
+                                )}
                             </div>
                         </>
                     )}
@@ -506,7 +471,7 @@ function CentrifugeEditDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                     <p className="text-sm text-muted-foreground">
-                        Define el tiempo total que tardan las **dos centrífugas trabajando juntas** en procesar una masa completa (380 QQ).
+                        Define el tiempo total que tardan las **dos centrífugas trabajando juntas** en procesar una masa completa.
                     </p>
                     <div className="space-y-1.5">
                         <Label htmlFor="cycle-time">Tiempo para Procesar 1 Masa (minutos)</Label>
@@ -690,6 +655,7 @@ export default function OperationsClient({
     const [tachosGoal, setTachosGoal] = React.useState(6);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
+    const [masaQQAmount, setMasaQQAmount] = React.useState(380);
     const [tachosImageUrl, setTachosImageUrl] = React.useState<string | null>(null);
     const [centrifugeCycleTime, setCentrifugeCycleTime] = React.useState(90);
     const [isCentrifugesAuto, setIsCentrifugesAuto] = React.useState(true);
@@ -726,6 +692,7 @@ export default function OperationsClient({
             tachosGoal: 6,
             isTachosAuto: false,
             isTachosGoalEnabled: false,
+            masaQQAmount: 380,
             centrifugeCycleTime: 90,
             isCentrifugesAuto: true,
         },
@@ -831,6 +798,7 @@ export default function OperationsClient({
             setTachosGoal(params.tachosGoal);
             setIsTachosAuto(params.isTachosAuto);
             setIsTachosGoalEnabled(params.isTachosGoalEnabled);
+            setMasaQQAmount(params.masaQQAmount || 380);
             setCentrifugeCycleTime(params.centrifugeCycleTime);
             setIsCentrifugesAuto(params.isCentrifugesAuto ?? true);
 
@@ -865,6 +833,7 @@ export default function OperationsClient({
             tachosGoal: tachosGoal,
             isTachosAuto: isTachosAuto,
             isTachosGoalEnabled: isTachosGoalEnabled,
+            masaQQAmount: masaQQAmount,
             centrifugeCycleTime: centrifugeCycleTime,
             isCentrifugesAuto: isCentrifugesAuto,
         };
@@ -873,7 +842,7 @@ export default function OperationsClient({
         } catch (error) {
             console.error("Error saving params to localStorage", error);
         }
-    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, centrifugeCycleTime, isCentrifugesAuto]);
+    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, masaQQAmount, centrifugeCycleTime, isCentrifugesAuto]);
 
     React.useEffect(() => {
         saveParamsToLocalStorage();
@@ -953,11 +922,12 @@ export default function OperationsClient({
         setReceivers(prev => prev.map(r => r.id === updatedReceiver.id ? {...r, ...updatedReceiver} : r));
     };
     
-    const handleTachosConfigChange = (config: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number }) => {
+    const handleTachosConfigChange = (config: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number, masaQQAmount: number; }) => {
         setIsTachosAuto(config.isAuto);
         setTachosCookTime(config.cookTime);
         setIsTachosGoalEnabled(config.isGoalEnabled);
         setTachosGoal(config.goal);
+        setMasaQQAmount(config.masaQQAmount);
     };
 
     const handleCentrifugeConfigSave = (config: { cycleTime: number }) => {
@@ -983,19 +953,35 @@ export default function OperationsClient({
         const newReceivers = JSON.parse(JSON.stringify(currentReceivers));
         
         const receiver1 = newReceivers.find((r: ReceiverState) => r.id === 'rec1');
-        if (receiver1 && receiver1.currentQQ < (receiver1.capacityQQ * MASA_QQ_AMOUNT)) {
-            receiver1.currentQQ += MASA_QQ_AMOUNT;
+        if (receiver1 && receiver1.currentQQ < (receiver1.capacityQQ * masaQQAmount)) {
+            receiver1.currentQQ += masaQQAmount;
             return { success: true, newReceivers };
         }
 
         const receiver2 = newReceivers.find((r: ReceiverState) => r.id === 'rec2');
-        if (receiver2 && receiver2.currentQQ < (receiver2.capacityQQ * MASA_QQ_AMOUNT)) {
-            receiver2.currentQQ += MASA_QQ_AMOUNT;
+        if (receiver2 && receiver2.currentQQ < (receiver2.capacityQQ * masaQQAmount)) {
+            receiver2.currentQQ += masaQQAmount;
             return { success: true, newReceivers };
         }
 
         return { success: false, newReceivers: currentReceivers };
-    }, []);
+    }, [masaQQAmount]);
+
+    const handleManualCook = () => {
+        setSimulationState(prev => {
+            if (prev.tachos.state === 'idle') {
+                return {
+                    ...prev,
+                    tachos: {
+                        ...prev.tachos,
+                        state: 'cooking',
+                        timeRemaining: prev.tachos.cookTimeSeconds,
+                    }
+                }
+            }
+            return prev;
+        });
+    }
 
     const handleManualSendMasa = () => {
         setSimulationState(prev => {
@@ -1029,8 +1015,8 @@ export default function OperationsClient({
                 return prev;
             }
             
-            const PURGES_PER_MASA = 12;
-            const qqPerPurge = MASA_QQ_AMOUNT / PURGES_PER_MASA;
+            const PURGES_PER_MASA = masaQQAmount / 30; // Assuming 30 QQ per purge
+            const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
             const newReceivers = JSON.parse(JSON.stringify(prev.receivers));
             const receiverToUpdate = newReceivers.find(r => r.id === activeReceiver.id);
             
@@ -1234,19 +1220,19 @@ export default function OperationsClient({
                 const goalMet = isTachosGoalEnabled && prev.totalMasasSent >= tachosGoal;
                 
                 // 1. Tachos Logic
+                if (newTachos.state === 'cooking') {
+                    newTachos.timeRemaining -= elapsedIncrement;
+                    newTachos.progress = 100 * (1 - newTachos.timeRemaining / newTachos.cookTimeSeconds);
+                    if (newTachos.timeRemaining <= 0) {
+                        newTachos.state = 'ready';
+                        newTachos.progress = 100;
+                    }
+                }
+                
                 if (isTachosAuto && !goalMet) {
                     if (newTachos.state === 'idle') {
                         newTachos.state = 'cooking';
                         newTachos.timeRemaining = newTachos.cookTimeSeconds;
-                    }
-
-                    if (newTachos.state === 'cooking') {
-                        newTachos.timeRemaining -= elapsedIncrement;
-                        newTachos.progress = 100 * (1 - newTachos.timeRemaining / newTachos.cookTimeSeconds);
-                        if (newTachos.timeRemaining <= 0) {
-                            newTachos.state = 'ready';
-                            newTachos.progress = 100;
-                        }
                     }
 
                     if (newTachos.state === 'ready') {
@@ -1254,7 +1240,7 @@ export default function OperationsClient({
                         if (success) {
                             newReceivers = updatedReceivers;
                             newTotalMasasSent += 1;
-                            newTachos.state = 'idle'; // Reset for next cook cycle
+                            newTachos.state = 'idle'; 
                             newTachos.progress = 0;
                             newTachos.timeRemaining = 0;
                         }
@@ -1266,18 +1252,18 @@ export default function OperationsClient({
 
                 // 2. Centrifuges Logic
                 if (isCentrifugesAuto) {
+                    const PURGES_PER_MASA = Math.max(1, masaQQAmount / 30);
+                    const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
                     const totalCycleTimeSeconds = centrifugeCycleTime * 60;
-                    const PURGES_PER_MASA = 12; // ~12-13 purges per masa
-                    const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA * 2; // *2 because 2 machines work together
-                    const qqPerPurge = MASA_QQ_AMOUNT / PURGES_PER_MASA;
+                    const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA;
     
-                    let activeReceiver = newReceivers.find(r => r.id === 'rec1' && r.currentQQ > 0) || newReceivers.find(r => r.id === 'rec2' && r.currentQQ > 0);
+                    let activeReceiver = newReceivers.find((r: ReceiverState) => r.id === 'rec1' && r.currentQQ > 0) || newReceivers.find((r: ReceiverState) => r.id === 'rec2' && r.currentQQ > 0);
                     
                     if (activeReceiver) {
-                         const idleCentrifuge = newCentrifuges.find(c => c.state === 'idle');
+                         const idleCentrifuge = newCentrifuges.find((c: CentrifugeState) => c.state === 'idle');
                          if (idleCentrifuge && activeReceiver.currentQQ >= qqPerPurge) {
                              const otherCentrifugeId = idleCentrifuge.id === 'cent1' ? 'cent2' : 'cent1';
-                             const otherCentrifuge = newCentrifuges.find(c => c.id === otherCentrifugeId);
+                             const otherCentrifuge = newCentrifuges.find((c: CentrifugeState) => c.id === otherCentrifugeId);
                              
                              let shouldStart = false;
                              if (otherCentrifuge?.state === 'idle') {
@@ -1287,11 +1273,11 @@ export default function OperationsClient({
                              }
     
                              if (shouldStart) {
-                                const receiverToUpdate = newReceivers.find(r => r.id === activeReceiver!.id);
+                                const receiverToUpdate = newReceivers.find((r: ReceiverState) => r.id === activeReceiver!.id);
                                 if (receiverToUpdate) {
                                     receiverToUpdate.currentQQ -= qqPerPurge;
                                 }
-                                newCentrifuges = newCentrifuges.map(c => 
+                                newCentrifuges = newCentrifuges.map((c: CentrifugeState) => 
                                     c.id === idleCentrifuge.id 
                                     ? { ...c, state: 'processing', timeRemaining: individualPurgeCycleTime }
                                     : c
@@ -1302,22 +1288,22 @@ export default function OperationsClient({
                 }
 
                 // Update progress for all processing centrifuges
-                newCentrifuges.forEach((cent, index) => {
+                newCentrifuges.forEach((cent: CentrifugeState, index: number) => {
                     if (cent.state === 'processing') {
                         cent.timeRemaining -= elapsedIncrement;
                         
+                        const PURGES_PER_MASA = Math.max(1, masaQQAmount / 30);
+                        const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
                         const totalCycleTimeSeconds = centrifugeCycleTime * 60;
-                        const PURGES_PER_MASA = 12;
-                        const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA * 2;
-                        const qqPerPurge = MASA_QQ_AMOUNT / PURGES_PER_MASA;
+                        const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA;
                         
                         cent.progress = Math.max(0, 100 * (1 - cent.timeRemaining / individualPurgeCycleTime));
                         
                         const qqPerSecond = qqPerPurge / individualPurgeCycleTime;
                         const qqThisTick = qqPerSecond * elapsedIncrement;
                         
-                        const familiarSilo = newSilos.find(s => s.id === 'familiar');
-                        const granelSilo = newSilos.find(s => s.id === 'granel');
+                        const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
+                        const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel');
 
                         if (familiarSilo && granelSilo) {
                             const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
@@ -1357,11 +1343,11 @@ export default function OperationsClient({
                 const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
                 
-                const kgAvailableInFamiliarSilo = (newSilos.find(s => s.id === 'familiar')?.currentQQ || 0) * KG_PER_QUINTAL;
+                const kgAvailableInFamiliarSilo = (newSilos.find((s: SiloState) => s.id === 'familiar')?.currentQQ || 0) * KG_PER_QUINTAL;
                 const canProduce = kgAvailableInFamiliarSilo >= kgConsumedThisTick;
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
-                    const finalSilos = newSilos.map(s => s.id === 'familiar' ? { ...s, currentQQ: 0 } : s);
+                    const finalSilos = newSilos.map((s: SiloState) => s.id === 'familiar' ? { ...s, currentQQ: 0 } : s);
                     pauseClock();
                     return {...prev, silos: finalSilos, elapsedTime: newElapsedTime, isFinished: true, centrifuges: newCentrifuges, receivers: newReceivers, tachos: newTachos };
                 }
@@ -1373,7 +1359,7 @@ export default function OperationsClient({
 
                 if (canProduce) {
                     if (kgConsumedThisTick > 0) {
-                         newSilos = newSilos.map(s => {
+                         newSilos = newSilos.map((s: SiloState) => {
                             if (s.id === 'familiar') {
                                 return { ...s, currentQQ: s.currentQQ - (kgConsumedThisTick / KG_PER_QUINTAL) };
                             }
@@ -1678,9 +1664,6 @@ export default function OperationsClient({
                                     <Edit className="h-4 w-4" />
                                 </Button>
                             </div>
-                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                <Image src={simTachos.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                            </div>
                              <div className="space-y-1">
                                 <div className={cn("flex justify-between items-center text-xs font-medium", currentTachosConfig.color)}>
                                     <span className="flex items-center gap-1.5"><currentTachosConfig.icon className="h-3 w-3" /> {currentTachosConfig.text}</span>
@@ -1688,14 +1671,17 @@ export default function OperationsClient({
                                 </div>
                                 <Progress value={simTachos.progress} indicatorClassName={cn(currentTachosConfig.color.replace("text-", "bg-"))} />
                             </div>
-                            <div className="space-y-4">
-                                <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
-                                    <div className='text-center border bg-muted/30 rounded-lg p-2'>
-                                        <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
-                                        <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
-                                    </div>
-                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simTachos.state !== 'ready'}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
+                            <div className="space-y-2">
+                                <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                    <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
+                                    <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
+                                 {!isTachosAuto && (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Button className="w-full" onClick={handleManualCook} disabled={simTachos.state !== 'idle'}>Cocinar Masa</Button>
+                                        <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'ready'}>Enviar Masa</Button>
+                                    </div>
+                                )}
                             </div>
                         </div>
                         
@@ -1703,7 +1689,7 @@ export default function OperationsClient({
                          <div className="space-y-4">
                             {receivers.map((receiver) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
-                                const masas = simReceiver.currentQQ / MASA_QQ_AMOUNT;
+                                const masas = simReceiver.currentQQ / masaQQAmount;
                                 const maxMasas = simReceiver.capacityQQ;
                                 return (
                                     <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
@@ -2104,16 +2090,15 @@ export default function OperationsClient({
                     onOpenChange={(isOpen) => !isOpen && setEditingSilo(null)}
                     silo={editingSilo}
                     onSave={handleSiloSave}
-                    onImageSave={handleImageSave}
                     isTachos={editingSilo.id === 'tachos'}
                     tachosConfig={{
                         isAuto: isTachosAuto,
                         cookTime: tachosCookTime,
                         isGoalEnabled: isTachosGoalEnabled,
-                        goal: tachosGoal
+                        goal: tachosGoal,
+                        masaQQAmount: masaQQAmount,
                     }}
                     onTachosConfigChange={handleTachosConfigChange}
-                    isUploading={isUploading}
                 />
             )}
             {editingReceiver && (
