@@ -99,6 +99,7 @@ type SimulationParams = {
     machines: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>[];
     wrappers: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>[];
     silos: Omit<SiloState, 'imageUrl'>[];
+    receivers: Omit<ReceiverState, 'imageUrl'>[];
     tachosState: Omit<SiloState, 'imageUrl'>;
     autoTachosInterval: number;
     autoTachosGoal: number;
@@ -110,6 +111,7 @@ type ImageUrlConfig = {
     machines: { [id: number]: string };
     wrappers: { [id: string]: string };
     silos: { [id: string]: string };
+    receivers: { [id: string]: string };
     tachos: string;
 };
 
@@ -140,7 +142,7 @@ function MachineEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedMachine: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>) => void;
-    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => Promise<void>;
+    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => Promise<void>;
     isUploading: boolean;
 }) {
     const [editedMachine, setEditedMachine] = React.useState(machine);
@@ -262,7 +264,7 @@ function SiloEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<SiloState, 'imageUrl'>) => void;
-    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => Promise<void>;
+    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => Promise<void>;
     isTachos?: boolean;
     tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
     onTachosConfigChange?: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
@@ -414,6 +416,104 @@ function SiloEditDialog({
     );
 }
 
+function ReceiverEditDialog({
+    receiver,
+    open,
+    onOpenChange,
+    onSave,
+    onImageSave,
+    isUploading,
+}: {
+    receiver: ReceiverState;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSave: (updatedReceiver: Omit<ReceiverState, 'imageUrl'>) => void;
+    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => Promise<void>;
+    isUploading: boolean;
+}) {
+    const [editedReceiver, setEditedReceiver] = React.useState(receiver);
+
+    React.useEffect(() => {
+        setEditedReceiver(receiver);
+    }, [receiver]);
+
+    const handleFieldChange = (field: keyof Omit<ReceiverState, 'imageUrl'>, value: any) => {
+        setEditedReceiver(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await onImageSave('receiver', receiver.id, file);
+    };
+
+    const fileInputId = `receiver-modal-image-upload-${receiver.id}`;
+
+    const handleSaveChanges = () => {
+        const { imageUrl, ...configToSave } = editedReceiver;
+        onSave(configToSave);
+        onOpenChange(false);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar {receiver.name}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
+                    <div className="space-y-2">
+                        <Label>Previsualización de la Imagen</Label>
+                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                            {isUploading ? (
+                                <div className="flex flex-col items-center gap-2">
+                                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                                    <p className="text-sm text-muted-foreground">Subiendo...</p>
+                                </div>
+                            ) : (
+                                <Image
+                                    src={editedReceiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"}
+                                    alt={editedReceiver.name}
+                                    width={600}
+                                    height={400}
+                                    className="object-contain w-full h-full"
+                                    unoptimized
+                                />
+                            )}
+                        </div>
+                        <input
+                            type="file"
+                            id={fileInputId}
+                            className="hidden"
+                            accept="image/*"
+                            onChange={handleFileSelect}
+                            disabled={isUploading}
+                        />
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()} disabled={isUploading}>
+                            <Upload className="mr-2 h-3 w-3" />
+                            {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
+                        </Button>
+                    </div>
+                    <Separator />
+                    <div className="space-y-1.5">
+                        <Label htmlFor={`receiver-name-${receiver.id}`}>Nombre</Label>
+                        <Input id={`receiver-name-${receiver.id}`} type="text" value={editedReceiver.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Capacidad (Masas)</Label>
+                        <Input type="number" value={editedReceiver.capacityMasas} disabled />
+                        <p className='text-xs text-muted-foreground'>La capacidad de los recibidores está fijada en 1 masa.</p>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
+                    <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 function WrapperEditDialog({
     wrapper,
     allMachines,
@@ -428,7 +528,7 @@ function WrapperEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>) => void;
-    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => Promise<void>;
+    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => Promise<void>;
     isUploading: boolean;
 }) {
     const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
@@ -582,6 +682,7 @@ export default function OperationsClient({
     // --- UI State ---
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
+    const [editingReceiver, setEditingReceiver] = React.useState<ReceiverState | null>(null);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
     const [isUploading, setIsUploading] = React.useState(false);
 
@@ -600,6 +701,10 @@ export default function OperationsClient({
             silos: [
                 { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0 },
                 { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0 },
+            ],
+            receivers: [
+                { id: 'rec1', name: 'Recibidor 1', capacityMasas: 1, currentMasas: 0 },
+                { id: 'rec2', name: 'Recibidor 2', capacityMasas: 1, currentMasas: 0 },
             ],
             tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0 },
             autoTachosInterval: 10,
@@ -621,6 +726,10 @@ export default function OperationsClient({
             silos: {
                 'familiar': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media',
                 'granel': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.%20Gran.jpeg?alt=media',
+            },
+            receivers: {
+                'rec1': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media',
+                'rec2': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media',
             },
             tachos: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media',
         }
@@ -648,6 +757,10 @@ export default function OperationsClient({
                         const ss = savedParams.silos?.find((s: any) => s.id === ds.id);
                         return { ...ds, ...ss };
                     }),
+                    receivers: defaultParams.receivers.map(dr => {
+                        const sr = savedParams.receivers?.find((r: any) => r.id === dr.id);
+                        return { ...dr, ...sr };
+                    }),
                     tachosState: { ...defaultParams.tachosState, ...savedParams.tachosState },
                 };
             } else {
@@ -663,6 +776,7 @@ export default function OperationsClient({
                     machines: { ...getDefaultConfig().images.machines, ...firestoreImages.machines },
                     wrappers: { ...getDefaultConfig().images.wrappers, ...firestoreImages.wrappers },
                     silos: { ...getDefaultConfig().images.silos, ...firestoreImages.silos },
+                    receivers: { ...getDefaultConfig().images.receivers, ...firestoreImages.receivers },
                     tachos: firestoreImages.tachos || getDefaultConfig().images.tachos,
                 };
             }
@@ -681,15 +795,15 @@ export default function OperationsClient({
                 ...s,
                 imageUrl: imageUrls.silos[s.id] || null,
             })));
+            setReceivers(params.receivers.map(r => ({
+                ...r,
+                imageUrl: imageUrls.receivers[r.id] || null,
+            })));
             setTachosState({
                 ...params.tachosState,
                 imageUrl: imageUrls.tachos,
             });
             // --- NUEVA INICIALIZACIÓN ---
-            setReceivers([
-                { id: 'rec1', name: 'Recibidor 1', capacityMasas: 1, currentMasas: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media' },
-                { id: 'rec2', name: 'Recibidor 2', capacityMasas: 1, currentMasas: 0, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media' },
-            ]);
             setCentrifuges([
                 { id: 'cent1', name: 'Centrífuga 1', state: 'idle', purgeTimeSeconds: 2 * 3600, sendingTimeSeconds: 3600, connectedReceiverId: 'rec1', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
                 { id: 'cent2', name: 'Centrífuga 2', state: 'idle', purgeTimeSeconds: 2 * 3600, sendingTimeSeconds: 3600, connectedReceiverId: 'rec2', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
@@ -707,6 +821,7 @@ export default function OperationsClient({
             setMachines(params.machines.map(m => ({ ...m, imageUrl: images.machines[m.id] || null, isSimulatingActive: false })));
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
             setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null })));
+            setReceivers(params.receivers.map(r => ({ ...r, imageUrl: images.receivers[r.id] || null })));
             setTachosState({ ...params.tachosState, imageUrl: images.tachos });
         }
     }, []);
@@ -722,6 +837,7 @@ export default function OperationsClient({
             machines: machines.map(({ isSimulatingActive, imageUrl, ...m }) => m),
             wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, imageUrl, ...w }) => w),
             silos: silos.map(({imageUrl, ...s}) => s),
+            receivers: receivers.map(({imageUrl, ...r}) => r),
             tachosState: (({imageUrl, ...t}) => t)(tachosState),
             autoTachosInterval: autoTachosInterval,
             autoTachosGoal: autoTachosGoal,
@@ -733,13 +849,13 @@ export default function OperationsClient({
         } catch (error) {
             console.error("Error saving params to localStorage", error);
         }
-    }, [isClient, machines, wrappers, silos, tachosState, autoTachosInterval, autoTachosGoal, isTachosAuto, isTachosGoalEnabled]);
+    }, [isClient, machines, wrappers, silos, receivers, tachosState, autoTachosInterval, autoTachosGoal, isTachosAuto, isTachosGoalEnabled]);
 
     React.useEffect(() => {
         saveParamsToLocalStorage();
     }, [saveParamsToLocalStorage]);
     
-    const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos', id: string | number, file: File) => {
+    const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => {
         setIsUploading(true);
         const imagePath = `sim-images/${type}`;
         const formData = new FormData();
@@ -776,6 +892,8 @@ export default function OperationsClient({
                 setSilos(prev => prev.map(s => s.id === id ? { ...s, imageUrl: downloadURL } : s));
             } else if (type === 'wrapper') {
                 setWrappers(prev => prev.map(w => w.id === id ? { ...w, imageUrl: downloadURL } : w));
+            } else if (type === 'receiver') {
+                setReceivers(prev => prev.map(r => r.id === id ? { ...r, imageUrl: downloadURL } : r));
             } else if (type === 'tachos') {
                 setTachosState(prev => ({ ...prev, imageUrl: downloadURL }));
             }
@@ -807,6 +925,10 @@ export default function OperationsClient({
         } else {
             setSilos(prev => prev.map(s => s.id === updatedSilo.id ? {...s, ...updatedSilo} : s));
         }
+    };
+
+    const handleReceiverSave = (updatedReceiver: Omit<ReceiverState, 'imageUrl'>) => {
+        setReceivers(prev => prev.map(r => r.id === updatedReceiver.id ? { ...r, ...updatedReceiver } : r));
     };
     
     const handleTachosConfigChange = (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => {
@@ -880,9 +1002,10 @@ export default function OperationsClient({
     React.useEffect(() => {
         setSimulationState(prev => ({
             ...prev,
-            silos: JSON.parse(JSON.stringify(silos))
+            silos: JSON.parse(JSON.stringify(silos)),
+            receivers: JSON.parse(JSON.stringify(receivers)),
         }));
-    }, [silos]);
+    }, [silos, receivers]);
 
     const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const [simulationSpeed, setSimulationSpeed] = React.useState(1);
@@ -1206,10 +1329,12 @@ export default function OperationsClient({
             setSimulationState(createInitialSimulationState());
         } else {
             const currentSilos = JSON.parse(JSON.stringify(simulationState.silos));
+            const currentReceivers = JSON.parse(JSON.stringify(simulationState.receivers));
             const currentMasasSent = simulationState.totalMasasSent;
             setSimulationState({
                 ...createInitialSimulationState(),
                 silos: currentSilos,
+                receivers: currentReceivers,
                 totalMasasSent: currentMasasSent,
             });
         }
@@ -1395,58 +1520,61 @@ export default function OperationsClient({
                             </TooltipProvider>
                         </div>
                     </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
-                            {/* Tachos */}
-                            <div className="lg:col-span-1 p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                                <div className='flex justify-between items-start'>
-                                    <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
-                                    {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
-                                    </h3>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                                <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                    <Image src={tachosState.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                </div>
-                                <div className="space-y-4">
-                                    <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
-                                        <div className='text-center border bg-muted/30 rounded-lg p-2'>
-                                            <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
-                                            <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
-                                        </div>
-                                        <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simulationState.receivers.every(r => r.currentMasas >= r.capacityMasas)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+                        {/* Tachos */}
+                        <div className="lg:col-span-1 p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                            <div className='flex justify-between items-start'>
+                                <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
+                                {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
+                                </h3>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
+                            </div>
+                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                <Image src={tachosState.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                            </div>
+                            <div className="space-y-4">
+                                <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
+                                    <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                        <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
+                                        <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                     </div>
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simulationState.receivers.every(r => r.currentMasas >= r.capacityMasas)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
                                 </div>
                             </div>
-                            
-                            {/* Receivers */}
-                            <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-                                {receivers.map((receiver) => {
-                                    const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
-                                    return (
-                                        <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background">
+                        </div>
+                        
+                        {/* Receivers */}
+                        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+                            {receivers.map((receiver) => {
+                                const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
+                                return (
+                                    <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background">
+                                        <div className='flex justify-between items-start'>
                                             <h3 className="font-bold text-lg">{receiver.name}</h3>
-                                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                                <Image src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={receiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                            </div>
-                                            <div className='text-center border bg-muted/30 rounded-lg p-2'>
-                                                <p className="text-xs text-muted-foreground">Estado</p>
-                                                <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
-                                                    {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
-                                                </p>
-                                            </div>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
                                         </div>
-                                    )
-                                })}
-                            </div>
+                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                            <Image src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={receiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                        </div>
+                                        <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                            <p className="text-xs text-muted-foreground">Estado</p>
+                                            <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
+                                                {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
+                                            </p>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
 
-                            {/* Centrifuges */}
-                            <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-                                <div>centrifuga 1</div>
-                                <div>centrifuga 2</div>
-                            </div>
+                        {/* Centrifuges */}
+                        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+                            <div>centrifuga 1</div>
+                            <div>centrifuga 2</div>
                         </div>
                     </CardContent>
                 </Card>
@@ -1783,6 +1911,16 @@ export default function OperationsClient({
                         goal: autoTachosGoal
                     }}
                     onTachosConfigChange={handleTachosConfigChange}
+                    isUploading={isUploading}
+                />
+            )}
+            {editingReceiver && (
+                <ReceiverEditDialog
+                    open={!!editingReceiver}
+                    onOpenChange={(isOpen) => !isOpen && setEditingReceiver(null)}
+                    receiver={editingReceiver}
+                    onSave={handleReceiverSave}
+                    onImageSave={handleImageSave}
                     isUploading={isUploading}
                 />
             )}
