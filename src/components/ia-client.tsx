@@ -751,24 +751,26 @@ export default function OperationsClient({
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState);
     
     const sendMasaToReceiver = React.useCallback(() => {
-        const { receivers } = simulationState;
-        let sent = false;
-        let sentToId: string | null = null;
-        const newReceivers = [...receivers];
-        const availableReceiver = newReceivers.find(r => r.state === 'idle');
-
+        const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
         if (availableReceiver) {
-            availableReceiver.state = 'filling';
-            sent = true;
-            sentToId = availableReceiver.id;
+            setSimulationState(prev => {
+                const newReceivers = prev.receivers.map(r => r.id === availableReceiver.id ? { ...r, state: 'filling' } : r);
+                return {
+                    ...prev,
+                    receivers: newReceivers,
+                    tachos: {
+                        ...prev.tachos,
+                        state: 'sending',
+                        targetReceiverId: availableReceiver.id,
+                        timeRemaining: prev.tachos.transferTimeSeconds,
+                        progress: 0,
+                    },
+                    totalMasasSent: prev.totalMasasSent + 1,
+                };
+            });
+            return true;
         }
-
-        if (!sent) {
-            return { success: false, newReceivers: receivers, sentTo: null };
-        }
-        
-        return { success: true, newReceivers, sentTo: sentToId };
-
+        return false;
     }, [simulationState]);
 
 
@@ -777,6 +779,24 @@ export default function OperationsClient({
         setSimulationState(createInitialSimulationState());
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
+
+    const formatTime = (hours: number) => {
+        if (!isFinite(hours) || hours <= 0) return '0h 0m';
+        const h = Math.floor(hours);
+        const m = Math.round((hours - h) * 60);
+        return `${h}h ${m}m`;
+    };
+    
+    const formatElapsedTime = (totalSeconds: number) => {
+        if (!isFinite(totalSeconds) || totalSeconds < 0) return '0m 0s';
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        }
+        return `${minutes}m ${seconds}s`;
+    };
 
     
     const getDefaultConfig = (): { params: SimulationParams; images: ImageUrlConfig } => ({
@@ -1071,95 +1091,32 @@ export default function OperationsClient({
     };
     
     const handleManualSendMasa = () => {
-        if (simulationState.tachos.state !== 'idle') {
-             // Silently fail if not idle, or use a toast if feedback is needed.
-            return;
-        }
+        if (isSimulating) return; // Prevent manual actions during simulation
 
-        const idleReceiver = simulationState.receivers.find(r => r.state === 'idle' && r.currentQQ < r.capacityQQ);
-        if (!idleReceiver) {
-            toast({ title: 'Error', description: 'Todos los recibidores están ocupados o llenos.', variant: 'destructive' });
-            return;
-        }
-        
         setSimulationState(prev => {
-            const newReceivers = prev.receivers.map(r => r.id === idleReceiver.id ? { ...r, state: 'filling' } : r);
+            if (prev.tachos.state !== 'idle') {
+                return prev;
+            }
+
+            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
+            if (!availableReceiver) {
+                toast({ title: 'Error', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
+                return prev;
+            }
+
             return {
                 ...prev,
-                receivers: newReceivers,
                 tachos: {
                     ...prev.tachos,
                     state: 'sending',
-                    targetReceiverId: idleReceiver.id,
+                    targetReceiverId: availableReceiver.id,
                     timeRemaining: prev.tachos.transferTimeSeconds,
                     progress: 0,
                 },
                 totalMasasSent: prev.totalMasasSent + 1,
-            }
+            };
         });
     };
-    
-    const startCentrifugeCycle = (centrifugeId: string, currentState: SimulationState): SimulationState => {
-        const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
-        const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
-    
-        const activeReceiver = currentState.receivers.find(r => r.state === 'ready' && r.currentQQ >= qqPerPurge && r.fillProgress >= 100);
-    
-        const centrifugeToStart = currentState.centrifuges.find(c => c.id === centrifugeId);
-    
-        if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle') {
-            return currentState;
-        }
-        
-        const newReceivers = currentState.receivers.map(r => {
-            if (r.id === activeReceiver.id) {
-                return {
-                    ...r,
-                    currentQQ: r.currentQQ - qqPerPurge,
-                    state: 'draining',
-                };
-            }
-            return r;
-        });
-
-        const totalCycleTimeSeconds = (centrifugeCycleTime * 60) / 2;
-        const individualPurgeCycleTime = totalCycleTimeSeconds / (PURGES_PER_MASA / 2); 
-        
-        const newCentrifuges = currentState.centrifuges.map(c => 
-            c.id === centrifugeId 
-            ? { ...c, state: 'processing' as const, timeRemaining: individualPurgeCycleTime, progress: 0 } 
-            : c
-        );
-        
-        return {
-            ...currentState,
-            receivers: newReceivers,
-            centrifuges: newCentrifuges,
-        }
-    }
-
-    const handleManualStartCentrifuge = (centrifugeId: string) => {
-        if (isSimulating) {
-            toast({ title: 'Pausa requerida', description: 'Detén la simulación para iniciar un ciclo manual.', variant: 'destructive'});
-            return;
-        }
-
-        setSimulationState(prev => {
-            const receiverWithMaterial = prev.receivers.find(r => r.state === 'ready' && r.currentQQ > 0 && r.fillProgress >= 100);
-            if (!receiverWithMaterial) {
-                toast({ title: 'No se puede iniciar', description: 'Ningún recibidor está 100% lleno y listo.', variant: 'destructive'});
-                return prev;
-            }
-
-            const newState = startCentrifugeCycle(centrifugeId, prev);
-            if (newState === prev) {
-                 // The cycle couldn't be started, likely other centrifuge is busy. Silently fail.
-            } else {
-                 toast({title: 'Inicio Manual Solicitado'});
-            }
-            return newState;
-        });
-    }
     
     const handleManualCookMasa = () => {
         if (simulationState.tachos.state === 'idle' && !isSimulating) {
@@ -1228,13 +1185,14 @@ export default function OperationsClient({
                     }
                 } else if (nextState.tachos.state === 'sending') {
                     nextState.tachos.timeRemaining = Math.max(0, nextState.tachos.timeRemaining - elapsedIncrement);
-                    nextState.tachos.progress = Math.min(100, 100 * (1 - nextState.tachos.timeRemaining / nextState.tachos.transferTimeSeconds));
+                    const progress = Math.min(100, 100 * (1 - nextState.tachos.timeRemaining / nextState.tachos.transferTimeSeconds));
+                    nextState.tachos.progress = progress;
 
                     const receiver = nextState.receivers.find((r: ReceiverState) => r.id === nextState.tachos.targetReceiverId);
                     if (receiver) {
                         const qqPerSecond = masaQQAmount / nextState.tachos.transferTimeSeconds;
                         receiver.currentQQ = Math.min(receiver.capacityQQ, receiver.currentQQ + qqPerSecond * elapsedIncrement);
-                        receiver.fillProgress = nextState.tachos.progress; // Sync progress
+                        receiver.fillProgress = progress; // Sync progress
                     }
 
                     if (nextState.tachos.timeRemaining <= 0) {
@@ -1271,71 +1229,85 @@ export default function OperationsClient({
 
                 // 2. Centrifuges Logic
                 if (isCentrifugesAuto) {
-                     const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
-                     const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
-                     
-                     const activeReceiver = nextState.receivers.find((r: ReceiverState) => r.state === 'ready' && r.currentQQ >= qqPerPurge && r.fillProgress >= 100);
-                     const idleCentrifuge = nextState.centrifuges.find((c: CentrifugeState) => c.state === 'idle');
+                    // Find a receiver that is 100% full and ready to be drained
+                    const readyReceiver = nextState.receivers.find(r => r.state === 'ready' && r.fillProgress >= 100);
 
-                     if (activeReceiver && idleCentrifuge) {
-                         const otherCentrifugeId = idleCentrifuge.id === 'cent1' ? 'cent2' : 'cent1';
-                         const otherCentrifuge = nextState.centrifuges.find((c: CentrifugeState) => c.id === otherCentrifugeId);
-                         
-                         let shouldStart = false;
-                         const intervalSeconds = centrifugeStartInterval * 60;
-                         const totalCycleTimeSeconds = (centrifugeCycleTime * 60) / 2;
-                         const individualPurgeCycleTime = totalCycleTimeSeconds / (PURGES_PER_MASA / 2);
+                    if (readyReceiver) {
+                        // Check which centrifuges are idle
+                        const idleCentrifuges = nextState.centrifuges.filter(c => c.state === 'idle');
 
-                         if (!otherCentrifuge || otherCentrifuge.state === 'idle') {
-                             shouldStart = true;
-                         } else if (otherCentrifuge.state === 'processing') {
-                            if (otherCentrifuge.timeRemaining <= individualPurgeCycleTime - intervalSeconds) {
-                                shouldStart = true;
+                        if (idleCentrifuges.length > 0) {
+                            // Find the other centrifuge to check its timing
+                            const otherCentrifugeId = idleCentrifuges[0].id === 'cent1' ? 'cent2' : 'cent1';
+                            const otherCentrifuge = nextState.centrifuges.find(c => c.id === otherCentrifugeId);
+                            
+                            const totalCycleTimeSeconds = centrifugeCycleTime * 60;
+                            const intervalSeconds = centrifugeStartInterval * 60;
+                            
+                            let canStart = false;
+                            if (otherCentrifuge?.state === 'idle') {
+                                canStart = true;
+                            } else if (otherCentrifuge?.state === 'processing') {
+                                // Can start if the other machine has been running for at least `intervalSeconds`
+                                if (totalCycleTimeSeconds - otherCentrifuge.timeRemaining >= intervalSeconds) {
+                                    canStart = true;
+                                }
                             }
-                         }
 
-                         if (shouldStart) {
-                            const newStateAfterStart = startCentrifugeCycle(idleCentrifuge.id, nextState);
-                            nextState = newStateAfterStart; // Overwrite state with the result of the start function
-                         }
-                     }
-                }
-
-                // Update progress for all processing centrifuges
-                nextState.centrifuges.forEach((cent: CentrifugeState) => {
-                    if (cent.state === 'processing') {
-                        cent.timeRemaining = Math.max(0, cent.timeRemaining - elapsedIncrement);
-                        
-                        const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
-                        const totalCycleTimeSeconds = (centrifugeCycleTime * 60) / 2; 
-                        const individualPurgeCycleTime = totalCycleTimeSeconds / (PURGES_PER_MASA / 2);
-                        
-                        cent.progress = Math.min(100, 100 * (1 - cent.timeRemaining / individualPurgeCycleTime));
-                        
-                        const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
-                        const qqPerSecond = qqPerPurge / individualPurgeCycleTime;
-                        const qqThisTick = qqPerSecond * elapsedIncrement;
-                        
-                        const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
-                        const granelSilo = nextState.silos.find((s: SiloState) => s.id === 'granel');
-
-                        if (familiarSilo && granelSilo) {
-                            const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-                            const qqForFamiliar = Math.min(qqThisTick, spaceInFamiliar);
-                            familiarSilo.currentQQ += qqForFamiliar;
-
-                            const remainder = qqThisTick - qqForFamiliar;
-                            if (remainder > 0) {
-                                granelSilo.currentQQ = Math.min(granelSilo.capacityQQ, granelSilo.currentQQ + remainder);
+                            if (canStart) {
+                                const centrifugeToStart = idleCentrifuges[0];
+                                centrifugeToStart.state = 'processing';
+                                centrifugeToStart.timeRemaining = totalCycleTimeSeconds;
+                                centrifugeToStart.progress = 0;
+                                // Mark receiver as draining
+                                readyReceiver.state = 'draining';
                             }
                         }
+                    }
+                }
 
+                // Update progress and material consumption for all processing centrifuges
+                nextState.centrifuges.forEach((cent: CentrifugeState) => {
+                    if (cent.state === 'processing') {
+                        const totalCycleTimeSeconds = centrifugeCycleTime * 60;
+                        
+                        // Find which receiver this centrifuge should drain from
+                        // A simple approach: find the first draining receiver
+                        const drainingReceiver = nextState.receivers.find(r => r.state === 'draining');
+                        
+                        if (drainingReceiver && drainingReceiver.currentQQ > 0) {
+                             // Drain material
+                            const qqToDrainPerSecond = masaQQAmount / totalCycleTimeSeconds;
+                            const qqDrainedThisTick = qqToDrainPerSecond * elapsedIncrement;
+                            drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - qqDrainedThisTick);
+
+                            // Update centrifuge progress
+                            cent.timeRemaining = Math.max(0, cent.timeRemaining - elapsedIncrement);
+                            cent.progress = Math.min(100, 100 * (1 - cent.timeRemaining / totalCycleTimeSeconds));
+                            
+                            // Add material to silos
+                            const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
+                            const granelSilo = nextState.silos.find((s: SiloState) => s.id === 'granel');
+
+                            if (familiarSilo && granelSilo) {
+                                const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+                                const qqForFamiliar = Math.min(qqDrainedThisTick, spaceInFamiliar);
+                                familiarSilo.currentQQ += qqForFamiliar;
+
+                                const remainder = qqDrainedThisTick - qqForFamiliar;
+                                if (remainder > 0) {
+                                    granelSilo.currentQQ = Math.min(granelSilo.capacityQQ, granelSilo.currentQQ + remainder);
+                                }
+                            }
+                        }
+                        
+                         // Check if cycle is finished
                         if (cent.timeRemaining <= 0) {
                             cent.state = 'idle';
                             cent.progress = 0;
 
-                            const drainingReceiver = nextState.receivers.find((r: ReceiverState) => r.state === 'draining');
-                            if (drainingReceiver && drainingReceiver.currentQQ <= 0.01) {
+                            // If receiver is empty, set it back to idle
+                            if (drainingReceiver && drainingReceiver.currentQQ <= 0) {
                                 drainingReceiver.state = 'idle';
                                 drainingReceiver.currentQQ = 0;
                             }
@@ -1449,24 +1421,6 @@ export default function OperationsClient({
         }));
     };
     
-    const formatTime = (hours: number) => {
-        if (!isFinite(hours) || hours <= 0) return '0h 0m';
-        const h = Math.floor(hours);
-        const m = Math.round((hours - h) * 60);
-        return `${h}h ${m}m`;
-    };
-    
-    const formatElapsedTime = (totalSeconds: number) => {
-        if (!isFinite(totalSeconds) || totalSeconds < 0) return '0m 0s';
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = Math.floor(totalSeconds % 60);
-        if (hours > 0) {
-            return `${hours}h ${minutes}m`;
-        }
-        return `${minutes}m ${seconds}s`;
-    };
-
     const getSiloFillColor = (percentage: number): string => {
         if (percentage < 20) return 'bg-red-500';
         if (percentage < 60) return 'bg-yellow-500';
@@ -1729,7 +1683,12 @@ export default function OperationsClient({
                                         <span className="flex items-center gap-1.5"><currentTachosConfig.icon className="h-3 w-3" /> {currentTachosConfig.text}</span>
                                         <span>{formatElapsedTime(simTachos.timeRemaining)}</span>
                                     </div>
-                                    <Progress value={simTachos.progress} indicatorClassName={cn(simTachos.state === 'sending' ? 'bg-blue-600' : currentTachosConfig.color.replace("text-", "bg-"))} />
+                                    <Progress value={simTachos.progress} indicatorClassName={cn(
+                                        simTachos.state === 'cooking' ? 'bg-amber-500' : 
+                                        simTachos.state === 'ready' ? 'bg-green-500' : 
+                                        simTachos.state === 'sending' ? 'bg-blue-500' : 
+                                        'bg-primary'
+                                    )} />
                                 </div>
                                 <div className='text-center border bg-muted/30 rounded-lg p-2'>
                                     <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
@@ -1737,8 +1696,6 @@ export default function OperationsClient({
                                 </div>
                                 {!isTachosAuto && (
                                     simTachos.state === 'idle'
-                                    ? <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa Manual</Button>
-                                    : simTachos.state === 'ready'
                                     ? <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa Manual</Button>
                                     : <Button className="w-full" disabled>Procesando...</Button>
                                 )}
@@ -1805,8 +1762,6 @@ export default function OperationsClient({
                                         processing: { text: "Procesando", color: "text-amber-600", icon: Activity },
                                     };
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
-                                    const isReceiverReady = simulationState.receivers.some(r => r.state === 'ready' && r.fillProgress >= 100);
-
                                     return (
                                         <div key={centrifuge.id} className="border p-3 rounded-lg flex flex-col justify-between">
                                             <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
@@ -1817,21 +1772,10 @@ export default function OperationsClient({
                                                 </div>
                                                 <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
                                             </div>
-                                            {!isCentrifugesAuto && (
-                                                <Button size="sm" variant="secondary" className="w-full mt-2" onClick={() => handleManualStartCentrifuge(centrifuge.id)} disabled={simCentrifuge.state !== 'idle' || !isReceiverReady || isSimulating}>
-                                                   Iniciar Purga
-                                                </Button>
-                                            )}
                                         </div>
                                     )
                                 })}
                             </div>
-                            {!isCentrifugesAuto && simulationState.centrifuges.every(c => c.state === 'idle') && !simulationState.receivers.some(r => r.state === 'ready') && (
-                                <div className="text-center text-amber-600 font-semibold p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm flex items-center justify-center gap-2 mt-4">
-                                    <AlertTriangle className="h-4 w-4" />
-                                    <span>Recibidor no está listo</span>
-                                </div>
-                            )}
                         </div>
                     </CardContent>
                 </Card>
