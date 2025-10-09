@@ -1361,7 +1361,7 @@ export default function OperationsClient({
                    </CardContent>
                 </Card>
 
-                <Card>
+                 <Card>
                     <CardHeader>
                         <div className="flex items-center gap-4">
                             <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
@@ -1395,7 +1395,7 @@ export default function OperationsClient({
                             </TooltipProvider>
                         </div>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+                    <CardContent className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-start">
                         {/* Tachos */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                              <div className='flex justify-between items-start'>
