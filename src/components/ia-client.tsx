@@ -949,42 +949,40 @@ export default function OperationsClient({
         toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros han vuelto a sus valores por defecto.' });
     };
     
-    const sendMasaToReceiver = React.useCallback((currentReceivers: ReceiverState[]): { success: boolean; newReceivers: ReceiverState[], sentTo: string | null } => {
-        const newReceivers = JSON.parse(JSON.stringify(currentReceivers));
+    const sendMasaToReceiver = React.useCallback((): { success: boolean; newReceivers: ReceiverState[], sentTo: string | null } => {
+        const newReceivers: ReceiverState[] = JSON.parse(JSON.stringify(simulationState.receivers));
         
-        const receiver1 = newReceivers.find((r: ReceiverState) => r.id === 'rec1');
+        const receiver1 = newReceivers.find(r => r.id === 'rec1');
         if (receiver1 && receiver1.currentQQ < (receiver1.capacityQQ * masaQQAmount)) {
             receiver1.currentQQ += masaQQAmount;
             return { success: true, newReceivers, sentTo: receiver1.id };
         }
 
-        const receiver2 = newReceivers.find((r: ReceiverState) => r.id === 'rec2');
+        const receiver2 = newReceivers.find(r => r.id === 'rec2');
         if (receiver2 && receiver2.currentQQ < (receiver2.capacityQQ * masaQQAmount)) {
             receiver2.currentQQ += masaQQAmount;
             return { success: true, newReceivers, sentTo: receiver2.id };
         }
 
-        return { success: false, newReceivers: currentReceivers, sentTo: null };
-    }, [masaQQAmount]);
+        return { success: false, newReceivers: simulationState.receivers, sentTo: null };
+    }, [masaQQAmount, simulationState.receivers]);
 
     const handleManualSendMasa = () => {
-        setSimulationState(prev => {
-            const { success, newReceivers, sentTo } = sendMasaToReceiver(prev.receivers);
-            if (success) {
-                toast({ title: 'Masa enviada manualmente', description: `Se ha añadido una masa al ${sentTo === 'rec1' ? 'Recibidor 1' : 'Recibidor 2'}.` });
-                return {
-                    ...prev,
-                    receivers: newReceivers,
-                    totalMasasSent: prev.totalMasasSent + 1,
-                };
-            } else {
-                toast({ title: 'Error', description: 'Todos los recibidores están llenos.', variant: 'destructive' });
-                return prev;
-            }
-        });
+        const { success, newReceivers, sentTo } = sendMasaToReceiver();
+        if (success) {
+            setSimulationState(prev => ({
+                ...prev,
+                receivers: newReceivers,
+                totalMasasSent: prev.totalMasasSent + 1,
+            }));
+            toast({ title: 'Masa enviada manualmente', description: `Se ha añadido una masa al ${sentTo === 'rec1' ? 'Recibidor 1' : 'Recibidor 2'}.` });
+        } else {
+            toast({ title: 'Error', description: 'Todos los recibidores están llenos.', variant: 'destructive' });
+        }
     };
     
     const startCentrifugeCycle = (centrifugeId: string, isManual = false) => {
+        let localSuccess = false;
         setSimulationState(prev => {
              const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
              const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
@@ -1017,9 +1015,7 @@ export default function OperationsClient({
                     : c
                 );
                 
-                if (isManual) {
-                    // Do not toast here to avoid re-render issues
-                }
+                localSuccess = true;
 
                 return {
                     ...prev,
@@ -1029,6 +1025,10 @@ export default function OperationsClient({
             }
             return prev;
         });
+
+        if (isManual && localSuccess) {
+            toast({title: 'Ciclo manual iniciado', description: `La ${centrifugeId === 'cent1' ? 'Centrífuga 1' : 'Centrífuga 2'} ha comenzado a procesar.`});
+        }
     }
 
     const [isSimulating, setIsSimulating] = React.useState(false);
@@ -1197,9 +1197,9 @@ export default function OperationsClient({
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
                 
                 let newTachos = { ...prev.tachos, cookTimeSeconds: tachosCookTime * 60 };
-                let newReceivers = JSON.parse(JSON.stringify(prev.receivers));
-                let newCentrifuges = JSON.parse(JSON.stringify(prev.centrifuges));
-                let newSilos = JSON.parse(JSON.stringify(prev.silos));
+                let newReceivers: ReceiverState[] = JSON.parse(JSON.stringify(prev.receivers));
+                let newCentrifuges: CentrifugeState[] = JSON.parse(JSON.stringify(prev.centrifuges));
+                let newSilos: SiloState[] = JSON.parse(JSON.stringify(prev.silos));
                 let newTotalMasasSent = prev.totalMasasSent;
 
                 const goalMet = isTachosGoalEnabled && prev.totalMasasSent >= tachosGoal;
@@ -1221,7 +1221,7 @@ export default function OperationsClient({
                     }
 
                     if (newTachos.state === 'ready') {
-                        const { success, newReceivers: updatedReceivers } = sendMasaToReceiver(newReceivers);
+                        const { success, newReceivers: updatedReceivers } = sendMasaToReceiver();
                         if (success) {
                             newReceivers = updatedReceivers;
                             newTotalMasasSent += 1;
@@ -1239,28 +1239,31 @@ export default function OperationsClient({
                 if (isCentrifugesAuto) {
                      const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
                      const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
-                     const totalCycleTimeSeconds = centrifugeCycleTime * 60;
-                     const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA;
-
-                     let activeReceiver = newReceivers.find((r: ReceiverState) => r.id === 'rec1' && r.currentQQ >= qqPerPurge) || newReceivers.find((r: ReceiverState) => r.id === 'rec2' && r.currentQQ >= qqPerPurge);
+                     let activeReceiver = newReceivers.find((r) => r.id === 'rec1' && r.currentQQ >= qqPerPurge) || newReceivers.find((r) => r.id === 'rec2' && r.currentQQ >= qqPerPurge);
                     
-                     const idleCentrifuge = newCentrifuges.find((c: CentrifugeState) => c.state === 'idle');
+                     const idleCentrifuge = newCentrifuges.find((c) => c.state === 'idle');
                      if (activeReceiver && idleCentrifuge) {
                          const otherCentrifugeId = idleCentrifuge.id === 'cent1' ? 'cent2' : 'cent1';
-                         const otherCentrifuge = newCentrifuges.find((c: CentrifugeState) => c.id === otherCentrifugeId);
+                         const otherCentrifuge = newCentrifuges.find((c) => c.id === otherCentrifugeId);
                          
                          let shouldStart = false;
                          if (otherCentrifuge?.state === 'idle') {
                              shouldStart = true;
-                         } else if (otherCentrifuge?.state === 'processing' && otherCentrifuge.timeRemaining <= individualPurgeCycleTime / 2) {
-                             shouldStart = true;
+                         } else if (otherCentrifuge?.state === 'processing') {
+                            const totalCycleTimeSeconds = centrifugeCycleTime * 60;
+                            const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA;
+                            if (otherCentrifuge.timeRemaining <= individualPurgeCycleTime / 2) {
+                                shouldStart = true;
+                            }
                          }
 
                          if (shouldStart) {
-                            const receiverToUpdate = newReceivers.find((r: ReceiverState) => r.id === activeReceiver!.id);
+                            const receiverToUpdate = newReceivers.find((r) => r.id === activeReceiver!.id);
                             if (receiverToUpdate) {
                                 receiverToUpdate.currentQQ -= qqPerPurge;
-                                newCentrifuges = newCentrifuges.map((c: CentrifugeState) => 
+                                const totalCycleTimeSeconds = centrifugeCycleTime * 60;
+                                const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA;
+                                newCentrifuges = newCentrifuges.map((c) => 
                                     c.id === idleCentrifuge.id 
                                     ? { ...c, state: 'processing', timeRemaining: individualPurgeCycleTime }
                                     : c
@@ -1271,7 +1274,7 @@ export default function OperationsClient({
                 }
 
                 // Update progress for all processing centrifuges
-                newCentrifuges.forEach((cent: CentrifugeState, index: number) => {
+                newCentrifuges.forEach((cent, index) => {
                     if (cent.state === 'processing') {
                         cent.timeRemaining -= elapsedIncrement;
                         
@@ -1285,8 +1288,8 @@ export default function OperationsClient({
                         const qqPerSecond = qqPerPurge / individualPurgeCycleTime;
                         const qqThisTick = qqPerSecond * elapsedIncrement;
                         
-                        const familiarSilo = newSilos.find((s: SiloState) => s.id === 'familiar');
-                        const granelSilo = newSilos.find((s: SiloState) => s.id === 'granel');
+                        const familiarSilo = newSilos.find((s) => s.id === 'familiar');
+                        const granelSilo = newSilos.find((s) => s.id === 'granel');
 
                         if (familiarSilo && granelSilo) {
                             const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
@@ -1326,11 +1329,11 @@ export default function OperationsClient({
                 const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
                 
-                const kgAvailableInFamiliarSilo = (newSilos.find((s: SiloState) => s.id === 'familiar')?.currentQQ || 0) * KG_PER_QUINTAL;
+                const kgAvailableInFamiliarSilo = (newSilos.find((s) => s.id === 'familiar')?.currentQQ || 0) * KG_PER_QUINTAL;
                 const canProduce = kgAvailableInFamiliarSilo >= kgConsumedThisTick;
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
-                    const finalSilos = newSilos.map((s: SiloState) => s.id === 'familiar' ? { ...s, currentQQ: 0 } : s);
+                    const finalSilos = newSilos.map((s) => s.id === 'familiar' ? { ...s, currentQQ: 0 } : s);
                     pauseClock();
                     return {...prev, silos: finalSilos, elapsedTime: newElapsedTime, isFinished: true, centrifuges: newCentrifuges, receivers: newReceivers, tachos: newTachos };
                 }
@@ -1342,7 +1345,7 @@ export default function OperationsClient({
 
                 if (canProduce) {
                     if (kgConsumedThisTick > 0) {
-                         newSilos = newSilos.map((s: SiloState) => {
+                         newSilos = newSilos.map((s) => {
                             if (s.id === 'familiar') {
                                 return { ...s, currentQQ: s.currentQQ - (kgConsumedThisTick / KG_PER_QUINTAL) };
                             }
@@ -1376,7 +1379,7 @@ export default function OperationsClient({
                     
                     const arrivedItems: ConveyorItem[] = [];
                     const remainingOnBelt: ConveyorItem[] = [];
-                    wrapperState.conveyorBelt.forEach((item: ConveyorItem) => {
+                    wrapperState.conveyorBelt.forEach((item) => {
                         if (newElapsedTime >= item.producedAt + wrapperConfig.conveyorDelay) {
                             arrivedItems.push(item);
                         } else {
@@ -1660,15 +1663,15 @@ export default function OperationsClient({
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
                                  {!isTachosAuto && (
-                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isSimulating}>
-                                      Enviar Masa Manual
-                                    </Button>
+                                     simTachos.state === 'ready'
+                                     ? <Button className="w-full" onClick={handleManualSendMasa} disabled={isSimulating}>Enviar Masa Manual</Button>
+                                     : <Button className="w-full" onClick={() => setSimulationState(prev => ({...prev, tachos: {...prev.tachos, state: 'cooking', timeRemaining: prev.tachos.cookTimeSeconds}}))} disabled={isSimulating || simTachos.state === 'cooking'}>Cocinar Masa</Button>
                                 )}
                             </div>
                         </div>
                         
                         {/* Receivers */}
-                         <div className="space-y-4">
+                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
                             {receivers.map((receiver) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
                                 const masas = simReceiver.currentQQ / masaQQAmount;
@@ -1712,7 +1715,7 @@ export default function OperationsClient({
                                     </Button>
                                 </div>
                             </div>
-                            <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
                                 {centrifuges.map((centrifuge) => {
                                     const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
                                     const stateConfig = {
@@ -1721,7 +1724,7 @@ export default function OperationsClient({
                                     };
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
                                     return (
-                                        <div key={centrifuge.id} className="mt-4">
+                                        <div key={centrifuge.id} className="mt-4 border p-3 rounded-lg flex flex-col">
                                             <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
                                             <div className="space-y-1 mt-auto">
                                                 <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
