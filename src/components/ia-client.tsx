@@ -110,6 +110,7 @@ type SimulationParams = {
     isTachosAuto: boolean;
     isTachosGoalEnabled: boolean;
     centrifugeCycleTime: number; // Replaces purgeTime
+    isCentrifugesAuto: boolean;
 };
 
 type ImageUrlConfig = {
@@ -691,6 +692,7 @@ export default function OperationsClient({
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
     const [tachosImageUrl, setTachosImageUrl] = React.useState<string | null>(null);
     const [centrifugeCycleTime, setCentrifugeCycleTime] = React.useState(90);
+    const [isCentrifugesAuto, setIsCentrifugesAuto] = React.useState(true);
 
     // --- UI State ---
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
@@ -725,6 +727,7 @@ export default function OperationsClient({
             isTachosAuto: false,
             isTachosGoalEnabled: false,
             centrifugeCycleTime: 90,
+            isCentrifugesAuto: true,
         },
         images: {
             machines: {
@@ -829,6 +832,7 @@ export default function OperationsClient({
             setIsTachosAuto(params.isTachosAuto);
             setIsTachosGoalEnabled(params.isTachosGoalEnabled);
             setCentrifugeCycleTime(params.centrifugeCycleTime);
+            setIsCentrifugesAuto(params.isCentrifugesAuto ?? true);
 
         } catch (error) {
             console.error("Error loading config:", error);
@@ -862,13 +866,14 @@ export default function OperationsClient({
             isTachosAuto: isTachosAuto,
             isTachosGoalEnabled: isTachosGoalEnabled,
             centrifugeCycleTime: centrifugeCycleTime,
+            isCentrifugesAuto: isCentrifugesAuto,
         };
         try {
             window.localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(paramsToSave));
         } catch (error) {
             console.error("Error saving params to localStorage", error);
         }
-    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, centrifugeCycleTime]);
+    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, centrifugeCycleTime, isCentrifugesAuto]);
 
     React.useEffect(() => {
         saveParamsToLocalStorage();
@@ -994,6 +999,10 @@ export default function OperationsClient({
 
     const handleManualSendMasa = () => {
         setSimulationState(prev => {
+            if (prev.tachos.state !== 'ready') {
+                toast({ title: 'Aviso', description: 'La masa aún no está lista en Tachos.', variant: 'default' });
+                return prev;
+            }
             const { success, newReceivers } = sendMasaToReceiver(prev.receivers);
             if (success) {
                 toast({ title: 'Masa enviada al recibidor' });
@@ -1009,6 +1018,47 @@ export default function OperationsClient({
             }
         });
     };
+    
+    const startCentrifugeCycle = (centrifugeId: string) => {
+        setSimulationState(prev => {
+            const activeReceiver = prev.receivers.find(r => r.id === 'rec1' && r.currentQQ > 0) || prev.receivers.find(r => r.id === 'rec2' && r.currentQQ > 0);
+            const centrifugeToStart = prev.centrifuges.find(c => c.id === centrifugeId);
+
+            if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle') {
+                toast({ title: 'No se puede iniciar', description: 'No hay material o la centrífuga está ocupada.', variant: 'destructive'});
+                return prev;
+            }
+            
+            const PURGES_PER_MASA = 12;
+            const qqPerPurge = MASA_QQ_AMOUNT / PURGES_PER_MASA;
+            const newReceivers = JSON.parse(JSON.stringify(prev.receivers));
+            const receiverToUpdate = newReceivers.find(r => r.id === activeReceiver.id);
+            
+            if (receiverToUpdate && receiverToUpdate.currentQQ >= qqPerPurge) {
+                receiverToUpdate.currentQQ -= qqPerPurge;
+
+                const totalCycleTimeSeconds = centrifugeCycleTime * 60;
+                const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA * 2;
+                
+                const newCentrifuges = prev.centrifuges.map(c => 
+                    c.id === centrifugeId 
+                    ? { ...c, state: 'processing' as const, timeRemaining: individualPurgeCycleTime } 
+                    : c
+                );
+                
+                toast({ title: `Iniciando ciclo manual en ${centrifugeToStart.name}`});
+
+                return {
+                    ...prev,
+                    receivers: newReceivers,
+                    centrifuges: newCentrifuges,
+                }
+            } else {
+                 toast({ title: 'No hay suficiente material para una purga.'});
+                 return prev;
+            }
+        });
+    }
 
     const [isSimulating, setIsSimulating] = React.useState(false);
     
@@ -1215,40 +1265,53 @@ export default function OperationsClient({
 
 
                 // 2. Centrifuges Logic
-                const totalCycleTimeSeconds = centrifugeCycleTime * 60;
-                // Since 2 machines work together, each purga cycle is shorter to meet the total time.
-                // Let's say there are ~12-13 purges per masa.
-                const PURGES_PER_MASA = 12;
-                const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA * 2; // *2 because 2 machines
-
-                let activeReceiver = newReceivers.find(r => r.id === 'rec1' && r.currentQQ > 0) 
-                                    || newReceivers.find(r => r.id === 'rec2' && r.currentQQ > 0);
-                
-                const qqPerPurge = activeReceiver ? MASA_QQ_AMOUNT / PURGES_PER_MASA : 0;
-
-                newCentrifuges = newCentrifuges.map(cent => {
-                    let updatedCent = { ...cent };
+                if (isCentrifugesAuto) {
+                    const totalCycleTimeSeconds = centrifugeCycleTime * 60;
+                    const PURGES_PER_MASA = 12; // ~12-13 purges per masa
+                    const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA * 2; // *2 because 2 machines work together
+                    const qqPerPurge = MASA_QQ_AMOUNT / PURGES_PER_MASA;
+    
+                    let activeReceiver = newReceivers.find(r => r.id === 'rec1' && r.currentQQ > 0) || newReceivers.find(r => r.id === 'rec2' && r.currentQQ > 0);
                     
-                    if (updatedCent.state === 'idle' && activeReceiver && activeReceiver.currentQQ >= qqPerPurge) {
-                         const otherCentrifugeId = updatedCent.id === 'cent1' ? 'cent2' : 'cent1';
-                         const otherCentrifuge = newCentrifuges.find(c => c.id === otherCentrifugeId);
-                        
-                         if (otherCentrifuge) {
-                            const otherCentIsIdle = otherCentrifuge.state === 'idle';
-                            // Start if other is idle, or if other is halfway through its cycle
-                            const otherCentIsHalfway = otherCentrifuge.state === 'processing' && otherCentrifuge.timeRemaining <= individualPurgeCycleTime / 2;
-
-                            if (otherCentIsIdle || otherCentIsHalfway) {
-                                activeReceiver.currentQQ -= qqPerPurge;
-                                updatedCent.state = 'processing';
-                                updatedCent.timeRemaining = individualPurgeCycleTime;
-                            }
+                    if (activeReceiver) {
+                         const idleCentrifuge = newCentrifuges.find(c => c.state === 'idle');
+                         if (idleCentrifuge && activeReceiver.currentQQ >= qqPerPurge) {
+                             const otherCentrifugeId = idleCentrifuge.id === 'cent1' ? 'cent2' : 'cent1';
+                             const otherCentrifuge = newCentrifuges.find(c => c.id === otherCentrifugeId);
+                             
+                             let shouldStart = false;
+                             if (otherCentrifuge?.state === 'idle') {
+                                 shouldStart = true;
+                             } else if (otherCentrifuge?.state === 'processing' && otherCentrifuge.timeRemaining <= individualPurgeCycleTime / 2) {
+                                 shouldStart = true;
+                             }
+    
+                             if (shouldStart) {
+                                const receiverToUpdate = newReceivers.find(r => r.id === activeReceiver!.id);
+                                if (receiverToUpdate) {
+                                    receiverToUpdate.currentQQ -= qqPerPurge;
+                                }
+                                newCentrifuges = newCentrifuges.map(c => 
+                                    c.id === idleCentrifuge.id 
+                                    ? { ...c, state: 'processing', timeRemaining: individualPurgeCycleTime }
+                                    : c
+                                );
+                             }
                          }
                     }
+                }
 
-                    if (updatedCent.state === 'processing') {
-                        updatedCent.timeRemaining -= elapsedIncrement;
-                        updatedCent.progress = Math.max(0, 100 * (1 - updatedCent.timeRemaining / individualPurgeCycleTime));
+                // Update progress for all processing centrifuges
+                newCentrifuges.forEach((cent, index) => {
+                    if (cent.state === 'processing') {
+                        cent.timeRemaining -= elapsedIncrement;
+                        
+                        const totalCycleTimeSeconds = centrifugeCycleTime * 60;
+                        const PURGES_PER_MASA = 12;
+                        const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA * 2;
+                        const qqPerPurge = MASA_QQ_AMOUNT / PURGES_PER_MASA;
+                        
+                        cent.progress = Math.max(0, 100 * (1 - cent.timeRemaining / individualPurgeCycleTime));
                         
                         const qqPerSecond = qqPerPurge / individualPurgeCycleTime;
                         const qqThisTick = qqPerSecond * elapsedIncrement;
@@ -1267,13 +1330,12 @@ export default function OperationsClient({
                             }
                         }
 
-                        if (updatedCent.timeRemaining <= 0) {
-                            updatedCent.state = 'idle';
-                            updatedCent.progress = 0;
-                            // Check for next active receiver in the next tick
+                        if (cent.timeRemaining <= 0) {
+                            cent.state = 'idle';
+                            cent.progress = 0;
                         }
+                        newCentrifuges[index] = cent;
                     }
-                    return updatedCent;
                 });
                 
                 // 3. Envasadoras & Enfardadoras Logic
@@ -1632,13 +1694,13 @@ export default function OperationsClient({
                                         <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
                                         <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                     </div>
-                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simTachos.state !== 'ready' || simulationState.receivers.every(r => r.currentQQ >= r.capacityQQ * MASA_QQ_AMOUNT)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simTachos.state !== 'ready'}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
                                 </div>
                             </div>
                         </div>
                         
                         {/* Receivers */}
-                        <div className="space-y-4">
+                         <div className="space-y-4">
                             {receivers.map((receiver) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
                                 const masas = simReceiver.currentQQ / MASA_QQ_AMOUNT;
@@ -1666,11 +1728,21 @@ export default function OperationsClient({
 
                         {/* Centrifuges */}
                         <div className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
-                            <div className='flex justify-between items-start mb-2'>
+                            <div className='flex justify-between items-center mb-2'>
                                 <h3 className="font-bold text-lg">Centrífugas</h3>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
-                                    <Edit className="h-4 w-4" />
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                     <div className="flex items-center space-x-2">
+                                        <Label htmlFor="cent-auto-switch" className="text-xs">Auto</Label>
+                                        <Switch
+                                            id="cent-auto-switch"
+                                            checked={isCentrifugesAuto}
+                                            onCheckedChange={setIsCentrifugesAuto}
+                                        />
+                                    </div>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
+                                        <Edit className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             </div>
                             <div className="space-y-4">
                                 {centrifuges.map((centrifuge) => {
@@ -1690,6 +1762,11 @@ export default function OperationsClient({
                                                 </div>
                                                 <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
                                             </div>
+                                            {!isCentrifugesAuto && (
+                                                <Button size="sm" variant="secondary" className="w-full mt-2" onClick={() => startCentrifugeCycle(centrifuge.id)} disabled={simCentrifuge.state !== 'idle' || !isAnyMaterialAvailable || isSimulating}>
+                                                   Iniciar Purga Manual
+                                                </Button>
+                                            )}
                                         </div>
                                     )
                                 })}
