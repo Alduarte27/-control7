@@ -717,7 +717,7 @@ export default function OperationsClient({
             },
             centrifuges: {
                 'cent1': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
-                'cent2': 'https://firebasestorage.googleapis.com/v-0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
+                'cent2': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
             },
             tachos: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media',
         }
@@ -949,6 +949,34 @@ export default function OperationsClient({
         toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros han vuelto a sus valores por defecto.' });
     };
     
+    // --- SIMULATION STATE AND LOGIC ---
+    const [isSimulating, setIsSimulating] = React.useState(false);
+    
+    const createInitialSimulationState = React.useCallback((): SimulationState => ({
+        elapsedTime: 0,
+        machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
+        wrappers: {
+            '1': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+            '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+        },
+        isFinished: false,
+        silos: JSON.parse(JSON.stringify(silos)),
+        receivers: JSON.parse(JSON.stringify(receivers.map(r => ({...r, currentQQ: 0})))),
+        centrifuges: JSON.parse(JSON.stringify(centrifuges.map(c => ({...c, state: 'idle', progress: 0, timeRemaining: 0})))),
+        tachos: {
+            id: 'tachos',
+            name: 'Tachos',
+            imageUrl: tachosImageUrl,
+            state: 'idle',
+            cookTimeSeconds: tachosCookTime * 60,
+            timeRemaining: 0,
+            progress: 0,
+        },
+        totalMasasSent: 0,
+    }), [silos, receivers, centrifuges, tachosCookTime, tachosImageUrl]);
+    
+    const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
+    
     const sendMasaToReceiver = React.useCallback((): { success: boolean; newReceivers: ReceiverState[], sentTo: string | null } => {
         const newReceivers: ReceiverState[] = JSON.parse(JSON.stringify(simulationState.receivers));
         
@@ -986,6 +1014,7 @@ export default function OperationsClient({
         setSimulationState(prev => {
              const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
              const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
+
              let activeReceiver = prev.receivers.find(r => r.id === 'rec1' && r.currentQQ >= qqPerPurge);
              if (!activeReceiver) {
                  activeReceiver = prev.receivers.find(r => r.id === 'rec2' && r.currentQQ >= qqPerPurge);
@@ -995,7 +1024,8 @@ export default function OperationsClient({
 
             if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle') {
                 if (isManual) {
-                    toast({ title: 'No se puede iniciar', description: 'No hay material o la centrífuga está ocupada.', variant: 'destructive'});
+                   // This toast call was causing a render error, so it's removed from here.
+                   // The feedback is now handled in the onClick handler.
                 }
                 return prev;
             }
@@ -1026,37 +1056,14 @@ export default function OperationsClient({
             return prev;
         });
 
-        if (isManual && localSuccess) {
-            toast({title: 'Ciclo manual iniciado', description: `La ${centrifugeId === 'cent1' ? 'Centrífuga 1' : 'Centrífuga 2'} ha comenzado a procesar.`});
+        if (isManual) {
+            if (localSuccess) {
+                toast({title: 'Ciclo manual iniciado', description: `La ${centrifugeId === 'cent1' ? 'Centrífuga 1' : 'Centrífuga 2'} ha comenzado a procesar.`});
+            } else {
+                toast({ title: 'No se puede iniciar', description: 'No hay material o la centrífuga está ocupada.', variant: 'destructive'});
+            }
         }
     }
-
-    const [isSimulating, setIsSimulating] = React.useState(false);
-    
-    const createInitialSimulationState = React.useCallback((): SimulationState => ({
-        elapsedTime: 0,
-        machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
-        wrappers: {
-            '1': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-            '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-        },
-        isFinished: false,
-        silos: JSON.parse(JSON.stringify(silos)),
-        receivers: JSON.parse(JSON.stringify(receivers.map(r => ({...r, currentQQ: 0})))),
-        centrifuges: JSON.parse(JSON.stringify(centrifuges.map(c => ({...c, state: 'idle', progress: 0, timeRemaining: 0})))),
-        tachos: {
-            id: 'tachos',
-            name: 'Tachos',
-            imageUrl: tachosImageUrl,
-            state: 'idle',
-            cookTimeSeconds: tachosCookTime * 60,
-            timeRemaining: 0,
-            progress: 0,
-        },
-        totalMasasSent: 0,
-    }), [silos, receivers, centrifuges, tachosCookTime, tachosImageUrl]);
-    
-    const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
     
     React.useEffect(() => {
         setSimulationState(prev => ({
@@ -1665,7 +1672,9 @@ export default function OperationsClient({
                                  {!isTachosAuto && (
                                      simTachos.state === 'ready'
                                      ? <Button className="w-full" onClick={handleManualSendMasa} disabled={isSimulating}>Enviar Masa Manual</Button>
-                                     : <Button className="w-full" onClick={() => setSimulationState(prev => ({...prev, tachos: {...prev.tachos, state: 'cooking', timeRemaining: prev.tachos.cookTimeSeconds}}))} disabled={isSimulating || simTachos.state === 'cooking'}>Cocinar Masa</Button>
+                                     : simTachos.state === 'idle' 
+                                       ? <Button className="w-full" onClick={() => setSimulationState(prev => ({...prev, tachos: {...prev.tachos, state: 'cooking', timeRemaining: prev.tachos.cookTimeSeconds}}))} disabled={isSimulating}>Cocinar Masa</Button>
+                                       : <Button className="w-full" disabled>Cocinando...</Button>
                                 )}
                             </div>
                         </div>
