@@ -64,7 +64,6 @@ type CentrifugeState = {
     name: string;
     state: 'idle' | 'processing';
     processingTimeSeconds: number; // Tiempo total para procesar una masa
-    connectedReceiverId: string;
     imageUrl: string | null;
 
     // Live simulation data
@@ -762,8 +761,8 @@ export default function OperationsClient({
             setTachosImageUrl(imageUrls.tachos);
             
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', processingTimeSeconds: 90 * 60, connectedReceiverId: 'rec1', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', processingTimeSeconds: 90 * 60, connectedReceiverId: 'rec2', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', processingTimeSeconds: 90 * 60, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', processingTimeSeconds: 90 * 60, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
             ]);
             
             setTachosCookTime(params.tachosCookTime);
@@ -1140,9 +1139,10 @@ export default function OperationsClient({
                     let updatedCent = { ...cent };
 
                     if (updatedCent.state === 'idle') {
-                        const connectedReceiver = newReceivers.find(r => r.id === updatedCent.connectedReceiverId);
-                        if (connectedReceiver && connectedReceiver.currentMasas > 0) {
-                            connectedReceiver.currentMasas -= 1;
+                        // Find any receiver with a masa
+                        const availableReceiver = newReceivers.find(r => r.currentMasas > 0);
+                        if (availableReceiver) {
+                            availableReceiver.currentMasas -= 1; // Consume the masa
                             updatedCent.state = 'processing';
                             updatedCent.timeRemaining = updatedCent.processingTimeSeconds;
                         }
@@ -1152,7 +1152,6 @@ export default function OperationsClient({
                         updatedCent.timeRemaining -= elapsedIncrement;
                         updatedCent.progress = Math.max(0, 100 * (1 - updatedCent.timeRemaining / updatedCent.processingTimeSeconds));
                         
-                        // Add sugar to silos
                         const qqPerSecond = MASA_QQ_AMOUNT / updatedCent.processingTimeSeconds;
                         const qqThisTick = qqPerSecond * elapsedIncrement;
                         const familiarSilo = newSilos.find(s => s.id === 'familiar');
@@ -1535,11 +1534,10 @@ export default function OperationsClient({
                             </div>
                         </div>
                         
-                        {/* Receivers & Centrifuges Column */}
-                        <div className="lg:col-span-2 grid grid-cols-1 gap-4">
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {/* Receivers Column */}
-                                <div className="flex flex-col gap-4">
+                        {/* Receivers & Centrifuges Columns */}
+                        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                           {/* Receivers Column */}
+                            <div className="flex flex-col gap-4">
                                 {receivers.map((receiver) => {
                                     const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
                                     return (
@@ -1559,9 +1557,9 @@ export default function OperationsClient({
                                         </div>
                                     )
                                 })}
-                                </div>
-                                {/* Centrifuges Column */}
-                                <div className="flex flex-col gap-4">
+                            </div>
+                            {/* Centrifuges Column */}
+                            <div className="flex flex-col gap-4">
                                 {centrifuges.map((centrifuge) => {
                                     const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
                                     const stateConfig = {
@@ -1575,6 +1573,9 @@ export default function OperationsClient({
                                             <h3 className="font-bold text-lg">{simCentrifuge.name}</h3>
                                             {/* Future Edit Button */}
                                         </div>
+                                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                            <Image src={simCentrifuge.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media"} alt={simCentrifuge.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                        </div>
                                         <div className="space-y-1 mt-auto">
                                             <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
                                                 <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
@@ -1585,8 +1586,7 @@ export default function OperationsClient({
                                     </div>
                                     )
                                 })}
-                                </div>
-                           </div>
+                            </div>
                         </div>
 
                     </CardContent>
