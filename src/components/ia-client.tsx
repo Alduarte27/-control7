@@ -736,7 +736,7 @@ export default function OperationsClient({
             tachos: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media',
         }
     });
-    
+
     const createInitialSimulationState = React.useCallback((): SimulationState => ({
         elapsedTime: 0,
         machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
@@ -759,7 +759,7 @@ export default function OperationsClient({
         },
         totalMasasSent: 0,
     }), [silos, receivers, centrifuges, tachosCookTime, tachosImageUrl]);
-
+    
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
     
     React.useEffect(() => {
@@ -997,19 +997,18 @@ export default function OperationsClient({
     };
     
     const sendMasaToReceiver = React.useCallback((): { success: boolean; newReceivers: ReceiverState[], sentTo: string | null } => {
-        // This function now uses a passed state to avoid stale closure issues
         let success = false;
         let sentTo: string | null = null;
-
+        
         const newReceivers = JSON.parse(JSON.stringify(simulationState.receivers));
         
-        const receiver1 = newReceivers.find(r => r.id === 'rec1');
+        const receiver1 = newReceivers.find((r: ReceiverState) => r.id === 'rec1');
         if (receiver1 && receiver1.currentQQ < (receiver1.capacityQQ * masaQQAmount)) {
             receiver1.currentQQ += masaQQAmount;
             success = true;
             sentTo = receiver1.id;
         } else {
-            const receiver2 = newReceivers.find(r => r.id === 'rec2');
+            const receiver2 = newReceivers.find((r: ReceiverState) => r.id === 'rec2');
             if (receiver2 && receiver2.currentQQ < (receiver2.capacityQQ * masaQQAmount)) {
                 receiver2.currentQQ += masaQQAmount;
                 success = true;
@@ -1047,22 +1046,20 @@ export default function OperationsClient({
     const startCentrifugeCycle = (centrifugeId: string, isManual = false) => {
         let localSuccess = false;
         setSimulationState(prev => {
-            // Determine how many purges a full masa contains. Let's say it's ~30QQ per purge.
-             const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
-             const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
+            const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
+            const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
 
-             // Prioritize Recibidor 1, then Recibidor 2
-             let activeReceiver = prev.receivers.find(r => r.id === 'rec1' && r.currentQQ >= qqPerPurge);
-             if (!activeReceiver) {
-                 activeReceiver = prev.receivers.find(r => r.id === 'rec2' && r.currentQQ >= qqPerPurge);
-             }
+            let activeReceiver = prev.receivers.find(r => r.id === 'rec1' && r.currentQQ >= qqPerPurge);
+            if (!activeReceiver) {
+                activeReceiver = prev.receivers.find(r => r.id === 'rec2' && r.currentQQ >= qqPerPurge);
+            }
 
             const centrifugeToStart = prev.centrifuges.find(c => c.id === centrifugeId);
 
             if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle') {
                 if (isManual) {
-                   // This toast was causing a render error, so it's removed from here.
-                   // The feedback is now handled in the onClick handler.
+                    // This is a safe place to call toast because it's in response to a user click
+                    toast({ title: 'No se puede iniciar', description: 'No hay material o la centrífuga está ocupada.', variant: 'destructive'});
                 }
                 return prev;
             }
@@ -1072,9 +1069,6 @@ export default function OperationsClient({
             
             if (receiverToUpdate) {
                 receiverToUpdate.currentQQ -= qqPerPurge;
-
-                // The total cycle time (e.g., 90 mins) is for the WHOLE masa (all purges).
-                // So, the time for one purge is the total time divided by the number of purges.
                 const totalCycleTimeSeconds = centrifugeCycleTime * 60;
                 const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA;
                 
@@ -1086,6 +1080,10 @@ export default function OperationsClient({
                 
                 localSuccess = true;
 
+                if (isManual) {
+                    toast({title: 'Ciclo manual iniciado', description: `La ${centrifugeId === 'cent1' ? 'Centrífuga 1' : 'Centrífuga 2'} ha comenzado a procesar.`});
+                }
+                
                 return {
                     ...prev,
                     receivers: newReceivers,
@@ -1094,15 +1092,6 @@ export default function OperationsClient({
             }
             return prev;
         });
-
-        if (isManual) {
-            // This is a safe place to call toast
-            if (localSuccess) {
-                toast({title: 'Ciclo manual iniciado', description: `La ${centrifugeId === 'cent1' ? 'Centrífuga 1' : 'Centrífuga 2'} ha comenzado a procesar.`});
-            } else {
-                toast({ title: 'No se puede iniciar', description: 'No hay material o la centrífuga está ocupada.', variant: 'destructive'});
-            }
-        }
     }
     
     const pauseClock = React.useCallback(() => {
@@ -1164,7 +1153,6 @@ export default function OperationsClient({
                     }
 
                     if (newTachos.state === 'ready') {
-                         // We need a non-hook version of sendMasaToReceiver for inside the loop
                         let sent = false;
                         const rec1 = newReceivers.find(r => r.id === 'rec1');
                         if (rec1 && rec1.currentQQ < (rec1.capacityQQ * masaQQAmount)) {
@@ -1404,6 +1392,13 @@ export default function OperationsClient({
         }));
     };
     
+    const formatElapsedTime = (totalSeconds: number) => {
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = Math.floor(totalSeconds % 60);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    };
+
     const formatTime = (hours: number) => {
         if (!isFinite(hours) || hours <= 0) return '0h 0m';
         const h = Math.floor(hours);
@@ -1694,7 +1689,9 @@ export default function OperationsClient({
                                  {!isTachosAuto && (
                                      simTachos.state === 'idle' 
                                      ? <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa Manual</Button>
-                                     : <Button className="w-full" disabled>Cocinando...</Button>
+                                     : simTachos.state === 'cooking' 
+                                     ? <Button className="w-full" disabled>Cocinando...</Button>
+                                     : <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa</Button>
                                 )}
                             </div>
                         </div>
