@@ -1394,7 +1394,7 @@ export default function OperationsClient({
                             </TooltipProvider>
                         </div>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-stretch">
                         {/* Tachos */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                              <div className='flex justify-between items-start'>
