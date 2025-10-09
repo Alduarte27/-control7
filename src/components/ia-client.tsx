@@ -76,10 +76,10 @@ type TachosSimState = {
     imageUrl: string | null;
     state: 'idle' | 'cooking' | 'ready' | 'sending';
     cookTimeSeconds: number;
-    transferTimeSeconds: number; // New
+    transferTimeSeconds: number; 
     timeRemaining: number;
     progress: number;
-    targetReceiverId: string | null; // New
+    targetReceiverId: string | null; 
 };
 
 type ConveyorItem = {
@@ -1048,33 +1048,50 @@ export default function OperationsClient({
         toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros han vuelto a sus valores por defecto.' });
     };
 
+    const sendMasaToReceiver = React.useCallback(() => {
+        let sent = false;
+        let sentToId: string | null = null;
+        const newReceivers = [...simulationState.receivers];
+        const availableReceiver = newReceivers.find(r => r.state === 'idle');
+
+        if (availableReceiver) {
+            availableReceiver.state = 'filling';
+            sent = true;
+            sentToId = availableReceiver.id;
+        }
+
+        return { success: sent, newReceivers: newReceivers, sentTo: sentToId };
+    }, [simulationState.receivers]);
+
+
     const handleManualSendMasa = () => {
+        if (simulationState.tachos.state !== 'idle') {
+            toast({ title: 'Tachos Ocupados', description: 'No se puede enviar una masa manual mientras los tachos están cocinando o enviando.', variant: 'destructive'});
+            return;
+        }
+
+        const idleReceiver = simulationState.receivers.find(r => r.state === 'idle');
+        if (!idleReceiver) {
+            toast({ title: 'Error', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
+            return;
+        }
+
+        toast({ title: 'Envío Manual Iniciado', description: `Enviando una masa al ${idleReceiver.name}.` });
+        
         setSimulationState(prev => {
-            if (prev.tachos.state !== 'idle') {
-                toast({ title: 'Tachos Ocupados', description: 'No se puede enviar una masa manual mientras los tachos están cocinando o enviando.', variant: 'destructive'});
-                return prev;
-            }
-
-            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
-            if (!availableReceiver) {
-                toast({ title: 'Error', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
-                return prev;
-            }
-
-            toast({ title: 'Envío Manual Iniciado', description: `Enviando una masa al ${availableReceiver.name}.` });
-            
+            const newReceivers = prev.receivers.map(r => r.id === idleReceiver.id ? { ...r, state: 'filling' } : r);
             return {
                 ...prev,
+                receivers: newReceivers,
                 tachos: {
                     ...prev.tachos,
                     state: 'sending',
-                    targetReceiverId: availableReceiver.id,
+                    targetReceiverId: idleReceiver.id,
                     timeRemaining: prev.tachos.transferTimeSeconds,
                     progress: 0,
                 },
-                receivers: prev.receivers.map(r => r.id === availableReceiver.id ? { ...r, state: 'filling', fillProgress: 0 } : r),
                 totalMasasSent: prev.totalMasasSent + 1,
-            };
+            }
         });
     };
     
@@ -1082,12 +1099,11 @@ export default function OperationsClient({
         const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
         const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
     
-        // Find a receiver that is READY and has enough material for at least one purge
         const activeReceiver = currentState.receivers.find(r => r.state === 'ready' && r.currentQQ >= qqPerPurge);
     
         const centrifugeToStart = currentState.centrifuges.find(c => c.id === centrifugeId);
     
-        if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle') {
+        if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle' || activeReceiver.fillProgress < 100) {
             return currentState;
         }
         
@@ -1120,20 +1136,21 @@ export default function OperationsClient({
 
     const handleManualStartCentrifuge = (centrifugeId: string) => {
         if (isSimulating) {
+            // This is an intentional side-effect in a handler, which is safe.
             toast({ title: 'Pausa requerida', description: 'Detén la simulación para iniciar un ciclo manual.', variant: 'destructive'});
             return;
         }
 
         setSimulationState(prev => {
-            const receiverWithMaterial = prev.receivers.find(r => r.state === 'ready' && r.currentQQ > 0);
+            const receiverWithMaterial = prev.receivers.find(r => r.state === 'ready' && r.currentQQ > 0 && r.fillProgress >= 100);
             if (!receiverWithMaterial) {
-                toast({ title: 'No se puede iniciar', description: 'Ningún recibidor está listo y con material.', variant: 'destructive'});
+                toast({ title: 'No se puede iniciar', description: 'Ningún recibidor está 100% lleno y listo.', variant: 'destructive'});
                 return prev;
             }
 
             const newState = startCentrifugeCycle(centrifugeId, prev);
             if (newState === prev) {
-                 toast({ title: 'No se puede iniciar', description: 'La centrífuga está ocupada.', variant: 'destructive'});
+                 // Do not toast here as startCentrifugeCycle is pure
             } else {
                  toast({title: 'Inicio Manual Solicitado'});
             }
@@ -1188,7 +1205,7 @@ export default function OperationsClient({
                     return prev;
                 }
                 
-                let nextState = JSON.parse(JSON.stringify(prev));
+                let nextState: SimulationState = JSON.parse(JSON.stringify(prev));
                 const elapsedIncrement = (tickRateMs / 1000) * simulationSpeed;
                 nextState.elapsedTime += elapsedIncrement;
                 
@@ -1214,7 +1231,7 @@ export default function OperationsClient({
                     if (receiver) {
                         const qqPerSecond = masaQQAmount / nextState.tachos.transferTimeSeconds;
                         receiver.currentQQ = Math.min(receiver.capacityQQ * masaQQAmount, receiver.currentQQ + qqPerSecond * elapsedIncrement);
-                        receiver.fillProgress = (receiver.currentQQ / (receiver.capacityQQ * masaQQAmount)) * 100;
+                        receiver.fillProgress = nextState.tachos.progress; // Sync progress
                     }
 
                     if (nextState.tachos.timeRemaining <= 0) {
@@ -1253,7 +1270,7 @@ export default function OperationsClient({
                      const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
                      const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
                      
-                     const activeReceiver = nextState.receivers.find((r: ReceiverState) => r.state === 'ready' && r.currentQQ >= qqPerPurge);
+                     const activeReceiver = nextState.receivers.find((r: ReceiverState) => r.state === 'ready' && r.currentQQ >= qqPerPurge && r.fillProgress >= 100);
                      const idleCentrifuge = nextState.centrifuges.find((c: CentrifugeState) => c.state === 'idle');
 
                      if (activeReceiver && idleCentrifuge) {
@@ -1445,7 +1462,6 @@ export default function OperationsClient({
         }
         return `${minutes}m ${seconds}s`;
     };
-
 
     const getSiloFillColor = (percentage: number): string => {
         if (percentage < 20) return 'bg-red-500';
@@ -1717,7 +1733,7 @@ export default function OperationsClient({
                                 </div>
                                 {!isTachosAuto && (
                                     simTachos.state === 'idle'
-                                    ? <Button className="w-full" variant="secondary" onClick={handleManualCookMasa} disabled={isSimulating}>Cocinar Masa</Button>
+                                    ? <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa Manual</Button>
                                     : simTachos.state === 'ready'
                                     ? <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa Manual</Button>
                                     : <Button className="w-full" disabled>Procesando...</Button>
@@ -1787,7 +1803,7 @@ export default function OperationsClient({
                                         processing: { text: "Procesando", color: "text-amber-600", icon: Activity },
                                     };
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
-                                    const isReceiverReady = simulationState.receivers.some(r => r.state === 'ready');
+                                    const isReceiverReady = simulationState.receivers.some(r => r.state === 'ready' && r.fillProgress >= 100);
 
                                     return (
                                         <div key={centrifuge.id} className="border p-3 rounded-lg flex flex-col justify-between">
