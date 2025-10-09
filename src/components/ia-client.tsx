@@ -1397,7 +1397,7 @@ export default function OperationsClient({
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
                         {/* Tachos */}
-                        <div className="lg:col-span-1 p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                        <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                              <div className='flex justify-between items-start'>
                                 <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
                                   {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
@@ -1422,7 +1422,7 @@ export default function OperationsClient({
 
                         {/* Recibidores */}
                         {simulationState.receivers.map(receiver => (
-                            <div key={receiver.id} className="lg:col-span-1 p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                            <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                                 <h3 className="font-bold text-lg">{receiver.name}</h3>
                                 <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
                                     <Image src={receiver.imageUrl || ""} alt={receiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
@@ -1447,7 +1447,7 @@ export default function OperationsClient({
                             };
                             const { color, label, icon } = getStateProps();
                             return (
-                                <div key={cent.id} className="lg:col-span-1 p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                                <div key={cent.id} className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                                     <h3 className="font-bold text-lg">{cent.name}</h3>
                                     <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
                                         <Image src={cent.imageUrl || ""} alt={cent.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
