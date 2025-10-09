@@ -62,9 +62,8 @@ type ReceiverState = {
 type CentrifugeState = {
     id: string;
     name: string;
-    state: 'idle' | 'purging' | 'sending';
-    purgeTimeSeconds: number; // Tiempo de purga en segundos
-    sendingTimeSeconds: number; // Tiempo que tarda en enviar a silos
+    state: 'idle' | 'processing';
+    processingTimeSeconds: number; // Tiempo total para procesar una masa
     connectedReceiverId: string;
     imageUrl: string | null;
 
@@ -73,6 +72,15 @@ type CentrifugeState = {
     timeRemaining: number;
 };
 
+type TachosSimState = {
+    id: 'tachos';
+    name: string;
+    imageUrl: string | null;
+    state: 'idle' | 'cooking' | 'ready';
+    cookTimeSeconds: number;
+    timeRemaining: number;
+    progress: number;
+};
 
 type ConveyorItem = {
     producedAt: number; // The simulation time it was produced
@@ -100,9 +108,8 @@ type SimulationParams = {
     wrappers: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>[];
     silos: Omit<SiloState, 'imageUrl'>[];
     receivers: Omit<ReceiverState, 'imageUrl'>[];
-    tachosState: Omit<SiloState, 'imageUrl'>;
-    autoTachosInterval: number;
-    autoTachosGoal: number;
+    tachosCookTime: number; // Formerly autoTachosInterval
+    tachosGoal: number;
     isTachosAuto: boolean;
     isTachosGoalEnabled: boolean;
 };
@@ -121,11 +128,11 @@ type SimulationState = {
     machineTotals: { [machineId: number]: number }; // Total units produced by each machine
     wrappers: { [wrapperId: string]: Omit<WrapperState, 'id' | 'name' | 'capacity' | 'unitsPerBundle' | 'conveyorDelay' | 'imageUrl' | 'machineIds'> };
     isFinished: boolean;
-    nextAutoTachosSendTime: number;
-    silos: SiloState[]; // Add silos to the simulation state
-    receivers: ReceiverState[]; // NUEVO
-    centrifuges: CentrifugeState[]; // NUEVO
-    totalMasasSent: number; // Add masas sent to simulation state
+    silos: SiloState[]; 
+    receivers: ReceiverState[]; 
+    centrifuges: CentrifugeState[];
+    tachos: TachosSimState;
+    totalMasasSent: number; 
 };
 
 function MachineEditDialog({
@@ -260,14 +267,14 @@ function SiloEditDialog({
     onTachosConfigChange,
     isUploading,
 }: {
-    silo: SiloState;
+    silo: SiloState | TachosSimState;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<SiloState, 'imageUrl'>) => void;
     onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => Promise<void>;
     isTachos?: boolean;
-    tachosConfig?: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number };
-    onTachosConfigChange?: (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => void;
+    tachosConfig?: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number };
+    onTachosConfigChange?: (config: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number }) => void;
     isUploading: boolean;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
@@ -297,7 +304,7 @@ function SiloEditDialog({
     const fileInputId = `silo-modal-image-upload-${silo.id}`;
 
     const handleSaveChanges = () => {
-        const { imageUrl, ...configToSave } = editedSilo;
+        const { imageUrl, ...configToSave } = editedSilo as any;
         onSave(configToSave);
         if (isTachos && localTachosConfig && onTachosConfigChange) {
             onTachosConfigChange(localTachosConfig);
@@ -322,8 +329,8 @@ function SiloEditDialog({
                                 </div>
                             ) : (
                                 <Image
-                                    src={editedSilo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"}
-                                    alt={editedSilo.name}
+                                    src={silo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"}
+                                    alt={silo.name}
                                     width={600}
                                     height={400}
                                     className="object-contain w-full h-full"
@@ -349,10 +356,10 @@ function SiloEditDialog({
                         <Label htmlFor={`silo-name-${silo.id}`}>Nombre</Label>
                         <Input id={`silo-name-${silo.id}`} type="text" value={editedSilo.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
                     </div>
-                    {!isTachos && (
+                    {silo.id !== 'tachos' && 'capacityQQ' in silo && (
                         <div className="space-y-1.5">
                             <Label htmlFor={`silo-cap-${silo.id}`}>Capacidad Máx. (QQ)</Label>
-                            <Input id={`silo-cap-${silo.id}`} type="number" value={editedSilo.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
+                            <Input id={`silo-cap-${silo.id}`} type="number" value={(editedSilo as SiloState).capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
                         </div>
                     )}
                     {isTachos && localTachosConfig && (
@@ -370,12 +377,12 @@ function SiloEditDialog({
                                 </div>
                                 <div className={cn("space-y-3 transition-opacity", !localTachosConfig.isAuto && "opacity-50")}>
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="auto-interval" className="text-xs">Intervalo de Envío (minutos)</Label>
+                                        <Label htmlFor="auto-cooktime" className="text-xs">Tiempo de Cocción (minutos)</Label>
                                         <Input
-                                            id="auto-interval"
+                                            id="auto-cooktime"
                                             type="number"
-                                            value={localTachosConfig.interval}
-                                            onChange={(e) => handleTachosConfigFieldChange('interval', Number(e.target.value))}
+                                            value={localTachosConfig.cookTime}
+                                            onChange={(e) => handleTachosConfigFieldChange('cookTime', Number(e.target.value))}
                                             disabled={!localTachosConfig.isAuto}
                                             min="1"
                                         />
@@ -626,18 +633,17 @@ export default function OperationsClient({
     const [machines, setMachines] = React.useState<MachineState[]>([]);
     const [wrappers, setWrappers] = React.useState<WrapperState[]>([]);
     const [silos, setSilos] = React.useState<SiloState[]>([]);
-    const [tachosState, setTachosState] = React.useState<SiloState>({ id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0, imageUrl: null });
-    const [receivers, setReceivers] = React.useState<ReceiverState[]>([]); // NUEVO
-    const [centrifuges, setCentrifuges] = React.useState<CentrifugeState[]>([]); // NUEVO
-    
-    const [autoTachosInterval, setAutoTachosInterval] = React.useState(10);
-    const [autoTachosGoal, setAutoTachosGoal] = React.useState(6);
+    const [receivers, setReceivers] = React.useState<ReceiverState[]>([]);
+    const [centrifuges, setCentrifuges] = React.useState<CentrifugeState[]>([]);
+    const [tachosCookTime, setTachosCookTime] = React.useState(90);
+    const [tachosGoal, setTachosGoal] = React.useState(6);
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
+    const [tachosImageUrl, setTachosImageUrl] = React.useState<string | null>(null);
     
     // --- UI State ---
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
-    const [editingSilo, setEditingSilo] = React.useState<SiloState | null>(null);
+    const [editingSilo, setEditingSilo] = React.useState<SiloState | TachosSimState | null>(null);
     const [editingReceiver, setEditingReceiver] = React.useState<ReceiverState | null>(null);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
     const [isUploading, setIsUploading] = React.useState(false);
@@ -662,9 +668,8 @@ export default function OperationsClient({
                 { id: 'rec1', name: 'Recibidor 1', capacityMasas: 1, currentMasas: 0 },
                 { id: 'rec2', name: 'Recibidor 2', capacityMasas: 1, currentMasas: 0 },
             ],
-            tachosState: { id: 'tachos', name: 'Tachos', capacityQQ: 0, currentQQ: 0 },
-            autoTachosInterval: 10,
-            autoTachosGoal: 6,
+            tachosCookTime: 90, // 1.5 hours in minutes
+            tachosGoal: 6,
             isTachosAuto: false,
             isTachosGoalEnabled: false,
         },
@@ -717,7 +722,6 @@ export default function OperationsClient({
                         const sr = savedParams.receivers?.find((r: any) => r.id === dr.id);
                         return { ...dr, ...sr };
                     }),
-                    tachosState: { ...defaultParams.tachosState, ...savedParams.tachosState },
                 };
             } else {
                  params = defaultParams;
@@ -755,19 +759,15 @@ export default function OperationsClient({
                 ...r,
                 imageUrl: imageUrls.receivers[r.id] || null,
             })));
-            setTachosState({
-                ...params.tachosState,
-                imageUrl: imageUrls.tachos,
-            });
-            // --- NUEVA INICIALIZACIÓN ---
+            setTachosImageUrl(imageUrls.tachos);
+            
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', purgeTimeSeconds: 2 * 60, sendingTimeSeconds: 1 * 60, connectedReceiverId: 'rec1', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', purgeTimeSeconds: 2 * 60, sendingTimeSeconds: 1 * 60, connectedReceiverId: 'rec2', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', processingTimeSeconds: 90 * 60, connectedReceiverId: 'rec1', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', processingTimeSeconds: 90 * 60, connectedReceiverId: 'rec2', imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
             ]);
-            // --- FIN NUEVA INICIALIZACIÓN ---
-
-            setAutoTachosInterval(params.autoTachosInterval);
-            setAutoTachosGoal(params.autoTachosGoal);
+            
+            setTachosCookTime(params.tachosCookTime);
+            setTachosGoal(params.tachosGoal);
             setIsTachosAuto(params.isTachosAuto);
             setIsTachosGoalEnabled(params.isTachosGoalEnabled);
 
@@ -778,7 +778,7 @@ export default function OperationsClient({
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
             setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null })));
             setReceivers(params.receivers.map(r => ({ ...r, imageUrl: images.receivers[r.id] || null })));
-            setTachosState({ ...params.tachosState, imageUrl: images.tachos });
+            setTachosImageUrl(images.tachos);
         }
     }, []);
     
@@ -794,9 +794,8 @@ export default function OperationsClient({
             wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, imageUrl, ...w }) => w),
             silos: silos.map(({imageUrl, ...s}) => s),
             receivers: receivers.map(({imageUrl, ...r}) => r),
-            tachosState: (({imageUrl, ...t}) => t)(tachosState),
-            autoTachosInterval: autoTachosInterval,
-            autoTachosGoal: autoTachosGoal,
+            tachosCookTime: tachosCookTime,
+            tachosGoal: tachosGoal,
             isTachosAuto: isTachosAuto,
             isTachosGoalEnabled: isTachosGoalEnabled,
         };
@@ -805,7 +804,7 @@ export default function OperationsClient({
         } catch (error) {
             console.error("Error saving params to localStorage", error);
         }
-    }, [isClient, machines, wrappers, silos, receivers, tachosState, autoTachosInterval, autoTachosGoal, isTachosAuto, isTachosGoalEnabled]);
+    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosGoal, isTachosAuto, isTachosGoalEnabled]);
 
     React.useEffect(() => {
         saveParamsToLocalStorage();
@@ -851,7 +850,7 @@ export default function OperationsClient({
             } else if (type === 'receiver') {
                 setReceivers(prev => prev.map(r => r.id === id ? { ...r, imageUrl: downloadURL } : r));
             } else if (type === 'tachos') {
-                setTachosState(prev => ({ ...prev, imageUrl: downloadURL }));
+                setTachosImageUrl(downloadURL);
             }
             toast({ title: "Imagen actualizada", description: "La nueva imagen se ha guardado correctamente."});
 
@@ -876,22 +875,18 @@ export default function OperationsClient({
     };
 
     const handleSiloSave = (updatedSilo: Omit<SiloState, 'imageUrl'>) => {
-        if (updatedSilo.id === 'tachos') {
-            setTachosState(prev => ({...prev, ...updatedSilo}));
-        } else {
-            setSilos(prev => prev.map(s => s.id === updatedSilo.id ? {...s, ...updatedSilo} : s));
-        }
+        setSilos(prev => prev.map(s => s.id === updatedSilo.id ? {...s, ...updatedSilo} : s));
     };
 
     const handleReceiverSave = (updatedReceiver: Omit<ReceiverState, 'imageUrl'>) => {
         setReceivers(prev => prev.map(r => r.id === updatedReceiver.id ? { ...r, ...updatedReceiver } : r));
     };
     
-    const handleTachosConfigChange = (config: { isAuto: boolean; interval: number; isGoalEnabled: boolean; goal: number }) => {
+    const handleTachosConfigChange = (config: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number }) => {
         setIsTachosAuto(config.isAuto);
-        setAutoTachosInterval(config.interval);
+        setTachosCookTime(config.cookTime);
         setIsTachosGoalEnabled(config.isGoalEnabled);
-        setAutoTachosGoal(config.goal);
+        setTachosGoal(config.goal);
     };
 
     const handleRestoreDefaults = async () => {
@@ -928,6 +923,7 @@ export default function OperationsClient({
                     ...prev,
                     receivers: newReceivers,
                     totalMasasSent: prev.totalMasasSent + 1,
+                    tachos: { ...prev.tachos, state: 'idle' }
                 };
             } else {
                 toast({ title: 'Error', description: 'Todos los recibidores están llenos.', variant: 'destructive' });
@@ -946,12 +942,20 @@ export default function OperationsClient({
             '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
         },
         isFinished: false,
-        nextAutoTachosSendTime: 0,
         silos: JSON.parse(JSON.stringify(silos)),
         receivers: JSON.parse(JSON.stringify(receivers)),
         centrifuges: JSON.parse(JSON.stringify(centrifuges)),
+        tachos: {
+            id: 'tachos',
+            name: 'Tachos',
+            imageUrl: tachosImageUrl,
+            state: 'idle',
+            cookTimeSeconds: tachosCookTime * 60,
+            timeRemaining: 0,
+            progress: 0,
+        },
         totalMasasSent: 0,
-    }), [silos, receivers, centrifuges]);
+    }), [silos, receivers, centrifuges, tachosCookTime, tachosImageUrl]);
     
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
     
@@ -975,19 +979,15 @@ export default function OperationsClient({
     const wrappersRef = React.useRef(wrappers);
     React.useEffect(() => { wrappersRef.current = wrappers; }, [wrappers]);
 
-    const sendMasaToReceiverRef = React.useRef(sendMasaToReceiver);
-    React.useEffect(() => { sendMasaToReceiverRef.current = sendMasaToReceiver; }, [sendMasaToReceiver]);
-
     React.useEffect(() => {
-        if (isTachosAuto && isTachosGoalEnabled && simulationState.totalMasasSent >= autoTachosGoal) {
+        if (isTachosAuto && isTachosGoalEnabled && simulationState.totalMasasSent >= tachosGoal) {
             setIsTachosAuto(false); 
         }
-    }, [simulationState.totalMasasSent, isTachosAuto, isTachosGoalEnabled, autoTachosGoal]);
+    }, [simulationState.totalMasasSent, isTachosAuto, isTachosGoalEnabled, tachosGoal]);
     
     const totalWrapperCapacity = wrappers.reduce((sum, w) => sum + w.capacity, 0);
     
     const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
-    const granelSilo = simulationState.silos.find(s => s.id === 'granel');
     const familiarSiloQQ = familiarSilo?.currentQQ || 0;
 
     const staticSimulationResults = React.useMemo(() => {
@@ -1097,61 +1097,64 @@ export default function OperationsClient({
                 const elapsedIncrement = (tickRateMs / 1000) * simulationSpeed;
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
                 
-                let nextAutoSendTime = prev.nextAutoTachosSendTime;
+                let newTachos = { ...prev.tachos };
                 let newReceivers = [...prev.receivers];
                 let newCentrifuges = [...prev.centrifuges];
                 let newSilos = [...prev.silos];
                 let newTotalMasasSent = prev.totalMasasSent;
 
-                const goalMet = isTachosGoalEnabled && prev.totalMasasSent >= autoTachosGoal;
+                const goalMet = isTachosGoalEnabled && prev.totalMasasSent >= tachosGoal;
                 
-                if (isTachosAuto && !goalMet && newElapsedTime >= nextAutoSendTime) {
-                    const { success, newReceivers: updatedReceivers } = sendMasaToReceiverRef.current(newReceivers);
-                    if (success) {
-                        newReceivers = updatedReceivers;
-                        newTotalMasasSent = prev.totalMasasSent + 1;
-                        nextAutoSendTime = newElapsedTime + (autoTachosInterval * 60);
+                // 1. Tachos Logic
+                if (isTachosAuto && !goalMet) {
+                    if (newTachos.state === 'idle') {
+                        newTachos.state = 'cooking';
+                        newTachos.timeRemaining = newTachos.cookTimeSeconds;
+                    }
+
+                    if (newTachos.state === 'cooking') {
+                        newTachos.timeRemaining -= elapsedIncrement;
+                        newTachos.progress = 100 * (1 - newTachos.timeRemaining / newTachos.cookTimeSeconds);
+                        if (newTachos.timeRemaining <= 0) {
+                            newTachos.state = 'ready';
+                            newTachos.progress = 100;
+                        }
+                    }
+
+                    if (newTachos.state === 'ready') {
+                        const availableReceiver = newReceivers.find(r => r.currentMasas < r.capacityMasas);
+                        if (availableReceiver) {
+                            availableReceiver.currentMasas += 1;
+                            newTotalMasasSent += 1;
+                            newTachos.state = 'idle';
+                            newTachos.progress = 0;
+                        }
                     }
                 } else if (goalMet && isTachosAuto) {
                     setIsTachosAuto(false);
                 }
 
-                // Process Centrifuges
+
+                // 2. Centrifuges Logic
                 newCentrifuges = newCentrifuges.map(cent => {
                     let updatedCent = { ...cent };
 
-                    // 1. Start purging if idle and receiver has masa
                     if (updatedCent.state === 'idle') {
                         const connectedReceiver = newReceivers.find(r => r.id === updatedCent.connectedReceiverId);
                         if (connectedReceiver && connectedReceiver.currentMasas > 0) {
                             connectedReceiver.currentMasas -= 1;
-                            updatedCent.state = 'purging';
-                            updatedCent.timeRemaining = updatedCent.purgeTimeSeconds;
+                            updatedCent.state = 'processing';
+                            updatedCent.timeRemaining = updatedCent.processingTimeSeconds;
                         }
                     }
 
-                    // 2. Update progress if purging or sending
-                    if (updatedCent.state === 'purging' || updatedCent.state === 'sending') {
+                    if (updatedCent.state === 'processing') {
                         updatedCent.timeRemaining -= elapsedIncrement;
-                        const totalTime = updatedCent.state === 'purging' ? updatedCent.purgeTimeSeconds : updatedCent.sendingTimeSeconds;
-                        updatedCent.progress = Math.max(0, 100 * (1 - updatedCent.timeRemaining / totalTime));
-
-                        if (updatedCent.timeRemaining <= 0) {
-                            if (updatedCent.state === 'purging') {
-                                updatedCent.state = 'sending';
-                                updatedCent.timeRemaining = updatedCent.sendingTimeSeconds;
-                            } else { // sending finished
-                                updatedCent.state = 'idle';
-                                updatedCent.progress = 0;
-                            }
-                        }
-                    }
-                    
-                    // 3. If sending, add QQ to silos
-                    if (updatedCent.state === 'sending') {
-                        const qqPerSecond = MASA_QQ_AMOUNT / updatedCent.sendingTimeSeconds;
-                        const qqThisTick = qqPerSecond * elapsedIncrement;
+                        updatedCent.progress = Math.max(0, 100 * (1 - updatedCent.timeRemaining / updatedCent.processingTimeSeconds));
                         
+                        // Add sugar to silos
+                        const qqPerSecond = MASA_QQ_AMOUNT / updatedCent.processingTimeSeconds;
+                        const qqThisTick = qqPerSecond * elapsedIncrement;
                         const familiarSilo = newSilos.find(s => s.id === 'familiar');
                         const granelSilo = newSilos.find(s => s.id === 'granel');
 
@@ -1162,15 +1165,19 @@ export default function OperationsClient({
 
                             const remainder = qqThisTick - qqForFamiliar;
                             if (remainder > 0) {
-                                const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-                                const qqForGranel = Math.min(remainder, spaceInGranel);
-                                granelSilo.currentQQ += qqForGranel;
+                                granelSilo.currentQQ = Math.min(granelSilo.capacityQQ, granelSilo.currentQQ + remainder);
                             }
+                        }
+
+                        if (updatedCent.timeRemaining <= 0) {
+                            updatedCent.state = 'idle';
+                            updatedCent.progress = 0;
                         }
                     }
                     return updatedCent;
                 });
-
+                
+                // 3. Envasadoras & Enfardadoras Logic
                 const currentMachines = machinesRef.current;
                 const activeMachinesConfig = currentMachines
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
@@ -1195,7 +1202,7 @@ export default function OperationsClient({
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
                     const finalSilos = newSilos.map(s => s.id === 'familiar' ? { ...s, currentQQ: 0 } : s);
                     pauseClock();
-                    return {...prev, silos: finalSilos, elapsedTime: newElapsedTime, isFinished: true, centrifuges: newCentrifuges, receivers: newReceivers };
+                    return {...prev, silos: finalSilos, elapsedTime: newElapsedTime, isFinished: true, centrifuges: newCentrifuges, receivers: newReceivers, tachos: newTachos };
                 }
 
                 const newMachineTotals = { ...prev.machineTotals };
@@ -1269,10 +1276,10 @@ export default function OperationsClient({
                     elapsedTime: newElapsedTime,
                     machineTotals: newMachineTotals,
                     wrappers: newWrappersState,
-                    nextAutoTachosSendTime: nextAutoSendTime,
                     silos: newSilos,
                     receivers: newReceivers,
                     centrifuges: newCentrifuges,
+                    tachos: newTachos,
                     totalMasasSent: newTotalMasasSent,
                 };
             });
@@ -1281,14 +1288,15 @@ export default function OperationsClient({
 
     const resetSimulation = (resetMaterial = true) => {
         pauseClock();
+        const initialSimState = createInitialSimulationState();
         if (resetMaterial) {
-            setSimulationState(createInitialSimulationState());
+            setSimulationState(initialSimState);
         } else {
             const currentSilos = JSON.parse(JSON.stringify(simulationState.silos));
             const currentReceivers = JSON.parse(JSON.stringify(simulationState.receivers));
             const currentMasasSent = simulationState.totalMasasSent;
             setSimulationState({
-                ...createInitialSimulationState(),
+                ...initialSimState,
                 silos: currentSilos,
                 receivers: currentReceivers,
                 totalMasasSent: currentMasasSent,
@@ -1319,8 +1327,12 @@ export default function OperationsClient({
     };
     
     const formatTimeSeconds = (totalSeconds: number) => {
-        const minutes = Math.floor(totalSeconds / 60);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = Math.floor(totalSeconds % 60);
+        if (hours > 0) {
+            return `${hours}h ${minutes}m`;
+        }
         return `${minutes}m ${seconds}s`;
     };
 
@@ -1331,6 +1343,14 @@ export default function OperationsClient({
         return 'bg-green-500';
     };
     
+    const simTachos = simulationState.tachos;
+    const tachosStateConfig = {
+        idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
+        cooking: { text: "Cocinando", color: "text-amber-600", icon: Beaker },
+        ready: { text: "Lista para Enviar", color: "text-green-600", icon: CheckCircle2 },
+    };
+    const currentTachosConfig = tachosStateConfig[simTachos.state];
+
   return (
     <div className="bg-background min-h-screen text-foreground">
       <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
@@ -1483,19 +1503,26 @@ export default function OperationsClient({
                             </TooltipProvider>
                         </div>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
                         {/* Tachos */}
                         <div className="lg:col-span-1 p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                             <div className='flex justify-between items-start'>
-                                <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
+                                <h3 className="font-bold text-lg flex items-center gap-2">{simTachos.name}
                                 {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                 </h3>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(simTachos)}>
                                     <Edit className="h-4 w-4" />
                                 </Button>
                             </div>
                             <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                <Image src={tachosState.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                <Image src={simTachos.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                            </div>
+                             <div className="space-y-1">
+                                <div className={cn("flex justify-between items-center text-xs font-medium", currentTachosConfig.color)}>
+                                    <span className="flex items-center gap-1.5"><currentTachosConfig.icon className="h-3 w-3" /> {currentTachosConfig.text}</span>
+                                    <span>{formatTimeSeconds(simTachos.timeRemaining)}</span>
+                                </div>
+                                <Progress value={simTachos.progress} indicatorClassName={cn(currentTachosConfig.color.replace("text-", "bg-"))} />
                             </div>
                             <div className="space-y-4">
                                 <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
@@ -1503,71 +1530,66 @@ export default function OperationsClient({
                                         <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
                                         <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                     </div>
-                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simulationState.receivers.every(r => r.currentMasas >= r.capacityMasas)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simTachos.state !== 'idle' || simulationState.receivers.every(r => r.currentMasas >= r.capacityMasas)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
                                 </div>
                             </div>
                         </div>
                         
-                        {/* Receivers */}
+                        {/* Receivers & Centrifuges */}
                         <div className="lg:col-span-2 grid grid-cols-1 gap-4">
-                            {receivers.map((receiver) => {
+                            {receivers.map((receiver, index) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
+                                const centrifuge = centrifuges[index];
+                                const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
+                                
+                                const stateConfig = {
+                                    idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
+                                    processing: { text: "Procesando", color: "text-amber-600", icon: Activity },
+                                };
+                                const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
+
                                 return (
-                                    <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background flex items-center gap-4">
-                                        <div className="aspect-square w-24 bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                <div key={receiver.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-background">
+                                    {/* Receiver Card */}
+                                    <div className="flex flex-col justify-between">
+                                        <div className='flex justify-between items-start'>
+                                            <h3 className="font-bold text-lg">{receiver.name}</h3>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
+                                                <Edit className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                        <div className="aspect-square w-full max-w-24 mx-auto bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
                                             <Image src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={receiver.name} width={100} height={100} className="object-contain w-full h-full" unoptimized/>
                                         </div>
-                                        <div className="flex-1 space-y-2">
-                                            <div className='flex justify-between items-start'>
-                                                <h3 className="font-bold text-lg">{receiver.name}</h3>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                            <div className='text-center border bg-muted/30 rounded-lg p-2'>
-                                                <p className="text-xs text-muted-foreground">Estado</p>
-                                                <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
-                                                    {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
-                                                </p>
-                                            </div>
+                                        <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                            <p className="text-xs text-muted-foreground">Estado</p>
+                                            <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
+                                                {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
+                                            </p>
                                         </div>
                                     </div>
+                                    {/* Centrifuge Card */}
+                                    <div className="flex flex-col justify-between">
+                                        <div className='flex justify-between items-start'>
+                                            <h3 className="font-bold text-lg">{simCentrifuge.name}</h3>
+                                            {/* Future Edit Button */}
+                                        </div>
+                                         <div className="aspect-square w-full max-w-24 mx-auto bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                            <Image src={simCentrifuge.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media"} alt={simCentrifuge.name} width={100} height={100} className="object-contain w-full h-full" unoptimized/>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
+                                                <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
+                                                <span>{formatTimeSeconds(simCentrifuge.timeRemaining)}</span>
+                                            </div>
+                                            <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
+                                        </div>
+                                    </div>
+                                </div>
                                 )
                             })}
                         </div>
-                        
-                        {/* Centrifuges */}
-                        <div className="lg:col-span-2 grid grid-cols-1 gap-4">
-                            {centrifuges.map(centrifuge => {
-                                const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
-                                const stateConfig = {
-                                    idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
-                                    purging: { text: "Purgando", color: "text-amber-600", icon: Activity },
-                                    sending: { text: "Enviando", color: "text-green-600", icon: CheckCircle2 },
-                                };
-                                const currentConfig = stateConfig[simCentrifuge.state];
 
-                                return (
-                                    <div key={simCentrifuge.id} className="p-4 border rounded-lg space-y-3 bg-background flex items-center gap-4">
-                                        <div className="aspect-square w-24 bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                                            <Image src={simCentrifuge.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media"} alt={simCentrifuge.name} width={100} height={100} className="object-contain w-full h-full" unoptimized/>
-                                        </div>
-                                        <div className="flex-1 space-y-2">
-                                            <div className='flex justify-between items-start'>
-                                                <h3 className="font-bold text-lg">{simCentrifuge.name}</h3>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <div className={cn("flex justify-between items-center text-xs font-medium", currentConfig.color)}>
-                                                    <span className="flex items-center gap-1.5"><currentConfig.icon className="h-3 w-3" /> {currentConfig.text}</span>
-                                                    <span>{formatTimeSeconds(simCentrifuge.timeRemaining)}</span>
-                                                </div>
-                                                <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentConfig.color.replace("text-", "bg-"))} />
-                                            </div>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
                     </CardContent>
                 </Card>
 
@@ -1576,7 +1598,6 @@ export default function OperationsClient({
                         <CardTitle className="flex items-center gap-2">2. Almacenamiento</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Silo Cards */}
                         {silos.map((silo) => {
                             const simSilo = simulationState.silos.find(s => s.id === silo.id) || silo;
                             const currentKg = simSilo.currentQQ * KG_PER_QUINTAL;
@@ -1899,9 +1920,9 @@ export default function OperationsClient({
                     isTachos={editingSilo.id === 'tachos'}
                     tachosConfig={{
                         isAuto: isTachosAuto,
-                        interval: autoTachosInterval,
+                        cookTime: tachosCookTime,
                         isGoalEnabled: isTachosGoalEnabled,
-                        goal: autoTachosGoal
+                        goal: tachosGoal
                     }}
                     onTachosConfigChange={handleTachosConfigChange}
                     isUploading={isUploading}
