@@ -50,12 +50,11 @@ type SiloState = {
   imageUrl: string | null;
 };
 
-// NUEVOS TIPOS
 type ReceiverState = {
     id: string;
     name: string;
-    capacityMasas: number; // Siempre será 1
-    currentMasas: number;
+    capacityQQ: number;
+    currentQQ: number;
     imageUrl: string | null;
 };
 
@@ -63,7 +62,6 @@ type CentrifugeState = {
     id: string;
     name: string;
     state: 'idle' | 'processing';
-    processingTimeSeconds: number; // Tiempo total para procesar una masa
     imageUrl: string | null;
 
     // Live simulation data
@@ -111,6 +109,8 @@ type SimulationParams = {
     tachosGoal: number;
     isTachosAuto: boolean;
     isTachosGoalEnabled: boolean;
+    centrifugePurgeTime: number;
+    centrifugePurgeAmount: number;
 };
 
 type ImageUrlConfig = {
@@ -118,6 +118,7 @@ type ImageUrlConfig = {
     wrappers: { [id: string]: string };
     silos: { [id: string]: string };
     receivers: { [id: string]: string };
+    centrifuges: { [id: string]: string };
     tachos: string;
 };
 
@@ -148,7 +149,7 @@ function MachineEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedMachine: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>) => void;
-    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => Promise<void>;
+    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => Promise<void>;
     isUploading: boolean;
 }) {
     const [editedMachine, setEditedMachine] = React.useState(machine);
@@ -270,7 +271,7 @@ function SiloEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<SiloState, 'imageUrl'>) => void;
-    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => Promise<void>;
+    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => Promise<void>;
     isTachos?: boolean;
     tachosConfig?: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number };
     onTachosConfigChange?: (config: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number }) => void;
@@ -422,30 +423,29 @@ function SiloEditDialog({
     );
 }
 
-function ReceiverEditDialog({
-    receiver,
+function CentrifugeEditDialog({
     open,
     onOpenChange,
     onSave,
+    purgeTime,
+    purgeAmount,
 }: {
-    receiver: ReceiverState;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (updatedReceiver: Omit<ReceiverState, 'imageUrl'>) => void;
+    onSave: (config: { purgeTime: number; purgeAmount: number }) => void;
+    purgeTime: number;
+    purgeAmount: number;
 }) {
-    const [editedReceiver, setEditedReceiver] = React.useState(receiver);
+    const [localPurgeTime, setLocalPurgeTime] = React.useState(purgeTime);
+    const [localPurgeAmount, setLocalPurgeAmount] = React.useState(purgeAmount);
 
     React.useEffect(() => {
-        setEditedReceiver(receiver);
-    }, [receiver]);
-
-    const handleFieldChange = (field: keyof Omit<ReceiverState, 'imageUrl'>, value: any) => {
-        setEditedReceiver(prev => ({ ...prev, [field]: value }));
-    };
+        setLocalPurgeTime(purgeTime);
+        setLocalPurgeAmount(purgeAmount);
+    }, [purgeTime, purgeAmount]);
 
     const handleSaveChanges = () => {
-        const { imageUrl, ...configToSave } = editedReceiver;
-        onSave(configToSave);
+        onSave({ purgeTime: localPurgeTime, purgeAmount: localPurgeAmount });
         onOpenChange(false);
     };
 
@@ -453,17 +453,31 @@ function ReceiverEditDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Editar {receiver.name}</DialogTitle>
+                    <DialogTitle>Editar Configuración de Centrífugas</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
+                    <p className="text-sm text-muted-foreground">
+                        Esta configuración se aplica a ambas centrífugas, ya que trabajan en conjunto.
+                    </p>
                     <div className="space-y-1.5">
-                        <Label htmlFor={`receiver-name-${receiver.id}`}>Nombre</Label>
-                        <Input id={`receiver-name-${receiver.id}`} type="text" value={editedReceiver.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
+                        <Label htmlFor="purge-time">Tiempo de Procesamiento por Purga (minutos)</Label>
+                        <Input
+                            id="purge-time"
+                            type="number"
+                            value={localPurgeTime}
+                            onChange={(e) => setLocalPurgeTime(Number(e.target.value))}
+                            min="1"
+                        />
                     </div>
                     <div className="space-y-1.5">
-                        <Label>Capacidad (Masas)</Label>
-                        <Input type="number" value={editedReceiver.capacityMasas} disabled />
-                        <p className='text-xs text-muted-foreground'>La capacidad de los recibidores está fijada en 1 masa.</p>
+                        <Label htmlFor="purge-amount">Cantidad por Purga (QQ)</Label>
+                        <Input
+                            id="purge-amount"
+                            type="number"
+                            value={localPurgeAmount}
+                            onChange={(e) => setLocalPurgeAmount(Number(e.target.value))}
+                            min="1"
+                        />
                     </div>
                 </div>
                 <DialogFooter>
@@ -474,7 +488,6 @@ function ReceiverEditDialog({
         </Dialog>
     );
 }
-
 
 function WrapperEditDialog({
     wrapper,
@@ -490,7 +503,7 @@ function WrapperEditDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedWrapper: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>) => void;
-    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => Promise<void>;
+    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => Promise<void>;
     isUploading: boolean;
 }) {
     const [editedWrapper, setEditedWrapper] = React.useState<Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt'>>(wrapper);
@@ -639,11 +652,13 @@ export default function OperationsClient({
     const [isTachosAuto, setIsTachosAuto] = React.useState(false);
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
     const [tachosImageUrl, setTachosImageUrl] = React.useState<string | null>(null);
-    
+    const [centrifugePurgeTime, setCentrifugePurgeTime] = React.useState(15);
+    const [centrifugePurgeAmount, setCentrifugePurgeAmount] = React.useState(30);
+
     // --- UI State ---
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
     const [editingSilo, setEditingSilo] = React.useState<SiloState | TachosSimState | null>(null);
-    const [editingReceiver, setEditingReceiver] = React.useState<ReceiverState | null>(null);
+    const [editingCentrifuges, setEditingCentrifuges] = React.useState(false);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
     const [isUploading, setIsUploading] = React.useState(false);
 
@@ -664,13 +679,15 @@ export default function OperationsClient({
                 { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0 },
             ],
             receivers: [
-                { id: 'rec1', name: 'Recibidor 1', capacityMasas: 1, currentMasas: 0 },
-                { id: 'rec2', name: 'Recibidor 2', capacityMasas: 1, currentMasas: 0 },
+                { id: 'rec1', name: 'Recibidor 1', capacityQQ: MASA_QQ_AMOUNT, currentQQ: 0 },
+                { id: 'rec2', name: 'Recibidor 2', capacityQQ: MASA_QQ_AMOUNT, currentQQ: 0 },
             ],
             tachosCookTime: 90, // 1.5 hours in minutes
             tachosGoal: 6,
             isTachosAuto: false,
             isTachosGoalEnabled: false,
+            centrifugePurgeTime: 15,
+            centrifugePurgeAmount: 30,
         },
         images: {
             machines: {
@@ -690,6 +707,10 @@ export default function OperationsClient({
             receivers: {
                 'rec1': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media',
                 'rec2': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media',
+            },
+            centrifuges: {
+                'cent1': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
+                'cent2': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
             },
             tachos: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media',
         }
@@ -736,6 +757,7 @@ export default function OperationsClient({
                     wrappers: { ...getDefaultConfig().images.wrappers, ...firestoreImages.wrappers },
                     silos: { ...getDefaultConfig().images.silos, ...firestoreImages.silos },
                     receivers: { ...getDefaultConfig().images.receivers, ...firestoreImages.receivers },
+                    centrifuges: { ...getDefaultConfig().images.centrifuges, ...firestoreImages.centrifuges },
                     tachos: firestoreImages.tachos || getDefaultConfig().images.tachos,
                 };
             }
@@ -758,17 +780,18 @@ export default function OperationsClient({
                 ...r,
                 imageUrl: imageUrls.receivers[r.id] || null,
             })));
-            setTachosImageUrl(imageUrls.tachos);
-            
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', processingTimeSeconds: 15 * 60, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', processingTimeSeconds: 15 * 60, imageUrl: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media', progress: 0, timeRemaining: 0 },
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: imageUrls.centrifuges['cent1'], progress: 0, timeRemaining: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', imageUrl: imageUrls.centrifuges['cent2'], progress: 0, timeRemaining: 0 },
             ]);
+            setTachosImageUrl(imageUrls.tachos);
             
             setTachosCookTime(params.tachosCookTime);
             setTachosGoal(params.tachosGoal);
             setIsTachosAuto(params.isTachosAuto);
             setIsTachosGoalEnabled(params.isTachosGoalEnabled);
+            setCentrifugePurgeTime(params.centrifugePurgeTime);
+            setCentrifugePurgeAmount(params.centrifugePurgeAmount);
 
         } catch (error) {
             console.error("Error loading config:", error);
@@ -777,6 +800,10 @@ export default function OperationsClient({
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
             setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null })));
             setReceivers(params.receivers.map(r => ({ ...r, imageUrl: images.receivers[r.id] || null })));
+            setCentrifuges([
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: images.centrifuges['cent1'], progress: 0, timeRemaining: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', imageUrl: images.centrifuges['cent2'], progress: 0, timeRemaining: 0 },
+            ]);
             setTachosImageUrl(images.tachos);
         }
     }, []);
@@ -797,19 +824,21 @@ export default function OperationsClient({
             tachosGoal: tachosGoal,
             isTachosAuto: isTachosAuto,
             isTachosGoalEnabled: isTachosGoalEnabled,
+            centrifugePurgeTime: centrifugePurgeTime,
+            centrifugePurgeAmount: centrifugePurgeAmount,
         };
         try {
             window.localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(paramsToSave));
         } catch (error) {
             console.error("Error saving params to localStorage", error);
         }
-    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosGoal, isTachosAuto, isTachosGoalEnabled]);
+    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, centrifugePurgeTime, centrifugePurgeAmount]);
 
     React.useEffect(() => {
         saveParamsToLocalStorage();
     }, [saveParamsToLocalStorage]);
     
-    const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => {
+    const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => {
         setIsUploading(true);
         const imagePath = `sim-images/${type}`;
         const formData = new FormData();
@@ -850,6 +879,8 @@ export default function OperationsClient({
                 setReceivers(prev => prev.map(r => r.id === id ? { ...r, imageUrl: downloadURL } : r));
             } else if (type === 'tachos') {
                 setTachosImageUrl(downloadURL);
+            } else if (type === 'centrifuge') {
+                setCentrifuges(prev => prev.map(c => c.id === id ? { ...c, imageUrl: downloadURL } : c));
             }
             toast({ title: "Imagen actualizada", description: "La nueva imagen se ha guardado correctamente."});
 
@@ -876,16 +907,18 @@ export default function OperationsClient({
     const handleSiloSave = (updatedSilo: Omit<SiloState, 'imageUrl'>) => {
         setSilos(prev => prev.map(s => s.id === updatedSilo.id ? {...s, ...updatedSilo} : s));
     };
-
-    const handleReceiverSave = (updatedReceiver: Omit<ReceiverState, 'imageUrl'>) => {
-        setReceivers(prev => prev.map(r => r.id === updatedReceiver.id ? { ...r, ...updatedReceiver } : r));
-    };
     
     const handleTachosConfigChange = (config: { isAuto: boolean; cookTime: number; isGoalEnabled: boolean; goal: number }) => {
         setIsTachosAuto(config.isAuto);
         setTachosCookTime(config.cookTime);
         setIsTachosGoalEnabled(config.isGoalEnabled);
         setTachosGoal(config.goal);
+    };
+
+    const handleCentrifugeConfigSave = (config: { purgeTime: number; purgeAmount: number }) => {
+        setCentrifugePurgeTime(config.purgeTime);
+        setCentrifugePurgeAmount(config.purgeAmount);
+        toast({ title: 'Configuración de Centrífugas Guardada' });
     };
 
     const handleRestoreDefaults = async () => {
@@ -906,14 +939,14 @@ export default function OperationsClient({
         const newReceivers = JSON.parse(JSON.stringify(currentReceivers));
         
         const receiver1 = newReceivers.find((r: ReceiverState) => r.id === 'rec1');
-        if (receiver1 && receiver1.currentMasas < receiver1.capacityMasas) {
-            receiver1.currentMasas += 1;
+        if (receiver1 && receiver1.currentQQ < receiver1.capacityQQ) {
+            receiver1.currentQQ = MASA_QQ_AMOUNT;
             return { success: true, newReceivers };
         }
 
         const receiver2 = newReceivers.find((r: ReceiverState) => r.id === 'rec2');
-        if (receiver2 && receiver2.currentMasas < receiver2.capacityMasas) {
-            receiver2.currentMasas += 1;
+        if (receiver2 && receiver2.currentQQ < receiver2.capacityQQ) {
+            receiver2.currentQQ = MASA_QQ_AMOUNT;
             return { success: true, newReceivers };
         }
 
@@ -1103,10 +1136,10 @@ export default function OperationsClient({
                 const elapsedIncrement = (tickRateMs / 1000) * simulationSpeed;
                 const newElapsedTime = prev.elapsedTime + elapsedIncrement;
                 
-                let newTachos = { ...prev.tachos };
-                let newReceivers = [...prev.receivers];
-                let newCentrifuges = [...prev.centrifuges];
-                let newSilos = [...prev.silos];
+                let newTachos = { ...prev.tachos, cookTimeSeconds: tachosCookTime * 60 };
+                let newReceivers = JSON.parse(JSON.stringify(prev.receivers));
+                let newCentrifuges = JSON.parse(JSON.stringify(prev.centrifuges));
+                let newSilos = JSON.parse(JSON.stringify(prev.silos));
                 let newTotalMasasSent = prev.totalMasasSent;
 
                 const goalMet = isTachosGoalEnabled && prev.totalMasasSent >= tachosGoal;
@@ -1145,30 +1178,24 @@ export default function OperationsClient({
                 // 2. Centrifuges Logic
                 newCentrifuges = newCentrifuges.map(cent => {
                     let updatedCent = { ...cent };
+                    const purgeTimeSeconds = centrifugePurgeTime * 60;
 
                     if (updatedCent.state === 'idle') {
-                        let sourceReceiverId: string | null = null;
-                        const receiver1 = newReceivers.find(r => r.id === 'rec1');
-                        if (receiver1 && receiver1.currentMasas > 0) {
-                            sourceReceiverId = 'rec1';
-                        } else {
-                            const receiver2 = newReceivers.find(r => r.id === 'rec2');
-                            if (receiver2 && receiver2.currentMasas > 0) {
-                                sourceReceiverId = 'rec2';
-                            }
-                        }
+                        let activeReceiver = newReceivers.find(r => r.id === 'rec1' && r.currentQQ >= centrifugePurgeAmount) 
+                                            || newReceivers.find(r => r.id === 'rec2' && r.currentQQ >= centrifugePurgeAmount);
 
-                        if (sourceReceiverId) {
-                            const otherCentrifuge = newCentrifuges.find(c => c.id !== cent.id);
-                            const otherCentIsIdle = otherCentrifuge?.state === 'idle';
-                            const otherCentIsHalfway = otherCentrifuge ? (otherCentrifuge.timeRemaining <= otherCentrifuge.processingTimeSeconds / 2) : false;
+                        if (activeReceiver) {
+                            const otherCentrifugeId = updatedCent.id === 'cent1' ? 'cent2' : 'cent1';
+                            const otherCentrifuge = newCentrifuges.find(c => c.id === otherCentrifugeId);
+                           
+                            if (otherCentrifuge) {
+                                const otherCentIsIdle = otherCentrifuge.state === 'idle';
+                                const otherCentIsHalfway = otherCentrifuge.timeRemaining <= purgeTimeSeconds / 2;
 
-                            if (otherCentIsIdle || otherCentIsHalfway) {
-                                const sourceReceiver = newReceivers.find(r => r.id === sourceReceiverId);
-                                if (sourceReceiver) {
-                                    sourceReceiver.currentMasas -= 1;
+                                if (otherCentIsIdle || otherCentIsHalfway) {
+                                    activeReceiver.currentQQ -= centrifugePurgeAmount;
                                     updatedCent.state = 'processing';
-                                    updatedCent.timeRemaining = updatedCent.processingTimeSeconds;
+                                    updatedCent.timeRemaining = purgeTimeSeconds;
                                 }
                             }
                         }
@@ -1176,10 +1203,11 @@ export default function OperationsClient({
 
                     if (updatedCent.state === 'processing') {
                         updatedCent.timeRemaining -= elapsedIncrement;
-                        updatedCent.progress = Math.max(0, 100 * (1 - updatedCent.timeRemaining / updatedCent.processingTimeSeconds));
+                        updatedCent.progress = Math.max(0, 100 * (1 - updatedCent.timeRemaining / purgeTimeSeconds));
                         
-                        const qqPerSecond = MASA_QQ_AMOUNT / updatedCent.processingTimeSeconds;
+                        const qqPerSecond = centrifugePurgeAmount / purgeTimeSeconds;
                         const qqThisTick = qqPerSecond * elapsedIncrement;
+                        
                         const familiarSilo = newSilos.find(s => s.id === 'familiar');
                         const granelSilo = newSilos.find(s => s.id === 'granel');
 
@@ -1296,12 +1324,6 @@ export default function OperationsClient({
                     }
                 }
 
-                const areAllCentrifugesIdle = newCentrifuges.every(c => c.state === 'idle');
-                const areAllReceiversEmpty = newReceivers.every(r => r.currentMasas === 0);
-                if (areAllCentrifugesIdle && areAllReceiversEmpty && !isTachosAuto && newTachos.state !== 'ready' ) {
-                    // This could be a place to show an alert
-                }
-
                 return {
                     ...prev,
                     elapsedTime: newElapsedTime,
@@ -1381,6 +1403,9 @@ export default function OperationsClient({
         ready: { text: "Lista para Enviar", color: "text-green-600", icon: CheckCircle2 },
     };
     const currentTachosConfig = tachosStateConfig[simTachos.state];
+
+    const areAllCentrifugesIdle = simulationState.centrifuges.every(c => c.state === 'idle');
+    const areAllReceiversEmpty = simulationState.receivers.every(r => r.currentQQ < centrifugePurgeAmount);
 
   return (
     <div className="bg-background min-h-screen text-foreground">
@@ -1561,7 +1586,7 @@ export default function OperationsClient({
                                         <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
                                         <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                     </div>
-                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simTachos.state !== 'ready' || simulationState.receivers.every(r => r.currentMasas >= r.capacityMasas)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simTachos.state !== 'ready' || simulationState.receivers.every(r => r.currentQQ >= r.capacityQQ)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
                                 </div>
                             </div>
                         </div>
@@ -1570,19 +1595,16 @@ export default function OperationsClient({
                         <div className="flex flex-col gap-4">
                             {receivers.map((receiver) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
+                                const fillPercentage = simReceiver.capacityQQ > 0 ? (simReceiver.currentQQ / simReceiver.capacityQQ) * 100 : 0;
+                                const fillColorClass = getSiloFillColor(fillPercentage);
                                 return (
                                     <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
                                         <div className='flex justify-between items-start mb-2'>
                                             <h3 className="font-bold text-lg">{receiver.name}</h3>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
                                         </div>
-                                        <div className='text-center border bg-muted/30 rounded-lg p-2 mt-auto'>
-                                            <p className="text-xs text-muted-foreground">Estado</p>
-                                            <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
-                                                {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
-                                            </p>
+                                        <div className="space-y-2 pt-2 mt-auto">
+                                            <Label className="text-sm">Nivel: {simReceiver.currentQQ.toLocaleString(undefined, {maximumFractionDigits:0})} QQ ({fillPercentage.toFixed(1)}%)</Label>
+                                            <Progress value={fillPercentage} indicatorClassName={fillColorClass} />
                                         </div>
                                     </div>
                                 )
@@ -1590,33 +1612,35 @@ export default function OperationsClient({
                         </div>
                         {/* Centrifuges */}
                         <div className="flex flex-col gap-4">
-                            {centrifuges.map((centrifuge) => {
-                                const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
-                                const stateConfig = {
-                                    idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
-                                    processing: { text: "Procesando", color: "text-amber-600", icon: Activity },
-                                };
-                                const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
-                                return (
-                                <div key={centrifuge.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
-                                    <div className='flex justify-between items-start mb-2'>
-                                        <h3 className="font-bold text-lg">{simCentrifuge.name}</h3>
-                                        {/* Future Edit Button */}
-                                    </div>
-                                     <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                        <Image src={simCentrifuge.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media"} alt={simCentrifuge.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                    </div>
-                                    <div className="space-y-1 mt-auto">
-                                        <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
-                                            <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
-                                            <span>{formatTimeSeconds(simCentrifuge.timeRemaining)}</span>
-                                        </div>
-                                        <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
-                                    </div>
+                            <div className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
+                                <div className='flex justify-between items-start mb-2'>
+                                    <h3 className="font-bold text-lg">Centrífugas</h3>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
+                                        <Edit className="h-4 w-4" />
+                                    </Button>
                                 </div>
-                                )
-                            })}
-                             {simulationState.centrifuges.every(c => c.state === 'idle') && simulationState.receivers.every(r => r.currentMasas === 0) && (
+                                {centrifuges.map((centrifuge) => {
+                                    const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
+                                    const stateConfig = {
+                                        idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
+                                        processing: { text: "Procesando", color: "text-amber-600", icon: Activity },
+                                    };
+                                    const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
+                                    return (
+                                        <div key={centrifuge.id} className="mt-4">
+                                            <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
+                                            <div className="space-y-1 mt-auto">
+                                                <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
+                                                    <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
+                                                    <span>{formatTimeSeconds(simCentrifuge.timeRemaining)}</span>
+                                                </div>
+                                                <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                            {areAllCentrifugesIdle && areAllReceiversEmpty && (
                                 <div className="text-center text-amber-600 font-semibold p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-sm flex items-center justify-center gap-2">
                                     <AlertTriangle className="h-4 w-4" />
                                     <span>Sin Material</span>
@@ -1961,12 +1985,13 @@ export default function OperationsClient({
                     isUploading={isUploading}
                 />
             )}
-            {editingReceiver && (
-                <ReceiverEditDialog
-                    open={!!editingReceiver}
-                    onOpenChange={(isOpen) => !isOpen && setEditingReceiver(null)}
-                    receiver={editingReceiver}
-                    onSave={handleReceiverSave}
+             {editingCentrifuges && (
+                <CentrifugeEditDialog
+                    open={editingCentrifuges}
+                    onOpenChange={setEditingCentrifuges}
+                    onSave={handleCentrifugeConfigSave}
+                    purgeTime={centrifugePurgeTime}
+                    purgeAmount={centrifugePurgeAmount}
                 />
             )}
             {editingWrapper && (
