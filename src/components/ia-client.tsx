@@ -446,7 +446,7 @@ function ReceiverEditDialog({
                         <Input id={`rec-name-${receiver.id}`} type="text" value={editedReceiver.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
                     </div>
                      <div className="space-y-1.5">
-                        <Label htmlFor={`rec-cap-${receiver.id}`}>Capacidad (Masas)</Label>
+                        <Label htmlFor={`rec-cap-${receiver.id}`}>Capacidad Máx. (QQ)</Label>
                         <Input id={`rec-cap-${receiver.id}`} type="number" value={editedReceiver.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="1" />
                     </div>
                 </div>
@@ -747,9 +747,31 @@ export default function OperationsClient({
         },
         totalMasasSent: 0,
     }), [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
-
+    
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState);
     
+    const sendMasaToReceiver = React.useCallback(() => {
+        const { receivers } = simulationState;
+        let sent = false;
+        let sentToId: string | null = null;
+        const newReceivers = [...receivers];
+        const availableReceiver = newReceivers.find(r => r.state === 'idle');
+
+        if (availableReceiver) {
+            availableReceiver.state = 'filling';
+            sent = true;
+            sentToId = availableReceiver.id;
+        }
+
+        if (!sent) {
+            return { success: false, newReceivers: receivers, sentTo: null };
+        }
+        
+        return { success: true, newReceivers, sentTo: sentToId };
+
+    }, [simulationState]);
+
+
     React.useEffect(() => {
         // This effect ensures the initial state is correct after config is loaded.
         setSimulationState(createInitialSimulationState());
@@ -774,8 +796,8 @@ export default function OperationsClient({
                 { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0 },
             ],
             receivers: [
-                { id: 'rec1', name: 'Recibidor 1', capacityQQ: 1 },
-                { id: 'rec2', name: 'Recibidor 2', capacityQQ: 1 },
+                { id: 'rec1', name: 'Recibidor 1', capacityQQ: 400 },
+                { id: 'rec2', name: 'Recibidor 2', capacityQQ: 400 },
             ],
             tachosCookTime: 90, 
             tachosTransferTime: 10,
@@ -1047,36 +1069,18 @@ export default function OperationsClient({
         await loadConfig();
         toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros han vuelto a sus valores por defecto.' });
     };
-
-    const sendMasaToReceiver = React.useCallback(() => {
-        let sent = false;
-        let sentToId: string | null = null;
-        const newReceivers = [...simulationState.receivers];
-        const availableReceiver = newReceivers.find(r => r.state === 'idle');
-
-        if (availableReceiver) {
-            availableReceiver.state = 'filling';
-            sent = true;
-            sentToId = availableReceiver.id;
-        }
-
-        return { success: sent, newReceivers: newReceivers, sentTo: sentToId };
-    }, [simulationState.receivers]);
-
-
+    
     const handleManualSendMasa = () => {
         if (simulationState.tachos.state !== 'idle') {
-            toast({ title: 'Tachos Ocupados', description: 'No se puede enviar una masa manual mientras los tachos están cocinando o enviando.', variant: 'destructive'});
+             // Silently fail if not idle, or use a toast if feedback is needed.
             return;
         }
 
-        const idleReceiver = simulationState.receivers.find(r => r.state === 'idle');
+        const idleReceiver = simulationState.receivers.find(r => r.state === 'idle' && r.currentQQ < r.capacityQQ);
         if (!idleReceiver) {
-            toast({ title: 'Error', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
+            toast({ title: 'Error', description: 'Todos los recibidores están ocupados o llenos.', variant: 'destructive' });
             return;
         }
-
-        toast({ title: 'Envío Manual Iniciado', description: `Enviando una masa al ${idleReceiver.name}.` });
         
         setSimulationState(prev => {
             const newReceivers = prev.receivers.map(r => r.id === idleReceiver.id ? { ...r, state: 'filling' } : r);
@@ -1099,11 +1103,11 @@ export default function OperationsClient({
         const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
         const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
     
-        const activeReceiver = currentState.receivers.find(r => r.state === 'ready' && r.currentQQ >= qqPerPurge);
+        const activeReceiver = currentState.receivers.find(r => r.state === 'ready' && r.currentQQ >= qqPerPurge && r.fillProgress >= 100);
     
         const centrifugeToStart = currentState.centrifuges.find(c => c.id === centrifugeId);
     
-        if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle' || activeReceiver.fillProgress < 100) {
+        if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle') {
             return currentState;
         }
         
@@ -1136,7 +1140,6 @@ export default function OperationsClient({
 
     const handleManualStartCentrifuge = (centrifugeId: string) => {
         if (isSimulating) {
-            // This is an intentional side-effect in a handler, which is safe.
             toast({ title: 'Pausa requerida', description: 'Detén la simulación para iniciar un ciclo manual.', variant: 'destructive'});
             return;
         }
@@ -1150,7 +1153,7 @@ export default function OperationsClient({
 
             const newState = startCentrifugeCycle(centrifugeId, prev);
             if (newState === prev) {
-                 // Do not toast here as startCentrifugeCycle is pure
+                 // The cycle couldn't be started, likely other centrifuge is busy. Silently fail.
             } else {
                  toast({title: 'Inicio Manual Solicitado'});
             }
@@ -1230,13 +1233,14 @@ export default function OperationsClient({
                     const receiver = nextState.receivers.find((r: ReceiverState) => r.id === nextState.tachos.targetReceiverId);
                     if (receiver) {
                         const qqPerSecond = masaQQAmount / nextState.tachos.transferTimeSeconds;
-                        receiver.currentQQ = Math.min(receiver.capacityQQ * masaQQAmount, receiver.currentQQ + qqPerSecond * elapsedIncrement);
+                        receiver.currentQQ = Math.min(receiver.capacityQQ, receiver.currentQQ + qqPerSecond * elapsedIncrement);
                         receiver.fillProgress = nextState.tachos.progress; // Sync progress
                     }
 
                     if (nextState.tachos.timeRemaining <= 0) {
                         if (receiver) {
                             receiver.state = 'ready';
+                            receiver.currentQQ = Math.min(receiver.capacityQQ, masaQQAmount); // Ensure it's capped
                             receiver.fillProgress = 100; // Ensure it's 100%
                         }
                         nextState.tachos.state = 'idle';
@@ -1251,7 +1255,7 @@ export default function OperationsClient({
                         nextState.tachos.timeRemaining = nextState.tachos.cookTimeSeconds;
                         nextState.tachos.progress = 0;
                     } else if (nextState.tachos.state === 'ready') {
-                         const availableReceiver = nextState.receivers.find((r: ReceiverState) => r.state === 'idle');
+                         const availableReceiver = nextState.receivers.find((r: ReceiverState) => r.state === 'idle' && r.capacityQQ >= masaQQAmount);
                         if (availableReceiver) {
                             nextState.totalMasasSent += 1;
                             nextState.tachos.state = 'sending'; 
@@ -1452,7 +1456,7 @@ export default function OperationsClient({
         return `${h}h ${m}m`;
     };
     
-    const formatTimeSeconds = (totalSeconds: number) => {
+    const formatElapsedTime = (totalSeconds: number) => {
         if (!isFinite(totalSeconds) || totalSeconds < 0) return '0m 0s';
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -1663,7 +1667,7 @@ export default function OperationsClient({
                        <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
                            <Clock className="h-6 w-6 text-muted-foreground mb-2" />
                            <p className="text-sm text-muted-foreground">Tiempo Transcurrido</p>
-                           <p className="text-4xl font-bold font-mono text-primary">{formatTimeSeconds(simulationState.elapsedTime)}</p>
+                           <p className="text-4xl font-bold font-mono text-primary">{formatElapsedTime(simulationState.elapsedTime)}</p>
                            {simulationState.isFinished && simulationState.elapsedTime > 0 && (
                                <p className="text-destructive font-semibold mt-2 flex items-center gap-2">
                                    <AlertTriangle className="h-4 w-4" />
@@ -1723,9 +1727,9 @@ export default function OperationsClient({
                                 <div className="space-y-1">
                                     <div className={cn("flex justify-between items-center text-xs font-medium", currentTachosConfig.color)}>
                                         <span className="flex items-center gap-1.5"><currentTachosConfig.icon className="h-3 w-3" /> {currentTachosConfig.text}</span>
-                                        <span>{formatTimeSeconds(simTachos.timeRemaining)}</span>
+                                        <span>{formatElapsedTime(simTachos.timeRemaining)}</span>
                                     </div>
-                                    <Progress value={simTachos.progress} indicatorClassName={cn(currentTachosConfig.color.replace("text-", "bg-"))} />
+                                    <Progress value={simTachos.progress} indicatorClassName={cn(simTachos.state === 'sending' ? 'bg-blue-600' : currentTachosConfig.color.replace("text-", "bg-"))} />
                                 </div>
                                 <div className='text-center border bg-muted/30 rounded-lg p-2'>
                                     <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
@@ -1745,9 +1749,7 @@ export default function OperationsClient({
                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
                             {receivers.map((receiver) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
-                                const masasInReceiver = simReceiver.currentQQ / masaQQAmount;
-                                const maxMasas = simReceiver.capacityQQ;
-                                const consumptionPercentage = maxMasas > 0 ? (masasInReceiver / maxMasas) * 100 : 0;
+                                const consumptionPercentage = simReceiver.capacityQQ > 0 ? (simReceiver.currentQQ / simReceiver.capacityQQ) * 100 : 0;
                                 return (
                                     <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col h-full">
                                         <div className='flex justify-between items-start mb-2'>
@@ -1769,7 +1771,7 @@ export default function OperationsClient({
                                                 <Progress value={consumptionPercentage} indicatorClassName="bg-amber-500" />
                                             </div>
                                             <div className="text-center">
-                                                <p className="text-sm">Nivel: {masasInReceiver.toFixed(1)} / {maxMasas} Masas</p>
+                                                <p className="text-sm">Nivel: {simReceiver.currentQQ.toFixed(0)} / {simReceiver.capacityQQ.toLocaleString()} QQ</p>
                                             </div>
                                         </div>
                                     </div>
@@ -1811,7 +1813,7 @@ export default function OperationsClient({
                                             <div className="space-y-1">
                                                 <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
                                                     <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
-                                                    <span>{formatTimeSeconds(simCentrifuge.timeRemaining)}</span>
+                                                    <span>{formatElapsedTime(simCentrifuge.timeRemaining)}</span>
                                                 </div>
                                                 <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
                                             </div>
