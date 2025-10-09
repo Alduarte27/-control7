@@ -1361,7 +1361,7 @@ export default function OperationsClient({
                    </CardContent>
                 </Card>
 
-                 <Card>
+                <Card>
                     <CardHeader>
                         <div className="flex items-center gap-4">
                             <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
@@ -1420,21 +1420,10 @@ export default function OperationsClient({
                            </div>
                         </div>
 
-                        {/* Recibidores */}
-                        {simulationState.receivers.slice(0, 1).map(receiver => (
-                            <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                                <h3 className="font-bold text-lg">{receiver.name}</h3>
-                                <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                    <Image src={receiver.imageUrl || ""} alt={receiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                </div>
-                                <div className="space-y-2 pt-2">
-                                    <Label className="text-sm">Contenido (Masas)</Label>
-                                    <div className='text-center border bg-muted/30 rounded-lg p-4'>
-                                        <p className="text-3xl font-bold text-primary">{receiver.currentMasas} / {receiver.capacityMasas}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+                        <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                            <h3>recibidor 1</h3>
+                        </div>
+                        
                     </CardContent>
                 </Card>
 
