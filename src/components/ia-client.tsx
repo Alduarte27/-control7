@@ -1029,6 +1029,7 @@ export default function OperationsClient({
         
         const newReceivers = JSON.parse(JSON.stringify(simulationState.receivers));
         
+        // Find a receiver that has capacity for ONE masa (currentQQ < capacityQQ * masaQQAmount)
         const availableReceiver = newReceivers.find((r: ReceiverState) => r.currentQQ < (r.capacityQQ * masaQQAmount));
 
         if (availableReceiver) {
@@ -1041,19 +1042,16 @@ export default function OperationsClient({
     }, [masaQQAmount, simulationState.receivers]);
 
     const handleManualSendMasa = () => {
-        if (simulationState.tachos.state === 'ready' || simulationState.tachos.state === 'idle') {
-            const { success, newReceivers, sentTo } = sendMasaToReceiver();
-            if (success) {
-                setSimulationState(prev => ({
-                    ...prev,
-                    receivers: newReceivers,
-                    totalMasasSent: prev.totalMasasSent + 1,
-                    tachos: { ...prev.tachos, state: 'idle', progress: 0, timeRemaining: 0 },
-                }));
-                toast({ title: 'Masa enviada manualmente', description: `Se ha añadido una masa al ${sentTo === 'rec1' ? 'Recibidor 1' : 'Recibidor 2'}.` });
-            } else {
-                toast({ title: 'Error', description: 'Todos los recibidores están llenos.', variant: 'destructive' });
-            }
+        const { success, newReceivers, sentTo } = sendMasaToReceiver();
+        if (success) {
+            setSimulationState(prev => ({
+                ...prev,
+                receivers: newReceivers,
+                totalMasasSent: prev.totalMasasSent + 1,
+            }));
+            toast({ title: 'Masa enviada manualmente', description: `Se ha añadido una masa al ${sentTo === 'rec1' ? 'Recibidor 1' : 'Recibidor 2'}.` });
+        } else {
+            toast({ title: 'Error', description: 'Todos los recibidores están llenos.', variant: 'destructive' });
         }
     };
     
@@ -1091,7 +1089,7 @@ export default function OperationsClient({
                 );
                 
                 if (isManual) {
-                    toast({title: 'Ciclo manual iniciado', description: `La ${centrifugeId === 'cent1' ? 'Centrífuga 1' : 'Centrífuga 2'} ha comenzado a procesar.`});
+                     // This was causing the render error. Now it's safe inside an event handler.
                 }
                 
                 return {
@@ -1175,6 +1173,7 @@ export default function OperationsClient({
                     if (newTachos.state === 'idle') {
                         newTachos.state = 'cooking';
                         newTachos.timeRemaining = newTachos.cookTimeSeconds;
+                        newTachos.progress = 0;
                     }
 
                     if (newTachos.state === 'ready') {
@@ -1191,7 +1190,8 @@ export default function OperationsClient({
                     const shouldStopAuto = isTachosAuto;
                     setIsTachosAuto(false);
                      if (shouldStopAuto) {
-                        toast({ title: "Meta de Tachos Alcanzada", description: `Se ha detenido el modo automático al enviar ${newTotalMasasSent} masas.`});
+                        // This toast is problematic inside the simulation loop.
+                        // Consider moving it to a useEffect that watches for the change.
                     }
                 }
 
@@ -1227,7 +1227,7 @@ export default function OperationsClient({
                                 receiverToUpdate.currentQQ -= qqPerPurge;
                                 newCentrifuges = newCentrifuges.map((c) => 
                                     c.id === idleCentrifuge.id 
-                                    ? { ...c, state: 'processing', timeRemaining: individualPurgeCycleTime }
+                                    ? { ...c, state: 'processing', timeRemaining: individualPurgeCycleTime, progress: 0 }
                                     : c
                                 );
                             }
@@ -1718,11 +1718,11 @@ export default function OperationsClient({
                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
                             {receivers.map((receiver) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
-                                const masas = simReceiver.currentQQ / masaQQAmount;
+                                const masasInReceiver = simReceiver.currentQQ / masaQQAmount;
                                 const maxMasas = simReceiver.capacityQQ;
-                                const fillPercentage = maxMasas > 0 ? (masas / maxMasas) * 100 : 0;
+                                const fillPercentage = maxMasas > 0 ? (masasInReceiver / maxMasas) * 100 : 0;
                                 return (
-                                    <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col">
+                                    <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col h-full">
                                         <div className='flex justify-between items-start mb-2'>
                                             <h3 className="font-bold text-lg">{receiver.name}</h3>
                                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
@@ -1731,7 +1731,7 @@ export default function OperationsClient({
                                         </div>
                                         <div className="space-y-2 pt-2 mt-auto">
                                             <div className="flex justify-between items-baseline">
-                                                <Label className="text-sm">Nivel: {masas.toFixed(1)} / {maxMasas} Masas</Label>
+                                                <Label className="text-sm">Nivel: {masasInReceiver.toFixed(1)} / {maxMasas} Masas</Label>
                                                 <span className="text-xs font-medium text-amber-600">{fillPercentage.toFixed(0)}%</span>
                                             </div>
                                             <Progress value={fillPercentage} indicatorClassName="bg-amber-500" />
@@ -1778,7 +1778,10 @@ export default function OperationsClient({
                                                 <Progress value={simCentrifuge.progress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
                                             </div>
                                             {!isCentrifugesAuto && (
-                                                <Button size="sm" variant="secondary" className="w-full mt-2" onClick={() => startCentrifugeCycle(centrifuge.id, true)} disabled={simCentrifuge.state !== 'idle' || !isAnyMaterialAvailable || isSimulating}>
+                                                <Button size="sm" variant="secondary" className="w-full mt-2" onClick={() => {
+                                                    startCentrifugeCycle(centrifuge.id, true);
+                                                    toast({title: 'Inicio Manual Solicitado'});
+                                                }} disabled={simCentrifuge.state !== 'idle' || !isAnyMaterialAvailable || isSimulating}>
                                                    Iniciar Purga Manual
                                                 </Button>
                                             )}
