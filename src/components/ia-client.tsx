@@ -717,7 +717,7 @@ export default function OperationsClient({
             },
             centrifuges: {
                 'cent1': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
-                'cent2': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
+                'cent2': 'https://firebasestorage.googleapis.com/v-0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
             },
             tachos: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media',
         }
@@ -967,36 +967,15 @@ export default function OperationsClient({
         return { success: false, newReceivers: currentReceivers, sentTo: null };
     }, [masaQQAmount]);
 
-    const handleManualCook = () => {
-        setSimulationState(prev => {
-            if (prev.tachos.state === 'idle') {
-                return {
-                    ...prev,
-                    tachos: {
-                        ...prev.tachos,
-                        state: 'cooking',
-                        timeRemaining: prev.tachos.cookTimeSeconds,
-                    }
-                }
-            }
-            return prev;
-        });
-    }
-
     const handleManualSendMasa = () => {
         setSimulationState(prev => {
-            if (prev.tachos.state !== 'ready') {
-                toast({ title: 'Aviso', description: 'La masa aún no está lista en Tachos.', variant: 'default' });
-                return prev;
-            }
-            const { success, newReceivers } = sendMasaToReceiver(prev.receivers);
+            const { success, newReceivers, sentTo } = sendMasaToReceiver(prev.receivers);
             if (success) {
-                toast({ title: 'Masa enviada al recibidor' });
+                toast({ title: 'Masa enviada manualmente', description: `Se ha añadido una masa al ${sentTo === 'rec1' ? 'Recibidor 1' : 'Recibidor 2'}.` });
                 return {
                     ...prev,
                     receivers: newReceivers,
                     totalMasasSent: prev.totalMasasSent + 1,
-                    tachos: { ...prev.tachos, state: 'idle', progress: 0, timeRemaining: 0 }
                 };
             } else {
                 toast({ title: 'Error', description: 'Todos los recibidores están llenos.', variant: 'destructive' });
@@ -1039,7 +1018,7 @@ export default function OperationsClient({
                 );
                 
                 if (isManual) {
-                    toast({ title: `Iniciando ciclo manual en ${centrifugeToStart.name}`});
+                    // Do not toast here to avoid re-render issues
                 }
 
                 return {
@@ -1681,10 +1660,9 @@ export default function OperationsClient({
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
                                  {!isTachosAuto && (
-                                    <div className="grid grid-cols-2 gap-2">
-                                       <Button className="w-full" onClick={handleManualCook} disabled={simTachos.state !== 'idle' || isSimulating}>Cocinar Masa</Button>
-                                       <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'ready' || isSimulating}>Enviar Masa</Button>
-                                    </div>
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isSimulating}>
+                                      Enviar Masa Manual
+                                    </Button>
                                 )}
                             </div>
                         </div>
