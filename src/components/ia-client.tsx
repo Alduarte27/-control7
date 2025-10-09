@@ -668,6 +668,20 @@ export default function OperationsClient({
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
     const [isUploading, setIsUploading] = React.useState(false);
 
+     // --- SIMULATION STATE AND LOGIC ---
+    const [isSimulating, setIsSimulating] = React.useState(false);
+    const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    const [simulationSpeed, setSimulationSpeed] = React.useState(1);
+    
+    const machinesRef = React.useRef(machines);
+    React.useEffect(() => { machinesRef.current = machines; }, [machines]);
+
+    const productsRef = React.useRef(products);
+    React.useEffect(() => { productsRef.current = products; }, [products]);
+    
+    const wrappersRef = React.useRef(wrappers);
+    React.useEffect(() => { wrappersRef.current = wrappers; }, [wrappers]);
+
     const getDefaultConfig = (): { params: SimulationParams; images: ImageUrlConfig } => ({
         params: {
             machines: [
@@ -722,7 +736,40 @@ export default function OperationsClient({
             tachos: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media',
         }
     });
+    
+    const createInitialSimulationState = React.useCallback((): SimulationState => ({
+        elapsedTime: 0,
+        machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
+        wrappers: {
+            '1': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+            '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+        },
+        isFinished: false,
+        silos: JSON.parse(JSON.stringify(silos)),
+        receivers: JSON.parse(JSON.stringify(receivers.map(r => ({...r, currentQQ: 0})))),
+        centrifuges: JSON.parse(JSON.stringify(centrifuges.map(c => ({...c, state: 'idle', progress: 0, timeRemaining: 0})))),
+        tachos: {
+            id: 'tachos',
+            name: 'Tachos',
+            imageUrl: tachosImageUrl,
+            state: 'idle',
+            cookTimeSeconds: tachosCookTime * 60,
+            timeRemaining: 0,
+            progress: 0,
+        },
+        totalMasasSent: 0,
+    }), [silos, receivers, centrifuges, tachosCookTime, tachosImageUrl]);
 
+    const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
+    
+    React.useEffect(() => {
+        setSimulationState(prev => ({
+            ...prev,
+            silos: JSON.parse(JSON.stringify(silos)),
+            receivers: JSON.parse(JSON.stringify(receivers)),
+        }));
+    }, [silos, receivers]);
+    
     const loadConfig = React.useCallback(async () => {
         const { params: defaultParams } = getDefaultConfig();
         try {
@@ -949,72 +996,62 @@ export default function OperationsClient({
         toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros han vuelto a sus valores por defecto.' });
     };
     
-    // --- SIMULATION STATE AND LOGIC ---
-    const [isSimulating, setIsSimulating] = React.useState(false);
-    
-    const createInitialSimulationState = React.useCallback((): SimulationState => ({
-        elapsedTime: 0,
-        machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
-        wrappers: {
-            '1': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-            '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-        },
-        isFinished: false,
-        silos: JSON.parse(JSON.stringify(silos)),
-        receivers: JSON.parse(JSON.stringify(receivers.map(r => ({...r, currentQQ: 0})))),
-        centrifuges: JSON.parse(JSON.stringify(centrifuges.map(c => ({...c, state: 'idle', progress: 0, timeRemaining: 0})))),
-        tachos: {
-            id: 'tachos',
-            name: 'Tachos',
-            imageUrl: tachosImageUrl,
-            state: 'idle',
-            cookTimeSeconds: tachosCookTime * 60,
-            timeRemaining: 0,
-            progress: 0,
-        },
-        totalMasasSent: 0,
-    }), [silos, receivers, centrifuges, tachosCookTime, tachosImageUrl]);
-    
-    const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState());
-    
     const sendMasaToReceiver = React.useCallback((): { success: boolean; newReceivers: ReceiverState[], sentTo: string | null } => {
-        const newReceivers: ReceiverState[] = JSON.parse(JSON.stringify(simulationState.receivers));
+        // This function now uses a passed state to avoid stale closure issues
+        let success = false;
+        let sentTo: string | null = null;
+
+        const newReceivers = JSON.parse(JSON.stringify(simulationState.receivers));
         
         const receiver1 = newReceivers.find(r => r.id === 'rec1');
         if (receiver1 && receiver1.currentQQ < (receiver1.capacityQQ * masaQQAmount)) {
             receiver1.currentQQ += masaQQAmount;
-            return { success: true, newReceivers, sentTo: receiver1.id };
+            success = true;
+            sentTo = receiver1.id;
+        } else {
+            const receiver2 = newReceivers.find(r => r.id === 'rec2');
+            if (receiver2 && receiver2.currentQQ < (receiver2.capacityQQ * masaQQAmount)) {
+                receiver2.currentQQ += masaQQAmount;
+                success = true;
+                sentTo = receiver2.id;
+            }
         }
+        
+        return { success, newReceivers: success ? newReceivers : simulationState.receivers, sentTo };
 
-        const receiver2 = newReceivers.find(r => r.id === 'rec2');
-        if (receiver2 && receiver2.currentQQ < (receiver2.capacityQQ * masaQQAmount)) {
-            receiver2.currentQQ += masaQQAmount;
-            return { success: true, newReceivers, sentTo: receiver2.id };
-        }
-
-        return { success: false, newReceivers: simulationState.receivers, sentTo: null };
     }, [masaQQAmount, simulationState.receivers]);
 
     const handleManualSendMasa = () => {
-        const { success, newReceivers, sentTo } = sendMasaToReceiver();
-        if (success) {
-            setSimulationState(prev => ({
-                ...prev,
-                receivers: newReceivers,
-                totalMasasSent: prev.totalMasasSent + 1,
-            }));
-            toast({ title: 'Masa enviada manualmente', description: `Se ha añadido una masa al ${sentTo === 'rec1' ? 'Recibidor 1' : 'Recibidor 2'}.` });
-        } else {
+        setSimulationState(prev => {
+            const newReceivers = JSON.parse(JSON.stringify(prev.receivers));
+            
+            const receiver1 = newReceivers.find((r: ReceiverState) => r.id === 'rec1');
+            if (receiver1 && receiver1.currentQQ < (receiver1.capacityQQ * masaQQAmount)) {
+                receiver1.currentQQ += masaQQAmount;
+                toast({ title: 'Masa enviada manualmente', description: `Se ha añadido una masa al Recibidor 1.` });
+                return { ...prev, receivers: newReceivers, totalMasasSent: prev.totalMasasSent + 1 };
+            }
+
+            const receiver2 = newReceivers.find((r: ReceiverState) => r.id === 'rec2');
+            if (receiver2 && receiver2.currentQQ < (receiver2.capacityQQ * masaQQAmount)) {
+                receiver2.currentQQ += masaQQAmount;
+                toast({ title: 'Masa enviada manualmente', description: `Se ha añadido una masa al Recibidor 2.` });
+                return { ...prev, receivers: newReceivers, totalMasasSent: prev.totalMasasSent + 1 };
+            }
+
             toast({ title: 'Error', description: 'Todos los recibidores están llenos.', variant: 'destructive' });
-        }
+            return prev;
+        });
     };
     
     const startCentrifugeCycle = (centrifugeId: string, isManual = false) => {
         let localSuccess = false;
         setSimulationState(prev => {
+            // Determine how many purges a full masa contains. Let's say it's ~30QQ per purge.
              const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
              const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
 
+             // Prioritize Recibidor 1, then Recibidor 2
              let activeReceiver = prev.receivers.find(r => r.id === 'rec1' && r.currentQQ >= qqPerPurge);
              if (!activeReceiver) {
                  activeReceiver = prev.receivers.find(r => r.id === 'rec2' && r.currentQQ >= qqPerPurge);
@@ -1024,7 +1061,7 @@ export default function OperationsClient({
 
             if (!activeReceiver || !centrifugeToStart || centrifugeToStart.state !== 'idle') {
                 if (isManual) {
-                   // This toast call was causing a render error, so it's removed from here.
+                   // This toast was causing a render error, so it's removed from here.
                    // The feedback is now handled in the onClick handler.
                 }
                 return prev;
@@ -1036,6 +1073,8 @@ export default function OperationsClient({
             if (receiverToUpdate) {
                 receiverToUpdate.currentQQ -= qqPerPurge;
 
+                // The total cycle time (e.g., 90 mins) is for the WHOLE masa (all purges).
+                // So, the time for one purge is the total time divided by the number of purges.
                 const totalCycleTimeSeconds = centrifugeCycleTime * 60;
                 const individualPurgeCycleTime = totalCycleTimeSeconds / PURGES_PER_MASA;
                 
@@ -1057,6 +1096,7 @@ export default function OperationsClient({
         });
 
         if (isManual) {
+            // This is a safe place to call toast
             if (localSuccess) {
                 toast({title: 'Ciclo manual iniciado', description: `La ${centrifugeId === 'cent1' ? 'Centrífuga 1' : 'Centrífuga 2'} ha comenzado a procesar.`});
             } else {
@@ -1065,115 +1105,6 @@ export default function OperationsClient({
         }
     }
     
-    React.useEffect(() => {
-        setSimulationState(prev => ({
-            ...prev,
-            silos: JSON.parse(JSON.stringify(silos)),
-            receivers: JSON.parse(JSON.stringify(receivers)),
-        }));
-    }, [silos, receivers]);
-
-    const simulationIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-    const [simulationSpeed, setSimulationSpeed] = React.useState(1);
-    
-    const machinesRef = React.useRef(machines);
-    React.useEffect(() => { machinesRef.current = machines; }, [machines]);
-
-    const productsRef = React.useRef(products);
-    React.useEffect(() => { productsRef.current = products; }, [products]);
-    
-    const wrappersRef = React.useRef(wrappers);
-    React.useEffect(() => { wrappersRef.current = wrappers; }, [wrappers]);
-
-    React.useEffect(() => {
-        if (isTachosAuto && isTachosGoalEnabled && simulationState.totalMasasSent >= tachosGoal) {
-            setIsTachosAuto(false); 
-        }
-    }, [simulationState.totalMasasSent, isTachosAuto, isTachosGoalEnabled, tachosGoal]);
-    
-    const totalWrapperCapacity = wrappers.reduce((sum, w) => sum + w.capacity, 0);
-    
-    const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
-    const familiarSiloQQ = familiarSilo?.currentQQ || 0;
-
-    const staticSimulationResults = React.useMemo(() => {
-        const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
-        
-        const totalBagsPerMinuteFromPackers = activeMachines.reduce((sum, machine) => {
-            const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
-            return sum + effectiveBagsPerMinute;
-        }, 0);
-        
-        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, totalWrapperCapacity);
-        const isWrapperBottleneck = totalBagsPerMinuteFromPackers > totalWrapperCapacity;
-        
-        const avgUnitsPerBundle = wrappers.length > 0 ? wrappers.reduce((sum, w) => sum + w.unitsPerBundle, 0) / wrappers.length : 1;
-        const bundlesPerMinute = avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0;
-        
-        const bottleneckDescription = `Las enfardadoras (cap total: ${totalWrapperCapacity.toLocaleString()} f/min) limitan a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
-        const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
-
-        return {
-            isWrapperBottleneck,
-            bottleneckDescription,
-            noBottleneckDescription,
-            totalBagsPerMinuteFromPackers,
-            bundlesPerMinute,
-        };
-
-    }, [machines, wrappers, totalWrapperCapacity]);
-
-    const liveSimulationResults = React.useMemo(() => {
-        let totalKgProduced = 0;
-        let totalSacksProduced = 0;
-        let totalUnitsProduced = 0;
-
-        machinesRef.current.forEach(machine => {
-            if (machine.productId !== 'inactive') {
-                const product = productsRef.current.find(p => p.id === machine.productId);
-                if (product) {
-                    const machineUnits = simulationState.machineTotals[machine.id] || 0;
-                    totalUnitsProduced += machineUnits;
-                    if (machine.unitsPerSack && machine.unitsPerSack > 0) {
-                        const sacksFromMachine = machineUnits / machine.unitsPerSack;
-                        totalSacksProduced += sacksFromMachine;
-                        totalKgProduced += sacksFromMachine * (product.sackWeight || 50);
-                    }
-                }
-            }
-        });
-        
-        const totalKgConsumedPerSecond = machinesRef.current
-            .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
-            .reduce((sum, m) => {
-                const product = productsRef.current.find(p => p.id === m.productId);
-                if (!product) return sum;
-                const unitsPerMinuteNeto = m.speed * (1 - m.loss / 100);
-                const sacksPerMinute = (m.unitsPerSack > 0) ? unitsPerMinuteNeto / m.unitsPerSack : 0;
-                const kgPerMinute = sacksPerMinute * (product.sackWeight || 50);
-                return sum + (kgPerMinute / 60);
-            }, 0);
-        
-        const familiarSiloState = simulationState.silos.find(s => s.id === 'familiar');
-        const familiarSiloKg = (familiarSiloState?.currentQQ || 0) * KG_PER_QUINTAL;
-        const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
-
-        return {
-            totalKgProduced,
-            totalQuintalesProduced: totalKgProduced / KG_PER_QUINTAL,
-            totalBundlesProduced: Object.values(simulationState.wrappers).reduce((sum, w) => sum + w.totalBundles, 0),
-            timeToEmptyHours: timeToEmptySeconds / 3600,
-        }
-
-    }, [simulationState]);
-
-    const formatElapsedTime = (totalSeconds: number) => {
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = Math.floor(totalSeconds % 60);
-        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
-    };
-    
     const pauseClock = React.useCallback(() => {
         setIsSimulating(false);
         if (simulationIntervalRef.current) {
@@ -1181,6 +1112,11 @@ export default function OperationsClient({
             simulationIntervalRef.current = null;
         }
     }, []);
+
+    React.useEffect(() => {
+      return () => pauseClock();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pauseClock]);
 
     const startClock = () => {
         if (simulationIntervalRef.current) return;
@@ -1228,9 +1164,21 @@ export default function OperationsClient({
                     }
 
                     if (newTachos.state === 'ready') {
-                        const { success, newReceivers: updatedReceivers } = sendMasaToReceiver();
-                        if (success) {
-                            newReceivers = updatedReceivers;
+                         // We need a non-hook version of sendMasaToReceiver for inside the loop
+                        let sent = false;
+                        const rec1 = newReceivers.find(r => r.id === 'rec1');
+                        if (rec1 && rec1.currentQQ < (rec1.capacityQQ * masaQQAmount)) {
+                            rec1.currentQQ += masaQQAmount;
+                            sent = true;
+                        } else {
+                            const rec2 = newReceivers.find(r => r.id === 'rec2');
+                            if (rec2 && rec2.currentQQ < (rec2.capacityQQ * masaQQAmount)) {
+                                rec2.currentQQ += masaQQAmount;
+                                sent = true;
+                            }
+                        }
+
+                        if (sent) {
                             newTotalMasasSent += 1;
                             newTachos.state = 'idle'; 
                             newTachos.progress = 0;
@@ -1246,9 +1194,11 @@ export default function OperationsClient({
                 if (isCentrifugesAuto) {
                      const PURGES_PER_MASA = Math.max(1, Math.round(masaQQAmount / 30));
                      const qqPerPurge = masaQQAmount / PURGES_PER_MASA;
+
                      let activeReceiver = newReceivers.find((r) => r.id === 'rec1' && r.currentQQ >= qqPerPurge) || newReceivers.find((r) => r.id === 'rec2' && r.currentQQ >= qqPerPurge);
                     
                      const idleCentrifuge = newCentrifuges.find((c) => c.state === 'idle');
+
                      if (activeReceiver && idleCentrifuge) {
                          const otherCentrifugeId = idleCentrifuge.id === 'cent1' ? 'cent2' : 'cent1';
                          const otherCentrifuge = newCentrifuges.find((c) => c.id === otherCentrifugeId);
@@ -1454,11 +1404,6 @@ export default function OperationsClient({
         }));
     };
     
-    React.useEffect(() => {
-      return () => pauseClock();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pauseClock]);
-    
     const formatTime = (hours: number) => {
         if (!isFinite(hours) || hours <= 0) return '0h 0m';
         const h = Math.floor(hours);
@@ -1483,6 +1428,82 @@ export default function OperationsClient({
         return 'bg-green-500';
     };
     
+    const totalWrapperCapacity = wrappers.reduce((sum, w) => sum + w.capacity, 0);
+    
+    const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
+    const familiarSiloQQ = familiarSilo?.currentQQ || 0;
+
+    const staticSimulationResults = React.useMemo(() => {
+        const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
+        
+        const totalBagsPerMinuteFromPackers = activeMachines.reduce((sum, machine) => {
+            const effectiveBagsPerMinute = machine.speed * (1 - machine.loss / 100);
+            return sum + effectiveBagsPerMinute;
+        }, 0);
+        
+        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, totalWrapperCapacity);
+        const isWrapperBottleneck = totalBagsPerMinuteFromPackers > totalWrapperCapacity;
+        
+        const avgUnitsPerBundle = wrappers.length > 0 ? wrappers.reduce((sum, w) => sum + w.unitsPerBundle, 0) / wrappers.length : 1;
+        const bundlesPerMinute = avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0;
+        
+        const bottleneckDescription = `Las enfardadoras (cap total: ${totalWrapperCapacity.toLocaleString()} f/min) limitan a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
+        const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
+
+        return {
+            isWrapperBottleneck,
+            bottleneckDescription,
+            noBottleneckDescription,
+            totalBagsPerMinuteFromPackers,
+            bundlesPerMinute,
+        };
+
+    }, [machines, wrappers, totalWrapperCapacity]);
+
+    const liveSimulationResults = React.useMemo(() => {
+        let totalKgProduced = 0;
+        let totalSacksProduced = 0;
+        let totalUnitsProduced = 0;
+
+        machinesRef.current.forEach(machine => {
+            if (machine.productId !== 'inactive') {
+                const product = productsRef.current.find(p => p.id === machine.productId);
+                if (product) {
+                    const machineUnits = simulationState.machineTotals[machine.id] || 0;
+                    totalUnitsProduced += machineUnits;
+                    if (machine.unitsPerSack && machine.unitsPerSack > 0) {
+                        const sacksFromMachine = machineUnits / machine.unitsPerSack;
+                        totalSacksProduced += sacksFromMachine;
+                        totalKgProduced += sacksFromMachine * (product.sackWeight || 50);
+                    }
+                }
+            }
+        });
+        
+        const totalKgConsumedPerSecond = machinesRef.current
+            .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
+            .reduce((sum, m) => {
+                const product = productsRef.current.find(p => p.id === m.productId);
+                if (!product) return sum;
+                const unitsPerMinuteNeto = m.speed * (1 - m.loss / 100);
+                const sacksPerMinute = (m.unitsPerSack > 0) ? unitsPerMinuteNeto / m.unitsPerSack : 0;
+                const kgPerMinute = sacksPerMinute * (product.sackWeight || 50);
+                return sum + (kgPerMinute / 60);
+            }, 0);
+        
+        const familiarSiloState = simulationState.silos.find(s => s.id === 'familiar');
+        const familiarSiloKg = (familiarSiloState?.currentQQ || 0) * KG_PER_QUINTAL;
+        const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
+
+        return {
+            totalKgProduced,
+            totalQuintalesProduced: totalKgProduced / KG_PER_QUINTAL,
+            totalBundlesProduced: Object.values(simulationState.wrappers).reduce((sum, w) => sum + w.totalBundles, 0),
+            timeToEmptyHours: timeToEmptySeconds / 3600,
+        }
+
+    }, [simulationState]);
+    
     const simTachos = simulationState.tachos;
     const tachosStateConfig = {
         idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
@@ -1493,6 +1514,7 @@ export default function OperationsClient({
 
     const areAllCentrifugesIdle = simulationState.centrifuges.every(c => c.state === 'idle');
     const isAnyMaterialAvailable = simulationState.receivers.some(r => r.currentQQ > 0);
+    const tachosState = { id: 'tachos', name: 'Tachos', ...simulationState.tachos };
 
   return (
     <div className="bg-background min-h-screen text-foreground">
@@ -1653,7 +1675,7 @@ export default function OperationsClient({
                                 <h3 className="font-bold text-lg flex items-center gap-2">{simTachos.name}
                                 {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                 </h3>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(simTachos)}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
                                     <Edit className="h-4 w-4" />
                                 </Button>
                             </div>
@@ -1670,11 +1692,9 @@ export default function OperationsClient({
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
                                  {!isTachosAuto && (
-                                     simTachos.state === 'ready'
-                                     ? <Button className="w-full" onClick={handleManualSendMasa} disabled={isSimulating}>Enviar Masa Manual</Button>
-                                     : simTachos.state === 'idle' 
-                                       ? <Button className="w-full" onClick={() => setSimulationState(prev => ({...prev, tachos: {...prev.tachos, state: 'cooking', timeRemaining: prev.tachos.cookTimeSeconds}}))} disabled={isSimulating}>Cocinar Masa</Button>
-                                       : <Button className="w-full" disabled>Cocinando...</Button>
+                                     simTachos.state === 'idle' 
+                                     ? <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa Manual</Button>
+                                     : <Button className="w-full" disabled>Cocinando...</Button>
                                 )}
                             </div>
                         </div>
