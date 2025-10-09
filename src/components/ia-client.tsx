@@ -753,7 +753,7 @@ export default function OperationsClient({
 
             if (!response.ok) {
                 const errorData = await response.json();
-                throw new Error(errorData.details || 'Server error');
+                throw new Error(errorData.details || `Server error: ${response.statusText}`);
             }
 
             const { downloadURL } = await response.json();
@@ -1360,7 +1360,6 @@ export default function OperationsClient({
                    </CardContent>
                 </Card>
 
-
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <div className="flex items-center gap-4">
@@ -1469,7 +1468,13 @@ export default function OperationsClient({
                             );
                         })}
                     </CardContent>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">2. Almacenamiento</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Silo Cards */}
                         {simulationState.silos.map((silo) => {
                             const currentKg = silo.currentQQ * KG_PER_QUINTAL;
@@ -1509,7 +1514,7 @@ export default function OperationsClient({
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">2. Configuración de Envasadoras</CardTitle>
+                        <CardTitle className="flex items-center gap-2">3. Envasadoras</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
@@ -1614,7 +1619,7 @@ export default function OperationsClient({
 
                  <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">3. Enfardadora y Empaque Final</CardTitle>
+                        <CardTitle className="flex items-center gap-2">4. Enfardadora y Empaque Final</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {wrappers.map((wrapperConfig) => {
