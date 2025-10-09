@@ -1420,9 +1420,23 @@ export default function OperationsClient({
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex flex-col space-y-2">
-                                <div>recibidor 1</div>
-                                <div>recibidor 2</div>
+                            
+                            {/* Receivers */}
+                            <div className="col-span-1 lg:col-span-2 grid grid-cols-2 gap-4">
+                                {simulationState.receivers.map((receiver) => (
+                                    <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background">
+                                        <h3 className="font-bold text-lg">{receiver.name}</h3>
+                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                            <Image src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={receiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                        </div>
+                                        <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                            <p className="text-xs text-muted-foreground">Estado</p>
+                                            <p className={cn("text-lg font-bold", receiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
+                                                {receiver.currentMasas} / {receiver.capacityMasas} Masas
+                                            </p>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </CardContent>
