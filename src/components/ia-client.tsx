@@ -1395,7 +1395,7 @@ export default function OperationsClient({
                             </TooltipProvider>
                         </div>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 items-start">
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
                         {/* Tachos */}
                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                              <div className='flex justify-between items-start'>
@@ -1421,7 +1421,7 @@ export default function OperationsClient({
                         </div>
 
                         {/* Recibidores */}
-                        {simulationState.receivers.map(receiver => (
+                        {simulationState.receivers.slice(0, 1).map(receiver => (
                             <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
                                 <h3 className="font-bold text-lg">{receiver.name}</h3>
                                 <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
@@ -1435,39 +1435,6 @@ export default function OperationsClient({
                                 </div>
                             </div>
                         ))}
-
-                        {/* Centrífugas */}
-                        {simulationState.centrifuges.map(cent => {
-                            const getStateProps = () => {
-                                switch (cent.state) {
-                                    case 'purging': return { color: 'bg-blue-500', label: 'Purgando', icon: <Hourglass className="h-4 w-4" /> };
-                                    case 'sending': return { color: 'bg-green-500', label: 'Enviando a Silos', icon: <Wind className="h-4 w-4" /> };
-                                    default: return { color: 'bg-gray-400', label: 'Libre', icon: <PowerOff className="h-4 w-4" /> };
-                                }
-                            };
-                            const { color, label, icon } = getStateProps();
-                            return (
-                                <div key={cent.id} className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                                    <h3 className="font-bold text-lg">{cent.name}</h3>
-                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                        <Image src={cent.imageUrl || ""} alt={cent.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                    </div>
-                                    <div className="space-y-2 pt-2">
-                                        <div className='flex justify-between items-center text-sm'>
-                                            <Label>Estado</Label>
-                                            <Badge variant="secondary" className={cn(color, "text-white")}>
-                                                {icon}
-                                                <span>{label}</span>
-                                            </Badge>
-                                        </div>
-                                        <Progress value={cent.progress} indicatorClassName={color} />
-                                        <p className="text-xs text-muted-foreground text-center">
-                                            {cent.state !== 'idle' ? `Tiempo restante: ${formatElapsedTime(cent.timeRemaining)}` : 'Esperando masa...'}
-                                        </p>
-                                    </div>
-                                </div>
-                            );
-                        })}
                     </CardContent>
                 </Card>
 
