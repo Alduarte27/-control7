@@ -421,15 +421,11 @@ function ReceiverEditDialog({
     open,
     onOpenChange,
     onSave,
-    onImageSave,
-    isUploading,
 }: {
     receiver: ReceiverState;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedReceiver: Omit<ReceiverState, 'imageUrl'>) => void;
-    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver', id: string | number, file: File) => Promise<void>;
-    isUploading: boolean;
 }) {
     const [editedReceiver, setEditedReceiver] = React.useState(receiver);
 
@@ -440,14 +436,6 @@ function ReceiverEditDialog({
     const handleFieldChange = (field: keyof Omit<ReceiverState, 'imageUrl'>, value: any) => {
         setEditedReceiver(prev => ({ ...prev, [field]: value }));
     };
-
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        await onImageSave('receiver', receiver.id, file);
-    };
-
-    const fileInputId = `receiver-modal-image-upload-${receiver.id}`;
 
     const handleSaveChanges = () => {
         const { imageUrl, ...configToSave } = editedReceiver;
@@ -462,39 +450,6 @@ function ReceiverEditDialog({
                     <DialogTitle>Editar {receiver.name}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
-                    <div className="space-y-2">
-                        <Label>Previsualización de la Imagen</Label>
-                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                            {isUploading ? (
-                                <div className="flex flex-col items-center gap-2">
-                                    <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                                    <p className="text-sm text-muted-foreground">Subiendo...</p>
-                                </div>
-                            ) : (
-                                <Image
-                                    src={editedReceiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"}
-                                    alt={editedReceiver.name}
-                                    width={600}
-                                    height={400}
-                                    className="object-contain w-full h-full"
-                                    unoptimized
-                                />
-                            )}
-                        </div>
-                        <input
-                            type="file"
-                            id={fileInputId}
-                            className="hidden"
-                            accept="image/*"
-                            onChange={handleFileSelect}
-                            disabled={isUploading}
-                        />
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()} disabled={isUploading}>
-                            <Upload className="mr-2 h-3 w-3" />
-                            {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
-                        </Button>
-                    </div>
-                    <Separator />
                     <div className="space-y-1.5">
                         <Label htmlFor={`receiver-name-${receiver.id}`}>Nombre</Label>
                         <Input id={`receiver-name-${receiver.id}`} type="text" value={editedReceiver.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
@@ -513,6 +468,7 @@ function ReceiverEditDialog({
         </Dialog>
     );
 }
+
 
 function WrapperEditDialog({
     wrapper,
@@ -1546,35 +1502,36 @@ export default function OperationsClient({
                         </div>
                         
                         {/* Receivers */}
-                        <div className="lg:col-span-2 grid grid-cols-2 gap-4">
+                        <div className="lg:col-span-2 grid grid-cols-1 gap-4">
                             {receivers.map((receiver) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
                                 return (
-                                    <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background">
-                                        <div className='flex justify-between items-start'>
-                                            <h3 className="font-bold text-lg">{receiver.name}</h3>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
+                                    <div key={receiver.id} className="p-4 border rounded-lg space-y-3 bg-background flex items-center gap-4">
+                                        <div className="aspect-square w-24 bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                            <Image src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={receiver.name} width={100} height={100} className="object-contain w-full h-full" unoptimized/>
                                         </div>
-                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                            <Image src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={receiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                        </div>
-                                        <div className='text-center border bg-muted/30 rounded-lg p-2'>
-                                            <p className="text-xs text-muted-foreground">Estado</p>
-                                            <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
-                                                {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
-                                            </p>
+                                        <div className="flex-1 space-y-2">
+                                            <div className='flex justify-between items-start'>
+                                                <h3 className="font-bold text-lg">{receiver.name}</h3>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
+                                                    <Edit className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                                <p className="text-xs text-muted-foreground">Estado</p>
+                                                <p className={cn("text-lg font-bold", simReceiver.currentMasas > 0 ? "text-amber-600" : "text-primary")}>
+                                                    {simReceiver.currentMasas} / {simReceiver.capacityMasas} Masas
+                                                </p>
+                                            </div>
                                         </div>
                                     </div>
                                 )
                             })}
                         </div>
-
-                        {/* Centrifuges */}
+                        
                         <div className="lg:col-span-2 grid grid-cols-2 gap-4">
-                            <div>centrifuga 1</div>
-                            <div>centrifuga 2</div>
+                           <p>centrifuga 1</p>
+                           <p>centrifuga 2</p>
                         </div>
                     </CardContent>
                 </Card>
@@ -1920,8 +1877,6 @@ export default function OperationsClient({
                     onOpenChange={(isOpen) => !isOpen && setEditingReceiver(null)}
                     receiver={editingReceiver}
                     onSave={handleReceiverSave}
-                    onImageSave={handleImageSave}
-                    isUploading={isUploading}
                 />
             )}
             {editingWrapper && (
