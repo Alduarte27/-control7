@@ -1395,35 +1395,36 @@ export default function OperationsClient({
                             </TooltipProvider>
                         </div>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
-                        {/* Tachos */}
-                        <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                             <div className='flex justify-between items-start'>
-                                <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
-                                  {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
-                                </h3>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
-                                    <Edit className="h-4 w-4" />
-                                </Button>
-                            </div>
-                           <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                               <Image src={tachosState.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                           </div>
-                           <div className="space-y-4">
-                                <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
-                                    <div className='text-center border bg-muted/30 rounded-lg p-2'>
-                                      <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
-                                      <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+                            {/* Tachos */}
+                            <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
+                                <div className='flex justify-between items-start'>
+                                    <h3 className="font-bold text-lg flex items-center gap-2">{tachosState.name}
+                                    {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
+                                    </h3>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosState)}>
+                                        <Edit className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                                <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                    <Image src={tachosState.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt="Tachos" width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className={cn("space-y-3", isTachosAuto && "opacity-50")}>
+                                        <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                            <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
+                                            <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
+                                        </div>
+                                        <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simulationState.receivers.every(r => r.currentMasas >= r.capacityMasas)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
                                     </div>
-                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={isTachosAuto || simulationState.receivers.every(r => r.currentMasas >= r.capacityMasas)}>Enviar Masa ({MASA_QQ_AMOUNT} QQ)</Button>
-                               </div>
-                           </div>
+                                </div>
+                            </div>
+                            <div className="flex flex-col space-y-2">
+                                <div>recibidor 1</div>
+                                <div>recibidor 2</div>
+                            </div>
                         </div>
-
-                        <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col justify-between">
-                            <h3>recibidor 1</h3>
-                        </div>
-                        
                     </CardContent>
                 </Card>
 
