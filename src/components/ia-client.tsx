@@ -734,7 +734,7 @@ export default function OperationsClient({
             '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
         },
         isFinished: false,
-        silos: JSON.parse(JSON.stringify(silos.map(s => ({...s, currentQQ: s.capacityQQ})))), // Start full
+        silos: JSON.parse(JSON.stringify(silos.map(s => ({...s, currentQQ: 0})))),
         receivers: JSON.parse(JSON.stringify(receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null})))),
         centrifuges: JSON.parse(JSON.stringify(centrifuges.map(c => ({...c, state: 'idle', cycleProgress: 0, cycleTimeRemaining: 0})))),
         tachos: {
@@ -757,35 +757,36 @@ export default function OperationsClient({
         let success = false;
         let sentTo: string | null = null;
         
-        const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
+        setSimulationState(prev => {
+            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
 
-        if (availableReceiver) {
-            const newReceivers = simulationState.receivers.map(r => {
-                if (r.id === availableReceiver.id) {
-                    success = true;
-                    sentTo = r.id;
-                    return { ...r, state: 'filling' };
-                }
-                return r;
-            });
-
-            if (success) {
-                setSimulationState(prev => ({
-                    ...prev,
-                    receivers: newReceivers,
-                    tachos: {
-                        ...prev.tachos,
-                        state: 'sending',
-                        targetReceiverId: sentTo,
-                        timeRemaining: prev.tachos.transferTimeSeconds,
-                        progress: 0,
-                    },
-                    totalMasasSent: prev.totalMasasSent + 1,
-                }));
+            if (!availableReceiver) {
+                return prev; // No change if no receiver is available
             }
-        }
+            
+            success = true;
+            sentTo = availableReceiver.id;
+
+            const newReceivers = prev.receivers.map(r => 
+                r.id === availableReceiver.id ? { ...r, state: 'filling' } : r
+            );
+
+            return {
+                ...prev,
+                receivers: newReceivers,
+                tachos: {
+                    ...prev.tachos,
+                    state: 'sending',
+                    targetReceiverId: sentTo,
+                    timeRemaining: prev.tachos.transferTimeSeconds,
+                    progress: 0,
+                },
+                totalMasasSent: prev.totalMasasSent + 1,
+            };
+        });
+
         return { success, sentTo };
-    }, [simulationState.receivers, simulationState.tachos.transferTimeSeconds]);
+    }, []);
 
 
     const handleManualSendMasa = () => {
@@ -936,7 +937,7 @@ export default function OperationsClient({
             })));
             setSilos(params.silos.map(s => ({
                 ...s,
-                currentQQ: s.capacityQQ, // Start full
+                currentQQ: 0, // Start empty
                 imageUrl: imageUrls.silos[s.id] || null,
             })));
             setReceivers(params.receivers.map(r => ({
@@ -968,7 +969,7 @@ export default function OperationsClient({
             const { params, images } = getDefaultConfig();
             setMachines(params.machines.map(m => ({ ...m, imageUrl: images.machines[m.id] || null, isSimulatingActive: false })));
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
-            setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null, currentQQ: s.capacityQQ })));
+            setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null, currentQQ: 0 })));
             setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null, imageUrl: images.receivers[r.id] || null })));
             setCentrifuges([
                 { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: images.centrifuges['cent1'], cycleProgress: 0, cycleTimeRemaining: 0 },
@@ -1329,7 +1330,7 @@ export default function OperationsClient({
                     const kgPerMinute = bagsPerMinute * kgPerBag;
                     return sum + (kgPerMinute / 60);
                 }, 0);
-
+                
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
 
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
@@ -1433,11 +1434,13 @@ export default function OperationsClient({
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > totalWrapperCapacity;
         
         const relevantWrappers = wrappers.filter(w => machines.some(m => m.isSimulatingActive && w.machineIds.includes(m.id)));
-        const totalUnitsPerBundleForActive = relevantWrappers.reduce((sum, w) => sum + w.unitsPerBundle, 0);
-        const avgUnitsPerBundle = relevantWrappers.length > 0 ? totalUnitsPerBundleForActive / relevantWrappers.length : 1;
         
-        const fardosPerMinuteNeto = avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0;
-        
+        const totalFardosPorMinuto = relevantWrappers.reduce((sum, wrapper) => {
+            const connectedMachines = machines.filter(m => m.isSimulatingActive && wrapper.machineIds.includes(m.id));
+            const fundasPorMinutoParaEsteWrapper = connectedMachines.reduce((machineSum, machine) => machineSum + (machine.speed * (1 - machine.loss/100)), 0);
+            return sum + (fundasPorMinutoParaEsteWrapper / (wrapper.unitsPerBundle || 1));
+        }, 0);
+
         const bottleneckDescription = `Las enfardadoras (cap total: ${totalWrapperCapacity.toLocaleString()} f/min) limitan a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
 
@@ -1445,8 +1448,7 @@ export default function OperationsClient({
             isWrapperBottleneck,
             bottleneckDescription,
             noBottleneckDescription,
-            totalBagsPerMinuteFromPackers: fardosPerMinuteNeto,
-            bundlesPerMinute: avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0,
+            bundlesPerMinute: totalFardosPorMinuto,
         };
 
     }, [machines, wrappers, totalWrapperCapacity]);
@@ -1828,8 +1830,7 @@ export default function OperationsClient({
                                 const product = products.find(p => p.id === machine.productId);
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
                                 const wrapper = wrappersRef.current.find(w => w.machineIds.includes(machine.id));
-                                const unitsPerBundle = wrapper?.unitsPerBundle || 1;
-                                const fardosPerMinuteNeto = unitsPerBundle > 0 ? unitsPerMinuteNeto / unitsPerBundle : 0;
+                                const fardosPerMinuteNeto = wrapper && wrapper.unitsPerBundle > 0 ? unitsPerMinuteNeto / wrapper.unitsPerBundle : 0;
                                 const unitsProducedByMachine = simulationState.machineTotals[machine.id] || 0;
                                 
                                 return (
