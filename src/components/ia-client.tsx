@@ -788,19 +788,20 @@ export default function OperationsClient({
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState);
     
     const handleManualSendMasa = () => {
-        if (simulationState.tachos.state !== 'ready') {
-            toast({ title: 'Tachos no está listo', description: 'La masa debe estar cocinada y lista para enviar.', variant: 'destructive'});
-            return;
-        }
-
-        const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
-
-        if (!availableReceiver) {
-            toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados. Espere a que uno se vacíe.', variant: 'destructive' });
-            return;
-        }
-        
         setSimulationState(prev => {
+            if (prev.tachos.state !== 'idle') {
+                toast({ title: 'Tachos no está libre', description: 'El tacho está actualmente ocupado. Espere a que termine.', variant: 'destructive'});
+                return prev;
+            }
+
+            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
+            if (!availableReceiver) {
+                toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados. Espere a que uno se vacíe.', variant: 'destructive' });
+                return prev;
+            }
+            
+            toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
+
             const newReceivers = prev.receivers.map(r => 
                 r.id === availableReceiver.id ? { ...r, state: 'filling' } : r
             );
@@ -818,22 +819,6 @@ export default function OperationsClient({
                 totalMasasSent: prev.totalMasasSent + 1,
             };
         });
-        toast({ title: 'Masa Enviada', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
-    };
-
-    const handleManualCookMasa = () => {
-        if (simulationState.tachos.state === 'idle' && !isTachosAuto) {
-            setSimulationState(prev => ({
-                ...prev,
-                tachos: {
-                    ...prev.tachos,
-                    state: 'cooking',
-                    timeRemaining: prev.tachos.cookTimeSeconds,
-                    progress: 0,
-                }
-            }));
-            toast({ title: 'Cocción Iniciada', description: 'La masa ha comenzado a cocinarse.' });
-        }
     };
 
     React.useEffect(() => {
@@ -1724,12 +1709,9 @@ export default function OperationsClient({
                                     <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
-                                {!isTachosAuto ? (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <Button className="w-full" onClick={handleManualCookMasa} disabled={simTachos.state !== 'idle'}>Iniciar Cocción</Button>
-                                        <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'ready'}>Enviar Masa</Button>
-                                    </div>
-                                ) : null}
+                                {!isTachosAuto && (
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'idle'}>Enviar Masa</Button>
+                                )}
                              </div>
                         </div>
                         
