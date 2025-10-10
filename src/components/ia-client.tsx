@@ -38,6 +38,7 @@ type MachineState = {
     speed: number;
     loss: number;
     isSimulatingActive: boolean; 
+    imageUrl: string | null;
 };
 
 type SiloState = {
@@ -104,7 +105,7 @@ type WrapperState = {
 type SimulationParams = {
     machines: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>[];
     wrappers: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>[];
-    silos: Omit<SiloState, 'imageUrl'>[];
+    silos: Omit<SiloState, 'imageUrl' | 'currentQQ'>[];
     receivers: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress' | 'drainingBy'>[];
     tachosCookTime: number; 
     tachosTransferTime: number;
@@ -263,7 +264,7 @@ function SiloEditDialog({
     silo: SiloState | TachosSimState;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (updatedSilo: Omit<SiloState, 'imageUrl'>) => void;
+    onSave: (updatedSilo: Omit<SiloState, 'imageUrl' | 'currentQQ'>) => void;
     isTachos?: boolean;
     tachosConfig?: { isAuto: boolean; cookTime: number; transferTime: number; isGoalEnabled: boolean; goal: number; masaQQAmount: number };
     onTachosConfigChange?: (config: { isAuto: boolean; cookTime: number; transferTime: number; isGoalEnabled: boolean; goal: number; masaQQAmount: number }) => void;
@@ -278,7 +279,7 @@ function SiloEditDialog({
         }
     }, [silo, tachosConfig, isTachos]);
 
-    const handleFieldChange = (field: keyof Omit<SiloState, 'imageUrl'>, value: any) => {
+    const handleFieldChange = (field: keyof Omit<SiloState, 'imageUrl' | 'currentQQ'>, value: any) => {
         setEditedSilo(prev => ({ ...prev, [field]: value }));
     };
 
@@ -287,7 +288,7 @@ function SiloEditDialog({
     };
     
     const handleSaveChanges = () => {
-        const { imageUrl, ...configToSave } = editedSilo as any;
+        const { imageUrl, currentQQ, ...configToSave } = editedSilo as any;
         onSave(configToSave);
         if (isTachos && localTachosConfig && onTachosConfigChange) {
             onTachosConfigChange(localTachosConfig);
@@ -733,7 +734,7 @@ export default function OperationsClient({
             '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
         },
         isFinished: false,
-        silos: JSON.parse(JSON.stringify(silos)),
+        silos: JSON.parse(JSON.stringify(silos.map(s => ({...s, currentQQ: s.capacityQQ})))), // Start full
         receivers: JSON.parse(JSON.stringify(receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null})))),
         centrifuges: JSON.parse(JSON.stringify(centrifuges.map(c => ({...c, state: 'idle', cycleProgress: 0, cycleTimeRemaining: 0})))),
         tachos: {
@@ -833,8 +834,8 @@ export default function OperationsClient({
                 { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, machineIds: [3, 4] },
             ],
             silos: [
-                { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380, currentQQ: 0 },
-                { id: 'granel', name: 'Silo a Granel', capacityQQ: 700, currentQQ: 0 },
+                { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380 },
+                { id: 'granel', name: 'Silo a Granel', capacityQQ: 700 },
             ],
             receivers: [
                 { id: 'rec1', name: 'Recibidor 1', capacityQQ: 400 },
@@ -935,6 +936,7 @@ export default function OperationsClient({
             })));
             setSilos(params.silos.map(s => ({
                 ...s,
+                currentQQ: s.capacityQQ, // Start full
                 imageUrl: imageUrls.silos[s.id] || null,
             })));
             setReceivers(params.receivers.map(r => ({
@@ -966,7 +968,7 @@ export default function OperationsClient({
             const { params, images } = getDefaultConfig();
             setMachines(params.machines.map(m => ({ ...m, imageUrl: images.machines[m.id] || null, isSimulatingActive: false })));
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
-            setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null })));
+            setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null, currentQQ: s.capacityQQ })));
             setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null, imageUrl: images.receivers[r.id] || null })));
             setCentrifuges([
                 { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: images.centrifuges['cent1'], cycleProgress: 0, cycleTimeRemaining: 0 },
@@ -986,7 +988,7 @@ export default function OperationsClient({
         const paramsToSave: SimulationParams = {
             machines: machines.map(({ isSimulatingActive, imageUrl, ...m }) => m),
             wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, imageUrl, ...w }) => w),
-            silos: silos.map(({imageUrl, ...s}) => s),
+            silos: silos.map(({imageUrl, currentQQ, ...s}) => s),
             receivers: receivers.map(({imageUrl, currentQQ, state, fillProgress, drainingBy, ...r}) => r),
             tachosCookTime: tachosCookTime,
             tachosTransferTime: tachosTransferTime,
@@ -1075,7 +1077,7 @@ export default function OperationsClient({
         setWrappers(prev => prev.map(w => w.id === updatedWrapper.id ? { ...w, ...updatedWrapper } : w));
     };
 
-    const handleSiloSave = (updatedSilo: Omit<SiloState, 'imageUrl'>) => {
+    const handleSiloSave = (updatedSilo: Omit<SiloState, 'imageUrl' | 'currentQQ'>) => {
         setSilos(prev => prev.map(s => s.id === updatedSilo.id ? {...s, ...updatedSilo} : s));
     };
 
@@ -1450,7 +1452,7 @@ export default function OperationsClient({
             return sum;
         }, 0) / (wrappers.filter(w => machines.some(m => m.isSimulatingActive && w.machineIds.includes(m.id))).length || 1);
         
-        const bundlesPerMinute = avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0;
+        const fardosPerMinuteNeto = avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0;
         
         const bottleneckDescription = `Las enfardadoras (cap total: ${totalWrapperCapacity.toLocaleString()} f/min) limitan a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
         const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
@@ -1459,8 +1461,8 @@ export default function OperationsClient({
             isWrapperBottleneck,
             bottleneckDescription,
             noBottleneckDescription,
-            totalBagsPerMinuteFromPackers,
-            bundlesPerMinute,
+            totalBagsPerMinuteFromPackers: fardosPerMinuteNeto,
+            bundlesPerMinute: avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0,
         };
 
     }, [machines, wrappers, totalWrapperCapacity]);
@@ -1471,7 +1473,7 @@ export default function OperationsClient({
         let totalUnitsProduced = 0;
 
         machinesRef.current.forEach(machine => {
-            if (machine.productId !== 'inactive') {
+            if (machine.productId !== 'inactive' && simulationState.machineTotals[machine.id]) {
                 const product = productsRef.current.find(p => p.id === machine.productId);
                 if (product) {
                     const machineUnits = simulationState.machineTotals[machine.id] || 0;
