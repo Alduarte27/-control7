@@ -726,30 +726,32 @@ export default function OperationsClient({
     const wrappersRef = React.useRef(wrappers);
     React.useEffect(() => { wrappersRef.current = wrappers; }, [wrappers]);
 
-    const createInitialSimulationState = React.useCallback((): SimulationState => ({
-        elapsedTime: 0,
-        machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
-        wrappers: {
-            '1': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-            '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-        },
-        isFinished: false,
-        silos: JSON.parse(JSON.stringify(silos.map(s => ({...s, currentQQ: 0})))),
-        receivers: JSON.parse(JSON.stringify(receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null})))),
-        centrifuges: JSON.parse(JSON.stringify(centrifuges.map(c => ({...c, state: 'idle', cycleProgress: 0, cycleTimeRemaining: 0})))),
-        tachos: {
-            id: 'tachos',
-            name: 'Tachos',
-            imageUrl: tachosImageUrl,
-            state: 'idle',
-            cookTimeSeconds: tachosCookTime * 60,
-            transferTimeSeconds: tachosTransferTime * 60,
-            timeRemaining: 0,
-            progress: 0,
-            targetReceiverId: null,
-        },
-        totalMasasSent: 0,
-    }), [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
+    const createInitialSimulationState = React.useCallback((): SimulationState => {
+        return {
+            elapsedTime: 0,
+            machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
+            wrappers: {
+                '1': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+                '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+            },
+            isFinished: false,
+            silos: silos.map(s => ({...s, currentQQ: 0})),
+            receivers: receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null})),
+            centrifuges: centrifuges.map(c => ({...c, state: 'idle', cycleProgress: 0, cycleTimeRemaining: 0})),
+            tachos: {
+                id: 'tachos',
+                name: 'Tachos',
+                imageUrl: tachosImageUrl,
+                state: 'idle',
+                cookTimeSeconds: tachosCookTime * 60,
+                transferTimeSeconds: tachosTransferTime * 60,
+                timeRemaining: 0,
+                progress: 0,
+                targetReceiverId: null,
+            },
+            totalMasasSent: 0,
+        };
+    }, [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
     
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState);
     
@@ -1209,7 +1211,7 @@ export default function OperationsClient({
 
                 // 2. Centrifuges Logic
                 const purgeCycleTimeSeconds = centrifugePurgeCycleTime * 60;
-                let qqConsumedByCentrifuges = 0;
+                let qqProducedByCentrifuges = 0;
                 
                 const activeReceivers = nextState.receivers.filter(r => r.state === 'ready' && r.currentQQ > 0);
                 
@@ -1223,10 +1225,12 @@ export default function OperationsClient({
                             cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / purgeCycleTimeSeconds));
                             const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
                             if (drainingReceiver) {
-                                const qqPerCentrifugePerSecond = drainingReceiver.capacityQQ / purgeCycleTimeSeconds / 2;
+                                // Assuming 2 centrifuges drain one receiver in one cycle time.
+                                // So one centrifuge drains half a receiver in one cycle time.
+                                const qqPerCentrifugePerSecond = (drainingReceiver.capacityQQ / 2) / purgeCycleTimeSeconds;
                                 const consumption = qqPerCentrifugePerSecond * elapsedIncrement;
                                 drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - consumption);
-                                qqConsumedByCentrifuges += consumption;
+                                qqProducedByCentrifuges += consumption; // What's consumed from receiver is produced by centrifuge
                             }
 
                             if (cent.cycleTimeRemaining <= 0) {
@@ -1294,8 +1298,8 @@ export default function OperationsClient({
                 });
                 
                 // Distribute produced QQ to silos
-                if (qqConsumedByCentrifuges > 0) {
-                    let productionToDistribute = qqConsumedByCentrifuges;
+                if (qqProducedByCentrifuges > 0) {
+                    let productionToDistribute = qqProducedByCentrifuges;
                     const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
                     const granelSilo = nextState.silos.find(s => s.id === 'granel');
 
@@ -1316,20 +1320,17 @@ export default function OperationsClient({
 
                 // 3. Envasadoras & Enfardadoras Logic
                 const currentMachines = machinesRef.current;
-                const activeMachinesWithProduct = currentMachines
+                
+                const totalKgConsumedPerSecond = currentMachines
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
-                    .map(m => {
-                        const product = productsRef.current.find(p => p.id === m.productId);
-                        return { machine: m, product: product };
-                    })
-                    .filter(item => item.product);
-
-                const totalKgConsumedPerSecond = activeMachinesWithProduct.reduce((sum, item) => {
-                    const bagsPerMinute = item.machine.speed * (1 - item.machine.loss / 100);
-                    const kgPerBag = item.product?.presentationWeight || 1;
-                    const kgPerMinute = bagsPerMinute * kgPerBag;
-                    return sum + (kgPerMinute / 60);
-                }, 0);
+                    .reduce((sum, machine) => {
+                        const product = productsRef.current.find(p => p.id === machine.productId);
+                        if (!product) return sum;
+                        const bagsPerMinute = machine.speed * (1 - machine.loss / 100);
+                        const kgPerBag = product.presentationWeight || 1;
+                        const kgPerMinute = bagsPerMinute * kgPerBag;
+                        return sum + (kgPerMinute / 60);
+                    }, 0);
                 
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
 
@@ -1347,17 +1348,23 @@ export default function OperationsClient({
                     familiarSilo.currentQQ -= (kgConsumedThisTick / KG_PER_QUINTAL);
                 }
 
-                activeMachinesWithProduct.forEach(item => {
-                    const bagsPerMinute = item.machine.speed * (1 - item.machine.loss / 100);
-                    const unitsPerSecond = bagsPerMinute / 60;
-                    const unitsProducedThisTick = unitsPerSecond * elapsedIncrement;
+                currentMachines
+                    .filter(m => m.isSimulatingActive && m.productId !== 'inactive' && canProduce)
+                    .forEach(machine => {
+                        const product = productsRef.current.find(p => p.id === machine.productId);
+                        if (!product) return;
+                        
+                        const bagsPerMinute = machine.speed * (1 - machine.loss / 100);
+                        const unitsPerSecond = bagsPerMinute / 60;
+                        const unitsProducedThisTick = unitsPerSecond * elapsedIncrement;
 
-                    nextState.machineTotals[item.machine.id] += unitsProducedThisTick;
-                    const targetWrapper = wrappersRef.current.find(w => w.machineIds.includes(item.machine.id));
-                    if (targetWrapper) {
-                        nextState.wrappers[targetWrapper.id].conveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsProducedThisTick });
-                    }
-                });
+                        nextState.machineTotals[machine.id] += unitsProducedThisTick;
+                        const targetWrapper = wrappersRef.current.find(w => w.machineIds.includes(machine.id));
+                        if (targetWrapper) {
+                            nextState.wrappers[targetWrapper.id].conveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsProducedThisTick });
+                        }
+                    });
+
 
                 for (const wrapperConfig of wrappersRef.current) {
                     const wrapperId = wrapperConfig.id;
@@ -1419,8 +1426,8 @@ export default function OperationsClient({
     
     const totalWrapperCapacity = wrappers.reduce((sum, w) => sum + w.capacity, 0);
     
-    const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
-    const familiarSiloQQ = familiarSilo?.currentQQ || 0;
+    const familiarSiloState = simulationState.silos.find(s => s.id === 'familiar');
+    const familiarSiloQQ = familiarSiloState?.currentQQ || 0;
 
     const staticSimulationResults = React.useMemo(() => {
         const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
@@ -1438,7 +1445,10 @@ export default function OperationsClient({
         const totalFardosPorMinuto = relevantWrappers.reduce((sum, wrapper) => {
             const connectedMachines = machines.filter(m => m.isSimulatingActive && wrapper.machineIds.includes(m.id));
             const fundasPorMinutoParaEsteWrapper = connectedMachines.reduce((machineSum, machine) => machineSum + (machine.speed * (1 - machine.loss/100)), 0);
-            return sum + (fundasPorMinutoParaEsteWrapper / (wrapper.unitsPerBundle || 1));
+            
+            const wrapperEffectiveBagsPerMinute = Math.min(fundasPorMinutoParaEsteWrapper, wrapper.capacity);
+            
+            return sum + (wrapperEffectiveBagsPerMinute / (wrapper.unitsPerBundle || 1));
         }, 0);
 
         const bottleneckDescription = `Las enfardadoras (cap total: ${totalWrapperCapacity.toLocaleString()} f/min) limitan a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
@@ -1487,8 +1497,8 @@ export default function OperationsClient({
                 return sum + (kgPerMinute / 60);
             }, 0);
         
-        const familiarSiloState = simulationState.silos.find(s => s.id === 'familiar');
-        const familiarSiloKg = (familiarSiloState?.currentQQ || 0) * KG_PER_QUINTAL;
+        const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
+        const familiarSiloKg = (familiarSilo?.currentQQ || 0) * KG_PER_QUINTAL;
         const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
 
         return {
