@@ -67,9 +67,9 @@ export default function Control7Client({
   const searchParams = useSearchParams();
   const planIdFromUrl = searchParams.get('planId');
 
-  const [date, setDate] = React.useState<Date | undefined>(
-    planIdFromUrl ? getDateFromPlanId(planIdFromUrl) : new Date()
-  );
+  // Initialize date as undefined to prevent hydration mismatch.
+  // The useEffect below will set it on the client side.
+  const [date, setDate] = React.useState<Date | undefined>(undefined);
   
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
@@ -84,20 +84,16 @@ export default function Control7Client({
   });
 
   React.useEffect(() => {
-    // This effect runs only on the client and ensures the date is set to the current
-    // week if no planId is in the URL. This is the definitive fix for the hydration
-    // and wrong-week-on-load issue.
+    // This effect runs only on the client and ensures the date is set correctly,
+    // avoiding the hydration mismatch caused by `new Date()` on the server.
     if (planIdFromUrl) {
         const newDate = getDateFromPlanId(planIdFromUrl);
         // Avoid state update if the date is already correct
         if (newDate.getTime() !== date?.getTime()) {
             setDate(newDate);
         }
-    } else {
-        const today = new Date();
-        if (!date || getISOWeek(today) !== getISOWeek(date) || today.getFullYear() !== date.getFullYear()) {
-            setDate(today);
-        }
+    } else if (!date) { // Only set to today if date is not already set
+        setDate(new Date());
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [planIdFromUrl]);
