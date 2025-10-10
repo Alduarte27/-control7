@@ -1324,28 +1324,26 @@ export default function OperationsClient({
 
                 // 3. Envasadoras & Enfardadoras Logic
                 const currentMachines = machinesRef.current;
-                
-                const totalKgConsumedPerSecond = currentMachines
+
+                const kgPerSecond = currentMachines
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .reduce((sum, machine) => {
                         const product = productsRef.current.find(p => p.id === machine.productId);
                         if (!product || !product.presentationWeight) return sum;
                         const bagsPerMinute = machine.speed * (1 - machine.loss / 100);
-                        const kgPerMinute = bagsPerMinute * product.presentationWeight;
-                        return sum + (kgPerMinute / 60);
+                        return sum + (bagsPerMinute * product.presentationWeight) / 60;
                     }, 0);
                 
-                const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
+                const kgConsumedThisTick = kgPerSecond * elapsedIncrement;
+
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
-                const canProduce = familiarSilo && (familiarSilo.currentQQ * KG_PER_QUINTAL) > kgConsumedThisTick;
+                const canProduce = familiarSilo && (familiarSilo.currentQQ * KG_PER_QUINTAL) >= kgConsumedThisTick;
                 
                 if (canProduce && kgConsumedThisTick > 0 && familiarSilo) {
                     familiarSilo.currentQQ -= (kgConsumedThisTick / KG_PER_QUINTAL);
-                } else if (totalKgConsumedPerSecond > 0) {
-                    // Not enough material, stop production
+                } else if (kgPerSecond > 0) {
                     if (familiarSilo) familiarSilo.currentQQ = 0;
                     nextState.isFinished = true;
-                    // No return here, let the rest of the logic run for this final tick
                 }
 
                 currentMachines
@@ -1405,6 +1403,7 @@ export default function OperationsClient({
     const resetSimulation = () => {
         pauseClock();
         setSimulationState(createInitialSimulationState());
+        setIsTachosAuto(false);
     };
 
 
@@ -1486,19 +1485,18 @@ export default function OperationsClient({
             }
         });
         
-        const totalKgConsumedPerSecond = machinesRef.current
+        const kgPerSecond = machinesRef.current
             .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
             .reduce((sum, m) => {
                 const product = productsRef.current.find(p => p.id === m.productId);
                 if (!product || !product.presentationWeight) return sum;
                 const bagsPerMinute = m.speed * (1 - m.loss / 100);
-                const kgPerMinute = bagsPerMinute * product.presentationWeight;
-                return sum + (kgPerMinute / 60);
+                return sum + (bagsPerMinute * product.presentationWeight) / 60;
             }, 0);
         
         const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
         const familiarSiloKg = (familiarSilo?.currentQQ || 0) * KG_PER_QUINTAL;
-        const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
+        const timeToEmptySeconds = kgPerSecond > 0 ? familiarSiloKg / kgPerSecond : Infinity;
 
         return {
             totalKgProduced,
@@ -1587,7 +1585,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[90px]">
                             <PackageCheck className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Enfardado</h4>
-                             <p className="text-sm text-muted-foreground">{Math.floor(liveSimulationResults.totalBundlesProduced).toLocaleString()} Fardos</p>
+                            <p className="text-sm text-muted-foreground">{staticSimulationResults.bundlesPerMinute.toLocaleString(undefined, { maximumFractionDigits: 2 })} Fardos/Min</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Empaque final en fardos.</p></TooltipContent> </Tooltip> </TooltipProvider>
                 </div>
