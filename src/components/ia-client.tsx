@@ -788,20 +788,20 @@ export default function OperationsClient({
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState);
     
     const handleManualSendMasa = () => {
+        const currentState = simulationState;
+        
+        if (currentState.tachos.state !== 'idle') {
+            toast({ title: 'Tachos no está libre', description: 'El tacho está actualmente ocupado. Espere a que termine.', variant: 'destructive'});
+            return;
+        }
+
+        const availableReceiver = currentState.receivers.find(r => r.state === 'idle');
+        if (!availableReceiver) {
+            toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados. Espere a que uno se vacíe.', variant: 'destructive' });
+            return;
+        }
+
         setSimulationState(prev => {
-            if (prev.tachos.state !== 'idle') {
-                toast({ title: 'Tachos no está libre', description: 'El tacho está actualmente ocupado. Espere a que termine.', variant: 'destructive'});
-                return prev;
-            }
-
-            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
-            if (!availableReceiver) {
-                toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados. Espere a que uno se vacíe.', variant: 'destructive' });
-                return prev;
-            }
-            
-            toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
-
             const newReceivers = prev.receivers.map(r => 
                 r.id === availableReceiver.id ? { ...r, state: 'filling' } : r
             );
@@ -819,6 +819,8 @@ export default function OperationsClient({
                 totalMasasSent: prev.totalMasasSent + 1,
             };
         });
+        
+        toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
     };
 
     React.useEffect(() => {
@@ -1710,7 +1712,7 @@ export default function OperationsClient({
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
                                 {!isTachosAuto && (
-                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'idle'}>Enviar Masa</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa</Button>
                                 )}
                              </div>
                         </div>
