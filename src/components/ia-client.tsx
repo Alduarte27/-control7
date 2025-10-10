@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
@@ -139,6 +139,8 @@ type SimulationState = {
     tachos: TachosSimState;
     totalMasasSent: number;
     qqInCentrifuges: number;
+    totalQQProduced: number;
+    totalQQPacked: number;
 };
 
 function MachineEditDialog({
@@ -752,6 +754,8 @@ export default function OperationsClient({
             },
             totalMasasSent: 0,
             qqInCentrifuges: 0,
+            totalQQProduced: 0,
+            totalQQPacked: 0,
         };
     }, [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
     
@@ -1292,7 +1296,8 @@ export default function OperationsClient({
                     if (cent.state === 'idle') cent.cycleProgress = 0;
                 });
 
-                nextState.qqInCentrifuges = qqDrainedFromReceivers / elapsedIncrement;
+                const qqProducedPerSecond = qqDrainedFromReceivers / elapsedIncrement;
+                nextState.qqInCentrifuges = qqProducedPerSecond;
                 
                 nextState.receivers.forEach(r => {
                     if (r.currentQQ <= 0.1 && r.state === 'ready') {
@@ -1302,8 +1307,10 @@ export default function OperationsClient({
                 });
                 
                 // Distribute produced QQ to silos
-                if (qqDrainedFromReceivers > 0) {
-                    let productionToDistribute = qqDrainedFromReceivers;
+                if (qqProducedPerSecond > 0) {
+                    let productionToDistribute = qqProducedPerSecond * elapsedIncrement;
+                    nextState.totalQQProduced += productionToDistribute;
+                    
                     const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
                     const granelSilo = nextState.silos.find(s => s.id === 'granel');
 
@@ -1323,9 +1330,7 @@ export default function OperationsClient({
 
 
                 // 3. Envasadoras & Enfardadoras Logic
-                const currentMachines = machinesRef.current;
-
-                const kgPerSecond = currentMachines
+                const kgPerSecond = machinesRef.current
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .reduce((sum, machine) => {
                         const product = productsRef.current.find(p => p.id === machine.productId);
@@ -1335,6 +1340,7 @@ export default function OperationsClient({
                     }, 0);
                 
                 const kgConsumedThisTick = kgPerSecond * elapsedIncrement;
+                nextState.totalQQPacked += kgConsumedThisTick / KG_PER_QUINTAL;
 
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
                 const canProduce = familiarSilo && (familiarSilo.currentQQ * KG_PER_QUINTAL) >= kgConsumedThisTick;
@@ -1346,7 +1352,7 @@ export default function OperationsClient({
                     nextState.isFinished = true;
                 }
 
-                currentMachines
+                machinesRef.current
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive' && canProduce)
                     .forEach(machine => {
                         const product = productsRef.current.find(p => p.id === machine.productId);
@@ -1423,11 +1429,6 @@ export default function OperationsClient({
         return 'bg-green-500';
     };
     
-    const totalWrapperCapacity = wrappers.reduce((sum, w) => sum + w.capacity, 0);
-    
-    const familiarSiloState = simulationState.silos.find(s => s.id === 'familiar');
-    const familiarSiloQQ = familiarSiloState?.currentQQ || 0;
-
     const staticSimulationResults = React.useMemo(() => {
         const activeMachines = machines.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
         
@@ -1436,52 +1437,35 @@ export default function OperationsClient({
             return sum + effectiveBagsPerMinute;
         }, 0);
         
-        const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, totalWrapperCapacity);
+        const relevantWrappers = wrappers.filter(w => machines.some(m => m.isSimulatingActive && w.machineIds.includes(m.id)));
+        const totalWrapperCapacity = relevantWrappers.reduce((sum, w) => sum + w.capacity, 0);
+
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > totalWrapperCapacity;
         
-        const relevantWrappers = wrappers.filter(w => machines.some(m => m.isSimulatingActive && w.machineIds.includes(m.id)));
-        
-        const totalFardosPorMinuto = relevantWrappers.reduce((sum, wrapper) => {
+        const bundlesPerMinute = relevantWrappers.reduce((sum, wrapper) => {
             const connectedMachines = machines.filter(m => m.isSimulatingActive && wrapper.machineIds.includes(m.id));
-            const fundasPorMinutoParaEsteWrapper = connectedMachines.reduce((machineSum, machine) => machineSum + (machine.speed * (1 - machine.loss/100)), 0);
+            const bagsPerMinuteForThisWrapper = connectedMachines.reduce((machineSum, machine) => machineSum + (machine.speed * (1 - machine.loss/100)), 0);
             
-            const wrapperEffectiveBagsPerMinute = Math.min(fundasPorMinutoParaEsteWrapper, wrapper.capacity);
+            const wrapperEffectiveBagsPerMinute = Math.min(bagsPerMinuteForThisWrapper, wrapper.capacity);
             
             return sum + (wrapperEffectiveBagsPerMinute / (wrapper.unitsPerBundle || 1));
         }, 0);
-
-        const bottleneckDescription = `Las enfardadoras (cap total: ${totalWrapperCapacity.toLocaleString()} f/min) limitan a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
-        const noBottleneckDescription = `Las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min) operan a su capacidad.`;
-
+        
         return {
             isWrapperBottleneck,
-            bottleneckDescription,
-            noBottleneckDescription,
-            bundlesPerMinute: totalFardosPorMinuto,
+            totalBagsPerMinuteFromPackers,
+            totalWrapperCapacity,
+            bundlesPerMinute,
         };
 
-    }, [machines, wrappers, totalWrapperCapacity]);
+    }, [machines, wrappers]);
 
     const liveSimulationResults = React.useMemo(() => {
-        let totalKgProduced = 0;
-        let totalSacksProduced = 0;
         let totalUnitsProduced = 0;
-
         machinesRef.current.forEach(machine => {
             if (machine.productId !== 'inactive' && simulationState.machineTotals[machine.id]) {
-                const product = productsRef.current.find(p => p.id === machine.productId);
-                if (product) {
-                    const machineUnits = simulationState.machineTotals[machine.id] || 0;
-                    totalUnitsProduced += machineUnits;
-                    
-                    const kgPerUnit = product.presentationWeight || 1;
-                    totalKgProduced += machineUnits * kgPerUnit;
-                    
-                    if (product.sackWeight && product.sackWeight > 0) {
-                        const sacksFromMachine = (machineUnits * kgPerUnit) / product.sackWeight;
-                        totalSacksProduced += sacksFromMachine;
-                    }
-                }
+                const machineUnits = simulationState.machineTotals[machine.id] || 0;
+                totalUnitsProduced += machineUnits;
             }
         });
         
@@ -1498,15 +1482,26 @@ export default function OperationsClient({
         const familiarSiloKg = (familiarSilo?.currentQQ || 0) * KG_PER_QUINTAL;
         const timeToEmptySeconds = kgPerSecond > 0 ? familiarSiloKg / kgPerSecond : Infinity;
 
+        const qqRateFromCentrifuges = simulationState.qqInCentrifuges;
+        const qqRateToPackers = (kgPerSecond * 3600) / KG_PER_QUINTAL;
+        
+        let bottleneck = 'none';
+        if (staticSimulationResults.isWrapperBottleneck) {
+            bottleneck = 'wrapper';
+        } else if (qqRateToPackers > qqRateFromCentrifuges && machines.some(m => m.isSimulatingActive)) {
+            bottleneck = 'centrifuge';
+        }
+
         return {
-            totalKgProduced,
-            totalQuintalesProduced: totalKgProduced / KG_PER_QUINTAL,
             totalBundlesProduced: Object.values(simulationState.wrappers).reduce((sum, w) => sum + w.totalBundles, 0),
             timeToEmptyHours: timeToEmptySeconds / 3600,
             totalUnitsProduced,
+            bottleneck,
+            qqRateFromCentrifuges,
+            qqRateToPackers,
         }
 
-    }, [simulationState]);
+    }, [simulationState, machines, staticSimulationResults.isWrapperBottleneck]);
     
     const simTachos = simulationState.tachos;
     const tachosStateConfig = {
@@ -1569,12 +1564,12 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Warehouse className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Silos</h4>
-                            <p className="text-sm text-muted-foreground">{familiarSiloQQ.toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
+                            <p className="text-sm text-muted-foreground">{simulationState.silos.find(s => s.id === 'familiar')?.currentQQ.toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Almacenamiento de azúcar seca.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
                     <TooltipProvider> <Tooltip> <TooltipTrigger>
-                        <div className={cn("flex flex-col items-center gap-2 text-center p-2 rounded-md min-w-[90px]", staticSimulationResults.isWrapperBottleneck && 'bg-destructive/10')}>
+                        <div className={cn("flex flex-col items-center gap-2 text-center p-2 rounded-md min-w-[90px]", liveSimulationResults.bottleneck === 'wrapper' && 'bg-destructive/10')}>
                             <Package className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Envasado</h4>
                             <p className="text-sm text-muted-foreground">{Math.floor(liveSimulationResults.totalUnitsProduced).toLocaleString()} Fundas</p>
@@ -1587,14 +1582,8 @@ export default function OperationsClient({
                             <h4 className="font-semibold">Enfardado</h4>
                             <p className="text-sm text-muted-foreground">{staticSimulationResults.bundlesPerMinute.toLocaleString(undefined, { maximumFractionDigits: 2 })} Fardos/Min</p>
                         </div>
-                    </TooltipTrigger> <TooltipContent><p>Empaque final en fardos.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger> <TooltipContent><p>Capacidad de empaque final en fardos.</p></TooltipContent> </Tooltip> </TooltipProvider>
                 </div>
-                 {staticSimulationResults.isWrapperBottleneck && (
-                    <div className="text-center text-destructive text-sm font-semibold mt-2 flex items-center justify-center gap-2">
-                        <AlertTriangle className="h-4 w-4" />
-                        {staticSimulationResults.bottleneckDescription}
-                    </div>
-                )}
             </div>
             
             <div className="space-y-8">
@@ -2027,21 +2016,22 @@ export default function OperationsClient({
                             title="Total Fardos Producidos" 
                             value={liveSimulationResults.totalBundlesProduced} 
                             icon={PackageCheck} 
-                            description="Suma total de fardos que ha completado la enfardadora." 
+                            description="Suma total de fardos que han completado todas las enfardadoras." 
                             fractionDigits={0} 
                         />
                         <KpiCard 
-                            title="Total QQ Producidos" 
-                            value={liveSimulationResults.totalQuintalesProduced} 
+                            title="Total QQ Producidos (Azúcar Seca)" 
+                            value={simulationState.totalQQProduced} 
                             icon={Warehouse} 
-                            description="Peso total en quintales de todos los sacos producidos." 
+                            description="Peso total en quintales de azúcar que ha salido de las centrífugas hacia los silos." 
                             fractionDigits={1}
                         />
-                        <KpiCard 
-                            title="Tiempo Restante para Agotar Silo" 
-                            value={formatTime(liveSimulationResults.timeToEmptyHours)} 
-                            icon={Clock} 
-                            description="Tiempo estimado para consumir toda la materia prima restante al ritmo actual." 
+                         <KpiCard 
+                            title="Total QQ Empacados" 
+                            value={simulationState.totalQQPacked} 
+                            icon={Archive} 
+                            description="Peso total en quintales de azúcar que ha sido consumido por las envasadoras." 
+                            fractionDigits={1}
                         />
                     </div>
                     <Card>
@@ -2049,13 +2039,39 @@ export default function OperationsClient({
                             <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className={cn("text-sm p-3 rounded-md flex items-start gap-3", staticSimulationResults.isWrapperBottleneck ? 'bg-destructive/10 text-destructive' : 'bg-green-600/10 text-green-700')}>
-                                <AlertTriangle className="h-5 w-5 mt-0.5" />
-                                <div>
-                                    <h4 className="font-bold mb-1">{staticSimulationResults.isWrapperBottleneck ? "¡Cuello de Botella Detectado!" : "Operación Eficiente"}</h4>
-                                    <p>{staticSimulationResults.isWrapperBottleneck ? staticSimulationResults.bottleneckDescription : staticSimulationResults.noBottleneckDescription}</p>
+                            {liveSimulationResults.bottleneck === 'none' && (
+                                <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-green-600/10 text-green-700">
+                                    <CheckCircle2 className="h-5 w-5 mt-0.5" />
+                                    <div>
+                                        <h4 className="font-bold mb-1">Operación Óptima</h4>
+                                        <p>La línea de producción está balanceada. Las envasadoras están siendo alimentadas a un ritmo adecuado y las enfardadoras pueden manejar la carga.</p>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+                            {liveSimulationResults.bottleneck === 'wrapper' && (
+                                <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-destructive/10 text-destructive">
+                                    <AlertTriangle className="h-5 w-5 mt-0.5" />
+                                    <div>
+                                        <h4 className="font-bold mb-1">Cuello de Botella: Empaque</h4>
+                                        <p>
+                                            La capacidad de las enfardadoras ({staticSimulationResults.totalWrapperCapacity.toLocaleString()} f/min) es menor que la producción de las envasadoras ({staticSimulationResults.totalBagsPerMinuteFromPackers.toLocaleString()} f/min).
+                                            Considere aumentar la capacidad de las enfardadoras o reducir la velocidad de las envasadoras.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                             {liveSimulationResults.bottleneck === 'centrifuge' && (
+                                <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-amber-500/10 text-amber-600">
+                                    <Hourglass className="h-5 w-5 mt-0.5" />
+                                    <div>
+                                        <h4 className="font-bold mb-1">Cuello de Botella: Materia Prima</h4>
+                                        <p>
+                                            Las envasadoras demandan {liveSimulationResults.qqRateToPackers.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h, pero las centrífugas solo producen {liveSimulationResults.qqRateFromCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h. 
+                                            Las envasadoras se detendrán por falta de azúcar.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                     <Card>
