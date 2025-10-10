@@ -813,14 +813,16 @@ export default function OperationsClient({
     }, [createInitialSimulationState]);
 
     const formatElapsedTime = (totalSeconds: number) => {
-        if (!isFinite(totalSeconds) || totalSeconds < 0) return '0m 0s';
+        if (!isFinite(totalSeconds) || totalSeconds < 0) return '00:00:00';
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = Math.floor(totalSeconds % 60);
-        if (hours > 0) {
-            return `${hours}h ${minutes}m`;
-        }
-        return `${minutes}m ${seconds}s`;
+        
+        const paddedHours = String(hours).padStart(2, '0');
+        const paddedMinutes = String(minutes).padStart(2, '0');
+        const paddedSeconds = String(seconds).padStart(2, '0');
+
+        return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
     };
     
     const formatTime = (hours: number) => {
@@ -1330,7 +1332,7 @@ export default function OperationsClient({
 
 
                 // 3. Envasadoras & Enfardadoras Logic
-                const kgPerSecond = machinesRef.current
+                const totalKgConsumedPerSecond = machinesRef.current
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .reduce((sum, machine) => {
                         const product = productsRef.current.find(p => p.id === machine.productId);
@@ -1339,15 +1341,16 @@ export default function OperationsClient({
                         return sum + (bagsPerMinute * product.presentationWeight) / 60;
                     }, 0);
                 
-                const kgConsumedThisTick = kgPerSecond * elapsedIncrement;
-                nextState.totalQQPacked += kgConsumedThisTick / KG_PER_QUINTAL;
+                const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
+                const qqConsumedThisTick = kgConsumedThisTick / KG_PER_QUINTAL;
+                nextState.totalQQPacked += qqConsumedThisTick;
 
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
-                const canProduce = familiarSilo && (familiarSilo.currentQQ * KG_PER_QUINTAL) >= kgConsumedThisTick;
+                const canProduce = familiarSilo && familiarSilo.currentQQ >= qqConsumedThisTick;
                 
                 if (canProduce && kgConsumedThisTick > 0 && familiarSilo) {
-                    familiarSilo.currentQQ -= (kgConsumedThisTick / KG_PER_QUINTAL);
-                } else if (kgPerSecond > 0) {
+                    familiarSilo.currentQQ -= qqConsumedThisTick;
+                } else if (totalKgConsumedPerSecond > 0) {
                     if (familiarSilo) familiarSilo.currentQQ = 0;
                     nextState.isFinished = true;
                 }
@@ -1469,7 +1472,7 @@ export default function OperationsClient({
             }
         });
         
-        const kgPerSecond = machinesRef.current
+        const totalKgConsumedPerSecond = machinesRef.current
             .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
             .reduce((sum, m) => {
                 const product = productsRef.current.find(p => p.id === m.productId);
@@ -1480,10 +1483,10 @@ export default function OperationsClient({
         
         const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
         const familiarSiloKg = (familiarSilo?.currentQQ || 0) * KG_PER_QUINTAL;
-        const timeToEmptySeconds = kgPerSecond > 0 ? familiarSiloKg / kgPerSecond : Infinity;
+        const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
 
         const qqRateFromCentrifuges = simulationState.qqInCentrifuges;
-        const qqRateToPackers = (kgPerSecond * 3600) / KG_PER_QUINTAL;
+        const qqRateToPackers = (totalKgConsumedPerSecond * 3600) / KG_PER_QUINTAL;
         
         let bottleneck = 'none';
         if (staticSimulationResults.isWrapperBottleneck) {
