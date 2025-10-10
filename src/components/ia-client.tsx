@@ -52,7 +52,7 @@ type SiloState = {
 type ReceiverState = {
     id: string;
     name: string;
-    capacityQQ: number; _v0
+    capacityQQ: number;
     currentQQ: number; 
     state: 'idle' | 'filling' | 'ready' | 'draining';
     fillProgress: number;
@@ -787,20 +787,20 @@ export default function OperationsClient({
     
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState);
     
-    const sendMasaToReceiver = React.useCallback(() => {
-        let success = false;
-        let sentTo: string | null = null;
+    const handleManualSendMasa = () => {
+        if (simulationState.tachos.state !== 'ready') {
+            toast({ title: 'Tachos no está listo', description: 'La masa debe estar cocinada y lista para enviar.', variant: 'destructive'});
+            return;
+        }
+
+        const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
+
+        if (!availableReceiver) {
+            toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados. Espere a que uno se vacíe.', variant: 'destructive' });
+            return;
+        }
         
         setSimulationState(prev => {
-            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
-
-            if (!availableReceiver) {
-                return prev; // No change if no receiver is available
-            }
-            
-            success = true;
-            sentTo = availableReceiver.id;
-
             const newReceivers = prev.receivers.map(r => 
                 r.id === availableReceiver.id ? { ...r, state: 'filling' } : r
             );
@@ -811,27 +811,14 @@ export default function OperationsClient({
                 tachos: {
                     ...prev.tachos,
                     state: 'sending',
-                    targetReceiverId: sentTo,
+                    targetReceiverId: availableReceiver.id,
                     timeRemaining: prev.tachos.transferTimeSeconds,
                     progress: 0,
                 },
                 totalMasasSent: prev.totalMasasSent + 1,
             };
         });
-
-        return { success, sentTo };
-    }, []);
-
-
-    const handleManualSendMasa = () => {
-        if (simulationState.tachos.state !== 'ready') {
-            toast({ title: 'Tachos no está listo', description: 'La masa debe estar cocinada y lista para enviar.', variant: 'destructive'});
-            return;
-        }
-        const { success } = sendMasaToReceiver();
-        if (!success) {
-            toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados. Espere a que uno se vacíe.', variant: 'destructive' });
-        }
+        toast({ title: 'Masa Enviada', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
     };
 
     React.useEffect(() => {
@@ -1356,7 +1343,7 @@ export default function OperationsClient({
                 }
 
                 // 3. Envasadoras & Enfardadoras Logic
-                const kgPerSecond = machinesRef.current
+                const totalKgConsumedPerSecond = machinesRef.current
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .reduce((sum, machine) => {
                         const product = productsRef.current.find(p => p.id === machine.productId);
@@ -1365,8 +1352,8 @@ export default function OperationsClient({
                         return sum + (bagsPerMinute * product.presentationWeight) / 60;
                     }, 0);
                 
-                const kgConsumedThisTick = kgPerSecond * elapsedIncrement;
-
+                const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
+                
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
                 const canProduce = familiarSilo && familiarSilo.currentQQ * KG_PER_QUINTAL >= kgConsumedThisTick;
                 
@@ -1374,7 +1361,7 @@ export default function OperationsClient({
                     const qqConsumed = kgConsumedThisTick / KG_PER_QUINTAL;
                     familiarSilo.currentQQ -= qqConsumed;
                     nextState.totalQQPacked += qqConsumed;
-                } else if (kgPerSecond > 0) {
+                } else if (totalKgConsumedPerSecond > 0) {
                     if (familiarSilo) familiarSilo.currentQQ = 0;
                     nextState.isFinished = true;
                 }
@@ -1542,8 +1529,6 @@ export default function OperationsClient({
     const tachosStateForDialog = { id: 'tachos', name: 'Tachos', ...simulationState.tachos };
 
     const totalQQInReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
-    const totalBundlesProduced = liveSimulationResults.totalBundlesProduced;
-    const totalUnitsProduced = liveSimulationResults.totalUnitsProduced;
 
   return (
     <div className="bg-background min-h-screen text-foreground">
@@ -1585,7 +1570,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Hourglass className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Centrífugas</h4>
-                            <p className="text-sm text-muted-foreground">{simulationState.qqInCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ Procesando</p>
+                            <p className="text-sm text-muted-foreground">{simulationState.qqInCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ/h</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Azúcar siendo purgada y lavada.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
@@ -1609,7 +1594,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[90px]">
                             <PackageCheck className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Enfardado</h4>
-                            <p className="text-sm text-muted-foreground">{staticSimulationResults.bundlesPerMinute.toLocaleString(undefined, { maximumFractionDigits: 2 })} Fardos/Min</p>
+                             <p className="text-sm text-muted-foreground">{staticSimulationResults.bundlesPerMinute.toLocaleString(undefined, { maximumFractionDigits: 2 })} Fardos/Min</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Capacidad de empaque final en fardos.</p></TooltipContent> </Tooltip> </TooltipProvider>
                 </div>
@@ -2056,14 +2041,14 @@ export default function OperationsClient({
                         />
                         <KpiCard 
                             title="Total Fundas Producidas" 
-                            value={totalUnitsProduced} 
+                            value={liveSimulationResults.totalUnitsProduced} 
                             icon={Package2} 
                             description="Suma total de fundas individuales que han producido todas las envasadoras." 
                             fractionDigits={0} 
                         />
                         <KpiCard 
                             title="Total Fardos Producidos" 
-                            value={totalBundlesProduced} 
+                            value={liveSimulationResults.totalBundlesProduced} 
                             icon={PackageCheck} 
                             description="Suma total de fardos que han completado todas las enfardadoras." 
                             fractionDigits={0} 
