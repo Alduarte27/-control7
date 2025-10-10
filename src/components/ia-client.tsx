@@ -756,11 +756,9 @@ export default function OperationsClient({
         let success = false;
         let sentTo: string | null = null;
         
-        // Find an available receiver that is not currently being filled or used
         const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
 
         if (availableReceiver) {
-             // Create a mutable copy of the receivers array to modify
             const newReceivers = simulationState.receivers.map(r => {
                 if (r.id === availableReceiver.id) {
                     success = true;
@@ -801,10 +799,8 @@ export default function OperationsClient({
     };
 
     React.useEffect(() => {
-        // This effect ensures the initial state is correct after config is loaded.
         setSimulationState(createInitialSimulationState());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
+    }, [createInitialSimulationState]);
 
     const formatElapsedTime = (totalSeconds: number) => {
         if (!isFinite(totalSeconds) || totalSeconds < 0) return '0m 0s';
@@ -1194,7 +1190,7 @@ export default function OperationsClient({
                         nextState.tachos.timeRemaining = nextState.tachos.cookTimeSeconds;
                         nextState.tachos.progress = 0;
                     } else if (nextState.tachos.state === 'ready') {
-                        const availableReceiver = nextState.receivers.find((r: ReceiverState) => r.state === 'idle' && (r.capacityQQ - r.currentQQ) >= masaQQAmount);
+                        const availableReceiver = nextState.receivers.find((r: ReceiverState) => r.state === 'idle');
                         if (availableReceiver) {
                             nextState.totalMasasSent += 1;
                             nextState.tachos.state = 'sending'; 
@@ -1211,101 +1207,78 @@ export default function OperationsClient({
                 // 2. Centrifuges Logic
                 const purgeCycleTimeSeconds = centrifugePurgeCycleTime * 60;
                 
-                let drainingReceiver = nextState.receivers.find(r => r.state === 'draining');
-                if (!drainingReceiver && isCentrifugesAuto) {
-                    const readyReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ > 0 && r.fillProgress >= 100);
-                    if (readyReceiver) {
-                        readyReceiver.state = 'draining';
-                        drainingReceiver = readyReceiver;
+                nextState.centrifuges.forEach((cent, index) => {
+                    if (cent.cycleTimeRemaining > 0) {
+                        cent.cycleTimeRemaining = Math.max(0, cent.cycleTimeRemaining - elapsedIncrement);
                     }
-                }
 
-                if (drainingReceiver) {
-                    const activeCentrifuges = nextState.centrifuges.filter(c => c.state === 'purging');
-                    const qqPerCentrifugePerSecond = masaQQAmount / (purgeCycleTimeSeconds * 2);
-                    
-                    const totalQQConsumedThisTick = activeCentrifuges.reduce((sum, cent) => {
-                         return sum + (qqPerCentrifugePerSecond * elapsedIncrement);
-                    }, 0);
-                    
-                    if (drainingReceiver.currentQQ > 0) {
-                        drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - totalQQConsumedThisTick);
+                    let drainingReceiver = nextState.receivers.find(r => r.id === cent.drainingBy);
 
-                        let productionToDistribute = totalQQConsumedThisTick;
-                        const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
-                        const granelSilo = nextState.silos.find(s => s.id === 'granel');
+                    switch (cent.state) {
+                        case 'purging':
+                            cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / purgeCycleTimeSeconds));
+                            if (drainingReceiver) {
+                                const qqPerCentrifugePerSecond = drainingReceiver.capacityQQ / purgeCycleTimeSeconds;
+                                const qqConsumedThisTick = qqPerCentrifugePerSecond * elapsedIncrement;
+                                
+                                if (drainingReceiver.currentQQ > 0) {
+                                    drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - qqConsumedThisTick);
 
-                        if (familiarSilo) {
-                            const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-                            const toFamiliar = Math.min(productionToDistribute, spaceInFamiliar);
-                            familiarSilo.currentQQ += toFamiliar;
-                            productionToDistribute -= toFamiliar;
-                        }
+                                    let productionToDistribute = qqConsumedThisTick;
+                                    const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
+                                    const granelSilo = nextState.silos.find(s => s.id === 'granel');
 
-                        if (productionToDistribute > 0 && granelSilo) {
-                            const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-                            const toGranel = Math.min(productionToDistribute, spaceInGranel);
-                            granelSilo.currentQQ += toGranel;
-                        }
-                    }
-                    
-                    // Centrifuge State Machine - REWRITTEN
-                    nextState.centrifuges.forEach((cent, index) => {
-                        // Handle cycle time reduction
-                        if (cent.cycleTimeRemaining > 0) {
-                            cent.cycleTimeRemaining = Math.max(0, cent.cycleTimeRemaining - elapsedIncrement);
-                        }
+                                    if (familiarSilo) {
+                                        const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+                                        const toFamiliar = Math.min(productionToDistribute, spaceInFamiliar);
+                                        familiarSilo.currentQQ += toFamiliar;
+                                        productionToDistribute -= toFamiliar;
+                                    }
 
-                        // State Transitions
-                        switch (cent.state) {
-                            case 'purging':
-                                cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / purgeCycleTimeSeconds));
-                                if (cent.cycleTimeRemaining <= 0) {
-                                    cent.state = 'loading';
-                                    cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
-                                }
-                                break;
-                            case 'loading':
-                                cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / CENTRIFUGE_LOADING_TIME_SECONDS));
-                                if (cent.cycleTimeRemaining <= 0) {
-                                    if (drainingReceiver && drainingReceiver.currentQQ > 0) {
-                                        cent.state = 'purging';
-                                        cent.cycleTimeRemaining = purgeCycleTimeSeconds;
-                                    } else {
-                                        cent.state = 'idle';
+                                    if (productionToDistribute > 0 && granelSilo) {
+                                        const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+                                        const toGranel = Math.min(productionToDistribute, spaceInGranel);
+                                        granelSilo.currentQQ += toGranel;
                                     }
                                 }
-                                break;
-                            case 'idle':
-                                if (isCentrifugesAuto && drainingReceiver && drainingReceiver.currentQQ > 0) {
-                                    const otherCentrifuge = nextState.centrifuges[1 - index];
-                                    const canStart = index === 0 ? 
-                                        true : // First one can always start if conditions met
-                                        otherCentrifuge.state === 'idle' || // If other is idle
-                                        (purgeCycleTimeSeconds - otherCentrifuge.cycleTimeRemaining) >= (centrifugeStartInterval * 60); // Or if other has been running for the interval time
-
-                                    if (canStart) {
+                            }
+                            if (cent.cycleTimeRemaining <= 0) {
+                                cent.state = 'loading';
+                                cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
+                            }
+                            break;
+                        
+                        case 'loading':
+                            cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / CENTRIFUGE_LOADING_TIME_SECONDS));
+                            if (cent.cycleTimeRemaining <= 0) {
+                                if (drainingReceiver && drainingReceiver.currentQQ > 0) {
+                                    cent.state = 'purging';
+                                    cent.cycleTimeRemaining = purgeCycleTimeSeconds;
+                                } else {
+                                    cent.state = 'idle';
+                                    if(drainingReceiver) drainingReceiver.drainingBy = null;
+                                    cent.drainingBy = null;
+                                }
+                            }
+                            break;
+                            
+                        case 'idle':
+                            if (isCentrifugesAuto) {
+                                let availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.drainingBy === null);
+                                if (availableReceiver) {
+                                     const otherCentrifuge = nextState.centrifuges[1 - index];
+                                      if (otherCentrifuge.drainingBy !== availableReceiver.id) {
+                                        availableReceiver.drainingBy = cent.id;
+                                        cent.drainingBy = availableReceiver.id;
                                         cent.state = 'loading';
                                         cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
-                                    }
+                                      }
                                 }
-                                break;
-                        }
-                        
-                        if (cent.state === 'idle') {
-                            cent.cycleProgress = 0;
-                        }
-                    });
-
-                    // If receiver is empty, stop the process for this receiver
-                    if (drainingReceiver.currentQQ <= 0) {
-                        drainingReceiver.state = 'idle';
-                        drainingReceiver.currentQQ = 0;
-                        drainingReceiver.fillProgress = 0;
-                        nextState.centrifuges.forEach(c => { c.state = 'idle'; c.cycleProgress = 0; });
+                            }
+                            break;
                     }
-                }
-
+                    if (cent.state === 'idle') cent.cycleProgress = 0;
+                });
                 
                 // 3. Envasadoras & Enfardadoras Logic
                 const currentMachines = machinesRef.current;
@@ -1317,7 +1290,7 @@ export default function OperationsClient({
                         const kgPerBag = product?.presentationWeight || 1;
                         return {
                             id: m.id,
-                            unitsPerSecond: bagsPerMinute / 60, // Here units are bags
+                            unitsPerSecond: bagsPerMinute / 60,
                             kgPerSecond: (bagsPerMinute * kgPerBag) / 60,
                         };
                     });
@@ -1710,7 +1683,7 @@ export default function OperationsClient({
                                         <div className="space-y-3 pt-2 mt-auto flex-grow flex flex-col justify-end">
                                             <div className="space-y-1">
                                                 <Label className="text-xs text-muted-foreground">Llenado</Label>
-                                                <Progress value={simReceiver.fillProgress} indicatorClassName="bg-green-500" />
+                                                <Progress value={simReceiver.state === 'filling' ? simReceiver.fillProgress : (simReceiver.state === 'ready' || simReceiver.state === 'draining') ? 100 : 0} indicatorClassName="bg-green-500" />
                                             </div>
                                             <div className="space-y-1">
                                                  <div className="flex justify-between items-baseline">
@@ -1826,7 +1799,9 @@ export default function OperationsClient({
                             {machines.map((machine) => {
                                 const product = products.find(p => p.id === machine.productId);
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
-                                const sacksPerMinuteNeto = (product?.sackWeight && product.sackWeight > 0) ? ((unitsPerMinuteNeto * (product?.presentationWeight || 1)) / product.sackWeight) : 0;
+                                const wrapper = wrappers.find(w => w.machineIds.includes(machine.id));
+                                const unitsPerBundle = wrapper?.unitsPerBundle || 1;
+                                const fardosPerMinuteNeto = unitsPerMinuteNeto / unitsPerBundle;
                                 const unitsProducedByMachine = simulationState.machineTotals[machine.id] || 0;
                                 
                                 return (
@@ -1900,7 +1875,7 @@ export default function OperationsClient({
                                                     </div>
                                                     <div className="bg-background p-1 rounded-md border">
                                                         <p className="text-muted-foreground">Fardos/Min</p>
-                                                        <p className="font-bold text-sm text-green-600">{sacksPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
+                                                        <p className="font-bold text-sm text-green-600">{fardosPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
                                                     </div>
                                                 </div>
                                             </div>
