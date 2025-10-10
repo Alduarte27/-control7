@@ -1109,7 +1109,7 @@ export default function OperationsClient({
         }
         
         await loadConfig();
-        toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros han vuelto a sus valores por defecto.' });
+        toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros de la simulación han vuelto a sus valores por defecto.' });
     };
     
     const pauseClock = React.useCallback(() => {
@@ -1206,54 +1206,30 @@ export default function OperationsClient({
 
                 // 2. Centrifuges Logic
                 const purgeCycleTimeSeconds = centrifugePurgeCycleTime * 60;
+                let qqConsumedByCentrifuges = 0;
+
+                const activeReceivers = nextState.receivers.filter(r => r.state === 'ready' && r.currentQQ > 0);
                 
                 nextState.centrifuges.forEach((cent, index) => {
                     if (cent.cycleTimeRemaining > 0) {
                         cent.cycleTimeRemaining = Math.max(0, cent.cycleTimeRemaining - elapsedIncrement);
                     }
 
-                    let drainingReceiver = nextState.receivers.find(r => r.id === cent.drainingBy);
-
                     switch (cent.state) {
                         case 'purging':
                             cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / purgeCycleTimeSeconds));
+                            const drainingReceiver = nextState.receivers.find(r => r.id === cent.drainingBy);
                             if (drainingReceiver) {
-                                const qqPerCentrifugePerSecond = drainingReceiver.capacityQQ / purgeCycleTimeSeconds;
-                                const qqConsumedThisTick = qqPerCentrifugePerSecond * elapsedIncrement;
-                                
-                                if (drainingReceiver.currentQQ > 0) {
-                                    drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - qqConsumedThisTick);
-
-                                    let productionToDistribute = qqConsumedThisTick;
-                                    const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
-                                    const granelSilo = nextState.silos.find(s => s.id === 'granel');
-
-                                    if (familiarSilo) {
-                                        const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-                                        const toFamiliar = Math.min(productionToDistribute, spaceInFamiliar);
-                                        familiarSilo.currentQQ += toFamiliar;
-                                        productionToDistribute -= toFamiliar;
-                                    }
-
-                                    if (productionToDistribute > 0 && granelSilo) {
-                                        const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-                                        const toGranel = Math.min(productionToDistribute, spaceInGranel);
-                                        granelSilo.currentQQ += toGranel;
-                                    }
-                                }
+                                const qqPerCentrifugePerSecond = drainingReceiver.capacityQQ / purgeCycleTimeSeconds / 2; // Split between 2
+                                const qqToConsume = qqPerCentrifugePerSecond * elapsedIncrement;
+                                drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - qqToConsume);
+                                qqConsumedByCentrifuges += qqToConsume;
                             }
-                            if (cent.cycleTimeRemaining <= 0) {
-                                cent.state = 'loading';
-                                cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
-                            }
-                            break;
-                        
-                        case 'loading':
-                            cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / CENTRIFUGE_LOADING_TIME_SECONDS));
+
                             if (cent.cycleTimeRemaining <= 0) {
                                 if (drainingReceiver && drainingReceiver.currentQQ > 0) {
-                                    cent.state = 'purging';
-                                    cent.cycleTimeRemaining = purgeCycleTimeSeconds;
+                                    cent.state = 'loading';
+                                    cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
                                 } else {
                                     cent.state = 'idle';
                                     if(drainingReceiver) drainingReceiver.drainingBy = null;
@@ -1261,18 +1237,26 @@ export default function OperationsClient({
                                 }
                             }
                             break;
+                        
+                        case 'loading':
+                            cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / CENTRIFUGE_LOADING_TIME_SECONDS));
+                            if (cent.cycleTimeRemaining <= 0) {
+                                cent.state = 'purging';
+                                cent.cycleTimeRemaining = purgeCycleTimeSeconds;
+                            }
+                            break;
                             
                         case 'idle':
                             if (isCentrifugesAuto) {
-                                let availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.drainingBy === null);
+                                let availableReceiver = activeReceivers.find(r => r.drainingBy === null || r.drainingBy === cent.id);
                                 if (availableReceiver) {
-                                     const otherCentrifuge = nextState.centrifuges[1 - index];
-                                      if (otherCentrifuge.drainingBy !== availableReceiver.id) {
+                                    const otherCentrifuge = nextState.centrifuges[1 - index];
+                                    if (otherCentrifuge.drainingBy !== availableReceiver.id || otherCentrifuge.state === 'idle') {
                                         availableReceiver.drainingBy = cent.id;
                                         cent.drainingBy = availableReceiver.id;
                                         cent.state = 'loading';
                                         cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
-                                      }
+                                    }
                                 }
                             }
                             break;
@@ -1280,6 +1264,27 @@ export default function OperationsClient({
                     if (cent.state === 'idle') cent.cycleProgress = 0;
                 });
                 
+                // Distribute produced QQ to silos
+                if (qqConsumedByCentrifuges > 0) {
+                    let productionToDistribute = qqConsumedByCentrifuges;
+                    const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
+                    const granelSilo = nextState.silos.find(s => s.id === 'granel');
+
+                    if (familiarSilo) {
+                        const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+                        const toFamiliar = Math.min(productionToDistribute, spaceInFamiliar);
+                        familiarSilo.currentQQ += toFamiliar;
+                        productionToDistribute -= toFamiliar;
+                    }
+
+                    if (productionToDistribute > 0 && granelSilo) {
+                        const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+                        const toGranel = Math.min(productionToDistribute, spaceInGranel);
+                        granelSilo.currentQQ += toGranel;
+                    }
+                }
+
+
                 // 3. Envasadoras & Enfardadoras Logic
                 const currentMachines = machinesRef.current;
                 const activeMachinesConfig = currentMachines
@@ -1299,7 +1304,7 @@ export default function OperationsClient({
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
                 
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
-                const canProduce = (familiarSilo?.currentQQ || 0) * KG_PER_QUINTAL >= kgConsumedThisTick;
+                const canProduce = familiarSilo && (familiarSilo.currentQQ * KG_PER_QUINTAL) >= kgConsumedThisTick;
                 
                 if (!canProduce && totalKgConsumedPerSecond > 0) {
                     if (familiarSilo) familiarSilo.currentQQ = 0;
@@ -1407,7 +1412,14 @@ export default function OperationsClient({
         const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, totalWrapperCapacity);
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > totalWrapperCapacity;
         
-        const avgUnitsPerBundle = wrappers.length > 0 ? wrappers.reduce((sum, w) => sum + w.unitsPerBundle, 0) / wrappers.length : 1;
+        const avgUnitsPerBundle = wrappers.reduce((sum, w) => {
+            const machinesConnected = machines.filter(m => m.isSimulatingActive && w.machineIds.includes(m.id));
+            if (machinesConnected.length > 0) {
+                return sum + w.unitsPerBundle;
+            }
+            return sum;
+        }, 0) / (wrappers.filter(w => machines.some(m => m.isSimulatingActive && w.machineIds.includes(m.id))).length || 1);
+        
         const bundlesPerMinute = avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0;
         
         const bottleneckDescription = `Las enfardadoras (cap total: ${totalWrapperCapacity.toLocaleString()} f/min) limitan a las envasadoras (cap: ${totalBagsPerMinuteFromPackers.toLocaleString(undefined, {maximumFractionDigits: 0})} f/min).`;
@@ -1801,7 +1813,7 @@ export default function OperationsClient({
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
                                 const wrapper = wrappers.find(w => w.machineIds.includes(machine.id));
                                 const unitsPerBundle = wrapper?.unitsPerBundle || 1;
-                                const fardosPerMinuteNeto = unitsPerMinuteNeto / unitsPerBundle;
+                                const fardosPerMinuteNeto = unitsPerBundle > 0 ? unitsPerMinuteNeto / unitsPerBundle : 0;
                                 const unitsProducedByMachine = simulationState.machineTotals[machine.id] || 0;
                                 
                                 return (
