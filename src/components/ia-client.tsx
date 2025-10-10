@@ -821,6 +821,21 @@ export default function OperationsClient({
         toast({ title: 'Masa Enviada', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
     };
 
+    const handleManualCookMasa = () => {
+        if (simulationState.tachos.state === 'idle' && !isTachosAuto) {
+            setSimulationState(prev => ({
+                ...prev,
+                tachos: {
+                    ...prev.tachos,
+                    state: 'cooking',
+                    timeRemaining: prev.tachos.cookTimeSeconds,
+                    progress: 0,
+                }
+            }));
+            toast({ title: 'Cocción Iniciada', description: 'La masa ha comenzado a cocinarse.' });
+        }
+    };
+
     React.useEffect(() => {
         setSimulationState(createInitialSimulationState());
     }, [createInitialSimulationState]);
@@ -1570,7 +1585,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Hourglass className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Centrífugas</h4>
-                            <p className="text-sm text-muted-foreground">{simulationState.qqInCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ/h</p>
+                             <p className="text-sm text-muted-foreground">{simulationState.qqInCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ/h</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Azúcar siendo purgada y lavada.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
@@ -1709,9 +1724,12 @@ export default function OperationsClient({
                                     <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
-                                {!isTachosAuto && (
-                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'ready'}>Enviar Masa Manual</Button>
-                                )}
+                                {!isTachosAuto ? (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Button className="w-full" onClick={handleManualCookMasa} disabled={simTachos.state !== 'idle'}>Iniciar Cocción</Button>
+                                        <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'ready'}>Enviar Masa</Button>
+                                    </div>
+                                ) : null}
                              </div>
                         </div>
                         
