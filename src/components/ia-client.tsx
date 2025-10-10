@@ -1207,6 +1207,7 @@ export default function OperationsClient({
                 // 2. Centrifuges Logic
                 const purgeCycleTimeSeconds = centrifugePurgeCycleTime * 60;
                 let qqConsumedByCentrifuges = 0;
+                let qqConsumedThisTick = 0;
 
                 const activeReceivers = nextState.receivers.filter(r => r.state === 'ready' && r.currentQQ > 0);
                 
@@ -1216,52 +1217,79 @@ export default function OperationsClient({
                     }
 
                     switch (cent.state) {
-                        case 'purging':
+                        case 'purging': {
                             cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / purgeCycleTimeSeconds));
-                            const drainingReceiver = nextState.receivers.find(r => r.id === cent.drainingBy);
+                            const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
                             if (drainingReceiver) {
-                                const qqPerCentrifugePerSecond = drainingReceiver.capacityQQ / purgeCycleTimeSeconds / 2; // Split between 2
-                                const qqToConsume = qqPerCentrifugePerSecond * elapsedIncrement;
-                                drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - qqToConsume);
-                                qqConsumedByCentrifuges += qqToConsume;
+                                // Assuming 2 centrifuges drain one receiver in `purgeCycleTimeSeconds` total
+                                const qqPerCentrifugePerSecond = drainingReceiver.capacityQQ / purgeCycleTimeSeconds / 2;
+                                const consumption = qqPerCentrifugePerSecond * elapsedIncrement;
+                                drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - consumption);
+                                qqConsumedByCentrifuges += consumption;
                             }
 
                             if (cent.cycleTimeRemaining <= 0) {
+                                cent.state = 'loading';
+                                cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
+                            }
+                            break;
+                        }
+                        
+                        case 'loading': {
+                            cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / CENTRIFUGE_LOADING_TIME_SECONDS));
+                            if (cent.cycleTimeRemaining <= 0) {
+                                 const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
                                 if (drainingReceiver && drainingReceiver.currentQQ > 0) {
-                                    cent.state = 'loading';
-                                    cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
+                                    cent.state = 'purging';
+                                    cent.cycleTimeRemaining = purgeCycleTimeSeconds;
                                 } else {
-                                    cent.state = 'idle';
-                                    if(drainingReceiver) drainingReceiver.drainingBy = null;
-                                    cent.drainingBy = null;
+                                     cent.state = 'idle';
+                                     if(drainingReceiver) drainingReceiver.drainingBy = null;
                                 }
                             }
                             break;
-                        
-                        case 'loading':
-                            cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / CENTRIFUGE_LOADING_TIME_SECONDS));
-                            if (cent.cycleTimeRemaining <= 0) {
-                                cent.state = 'purging';
-                                cent.cycleTimeRemaining = purgeCycleTimeSeconds;
-                            }
-                            break;
+                        }
                             
-                        case 'idle':
+                        case 'idle': {
                             if (isCentrifugesAuto) {
                                 let availableReceiver = activeReceivers.find(r => r.drainingBy === null || r.drainingBy === cent.id);
+                                if (!availableReceiver) {
+                                    const partiallyDrainedReceiver = activeReceivers.find(r => r.drainingBy !== null);
+                                    if(partiallyDrainedReceiver) availableReceiver = partiallyDrainedReceiver;
+                                }
+
                                 if (availableReceiver) {
                                     const otherCentrifuge = nextState.centrifuges[1 - index];
-                                    if (otherCentrifuge.drainingBy !== availableReceiver.id || otherCentrifuge.state === 'idle') {
+                                    const isOtherCentrifugeDrainingThisReceiver = otherCentrifuge.state !== 'idle' && availableReceiver.drainingBy === otherCentrifuge.id;
+
+                                    let canStart = false;
+                                    if (!isOtherCentrifugeDrainingThisReceiver) {
+                                        canStart = true;
+                                    } else {
+                                        const otherCentrifugeTimeIntoCycle = (otherCentrifuge.state === 'loading' ? CENTRIFUGE_LOADING_TIME_SECONDS : purgeCycleTimeSeconds) - otherCentrifuge.cycleTimeRemaining;
+                                        if (otherCentrifugeTimeIntoCycle >= centrifugeStartInterval * 60) {
+                                            canStart = true;
+                                        }
+                                    }
+
+                                    if (canStart) {
                                         availableReceiver.drainingBy = cent.id;
-                                        cent.drainingBy = availableReceiver.id;
                                         cent.state = 'loading';
                                         cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
                                     }
                                 }
                             }
                             break;
+                        }
                     }
                     if (cent.state === 'idle') cent.cycleProgress = 0;
+                });
+
+                nextState.receivers.forEach(r => {
+                    if (r.currentQQ <= 0.1 && r.state === 'ready') {
+                       r.state = 'idle';
+                       r.drainingBy = null;
+                    }
                 });
                 
                 // Distribute produced QQ to silos
