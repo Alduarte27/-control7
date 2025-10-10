@@ -37,8 +37,6 @@ type MachineState = {
     productId: string;
     speed: number;
     loss: number;
-    unitsPerSack: number;
-    imageUrl: string | null;
     isSimulatingActive: boolean; 
 };
 
@@ -166,11 +164,6 @@ function MachineEditDialog({
 
     const handleFieldChange = (field: keyof Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>, value: any) => {
         const newMachine = { ...editedMachine, [field]: value };
-        if (field === 'productId') {
-            const product = products.find(p => p.id === value);
-            // @ts-ignore
-            newMachine.unitsPerSack = product?.unitsPerSack || 1;
-        }
         setEditedMachine(newMachine);
     };
     
@@ -247,10 +240,6 @@ function MachineEditDialog({
                             <Label htmlFor={`loss-${machine.id}`}>Merma (%)</Label>
                             <Input id={`loss-${machine.id}`} type="number" value={editedMachine.loss} onChange={e => handleFieldChange('loss', Number(e.target.value))}/>
                         </div>
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor={`units-${machine.id}`}>Unidades por Fardo</Label>
-                        <Input id={`units-${machine.id}`} type="number" value={editedMachine.unitsPerSack} onChange={e => handleFieldChange('unitsPerSack', Number(e.target.value))}/>
                     </div>
                 </div>
                 <DialogFooter>
@@ -838,10 +827,10 @@ export default function OperationsClient({
     const getDefaultConfig = (): { params: SimulationParams; images: ImageUrlConfig } => ({
         params: {
             machines: [
-                { id: 1, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1 },
-                { id: 2, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1 },
-                { id: 3, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1 },
-                { id: 4, productId: 'inactive', speed: 0, loss: 0, unitsPerSack: 1 },
+                { id: 1, productId: 'inactive', speed: 0, loss: 0 },
+                { id: 2, productId: 'inactive', speed: 0, loss: 0 },
+                { id: 3, productId: 'inactive', speed: 0, loss: 0 },
+                { id: 4, productId: 'inactive', speed: 0, loss: 0 },
             ],
             wrappers: [
                 { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, machineIds: [1, 2] },
@@ -1185,13 +1174,13 @@ export default function OperationsClient({
                     if (receiver) {
                         const qqPerSecond = masaQQAmount / nextState.tachos.transferTimeSeconds;
                         receiver.currentQQ = Math.min(receiver.capacityQQ, receiver.currentQQ + qqPerSecond * elapsedIncrement);
-                        receiver.fillProgress = progress; // Sync fill progress with tachos sending progress
+                        receiver.fillProgress = progress;
                     }
 
                     if (nextState.tachos.timeRemaining <= 0) {
                         if (receiver) {
                             receiver.state = 'ready';
-                            receiver.fillProgress = 100; // Ensure it's full visually
+                            receiver.fillProgress = 100;
                         }
                         nextState.tachos.state = 'idle';
                         nextState.tachos.progress = 0;
@@ -1324,13 +1313,12 @@ export default function OperationsClient({
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .map(m => {
                         const product = productsRef.current.find(p => p.id === m.productId);
-                        const unitsPerMinute = m.speed * (1 - m.loss / 100);
-                        const unitsPerSack = m.unitsPerSack || 1;
-                        const kgPerUnit = unitsPerSack > 0 ? (product?.sackWeight || 50) / unitsPerSack : 0;
+                        const bagsPerMinute = m.speed * (1 - m.loss / 100);
+                        const kgPerBag = product?.presentationWeight || 1;
                         return {
                             id: m.id,
-                            unitsPerSecond: unitsPerMinute / 60,
-                            kgPerSecond: (unitsPerMinute / 60) * kgPerUnit,
+                            unitsPerSecond: bagsPerMinute / 60, // Here units are bags
+                            kgPerSecond: (bagsPerMinute * kgPerBag) / 60,
                         };
                     });
                 
@@ -1473,10 +1461,13 @@ export default function OperationsClient({
                 if (product) {
                     const machineUnits = simulationState.machineTotals[machine.id] || 0;
                     totalUnitsProduced += machineUnits;
-                    if (machine.unitsPerSack && machine.unitsPerSack > 0) {
-                        const sacksFromMachine = machineUnits / machine.unitsPerSack;
+                    
+                    const kgPerUnit = product.presentationWeight || 1;
+                    totalKgProduced += machineUnits * kgPerUnit;
+                    
+                    if (product.sackWeight && product.sackWeight > 0) {
+                        const sacksFromMachine = (machineUnits * kgPerUnit) / product.sackWeight;
                         totalSacksProduced += sacksFromMachine;
-                        totalKgProduced += sacksFromMachine * (product.sackWeight || 50);
                     }
                 }
             }
@@ -1487,9 +1478,9 @@ export default function OperationsClient({
             .reduce((sum, m) => {
                 const product = productsRef.current.find(p => p.id === m.productId);
                 if (!product) return sum;
-                const unitsPerMinuteNeto = m.speed * (1 - m.loss / 100);
-                const sacksPerMinute = (m.unitsPerSack > 0) ? unitsPerMinuteNeto / m.unitsPerSack : 0;
-                const kgPerMinute = sacksPerMinute * (product.sackWeight || 50);
+                const bagsPerMinute = m.speed * (1 - m.loss / 100);
+                const kgPerBag = product.presentationWeight || 1;
+                const kgPerMinute = bagsPerMinute * kgPerBag;
                 return sum + (kgPerMinute / 60);
             }, 0);
         
@@ -1832,7 +1823,7 @@ export default function OperationsClient({
                             {machines.map((machine) => {
                                 const product = products.find(p => p.id === machine.productId);
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
-                                const sacksPerMinuteNeto = (machine.unitsPerSack > 0) ? (unitsPerMinuteNeto / machine.unitsPerSack) : 0;
+                                const sacksPerMinuteNeto = (product?.sackWeight && product.sackWeight > 0) ? ((unitsPerMinuteNeto * (product?.presentationWeight || 1)) / product.sackWeight) : 0;
                                 const unitsProducedByMachine = simulationState.machineTotals[machine.id] || 0;
                                 
                                 return (
@@ -1886,7 +1877,7 @@ export default function OperationsClient({
                                           <>
                                             <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
                                                 <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
-                                                <div className="grid grid-cols-3 gap-1 text-center">
+                                                <div className="grid grid-cols-2 gap-1 text-center">
                                                     <div className="bg-background p-1 rounded-md border">
                                                         <p className="text-muted-foreground">Velocidad</p>
                                                         <p className="font-bold text-sm">{machine.speed} <span className="text-xs font-normal">f/min</span></p>
@@ -1894,10 +1885,6 @@ export default function OperationsClient({
                                                     <div className="bg-background p-1 rounded-md border">
                                                         <p className="text-muted-foreground">Merma</p>
                                                         <p className="font-bold text-sm">{machine.loss}%</p>
-                                                    </div>
-                                                    <div className="bg-background p-1 rounded-md border">
-                                                        <p className="text-muted-foreground">Unidades</p>
-                                                        <p className="font-bold text-sm">{machine.unitsPerSack}</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1915,7 +1902,7 @@ export default function OperationsClient({
                                                 </div>
                                             </div>
                                             <div className="space-y-1">
-                                                <Label className="text-xs">Producción Total (Unidades)</Label>
+                                                <Label className="text-xs">Producción Total (Fundas)</Label>
                                                 <p className="text-lg font-bold text-center text-primary">{Math.floor(unitsProducedByMachine).toLocaleString()}</p>
                                                 <Progress value={(unitsProducedByMachine % machine.speed) / machine.speed * 100} className="h-1" />
                                             </div>
@@ -2051,7 +2038,7 @@ export default function OperationsClient({
                     </Card>
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina (Sacos)</CardTitle>
+                            <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina (Fardos)</CardTitle>
                         </CardHeader>
                         <CardContent>
                             {Object.values(simulationState.machineTotals).every(m => m === 0) ? (
@@ -2065,7 +2052,10 @@ export default function OperationsClient({
                                                   const machine = machines.find(m => m.id === parseInt(machineId));
                                                   if (!machine) return { name: `Máq. ${machineId}`, value: 0 };
                                                   const product = products.find(p => p.id === machine.productId);
-                                                  const sacksProduced = machine.unitsPerSack > 0 ? totalUnits / machine.unitsPerSack : 0;
+                                                  const kgPerUnit = product?.presentationWeight || 1;
+                                                  const totalKg = totalUnits * kgPerUnit;
+                                                  const sacksProduced = (product?.sackWeight && product.sackWeight > 0) ? totalKg / product.sackWeight : 0;
+                                                  
                                                   return {
                                                       name: `Máq. ${machineId} (${product?.productName || 'N/A'})`,
                                                       value: sacksProduced,
@@ -2079,7 +2069,7 @@ export default function OperationsClient({
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
-                                        <RechartsTooltip formatter={(value: number) => `${value.toLocaleString(undefined, {maximumFractionDigits: 1})} sacos`} />
+                                        <RechartsTooltip formatter={(value: number) => `${value.toLocaleString(undefined, {maximumFractionDigits: 1})} fardos`} />
                                     </PieChart>
                                 </ResponsiveContainer>
                             )}

@@ -50,6 +50,7 @@ function EditProductDialog({
     const [categoryId, setCategoryId] = React.useState<string>(product.categoryId);
     const [color, setColor] = React.useState(product.color || '#000000');
     const [sackWeight, setSackWeight] = React.useState(product.sackWeight || 50);
+    const [presentationWeight, setPresentationWeight] = React.useState(product.presentationWeight || 1);
 
     const handleSave = () => {
         onSave({
@@ -58,6 +59,7 @@ function EditProductDialog({
             categoryId,
             color,
             sackWeight: Number(sackWeight),
+            presentationWeight: Number(presentationWeight),
         });
     };
 
@@ -91,6 +93,26 @@ function EditProductDialog({
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
+                            <Label htmlFor="edit-product-weight">Peso por Fardo (kg)</Label>
+                            <Input
+                                id="edit-product-weight"
+                                type="number"
+                                value={sackWeight}
+                                onChange={(e) => setSackWeight(Number(e.target.value))}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="edit-product-pres-weight">Peso por Funda (kg)</Label>
+                            <Input
+                                id="edit-product-pres-weight"
+                                type="number"
+                                value={presentationWeight}
+                                onChange={(e) => setPresentationWeight(Number(e.target.value))}
+                                step="0.1"
+                            />
+                        </div>
+                    </div>
+                     <div className="space-y-2">
                             <Label htmlFor="edit-product-color">Color del Producto</Label>
                             <Input
                                 id="edit-product-color"
@@ -100,16 +122,6 @@ function EditProductDialog({
                                 className="w-24 h-10 p-1"
                             />
                         </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="edit-product-weight">Peso por Saco (kg)</Label>
-                            <Input
-                                id="edit-product-weight"
-                                type="number"
-                                value={sackWeight}
-                                onChange={(e) => setSackWeight(Number(e.target.value))}
-                            />
-                        </div>
-                    </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -146,7 +158,7 @@ function SortableItem({ product, categoryName, onEdit, onToggleStatus }: { produ
             <div className="flex items-center gap-2">
               <span className="h-4 w-4 rounded-full" style={{ backgroundColor: product.color || '#ccc' }}></span>
               {product.productName}
-              <span className="text-xs text-muted-foreground">({product.sackWeight || 50}kg)</span>
+              <span className="text-xs text-muted-foreground">({product.presentationWeight || 1}kg / {product.sackWeight || 50}kg)</span>
             </div>
         </div>
         <div className="flex items-center gap-2">
@@ -191,7 +203,7 @@ export default function AdminClient() {
             }
 
             const productsSnapshot = await getDocs(query(collection(db, 'products'), orderBy('order')));
-            const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, isActive: true, sackWeight: 50, ...doc.data() } as ProductDefinition));
+            const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, isActive: true, sackWeight: 50, presentationWeight: 1, ...doc.data() } as ProductDefinition));
             setProducts(productsList);
         } catch (error) {
             console.error('Error loading data from Firestore', error);
@@ -243,6 +255,7 @@ export default function AdminClient() {
             color: '#cccccc', // Default color
             isActive: true,
             sackWeight: 50, // Default weight
+            presentationWeight: 1, // Default presentation weight
         };
         const newProduct = await addProductAction(newProductData);
 
@@ -425,7 +438,9 @@ export default function AdminClient() {
                         product.color !== latestProduct.color ||
                         product.categoryName !== latestCategoryName ||
                         product.categoryIsPlanned !== latestCategoryIsPlanned ||
-                        product.sackWeight !== (latestProduct.sackWeight || 50)) { // Sync sackWeight
+                        product.sackWeight !== (latestProduct.sackWeight || 50) ||
+                        product.presentationWeight !== (latestProduct.presentationWeight || 1)
+                        ) {
                         needsUpdate = true;
                         return {
                             ...product,
@@ -434,7 +449,8 @@ export default function AdminClient() {
                             color: latestProduct.color,
                             categoryName: latestCategoryName,
                             categoryIsPlanned: latestCategoryIsPlanned,
-                            sackWeight: latestProduct.sackWeight || 50, // Add new field
+                            sackWeight: latestProduct.sackWeight || 50,
+                            presentationWeight: latestProduct.presentationWeight || 1,
                         };
                     }
                 }

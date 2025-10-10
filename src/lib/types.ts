@@ -32,6 +32,7 @@ export type ProductDefinition = {
   color?: string; // e.g., '#ff0000'
   isActive: boolean;
   sackWeight?: number; // Weight of one sack in kg
+  presentationWeight?: number; // Weight of one presentation/bag in kg
 }
 
 export type ProductData = ProductDefinition & {
