@@ -52,7 +52,7 @@ type SiloState = {
 type ReceiverState = {
     id: string;
     name: string;
-    capacityQQ: number; 
+    capacityQQ: number; _v0
     currentQQ: number; 
     state: 'idle' | 'filling' | 'ready' | 'draining';
     fillProgress: number;
@@ -142,6 +142,32 @@ type SimulationState = {
     totalQQProduced: number;
     totalQQPacked: number;
 };
+
+const CustomPieTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        return (
+            <div className="rounded-lg border bg-background p-3 shadow-sm text-sm min-w-[250px]">
+                <p className="font-bold mb-2 text-primary">{data.name}</p>
+                <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
+                    <div className="font-semibold text-muted-foreground">Producto:</div>
+                    <div className="text-right font-medium truncate" title={data.productName}>{data.productName}</div>
+                    
+                    <div className="font-semibold text-muted-foreground">Fardos:</div>
+                    <div className="text-right font-medium">{data.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+
+                    <div className="font-semibold text-muted-foreground">Fundas:</div>
+                    <div className="text-right font-medium">{data.units.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                    
+                    <div className="font-semibold text-muted-foreground">Consumo QQ:</div>
+                    <div className="text-right font-medium">{data.qqConsumed.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
+
 
 function MachineEditDialog({
     machine,
@@ -1297,10 +1323,9 @@ export default function OperationsClient({
                     }
                     if (cent.state === 'idle') cent.cycleProgress = 0;
                 });
-
-                const qqProducedPerSecond = qqDrainedFromReceivers / elapsedIncrement;
-                nextState.qqInCentrifuges = qqProducedPerSecond;
                 
+                nextState.qqInCentrifuges = qqDrainedFromReceivers / elapsedIncrement * 3600;
+
                 nextState.receivers.forEach(r => {
                     if (r.currentQQ <= 0.1 && r.state === 'ready') {
                        r.state = 'idle';
@@ -1309,8 +1334,8 @@ export default function OperationsClient({
                 });
                 
                 // Distribute produced QQ to silos
-                if (qqProducedPerSecond > 0) {
-                    let productionToDistribute = qqProducedPerSecond * elapsedIncrement;
+                if (qqDrainedFromReceivers > 0) {
+                    let productionToDistribute = qqDrainedFromReceivers;
                     nextState.totalQQProduced += productionToDistribute;
                     
                     const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
@@ -1330,9 +1355,8 @@ export default function OperationsClient({
                     }
                 }
 
-
                 // 3. Envasadoras & Enfardadoras Logic
-                 const totalKgConsumedPerSecond = machinesRef.current
+                const kgPerSecond = machinesRef.current
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .reduce((sum, machine) => {
                         const product = productsRef.current.find(p => p.id === machine.productId);
@@ -1341,17 +1365,16 @@ export default function OperationsClient({
                         return sum + (bagsPerMinute * product.presentationWeight) / 60;
                     }, 0);
                 
-                const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
-                const qqConsumedThisTick = kgConsumedThisTick / KG_PER_QUINTAL;
-                
+                const kgConsumedThisTick = kgPerSecond * elapsedIncrement;
 
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
-                const canProduce = familiarSilo && familiarSilo.currentQQ >= qqConsumedThisTick;
+                const canProduce = familiarSilo && familiarSilo.currentQQ * KG_PER_QUINTAL >= kgConsumedThisTick;
                 
                 if (canProduce && kgConsumedThisTick > 0 && familiarSilo) {
-                    familiarSilo.currentQQ -= qqConsumedThisTick;
-                    nextState.totalQQPacked += qqConsumedThisTick;
-                } else if (totalKgConsumedPerSecond > 0) {
+                    const qqConsumed = kgConsumedThisTick / KG_PER_QUINTAL;
+                    familiarSilo.currentQQ -= qqConsumed;
+                    nextState.totalQQPacked += qqConsumed;
+                } else if (kgPerSecond > 0) {
                     if (familiarSilo) familiarSilo.currentQQ = 0;
                     nextState.isFinished = true;
                 }
@@ -1562,9 +1585,9 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Hourglass className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Centrífugas</h4>
-                            <p className="text-sm text-muted-foreground">{simulationState.qqInCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h</p>
+                            <p className="text-sm text-muted-foreground">{simulationState.qqInCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ Procesando</p>
                         </div>
-                    </TooltipTrigger> <TooltipContent><p>Purga y lavado del azúcar.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger> <TooltipContent><p>Azúcar siendo purgada y lavada.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
                     <TooltipProvider> <Tooltip> <TooltipTrigger>
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
@@ -2100,18 +2123,24 @@ export default function OperationsClient({
                                           data={Object.entries(simulationState.machineTotals)
                                               .map(([machineId, totalUnits]) => {
                                                   const machine = machines.find(m => m.id === parseInt(machineId));
-                                                  if (!machine) return { name: `Máq. ${machineId}`, value: 0 };
+                                                  if (!machine) return null;
                                                   const product = products.find(p => p.id === machine.productId);
-                                                  const kgPerUnit = product?.presentationWeight || 1;
-                                                  const totalKg = totalUnits * kgPerUnit;
-                                                  const sacksProduced = (product?.sackWeight && product.sackWeight > 0) ? totalKg / product.sackWeight : 0;
+                                                  if (!product) return null;
+                                                  
+                                                  const wrapper = wrappers.find(w => w.machineIds.includes(machine.id));
+                                                  const unitsPerBundle = wrapper?.unitsPerBundle || 1;
+                                                  const totalBundles = totalUnits / unitsPerBundle;
+                                                  const totalKg = totalUnits * (product.presentationWeight || 1);
                                                   
                                                   return {
-                                                      name: `Máq. ${machineId} (${product?.productName || 'N/A'})`,
-                                                      value: sacksProduced,
+                                                      name: `Máquina ${machineId}`,
+                                                      productName: product.productName,
+                                                      value: totalBundles, // Value for pie chart size
+                                                      units: totalUnits,
+                                                      qqConsumed: totalKg / KG_PER_QUINTAL,
                                                   }
                                               })
-                                              .filter(d => d.value > 0)
+                                              .filter((d): d is NonNullable<typeof d> => d !== null && d.value > 0)
                                           } 
                                           dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label
                                         >
@@ -2119,7 +2148,7 @@ export default function OperationsClient({
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
-                                        <RechartsTooltip formatter={(value: number) => `${value.toLocaleString(undefined, {maximumFractionDigits: 1})} fardos`} />
+                                        <RechartsTooltip content={<CustomPieTooltip />} />
                                     </PieChart>
                                 </ResponsiveContainer>
                             )}
