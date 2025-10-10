@@ -753,40 +753,48 @@ export default function OperationsClient({
     const sendMasaToReceiver = React.useCallback(() => {
         let success = false;
         let sentTo: string | null = null;
-        const newReceivers = simulationState.receivers.map(r => {
-            if (!success && r.state === 'idle' && r.capacityQQ >= masaQQAmount) {
-                success = true;
-                sentTo = r.id;
-                return { ...r, state: 'filling' };
-            }
-            return r;
-        });
+        
+        // Find an available receiver that is not currently being filled or used
+        const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
 
-        if (success) {
-            setSimulationState(prev => ({
-                ...prev,
-                receivers: newReceivers,
-                tachos: {
-                    ...prev.tachos,
-                    state: 'sending',
-                    targetReceiverId: sentTo,
-                    timeRemaining: prev.tachos.transferTimeSeconds,
-                    progress: 0,
-                },
-                totalMasasSent: prev.totalMasasSent + 1,
-            }));
+        if (availableReceiver) {
+             // Create a mutable copy of the receivers array to modify
+            const newReceivers = simulationState.receivers.map(r => {
+                if (r.id === availableReceiver.id) {
+                    success = true;
+                    sentTo = r.id;
+                    return { ...r, state: 'filling' };
+                }
+                return r;
+            });
+
+            if (success) {
+                setSimulationState(prev => ({
+                    ...prev,
+                    receivers: newReceivers,
+                    tachos: {
+                        ...prev.tachos,
+                        state: 'sending',
+                        targetReceiverId: sentTo,
+                        timeRemaining: prev.tachos.transferTimeSeconds,
+                        progress: 0,
+                    },
+                    totalMasasSent: prev.totalMasasSent + 1,
+                }));
+            }
         }
-        return { success, newReceivers, sentTo };
-    }, [masaQQAmount, simulationState.receivers]);
+        return { success, sentTo };
+    }, [simulationState.receivers, simulationState.tachos.transferTimeSeconds]);
+
 
     const handleManualSendMasa = () => {
-        if (simulationState.tachos.state !== 'idle') {
-            toast({ title: 'Tachos Ocupados', description: 'No se puede enviar una masa mientras los tachos están cocinando o enviando.', variant: 'destructive'});
+        if (simulationState.tachos.state !== 'ready') {
+            toast({ title: 'Tachos no está listo', description: 'La masa debe estar cocinada y lista para enviar.', variant: 'destructive'});
             return;
         }
         const { success } = sendMasaToReceiver();
         if (!success) {
-            toast({ title: 'Sin Recibidores', description: 'Todos los recibidores están ocupados o no tienen capacidad.', variant: 'destructive' });
+            toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados. Espere a que uno se vacíe.', variant: 'destructive' });
         }
     };
 
@@ -1164,14 +1172,13 @@ export default function OperationsClient({
                     if (receiver) {
                         const qqPerSecond = masaQQAmount / nextState.tachos.transferTimeSeconds;
                         receiver.currentQQ = Math.min(receiver.capacityQQ, receiver.currentQQ + qqPerSecond * elapsedIncrement);
-                        receiver.fillProgress = (receiver.currentQQ / receiver.capacityQQ) * 100;
+                        receiver.fillProgress = receiver.capacityQQ > 0 ? (receiver.currentQQ / receiver.capacityQQ) * 100 : 0;
                     }
 
                     if (nextState.tachos.timeRemaining <= 0) {
                         if (receiver) {
                             receiver.state = 'ready';
-                            receiver.currentQQ = Math.min(receiver.capacityQQ, receiver.currentQQ); // Ensure it's full
-                            receiver.fillProgress = (receiver.currentQQ / receiver.capacityQQ) * 100;
+                            receiver.fillProgress = 100; // Ensure it's full visually
                         }
                         nextState.tachos.state = 'idle';
                         nextState.tachos.progress = 0;
@@ -1202,7 +1209,6 @@ export default function OperationsClient({
                 // 2. Centrifuges Logic
                 const purgeCycleTimeSeconds = centrifugePurgeCycleTime * 60;
                 
-                // Assign a receiver to centrifuges if one is ready
                 let drainingReceiver = nextState.receivers.find(r => r.state === 'draining');
                 if (!drainingReceiver && isCentrifugesAuto) {
                     const readyReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ > 0);
@@ -1212,17 +1218,35 @@ export default function OperationsClient({
                     }
                 }
 
-                // If a receiver is being drained, process with centrifuges
                 if (drainingReceiver) {
                     const activeCentrifuges = nextState.centrifuges.filter(c => c.state === 'purging');
-                    const drainRatePerCentrifuge = drainingReceiver.capacityQQ / ((purgeCycleTimeSeconds + CENTRIFUGE_LOADING_TIME_SECONDS) * 2); // Assume 2 centrifuges drain one receiver
-                    const totalDrainRatePerSecond = activeCentrifuges.length * drainRatePerCentrifuge;
+                    const qqConsumedPerCentrifugePerSecond = activeCentrifuges.length > 0
+                        ? (drainingReceiver.capacityQQ / (purgeCycleTimeSeconds * (activeCentrifuges.length || 1)))
+                        : 0;
 
+                    const totalQQConsumedThisTick = activeCentrifuges.reduce((sum, cent) => {
+                         const qqToConsume = qqConsumedPerCentrifugePerSecond * elapsedIncrement;
+                         return sum + qqToConsume;
+                    }, 0);
+                    
                     if (drainingReceiver.currentQQ > 0) {
-                        drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - (totalDrainRatePerSecond * elapsedIncrement));
+                        drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - totalQQConsumedThisTick);
+
+                        let productionToDistribute = totalQQConsumedThisTick;
                         const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
+                        const granelSilo = nextState.silos.find(s => s.id === 'granel');
+
                         if (familiarSilo) {
-                            familiarSilo.currentQQ = Math.min(familiarSilo.capacityQQ, familiarSilo.currentQQ + (totalDrainRatePerSecond * elapsedIncrement));
+                            const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+                            const toFamiliar = Math.min(productionToDistribute, spaceInFamiliar);
+                            familiarSilo.currentQQ += toFamiliar;
+                            productionToDistribute -= toFamiliar;
+                        }
+
+                        if (productionToDistribute > 0 && granelSilo) {
+                            const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
+                            const toGranel = Math.min(productionToDistribute, spaceInGranel);
+                            granelSilo.currentQQ += toGranel;
                         }
                     }
                     
@@ -1234,6 +1258,7 @@ export default function OperationsClient({
                             if (cent.cycleTimeRemaining <= 0) {
                                 cent.state = 'loading';
                                 cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
+                                cent.cycleProgress = 0;
                             }
                         } else if (cent.state === 'loading') {
                              cent.cycleTimeRemaining = Math.max(0, cent.cycleTimeRemaining - elapsedIncrement);
@@ -1242,8 +1267,10 @@ export default function OperationsClient({
                                 if (drainingReceiver && drainingReceiver.currentQQ > 0) {
                                     cent.state = 'purging';
                                     cent.cycleTimeRemaining = purgeCycleTimeSeconds;
+                                    cent.cycleProgress = 0;
                                 } else {
                                     cent.state = 'idle';
+                                    cent.cycleProgress = 0;
                                 }
                             }
                         } else if (cent.state === 'idle' && drainingReceiver.currentQQ > 0) {
@@ -1252,12 +1279,12 @@ export default function OperationsClient({
                                 cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
                             } else { // Second centrifuge starts with a delay
                                 const firstCentrifuge = nextState.centrifuges[0];
-                                const timeIntoCycle = (firstCentrifuge.state === 'purging' ? (purgeCycleTimeSeconds - firstCentrifuge.cycleTimeRemaining) : 0) +
-                                                      (firstCentrifuge.state === 'loading' ? (CENTRIFUGE_LOADING_TIME_SECONDS - firstCentrifuge.cycleTimeRemaining) : 0);
-                                
-                                if (timeIntoCycle >= centrifugeStartInterval * 60) {
-                                     cent.state = 'loading';
-                                     cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
+                                if (firstCentrifuge.state === 'purging') {
+                                    const timeIntoFirstCycle = purgeCycleTimeSeconds - firstCentrifuge.cycleTimeRemaining;
+                                    if (timeIntoFirstCycle >= centrifugeStartInterval * 60) {
+                                         cent.state = 'loading';
+                                         cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
+                                    }
                                 }
                             }
                         }
@@ -1267,7 +1294,7 @@ export default function OperationsClient({
                         }
                     });
 
-                    // If receiver is empty, stop the process
+                    // If receiver is empty, stop the process for this receiver
                     if (drainingReceiver.currentQQ <= 0) {
                         drainingReceiver.state = 'idle';
                         drainingReceiver.currentQQ = 0;
@@ -1660,7 +1687,7 @@ export default function OperationsClient({
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
                                 {!isTachosAuto && (
-                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'idle'}>Enviar Masa Manual</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'ready'}>Enviar Masa Manual</Button>
                                 )}
                              </div>
                         </div>
