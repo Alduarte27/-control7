@@ -137,7 +137,8 @@ type SimulationState = {
     receivers: ReceiverState[]; 
     centrifuges: CentrifugeState[];
     tachos: TachosSimState;
-    totalMasasSent: number; 
+    totalMasasSent: number;
+    qqInCentrifuges: number;
 };
 
 function MachineEditDialog({
@@ -750,6 +751,7 @@ export default function OperationsClient({
                 targetReceiverId: null,
             },
             totalMasasSent: 0,
+            qqInCentrifuges: 0,
         };
     }, [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
     
@@ -1211,7 +1213,7 @@ export default function OperationsClient({
 
                 // 2. Centrifuges Logic
                 const purgeCycleTimeSeconds = centrifugePurgeCycleTime * 60;
-                let qqProducedByCentrifuges = 0;
+                let qqDrainedFromReceivers = 0;
                 
                 const activeReceivers = nextState.receivers.filter(r => r.state === 'ready' && r.currentQQ > 0);
                 
@@ -1230,7 +1232,7 @@ export default function OperationsClient({
                                 const qqPerCentrifugePerSecond = (drainingReceiver.capacityQQ / 2) / purgeCycleTimeSeconds;
                                 const consumption = qqPerCentrifugePerSecond * elapsedIncrement;
                                 drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - consumption);
-                                qqProducedByCentrifuges += consumption; // What's consumed from receiver is produced by centrifuge
+                                qqDrainedFromReceivers += consumption;
                             }
 
                             if (cent.cycleTimeRemaining <= 0) {
@@ -1290,6 +1292,8 @@ export default function OperationsClient({
                     if (cent.state === 'idle') cent.cycleProgress = 0;
                 });
 
+                nextState.qqInCentrifuges = qqDrainedFromReceivers / elapsedIncrement;
+                
                 nextState.receivers.forEach(r => {
                     if (r.currentQQ <= 0.1 && r.state === 'ready') {
                        r.state = 'idle';
@@ -1298,8 +1302,8 @@ export default function OperationsClient({
                 });
                 
                 // Distribute produced QQ to silos
-                if (qqProducedByCentrifuges > 0) {
-                    let productionToDistribute = qqProducedByCentrifuges;
+                if (qqDrainedFromReceivers > 0) {
+                    let productionToDistribute = qqDrainedFromReceivers;
                     const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
                     const granelSilo = nextState.silos.find(s => s.id === 'granel');
 
@@ -1325,27 +1329,23 @@ export default function OperationsClient({
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .reduce((sum, machine) => {
                         const product = productsRef.current.find(p => p.id === machine.productId);
-                        if (!product) return sum;
+                        if (!product || !product.presentationWeight) return sum;
                         const bagsPerMinute = machine.speed * (1 - machine.loss / 100);
-                        const kgPerBag = product.presentationWeight || 1;
-                        const kgPerMinute = bagsPerMinute * kgPerBag;
+                        const kgPerMinute = bagsPerMinute * product.presentationWeight;
                         return sum + (kgPerMinute / 60);
                     }, 0);
                 
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
-
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
-                const canProduce = familiarSilo && (familiarSilo.currentQQ * KG_PER_QUINTAL) >= kgConsumedThisTick;
+                const canProduce = familiarSilo && (familiarSilo.currentQQ * KG_PER_QUINTAL) > kgConsumedThisTick;
                 
-                if (!canProduce && totalKgConsumedPerSecond > 0) {
-                    if (familiarSilo) familiarSilo.currentQQ = 0;
-                    pauseClock();
-                    nextState.isFinished = true;
-                    return nextState;
-                }
-
                 if (canProduce && kgConsumedThisTick > 0 && familiarSilo) {
                     familiarSilo.currentQQ -= (kgConsumedThisTick / KG_PER_QUINTAL);
+                } else if (totalKgConsumedPerSecond > 0) {
+                    // Not enough material, stop production
+                    if (familiarSilo) familiarSilo.currentQQ = 0;
+                    nextState.isFinished = true;
+                    // No return here, let the rest of the logic run for this final tick
                 }
 
                 currentMachines
@@ -1490,10 +1490,9 @@ export default function OperationsClient({
             .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
             .reduce((sum, m) => {
                 const product = productsRef.current.find(p => p.id === m.productId);
-                if (!product) return sum;
+                if (!product || !product.presentationWeight) return sum;
                 const bagsPerMinute = m.speed * (1 - m.loss / 100);
-                const kgPerBag = product.presentationWeight || 1;
-                const kgPerMinute = bagsPerMinute * kgPerBag;
+                const kgPerMinute = bagsPerMinute * product.presentationWeight;
                 return sum + (kgPerMinute / 60);
             }, 0);
         
@@ -1506,6 +1505,7 @@ export default function OperationsClient({
             totalQuintalesProduced: totalKgProduced / KG_PER_QUINTAL,
             totalBundlesProduced: Object.values(simulationState.wrappers).reduce((sum, w) => sum + w.totalBundles, 0),
             timeToEmptyHours: timeToEmptySeconds / 3600,
+            totalUnitsProduced,
         }
 
     }, [simulationState]);
@@ -1520,6 +1520,8 @@ export default function OperationsClient({
     const currentTachosConfig = tachosStateConfig[simTachos.state];
 
     const tachosStateForDialog = { id: 'tachos', name: 'Tachos', ...simulationState.tachos };
+
+    const totalQQInReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
 
   return (
     <div className="bg-background min-h-screen text-foreground">
@@ -1545,6 +1547,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Beaker className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Tachos</h4>
+                            <p className="text-sm text-muted-foreground">{simulationState.totalMasasSent} Masas</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Inicio: Generación de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
@@ -1552,6 +1555,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Droplets className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Recibidores</h4>
+                            <p className="text-sm text-muted-foreground">{totalQQInReceivers.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Almacenamiento temporal de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
@@ -1559,6 +1563,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Hourglass className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Centrífugas</h4>
+                            <p className="text-sm text-muted-foreground">{simulationState.qqInCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/s</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Purga y lavado del azúcar.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
@@ -1574,6 +1579,7 @@ export default function OperationsClient({
                         <div className={cn("flex flex-col items-center gap-2 text-center p-2 rounded-md min-w-[90px]", staticSimulationResults.isWrapperBottleneck && 'bg-destructive/10')}>
                             <Package className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Envasado</h4>
+                            <p className="text-sm text-muted-foreground">{Math.floor(liveSimulationResults.totalUnitsProduced).toLocaleString()} Fundas</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Producción de las envasadoras.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
@@ -1581,6 +1587,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[90px]">
                             <PackageCheck className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Enfardado</h4>
+                             <p className="text-sm text-muted-foreground">{Math.floor(liveSimulationResults.totalBundlesProduced).toLocaleString()} Fardos</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Empaque final en fardos.</p></TooltipContent> </Tooltip> </TooltipProvider>
                 </div>
