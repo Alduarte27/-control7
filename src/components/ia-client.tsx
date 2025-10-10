@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { ProductDefinition } from '@/lib/types';
+import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -677,12 +677,25 @@ function WrapperEditDialog({
 
 export default function OperationsClient({ 
   prefetchedProducts,
+  prefetchedCategories,
 }: { 
   prefetchedProducts: ProductDefinition[],
+  prefetchedCategories: CategoryDefinition[]
 }) {
     const [isClient, setIsClient] = React.useState(false);
     const { toast } = useToast();
-    const products = React.useMemo(() => prefetchedProducts.filter(p => p.isActive), [prefetchedProducts]);
+
+    const familiarCategoryId = React.useMemo(() => {
+        return prefetchedCategories.find(c => c.name.toLowerCase() === 'familiar')?.id;
+    }, [prefetchedCategories]);
+
+    const products = React.useMemo(() => {
+        const activeProducts = prefetchedProducts.filter(p => p.isActive);
+        if (familiarCategoryId) {
+            return activeProducts.filter(p => p.categoryId === familiarCategoryId);
+        }
+        return activeProducts; // Fallback to all active products if category not found
+    }, [prefetchedProducts, familiarCategoryId]);
     
     // --- Unified Configuration State ---
     const [machines, setMachines] = React.useState<MachineState[]>([]);
