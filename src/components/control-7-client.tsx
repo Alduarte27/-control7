@@ -126,12 +126,6 @@ export default function Control7Client({
   }, [isDirty]);
 
 
-  const currentYear = date ? date.getFullYear() : new Date().getFullYear();
-  const currentWeek = date ? getISOWeek(date) : getISOWeek(new Date());
-  
-  const planId = `${currentYear}-W${currentWeek}`;
-
-
   const generateInitialData = (products: ProductDefinition[], categories: CategoryDefinition[], currentDate: Date): ProductData[] => {
     const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, isPlanned: c.isPlanned }]));
     const dayOfYearMap = getDayOfYearForWeek(currentDate);
@@ -198,6 +192,11 @@ export default function Control7Client({
   React.useEffect(() => {
     const fetchData = async () => {
         if (!date) return;
+        
+        const currentYear = date.getFullYear();
+        const currentWeek = getISOWeek(date);
+        const planId = `${currentYear}-W${currentWeek}`;
+
         setLoading(true);
         setIsDirty(false);
         try {
@@ -292,9 +291,14 @@ export default function Control7Client({
     };
 
     fetchData();
-  }, [planId, date, prefetchedCategories, prefetchedProducts, applyAISuggestion, toast]);
+  }, [date, prefetchedCategories, prefetchedProducts, applyAISuggestion, toast]);
 
   const handleSave = async () => {
+    if (!date) return;
+    const currentYear = date.getFullYear();
+    const currentWeek = getISOWeek(date);
+    const planId = `${currentYear}-W${currentWeek}`;
+
     try {
       const dataToSave = data.map(({ isSuggested, ...rest }) => rest);
       
