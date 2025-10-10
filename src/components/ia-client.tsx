@@ -1207,8 +1207,7 @@ export default function OperationsClient({
                 // 2. Centrifuges Logic
                 const purgeCycleTimeSeconds = centrifugePurgeCycleTime * 60;
                 let qqConsumedByCentrifuges = 0;
-                let qqConsumedThisTick = 0;
-
+                
                 const activeReceivers = nextState.receivers.filter(r => r.state === 'ready' && r.currentQQ > 0);
                 
                 nextState.centrifuges.forEach((cent, index) => {
@@ -1221,7 +1220,6 @@ export default function OperationsClient({
                             cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / purgeCycleTimeSeconds));
                             const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
                             if (drainingReceiver) {
-                                // Assuming 2 centrifuges drain one receiver in `purgeCycleTimeSeconds` total
                                 const qqPerCentrifugePerSecond = drainingReceiver.capacityQQ / purgeCycleTimeSeconds / 2;
                                 const consumption = qqPerCentrifugePerSecond * elapsedIncrement;
                                 drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - consumption);
@@ -1315,22 +1313,23 @@ export default function OperationsClient({
 
                 // 3. Envasadoras & Enfardadoras Logic
                 const currentMachines = machinesRef.current;
-                const activeMachinesConfig = currentMachines
+                const activeMachinesWithProduct = currentMachines
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .map(m => {
                         const product = productsRef.current.find(p => p.id === m.productId);
-                        const bagsPerMinute = m.speed * (1 - m.loss / 100);
-                        const kgPerBag = product?.presentationWeight || 1;
-                        return {
-                            id: m.id,
-                            unitsPerSecond: bagsPerMinute / 60,
-                            kgPerSecond: (bagsPerMinute * kgPerBag) / 60,
-                        };
-                    });
-                
-                const totalKgConsumedPerSecond = activeMachinesConfig.reduce((sum, m) => sum + m.kgPerSecond, 0);
+                        return { machine: m, product: product };
+                    })
+                    .filter(item => item.product);
+
+                const totalKgConsumedPerSecond = activeMachinesWithProduct.reduce((sum, item) => {
+                    const bagsPerMinute = item.machine.speed * (1 - item.machine.loss / 100);
+                    const kgPerBag = item.product?.presentationWeight || 1;
+                    const kgPerMinute = bagsPerMinute * kgPerBag;
+                    return sum + (kgPerMinute / 60);
+                }, 0);
+
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
-                
+
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
                 const canProduce = familiarSilo && (familiarSilo.currentQQ * KG_PER_QUINTAL) >= kgConsumedThisTick;
                 
@@ -1345,10 +1344,13 @@ export default function OperationsClient({
                     familiarSilo.currentQQ -= (kgConsumedThisTick / KG_PER_QUINTAL);
                 }
 
-                activeMachinesConfig.forEach(m => {
-                    const unitsProducedThisTick = m.unitsPerSecond * elapsedIncrement;
-                    nextState.machineTotals[m.id] += unitsProducedThisTick;
-                    const targetWrapper = wrappersRef.current.find(w => w.machineIds.includes(m.id));
+                activeMachinesWithProduct.forEach(item => {
+                    const bagsPerMinute = item.machine.speed * (1 - item.machine.loss / 100);
+                    const unitsPerSecond = bagsPerMinute / 60;
+                    const unitsProducedThisTick = unitsPerSecond * elapsedIncrement;
+
+                    nextState.machineTotals[item.machine.id] += unitsProducedThisTick;
+                    const targetWrapper = wrappersRef.current.find(w => w.machineIds.includes(item.machine.id));
                     if (targetWrapper) {
                         nextState.wrappers[targetWrapper.id].conveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsProducedThisTick });
                     }
