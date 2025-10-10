@@ -1762,7 +1762,11 @@ export default function OperationsClient({
                                                     <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
                                                     <span>{formatElapsedTime(simCentrifuge.cycleTimeRemaining)}</span>
                                                 </div>
-                                                <Progress value={simCentrifuge.cycleProgress} indicatorClassName={cn(currentCentrifugeConfig.color.replace("text-", "bg-"))} />
+                                                <Progress value={simCentrifuge.cycleProgress} indicatorClassName={cn(
+                                                    simCentrifuge.state === 'loading' ? 'bg-blue-500' :
+                                                    simCentrifuge.state === 'purging' ? 'bg-amber-500' :
+                                                    'bg-primary'
+                                                )} />
                                             </div>
                                         </div>
                                     )
@@ -1779,7 +1783,6 @@ export default function OperationsClient({
                     <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {silos.map((silo) => {
                             const simSilo = simulationState.silos.find(s => s.id === silo.id) || silo;
-                            const currentKg = simSilo.currentQQ * KG_PER_QUINTAL;
                             const fillPercentage = simSilo.capacityQQ > 0 ? (simSilo.currentQQ / simSilo.capacityQQ) * 100 : 0;
                             const fillColorClass = getSiloFillColor(fillPercentage);
                             const isProductionSilo = simSilo.id === 'familiar';
@@ -1799,7 +1802,7 @@ export default function OperationsClient({
                                         <Label className='text-xs text-muted-foreground'>Capacidad: {simSilo.capacityQQ.toLocaleString()} QQ</Label>
                                     </div>
                                     <div className="space-y-2 pt-2">
-                                        <Label className="text-sm">Nivel: {currentKg.toLocaleString(undefined, {maximumFractionDigits:0})} kg ({fillPercentage.toFixed(1)}%)</Label>
+                                        <Label className="text-sm">Nivel: {simSilo.currentQQ.toLocaleString(undefined, {maximumFractionDigits:1})} QQ ({fillPercentage.toFixed(1)}%)</Label>
                                         <Progress value={fillPercentage} indicatorClassName={fillColorClass} />
                                     </div>
                                      {isProductionSilo && (
