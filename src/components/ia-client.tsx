@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Package2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
@@ -1332,7 +1332,7 @@ export default function OperationsClient({
 
 
                 // 3. Envasadoras & Enfardadoras Logic
-                const totalKgConsumedPerSecond = machinesRef.current
+                 const totalKgConsumedPerSecond = machinesRef.current
                     .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
                     .reduce((sum, machine) => {
                         const product = productsRef.current.find(p => p.id === machine.productId);
@@ -1343,13 +1343,14 @@ export default function OperationsClient({
                 
                 const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
                 const qqConsumedThisTick = kgConsumedThisTick / KG_PER_QUINTAL;
-                nextState.totalQQPacked += qqConsumedThisTick;
+                
 
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
                 const canProduce = familiarSilo && familiarSilo.currentQQ >= qqConsumedThisTick;
                 
                 if (canProduce && kgConsumedThisTick > 0 && familiarSilo) {
                     familiarSilo.currentQQ -= qqConsumedThisTick;
+                    nextState.totalQQPacked += qqConsumedThisTick;
                 } else if (totalKgConsumedPerSecond > 0) {
                     if (familiarSilo) familiarSilo.currentQQ = 0;
                     nextState.isFinished = true;
@@ -1504,7 +1505,7 @@ export default function OperationsClient({
             qqRateToPackers,
         }
 
-    }, [simulationState, machines, staticSimulationResults.isWrapperBottleneck]);
+    }, [simulationState, machines, staticSimulationResults.isWrapperBottleneck, products]);
     
     const simTachos = simulationState.tachos;
     const tachosStateConfig = {
@@ -1518,6 +1519,8 @@ export default function OperationsClient({
     const tachosStateForDialog = { id: 'tachos', name: 'Tachos', ...simulationState.tachos };
 
     const totalQQInReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
+    const totalBundlesProduced = liveSimulationResults.totalBundlesProduced;
+    const totalUnitsProduced = liveSimulationResults.totalUnitsProduced;
 
   return (
     <div className="bg-background min-h-screen text-foreground">
@@ -1559,7 +1562,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Hourglass className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Centrífugas</h4>
-                            <p className="text-sm text-muted-foreground">{simulationState.qqInCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/s</p>
+                            <p className="text-sm text-muted-foreground">{simulationState.qqInCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Purga y lavado del azúcar.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
@@ -2014,27 +2017,33 @@ export default function OperationsClient({
                 
                 <div className="space-y-6">
                     <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                       <KpiCard 
+                            title="Tiempo para Agotar Silo" 
+                            value={formatTime(liveSimulationResults.timeToEmptyHours)} 
+                            icon={Hourglass} 
+                            description="Tiempo estimado para que se agote el azúcar en el Silo Familiar al ritmo de consumo actual." 
+                        />
+                        <KpiCard
+                            title="Flujo de Producción (QQ/hora)"
+                            value={`${liveSimulationResults.qqRateFromCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })}`}
+                            subValue={`vs ${liveSimulationResults.qqRateToPackers.toLocaleString(undefined, { maximumFractionDigits: 1 })} de Empaque`}
+                            icon={Activity}
+                            description="Compara la producción de azúcar de las centrífugas con la demanda de las envasadoras."
+                        />
                         <KpiCard 
-                            title="Total Fardos Producidos" 
-                            value={liveSimulationResults.totalBundlesProduced} 
-                            icon={PackageCheck} 
-                            description="Suma total de fardos que han completado todas las enfardadoras." 
+                            title="Total Fundas Producidas" 
+                            value={totalUnitsProduced} 
+                            icon={Package2} 
+                            description="Suma total de fundas individuales que han producido todas las envasadoras." 
                             fractionDigits={0} 
                         />
                         <KpiCard 
-                            title="Total QQ Producidos (Azúcar Seca)" 
-                            value={simulationState.totalQQProduced} 
-                            icon={Warehouse} 
-                            description="Peso total en quintales de azúcar que ha salido de las centrífugas hacia los silos." 
-                            fractionDigits={1}
-                        />
-                         <KpiCard 
-                            title="Total QQ Empacados" 
-                            value={simulationState.totalQQPacked} 
-                            icon={Archive} 
-                            description="Peso total en quintales de azúcar que ha sido consumido por las envasadoras." 
-                            fractionDigits={1}
+                            title="Total Fardos Producidos" 
+                            value={totalBundlesProduced} 
+                            icon={PackageCheck} 
+                            description="Suma total de fardos que han completado todas las enfardadoras." 
+                            fractionDigits={0} 
                         />
                     </div>
                     <Card>
