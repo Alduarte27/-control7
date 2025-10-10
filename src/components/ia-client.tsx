@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2 } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { ProductDefinition } from '@/lib/types';
@@ -30,6 +30,8 @@ const KG_PER_QUINTAL = 50;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 const LOCAL_STORAGE_CONFIG_KEY = 'simulationConfig';
 const FIRESTORE_ASSETS_PATH = 'simulation_assets';
+const CENTRIFUGE_PURGE_RATIO = 0.9; // 90% of the cycle is purging
+const CENTRIFUGE_COOLDOWN_RATIO = 0.1; // 10% is cooldown
 
 type MachineState = {
     id: number;
@@ -56,18 +58,20 @@ type ReceiverState = {
     currentQQ: number; 
     state: 'idle' | 'filling' | 'ready' | 'draining';
     fillProgress: number;
+    drainingBy: string | null;
     imageUrl: string | null;
 };
 
 type CentrifugeState = {
     id: string;
     name: string;
-    state: 'idle' | 'processing';
+    state: 'idle' | 'purging' | 'cooldown';
     imageUrl: string | null;
 
     // Live simulation data
     progress: number;
     timeRemaining: number;
+    cycleTime: number; // The duration of one purge-cooldown cycle
 };
 
 type TachosSimState = {
@@ -107,7 +111,7 @@ type SimulationParams = {
     machines: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>[];
     wrappers: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>[];
     silos: Omit<SiloState, 'imageUrl'>[];
-    receivers: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress'>[];
+    receivers: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress' | 'drainingBy'>[];
     tachosCookTime: number; 
     tachosTransferTime: number;
     tachosGoal: number;
@@ -416,7 +420,7 @@ function ReceiverEditDialog({
     receiver: ReceiverState;
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (updatedSilo: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress'>) => void;
+    onSave: (updatedSilo: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress' | 'drainingBy'>) => void;
 }) {
     const [editedReceiver, setEditedReceiver] = React.useState(receiver);
 
@@ -424,12 +428,12 @@ function ReceiverEditDialog({
         setEditedReceiver(receiver);
     }, [receiver]);
 
-    const handleFieldChange = (field: keyof Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress'>, value: any) => {
+    const handleFieldChange = (field: keyof Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress' | 'drainingBy'>, value: any) => {
         setEditedReceiver(prev => ({ ...prev, [field]: value }));
     };
     
     const handleSaveChanges = () => {
-        const { imageUrl, currentQQ, state, fillProgress, ...configToSave } = editedReceiver;
+        const { imageUrl, currentQQ, state, fillProgress, drainingBy, ...configToSave } = editedReceiver;
         onSave(configToSave);
         onOpenChange(false);
     };
@@ -494,7 +498,7 @@ function CentrifugeEditDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                     <p className="text-sm text-muted-foreground">
-                        Define los tiempos que gobiernan el trabajo alternado de las centrífugas.
+                        Define los tiempos que gobiernan el trabajo en equipo de las centrífugas.
                     </p>
                     <div className="space-y-1.5">
                         <Label htmlFor="cycle-time">Tiempo para Procesar 1 Masa (minutos)</Label>
@@ -732,8 +736,8 @@ export default function OperationsClient({
         },
         isFinished: false,
         silos: JSON.parse(JSON.stringify(silos)),
-        receivers: JSON.parse(JSON.stringify(receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0})))),
-        centrifuges: JSON.parse(JSON.stringify(centrifuges.map(c => ({...c, state: 'idle', progress: 0, timeRemaining: 0})))),
+        receivers: JSON.parse(JSON.stringify(receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null})))),
+        centrifuges: JSON.parse(JSON.stringify(centrifuges.map(c => ({...c, state: 'idle', progress: 0, timeRemaining: 0, cycleTime: 0})))),
         tachos: {
             id: 'tachos',
             name: 'Tachos',
@@ -751,28 +755,60 @@ export default function OperationsClient({
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState);
     
     const sendMasaToReceiver = React.useCallback(() => {
-        const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
-        if (availableReceiver) {
-            setSimulationState(prev => {
-                const newReceivers = prev.receivers.map(r => r.id === availableReceiver.id ? { ...r, state: 'filling' } : r);
-                return {
-                    ...prev,
-                    receivers: newReceivers,
-                    tachos: {
-                        ...prev.tachos,
-                        state: 'sending',
-                        targetReceiverId: availableReceiver.id,
-                        timeRemaining: prev.tachos.transferTimeSeconds,
-                        progress: 0,
-                    },
-                    totalMasasSent: prev.totalMasasSent + 1,
-                };
-            });
-            return true;
-        }
-        return false;
-    }, [simulationState]);
+        let success = false;
+        let sentTo = null;
+        setSimulationState(prev => {
+            if (prev.tachos.state !== 'ready') return prev;
 
+            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
+            if (!availableReceiver) return prev;
+
+            success = true;
+            sentTo = availableReceiver.id;
+
+            return {
+                ...prev,
+                receivers: prev.receivers.map(r => r.id === availableReceiver.id ? { ...r, state: 'filling' } : r),
+                tachos: {
+                    ...prev.tachos,
+                    state: 'sending',
+                    targetReceiverId: availableReceiver.id,
+                    timeRemaining: prev.tachos.transferTimeSeconds,
+                    progress: 0,
+                },
+                totalMasasSent: prev.totalMasasSent + 1,
+            };
+        });
+        return { success, sentTo };
+    }, []);
+
+    const handleManualSendMasa = () => {
+         setSimulationState(prev => {
+            if (prev.tachos.state !== 'idle') {
+                toast({ title: 'Tachos Ocupados', description: 'No se puede enviar una masa mientras los tachos están cocinando o enviando.', variant: 'destructive'});
+                return prev;
+            }
+            
+            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
+            if (!availableReceiver) {
+                toast({ title: 'Sin Recibidores', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
+                return prev;
+            }
+
+            return {
+                ...prev,
+                receivers: prev.receivers.map(r => r.id === availableReceiver.id ? { ...r, state: 'filling' } : r),
+                tachos: {
+                    ...prev.tachos,
+                    state: 'sending',
+                    targetReceiverId: availableReceiver.id,
+                    timeRemaining: prev.tachos.transferTimeSeconds,
+                    progress: 0,
+                },
+                totalMasasSent: prev.totalMasasSent + 1,
+            };
+         });
+    };
 
     React.useEffect(() => {
         // This effect ensures the initial state is correct after config is loaded.
@@ -921,11 +957,12 @@ export default function OperationsClient({
                 currentQQ: 0,
                 state: 'idle',
                 fillProgress: 0,
+                drainingBy: null,
                 imageUrl: imageUrls.receivers[r.id] || null,
             })));
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: imageUrls.centrifuges['cent1'], progress: 0, timeRemaining: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', imageUrl: imageUrls.centrifuges['cent2'], progress: 0, timeRemaining: 0 },
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: imageUrls.centrifuges['cent1'], progress: 0, timeRemaining: 0, cycleTime: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', imageUrl: imageUrls.centrifuges['cent2'], progress: 0, timeRemaining: 0, cycleTime: 0 },
             ]);
             setTachosImageUrl(imageUrls.tachos);
             
@@ -945,10 +982,10 @@ export default function OperationsClient({
             setMachines(params.machines.map(m => ({ ...m, imageUrl: images.machines[m.id] || null, isSimulatingActive: false })));
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
             setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null })));
-            setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, imageUrl: images.receivers[r.id] || null })));
+            setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null, imageUrl: images.receivers[r.id] || null })));
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: images.centrifuges['cent1'], progress: 0, timeRemaining: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', imageUrl: images.centrifuges['cent2'], progress: 0, timeRemaining: 0 },
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: images.centrifuges['cent1'], progress: 0, timeRemaining: 0, cycleTime: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', imageUrl: images.centrifuges['cent2'], progress: 0, timeRemaining: 0, cycleTime: 0 },
             ]);
             setTachosImageUrl(images.tachos);
         }
@@ -965,7 +1002,7 @@ export default function OperationsClient({
             machines: machines.map(({ isSimulatingActive, imageUrl, ...m }) => m),
             wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, imageUrl, ...w }) => w),
             silos: silos.map(({imageUrl, ...s}) => s),
-            receivers: receivers.map(({imageUrl, currentQQ, state, fillProgress, ...r}) => r),
+            receivers: receivers.map(({imageUrl, currentQQ, state, fillProgress, drainingBy, ...r}) => r),
             tachosCookTime: tachosCookTime,
             tachosTransferTime: tachosTransferTime,
             tachosGoal: tachosGoal,
@@ -1057,7 +1094,7 @@ export default function OperationsClient({
         setSilos(prev => prev.map(s => s.id === updatedSilo.id ? {...s, ...updatedSilo} : s));
     };
 
-    const handleReceiverSave = (updatedReceiver: Omit<ReceiverState, 'imageUrl'|'currentQQ' | 'state' | 'fillProgress'>) => {
+    const handleReceiverSave = (updatedReceiver: Omit<ReceiverState, 'imageUrl'|'currentQQ' | 'state' | 'fillProgress' | 'drainingBy'>) => {
         setReceivers(prev => prev.map(r => r.id === updatedReceiver.id ? {...r, ...updatedReceiver} : r));
     };
     
@@ -1088,50 +1125,6 @@ export default function OperationsClient({
         
         await loadConfig();
         toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros han vuelto a sus valores por defecto.' });
-    };
-    
-    const handleManualSendMasa = () => {
-        if (isSimulating) return; // Prevent manual actions during simulation
-
-        setSimulationState(prev => {
-            if (prev.tachos.state !== 'idle') {
-                return prev;
-            }
-
-            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
-            if (!availableReceiver) {
-                toast({ title: 'Error', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
-                return prev;
-            }
-
-            return {
-                ...prev,
-                tachos: {
-                    ...prev.tachos,
-                    state: 'sending',
-                    targetReceiverId: availableReceiver.id,
-                    timeRemaining: prev.tachos.transferTimeSeconds,
-                    progress: 0,
-                },
-                totalMasasSent: prev.totalMasasSent + 1,
-            };
-        });
-    };
-    
-    const handleManualCookMasa = () => {
-        if (simulationState.tachos.state === 'idle' && !isSimulating) {
-            setSimulationState(prev => ({
-                ...prev,
-                tachos: {
-                    ...prev.tachos,
-                    state: 'cooking',
-                    cookTimeSeconds: tachosCookTime * 60,
-                    timeRemaining: tachosCookTime * 60,
-                    progress: 0,
-                    targetReceiverId: null,
-                }
-            }));
-        }
     };
     
     const pauseClock = React.useCallback(() => {
@@ -1192,14 +1185,14 @@ export default function OperationsClient({
                     if (receiver) {
                         const qqPerSecond = masaQQAmount / nextState.tachos.transferTimeSeconds;
                         receiver.currentQQ = Math.min(receiver.capacityQQ, receiver.currentQQ + qqPerSecond * elapsedIncrement);
-                        receiver.fillProgress = progress; // Sync progress
+                        receiver.fillProgress = (receiver.currentQQ / receiver.capacityQQ) * 100;
                     }
 
                     if (nextState.tachos.timeRemaining <= 0) {
                         if (receiver) {
                             receiver.state = 'ready';
-                            receiver.currentQQ = Math.min(receiver.capacityQQ, masaQQAmount); // Ensure it's capped
-                            receiver.fillProgress = 100; // Ensure it's 100%
+                            receiver.currentQQ = Math.min(receiver.capacityQQ, masaQQAmount);
+                            receiver.fillProgress = 100;
                         }
                         nextState.tachos.state = 'idle';
                         nextState.tachos.progress = 0;
@@ -1228,92 +1221,86 @@ export default function OperationsClient({
                 }
 
                 // 2. Centrifuges Logic
+                const totalCycleTimeSeconds = centrifugeCycleTime * 60;
+                const qqPerPurgeCycle = masaQQAmount / (totalCycleTimeSeconds / (centrifugeStartInterval * 60)); 
+                const purgeTime = totalCycleTimeSeconds * CENTRIFUGE_PURGE_RATIO;
+                const cooldownTime = totalCycleTimeSeconds * CENTRIFUGE_COOLDOWN_RATIO;
+
                 if (isCentrifugesAuto) {
                     // Find a receiver that is 100% full and ready to be drained
-                    const readyReceiver = nextState.receivers.find(r => r.state === 'ready' && r.fillProgress >= 100);
+                    const readyReceiver = nextState.receivers.find(r => r.state === 'ready' && r.fillProgress >= 100 && r.drainingBy === null);
 
                     if (readyReceiver) {
-                        // Check which centrifuges are idle
-                        const idleCentrifuges = nextState.centrifuges.filter(c => c.state === 'idle');
-
-                        if (idleCentrifuges.length > 0) {
-                            // Find the other centrifuge to check its timing
-                            const otherCentrifugeId = idleCentrifuges[0].id === 'cent1' ? 'cent2' : 'cent1';
-                            const otherCentrifuge = nextState.centrifuges.find(c => c.id === otherCentrifugeId);
-                            
-                            const totalCycleTimeSeconds = centrifugeCycleTime * 60;
-                            const intervalSeconds = centrifugeStartInterval * 60;
-                            
-                            let canStart = false;
-                            if (otherCentrifuge?.state === 'idle') {
-                                canStart = true;
-                            } else if (otherCentrifuge?.state === 'processing') {
-                                // Can start if the other machine has been running for at least `intervalSeconds`
-                                if (totalCycleTimeSeconds - otherCentrifuge.timeRemaining >= intervalSeconds) {
-                                    canStart = true;
-                                }
-                            }
-
-                            if (canStart) {
-                                const centrifugeToStart = idleCentrifuges[0];
-                                centrifugeToStart.state = 'processing';
-                                centrifugeToStart.timeRemaining = totalCycleTimeSeconds;
-                                centrifugeToStart.progress = 0;
-                                // Mark receiver as draining
-                                readyReceiver.state = 'draining';
-                            }
+                        readyReceiver.state = 'draining';
+                        readyReceiver.drainingBy = 'cent1'; // Centrifuge 1 always starts first
+                        const cent1 = nextState.centrifuges.find(c => c.id === 'cent1');
+                        if (cent1) {
+                            cent1.state = 'purging';
+                            cent1.cycleTime = purgeTime;
+                            cent1.timeRemaining = purgeTime;
                         }
                     }
                 }
-
+                
                 // Update progress and material consumption for all processing centrifuges
-                nextState.centrifuges.forEach((cent: CentrifugeState) => {
-                    if (cent.state === 'processing') {
-                        const totalCycleTimeSeconds = centrifugeCycleTime * 60;
-                        
-                        // Find which receiver this centrifuge should drain from
-                        // A simple approach: find the first draining receiver
-                        const drainingReceiver = nextState.receivers.find(r => r.state === 'draining');
-                        
-                        if (drainingReceiver && drainingReceiver.currentQQ > 0) {
-                             // Drain material
-                            const qqToDrainPerSecond = masaQQAmount / totalCycleTimeSeconds;
-                            const qqDrainedThisTick = qqToDrainPerSecond * elapsedIncrement;
-                            drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - qqDrainedThisTick);
+                nextState.centrifuges.forEach((cent) => {
+                    const receiver = nextState.receivers.find(r => r.drainingBy === cent.id || (r.state === 'draining' && r.drainingBy !== null));
 
-                            // Update centrifuge progress
-                            cent.timeRemaining = Math.max(0, cent.timeRemaining - elapsedIncrement);
-                            cent.progress = Math.min(100, 100 * (1 - cent.timeRemaining / totalCycleTimeSeconds));
-                            
-                            // Add material to silos
+                    if (cent.state !== 'idle' && receiver) {
+                        cent.timeRemaining = Math.max(0, cent.timeRemaining - elapsedIncrement);
+                        cent.progress = Math.min(100, 100 * (1 - cent.timeRemaining / cent.cycleTime));
+
+                        if (cent.state === 'purging') {
+                             const qqToDrainPerSecond = masaQQAmount / totalCycleTimeSeconds;
+                             const qqDrainedThisTick = qqToDrainPerSecond * elapsedIncrement;
+                             receiver.currentQQ = Math.max(0, receiver.currentQQ - qqDrainedThisTick);
+
+                             // Add material to silos
                             const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
-                            const granelSilo = nextState.silos.find((s: SiloState) => s.id === 'granel');
+                            if (familiarSilo) {
+                                familiarSilo.currentQQ = Math.min(familiarSilo.capacityQQ, familiarSilo.currentQQ + qqDrainedThisTick);
+                            }
 
-                            if (familiarSilo && granelSilo) {
-                                const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-                                const qqForFamiliar = Math.min(qqDrainedThisTick, spaceInFamiliar);
-                                familiarSilo.currentQQ += qqForFamiliar;
+                             if (cent.timeRemaining <= 0) {
+                                cent.state = 'cooldown';
+                                cent.cycleTime = cooldownTime;
+                                cent.timeRemaining = cooldownTime;
+                             }
 
-                                const remainder = qqDrainedThisTick - qqForFamiliar;
-                                if (remainder > 0) {
-                                    granelSilo.currentQQ = Math.min(granelSilo.capacityQQ, granelSilo.currentQQ + remainder);
+                            // Start the other centrifuge if interval has passed
+                            const otherCentId = cent.id === 'cent1' ? 'cent2' : 'cent1';
+                            const otherCent = nextState.centrifuges.find(c => c.id === otherCentId);
+                            if (otherCent && otherCent.state === 'idle') {
+                                const timeSinceStart = purgeTime - cent.timeRemaining;
+                                if (timeSinceStart >= (centrifugeStartInterval * 60)) {
+                                    otherCent.state = 'purging';
+                                    otherCent.cycleTime = purgeTime;
+                                    otherCent.timeRemaining = purgeTime;
+                                    receiver.drainingBy = otherCent.id; // now the other one is also draining
+                                }
+                            }
+                        } else if (cent.state === 'cooldown') {
+                            if (cent.timeRemaining <= 0) {
+                                // If there's still material, start purging again
+                                if (receiver.currentQQ > 0) {
+                                    cent.state = 'purging';
+                                    cent.cycleTime = purgeTime;
+                                    cent.timeRemaining = purgeTime;
+                                } else {
+                                    cent.state = 'idle';
                                 }
                             }
                         }
-                        
-                         // Check if cycle is finished
-                        if (cent.timeRemaining <= 0) {
-                            cent.state = 'idle';
-                            cent.progress = 0;
-
-                            // If receiver is empty, set it back to idle
-                            if (drainingReceiver && drainingReceiver.currentQQ <= 0) {
-                                drainingReceiver.state = 'idle';
-                                drainingReceiver.currentQQ = 0;
-                            }
-                        }
+                    }
+                     // Check if both are idle and receiver is empty
+                    const bothIdle = nextState.centrifuges.every(c => c.state === 'idle');
+                    const receiverDraining = nextState.receivers.find(r => r.state === 'draining');
+                    if (receiverDraining && receiverDraining.currentQQ <= 0 && bothIdle) {
+                        receiverDraining.state = 'idle';
+                        receiverDraining.drainingBy = null;
                     }
                 });
+
                 
                 // 3. Envasadoras & Enfardadoras Logic
                 const currentMachines = machinesRef.current;
@@ -1695,9 +1682,7 @@ export default function OperationsClient({
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
                                 {!isTachosAuto && (
-                                    simTachos.state === 'idle'
-                                    ? <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa Manual</Button>
-                                    : <Button className="w-full" disabled>Procesando...</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'idle'}>Enviar Masa Manual</Button>
                                 )}
                              </div>
                         </div>
@@ -1715,7 +1700,7 @@ export default function OperationsClient({
                                                 <Edit className="h-4 w-4" />
                                             </Button>
                                         </div>
-                                        <div className="space-y-3 pt-2 mt-auto">
+                                        <div className="space-y-3 pt-2 mt-auto flex-grow flex flex-col justify-end">
                                             <div className="space-y-1">
                                                 <Label className="text-xs text-muted-foreground">Llenado</Label>
                                                 <Progress value={simReceiver.fillProgress} indicatorClassName="bg-green-500" />
@@ -1759,7 +1744,8 @@ export default function OperationsClient({
                                     const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
                                     const stateConfig = {
                                         idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
-                                        processing: { text: "Procesando", color: "text-amber-600", icon: Activity },
+                                        purging: { text: "Purgando", color: "text-amber-600", icon: Waves },
+                                        cooldown: { text: "Enfriando", color: "text-blue-600", icon: Snowflake },
                                     };
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
                                     return (
