@@ -1394,46 +1394,9 @@ export default function OperationsClient({
         }, tickRateMs);
     };
 
-    const resetSimulation = (resetMaterial = true) => {
+    const resetSimulation = () => {
         pauseClock();
-        const newInitialState = {
-            elapsedTime: 0,
-            machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
-            wrappers: {
-                '1': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-                '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
-            },
-            isFinished: false,
-            silos: silos.map(s => ({...s, currentQQ: s.capacityQQ})),
-            receivers: receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null})),
-            centrifuges: centrifuges.map(c => ({...c, state: 'idle', cycleProgress: 0, cycleTimeRemaining: 0})),
-            tachos: {
-                id: 'tachos',
-                name: 'Tachos',
-                imageUrl: tachosImageUrl,
-                state: 'idle',
-                cookTimeSeconds: tachosCookTime * 60,
-                transferTimeSeconds: tachosTransferTime * 60,
-                timeRemaining: 0,
-                progress: 0,
-                targetReceiverId: null,
-            },
-            totalMasasSent: 0,
-        };
-
-        if (resetMaterial) {
-            setSimulationState(newInitialState);
-        } else {
-            const currentSilos = JSON.parse(JSON.stringify(simulationState.silos));
-            const currentReceivers = JSON.parse(JSON.stringify(simulationState.receivers));
-            const currentMasasSent = simulationState.totalMasasSent;
-            setSimulationState({
-                ...newInitialState,
-                silos: currentSilos,
-                receivers: currentReceivers,
-                totalMasasSent: currentMasasSent,
-            });
-        }
+        setSimulationState(createInitialSimulationState());
     };
 
 
@@ -1629,7 +1592,7 @@ export default function OperationsClient({
                                <Pause className="mr-2 h-4 w-4" /> Detener
                            </Button>
                            <Separator orientation="vertical" className="h-6 mx-2" />
-                           <Button onClick={() => resetSimulation(true)} variant="outline">
+                           <Button onClick={resetSimulation} variant="outline">
                                <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Todo
                            </Button>
                        </div>
