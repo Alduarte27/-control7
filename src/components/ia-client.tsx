@@ -593,7 +593,7 @@ function WrapperEditDialog({
                                </div>
                            ) : (
                                 <Image
-                                    src={editedWrapper.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media"}
+                                    src={wrapper.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media"}
                                     alt={editedWrapper.name}
                                     width={600}
                                     height={400}
@@ -1396,21 +1396,46 @@ export default function OperationsClient({
 
     const resetSimulation = (resetMaterial = true) => {
         pauseClock();
-        const initialSimState = createInitialSimulationState();
+        const newInitialState = {
+            elapsedTime: 0,
+            machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
+            wrappers: {
+                '1': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+                '2': { buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] },
+            },
+            isFinished: false,
+            silos: silos.map(s => ({...s, currentQQ: s.capacityQQ})),
+            receivers: receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null})),
+            centrifuges: centrifuges.map(c => ({...c, state: 'idle', cycleProgress: 0, cycleTimeRemaining: 0})),
+            tachos: {
+                id: 'tachos',
+                name: 'Tachos',
+                imageUrl: tachosImageUrl,
+                state: 'idle',
+                cookTimeSeconds: tachosCookTime * 60,
+                transferTimeSeconds: tachosTransferTime * 60,
+                timeRemaining: 0,
+                progress: 0,
+                targetReceiverId: null,
+            },
+            totalMasasSent: 0,
+        };
+
         if (resetMaterial) {
-            setSimulationState(initialSimState);
+            setSimulationState(newInitialState);
         } else {
             const currentSilos = JSON.parse(JSON.stringify(simulationState.silos));
             const currentReceivers = JSON.parse(JSON.stringify(simulationState.receivers));
             const currentMasasSent = simulationState.totalMasasSent;
             setSimulationState({
-                ...initialSimState,
+                ...newInitialState,
                 silos: currentSilos,
                 receivers: currentReceivers,
                 totalMasasSent: currentMasasSent,
             });
         }
     };
+
 
     const toggleMachineActive = (machineId: number) => {
         setMachines(prev => prev.map(m => {
@@ -1444,13 +1469,9 @@ export default function OperationsClient({
         const effectiveSystemBagsPerMinute = Math.min(totalBagsPerMinuteFromPackers, totalWrapperCapacity);
         const isWrapperBottleneck = totalBagsPerMinuteFromPackers > totalWrapperCapacity;
         
-        const avgUnitsPerBundle = wrappers.reduce((sum, w) => {
-            const machinesConnected = machines.filter(m => m.isSimulatingActive && w.machineIds.includes(m.id));
-            if (machinesConnected.length > 0) {
-                return sum + w.unitsPerBundle;
-            }
-            return sum;
-        }, 0) / (wrappers.filter(w => machines.some(m => m.isSimulatingActive && w.machineIds.includes(m.id))).length || 1);
+        const relevantWrappers = wrappers.filter(w => machines.some(m => m.isSimulatingActive && w.machineIds.includes(m.id)));
+        const totalUnitsPerBundleForActive = relevantWrappers.reduce((sum, w) => sum + w.unitsPerBundle, 0);
+        const avgUnitsPerBundle = relevantWrappers.length > 0 ? totalUnitsPerBundleForActive / relevantWrappers.length : 1;
         
         const fardosPerMinuteNeto = avgUnitsPerBundle > 0 ? effectiveSystemBagsPerMinute / avgUnitsPerBundle : 0;
         
@@ -1843,7 +1864,7 @@ export default function OperationsClient({
                             {machines.map((machine) => {
                                 const product = products.find(p => p.id === machine.productId);
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
-                                const wrapper = wrappers.find(w => w.machineIds.includes(machine.id));
+                                const wrapper = wrappersRef.current.find(w => w.machineIds.includes(machine.id));
                                 const unitsPerBundle = wrapper?.unitsPerBundle || 1;
                                 const fardosPerMinuteNeto = unitsPerBundle > 0 ? unitsPerMinuteNeto / unitsPerBundle : 0;
                                 const unitsProducedByMachine = simulationState.machineTotals[machine.id] || 0;
