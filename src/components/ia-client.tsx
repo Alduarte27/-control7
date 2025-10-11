@@ -836,14 +836,12 @@ export default function OperationsClient({
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState);
     
     const handleManualSendMasa = () => {
-        const currentState = simulationState;
-    
-        if (currentState.tachos.state !== 'idle') {
+        if (simulationState.tachos.state !== 'idle') {
             toast({ title: 'Tachos no está libre', description: 'El tacho está actualmente ocupado.', variant: 'destructive'});
             return;
         }
     
-        const availableReceiver = currentState.receivers.find(r => r.state === 'idle');
+        const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
         if (!availableReceiver) {
             toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
             return;
@@ -1334,7 +1332,7 @@ export default function OperationsClient({
 
                             if (cent.stageTimeRemaining <= 0) {
                                 const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
-                                if (drainingReceiver && drainingReceiver.currentQQ <= 0.1) {
+                                if (drainingReceiver) {
                                     drainingReceiver.drainingBy = null;
                                 }
                                 cent.state = 'idle';
@@ -1586,7 +1584,7 @@ export default function OperationsClient({
 
     const tachosStateForDialog = { id: 'tachos', name: 'Tachos', ...simulationState.tachos };
 
-    const totalQQInReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
+    const totalQQinReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
 
   return (
     <div className="bg-background min-h-screen text-foreground">
