@@ -836,22 +836,32 @@ export default function OperationsClient({
     const [simulationState, setSimulationState] = React.useState<SimulationState>(createInitialSimulationState);
     
     const handleManualSendMasa = () => {
-        if (simulationState.tachos.state !== 'idle') {
-            toast({ title: 'Tachos no está libre', description: 'El tacho está actualmente ocupado.', variant: 'destructive'});
-            return;
-        }
-    
-        const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
-        if (!availableReceiver) {
-            toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
-            return;
-        }
-
+        let sent = false;
+        let toastShown = false;
+        
         setSimulationState(prev => {
+            if (prev.tachos.state !== 'idle') {
+                if (!toastShown) {
+                    toast({ title: 'Tachos no está libre', description: 'El tacho está actualmente ocupado.', variant: 'destructive'});
+                    toastShown = true;
+                }
+                return prev;
+            }
+        
+            const availableReceiver = prev.receivers.find(r => r.state === 'idle');
+            if (!availableReceiver) {
+                if (!toastShown) {
+                    toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
+                    toastShown = true;
+                }
+                return prev;
+            }
+
             const newReceivers = prev.receivers.map(r => 
                 r.id === availableReceiver.id ? { ...r, state: 'filling' } : r
             );
 
+            sent = true;
             return {
                 ...prev,
                 receivers: newReceivers,
@@ -866,8 +876,12 @@ export default function OperationsClient({
             };
         });
 
-        toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
+        if (sent) {
+            const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
+            toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver?.name}.` });
+        }
     };
+
 
     React.useEffect(() => {
         setSimulationState(createInitialSimulationState());
@@ -1618,7 +1632,7 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Droplets className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Recibidores</h4>
-                            <p className="text-sm text-muted-foreground">{totalQQInReceivers.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
+                             <p className="text-sm text-muted-foreground">{totalQQInReceivers.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Almacenamiento temporal de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
@@ -1765,9 +1779,9 @@ export default function OperationsClient({
                                     <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
-                                {!isTachosAuto && (
-                                     <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa</Button>
-                                )}
+                                 {!isTachosAuto && (
+                                     <Button className="w-full" onClick={handleManualSendMasa} disabled={isSimulating && simTachos.state !== 'idle'}>Enviar Masa</Button>
+                                 )}
                              </div>
                         </div>
                         
@@ -2280,4 +2294,5 @@ export default function OperationsClient({
 
 
     
+
 
