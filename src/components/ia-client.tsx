@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -112,6 +113,7 @@ type SimulationParams = {
     isTachosAuto: boolean;
     isTachosGoalEnabled: boolean;
     masaQQAmount: number;
+    centrifugeBatchSizeQQ: number;
     centrifugeLoadTime: number;
     centrifugeWashTime: number;
     centrifugePurgeTime: number;
@@ -490,8 +492,8 @@ function CentrifugeEditDialog({
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (config: { loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => void;
-    config: { loadTime: number, washTime: number, purgeTime: number, startInterval: number };
+    onSave: (config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => void;
+    config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number };
 }) {
     const [localConfig, setLocalConfig] = React.useState(config);
 
@@ -518,9 +520,22 @@ function CentrifugeEditDialog({
                     <DialogTitle>Editar Configuración de Centrífugas</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
-                    <p className="text-sm text-muted-foreground">
-                        Define los tiempos en segundos que gobiernan el ciclo de trabajo de las centrífugas.
+                     <p className="text-sm text-muted-foreground">
+                        Define la cantidad de masa a procesar y los tiempos que gobiernan el ciclo de trabajo.
                     </p>
+                    <div className="p-3 border rounded-lg bg-muted/30">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="batch-size">Cantidad de Carga por Ciclo (QQ)</Label>
+                             <Input
+                                id="batch-size"
+                                type="number"
+                                value={localConfig.batchSizeQQ}
+                                onChange={(e) => handleValueChange('batchSizeQQ', e.target.value)}
+                                min="1"
+                            />
+                            <p className="text-xs text-muted-foreground">La cantidad de masa que cada centrífuga tomará del recibidor en cada ciclo de carga.</p>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="load-time">Tiempo de Carga (seg)</Label>
@@ -754,6 +769,7 @@ export default function OperationsClient({
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
     const [masaQQAmount, setMasaQQAmount] = React.useState(380);
     const [tachosImageUrl, setTachosImageUrl] = React.useState<string | null>(null);
+    const [centrifugeBatchSizeQQ, setCentrifugeBatchSizeQQ] = React.useState(25);
     const [centrifugeLoadTime, setCentrifugeLoadTime] = React.useState(60);
     const [centrifugeWashTime, setCentrifugeWashTime] = React.useState(120);
     const [centrifugePurgeTime, setCentrifugePurgeTime] = React.useState(60);
@@ -903,6 +919,7 @@ export default function OperationsClient({
             isTachosAuto: false,
             isTachosGoalEnabled: false,
             masaQQAmount: 380,
+            centrifugeBatchSizeQQ: 25,
             centrifugeLoadTime: 60,
             centrifugeWashTime: 120,
             centrifugePurgeTime: 60,
@@ -1017,6 +1034,7 @@ export default function OperationsClient({
             setIsTachosAuto(params.isTachosAuto);
             setIsTachosGoalEnabled(params.isTachosGoalEnabled);
             setMasaQQAmount(params.masaQQAmount || 380);
+            setCentrifugeBatchSizeQQ(params.centrifugeBatchSizeQQ || 25);
             setCentrifugeLoadTime(params.centrifugeLoadTime || 60);
             setCentrifugeWashTime(params.centrifugeWashTime || 120);
             setCentrifugePurgeTime(params.centrifugePurgeTime || 60);
@@ -1056,6 +1074,7 @@ export default function OperationsClient({
             isTachosAuto: isTachosAuto,
             isTachosGoalEnabled: isTachosGoalEnabled,
             masaQQAmount: masaQQAmount,
+            centrifugeBatchSizeQQ: centrifugeBatchSizeQQ,
             centrifugeLoadTime: centrifugeLoadTime,
             centrifugeWashTime: centrifugeWashTime,
             centrifugePurgeTime: centrifugePurgeTime,
@@ -1067,7 +1086,7 @@ export default function OperationsClient({
         } catch (error) {
             console.error("Error saving params to localStorage", error);
         }
-    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosTransferTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, masaQQAmount, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeStartInterval, isCentrifugesAuto]);
+    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosTransferTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, masaQQAmount, centrifugeBatchSizeQQ, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeStartInterval, isCentrifugesAuto]);
 
     React.useEffect(() => {
         saveParamsToLocalStorage();
@@ -1156,7 +1175,8 @@ export default function OperationsClient({
         setMasaQQAmount(config.masaQQAmount);
     };
 
-    const handleCentrifugeConfigSave = (config: { loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => {
+    const handleCentrifugeConfigSave = (config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => {
+        setCentrifugeBatchSizeQQ(config.batchSizeQQ);
         setCentrifugeLoadTime(config.loadTime);
         setCentrifugeWashTime(config.washTime);
         setCentrifugePurgeTime(config.purgeTime);
@@ -1281,7 +1301,7 @@ export default function OperationsClient({
 
                     switch (cent.state) {
                         case 'loading': {
-                            const qqPerSecond = centrifugeLoadTime > 0 ? masaQQAmount / centrifugeLoadTime : masaQQAmount;
+                            const qqPerSecond = centrifugeLoadTime > 0 ? centrifugeBatchSizeQQ / centrifugeLoadTime : centrifugeBatchSizeQQ;
                             const consumption = qqPerSecond * elapsedIncrement;
                             const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
                             if (drainingReceiver) {
@@ -1306,7 +1326,7 @@ export default function OperationsClient({
                             break;
                         }
                         case 'purging': {
-                            const qqPerSecond = centrifugePurgeTime > 0 ? masaQQAmount / centrifugePurgeTime : masaQQAmount;
+                            const qqPerSecond = centrifugePurgeTime > 0 ? centrifugeBatchSizeQQ / centrifugePurgeTime : centrifugeBatchSizeQQ;
                             qqPurgedThisTick += qqPerSecond * elapsedIncrement;
                             cent.stageProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / centrifugePurgeTime));
 
@@ -1321,7 +1341,7 @@ export default function OperationsClient({
                         }
                         case 'idle': {
                             if (isCentrifugesAuto) {
-                                const availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ > 0 && r.drainingBy === null);
+                                const availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ > centrifugeBatchSizeQQ && r.drainingBy === null);
                                 if (availableReceiver) {
                                     const otherCentrifuge = nextState.centrifuges[1 - index];
                                     let canStart = false;
@@ -1372,7 +1392,7 @@ export default function OperationsClient({
                 }
                 
                 const totalQQinReceivers = nextState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
-                const centrifugeThroughputQQperHour = nextState.qqInCentrifuges > 0 ? nextState.qqInCentrifuges : (masaQQAmount * 3600) / (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime);
+                const centrifugeThroughputQQperHour = nextState.qqInCentrifuges > 0 ? nextState.qqInCentrifuges : (centrifugeBatchSizeQQ * 3600) / (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime);
                 nextState.timeToProcessReceivers = centrifugeThroughputQQperHour > 0 ? (totalQQinReceivers / centrifugeThroughputQQperHour) : 0;
 
 
@@ -1541,7 +1561,7 @@ export default function OperationsClient({
         }
 
         const totalQQinReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
-        const processedQQ = simulationState.initialQQInReceivers - totalQQinReceivers;
+        const processedQQ = simulationState.initialQQInReceivers > 0 ? simulationState.initialQQInReceivers - totalQQinReceivers : 0;
         const processingProgress = simulationState.initialQQInReceivers > 0 ? (processedQQ / simulationState.initialQQInReceivers) * 100 : 0;
 
         return {
@@ -1554,7 +1574,7 @@ export default function OperationsClient({
             processingProgress,
         }
 
-    }, [simulationState, machines, staticSimulationResults.isWrapperBottleneck, products]);
+    }, [simulationState, machines, staticSimulationResults.isWrapperBottleneck]);
     
     const simTachos = simulationState.tachos;
     const tachosStateConfig = {
@@ -1748,8 +1768,8 @@ export default function OperationsClient({
                                     <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
-                                {!isTachosAuto && (
-                                    <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa</Button>
+                                {!isTachosAuto && simTachos.state === 'idle' && (
+                                     <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa</Button>
                                 )}
                              </div>
                         </div>
@@ -2234,6 +2254,7 @@ export default function OperationsClient({
                     onOpenChange={setEditingCentrifuges}
                     onSave={handleCentrifugeConfigSave}
                     config={{
+                        batchSizeQQ: centrifugeBatchSizeQQ,
                         loadTime: centrifugeLoadTime,
                         washTime: centrifugeWashTime,
                         purgeTime: centrifugePurgeTime,
@@ -2258,3 +2279,4 @@ export default function OperationsClient({
     </div>
   );
 }
+
