@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -182,7 +183,7 @@ function MachineEditDialog({
     onOpenChange,
     onSave,
     onImageSave,
-    isUploading
+    isUploading,
 }: {
     machine: MachineState;
     products: ProductDefinition[];
@@ -279,7 +280,7 @@ function MachineEditDialog({
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={()={() => onOpenChange(false)}}>Cancelar</Button>
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
                     <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
                 </DialogFooter>
             </DialogContent>
@@ -1314,15 +1315,15 @@ export default function OperationsClient({
                 let qqPurgedThisTick = 0;
                 
                 nextState.centrifuges.forEach((cent) => {
-                    if (cent.state === 'idle') return;
-
+                    if (cent.state !== 'idle') {
+                        cent.timeIntoCycle += elapsedIncrement;
+                    }
+                    
                     cent.stageTimeRemaining = Math.max(0, cent.stageTimeRemaining - elapsedIncrement);
-                    cent.timeIntoCycle += elapsedIncrement;
-                    let stageDuration = 0;
 
                     switch (cent.state) {
                         case 'loading': {
-                            stageDuration = centrifugeLoadTime;
+                            const stageDuration = centrifugeLoadTime;
                             if (stageDuration > 0) {
                                 const qqPerSecond = centrifugeBatchSizeQQ / stageDuration;
                                 const consumption = qqPerSecond * elapsedIncrement;
@@ -1331,7 +1332,11 @@ export default function OperationsClient({
                                     const amountToDrain = Math.min(consumption, drainingReceiver.currentQQ);
                                     drainingReceiver.currentQQ -= amountToDrain;
                                 }
+                                cent.stageProgress = Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration);
+                            } else {
+                                cent.stageProgress = cent.stageTimeRemaining <= 0 ? 100 : 0;
                             }
+                            
                             if (cent.stageTimeRemaining <= 0) {
                                 cent.state = 'washing';
                                 cent.stageTimeRemaining = centrifugeWashTime;
@@ -1339,7 +1344,9 @@ export default function OperationsClient({
                             break;
                         }
                         case 'washing': {
-                            stageDuration = centrifugeWashTime;
+                            const stageDuration = centrifugeWashTime;
+                            cent.stageProgress = stageDuration > 0 ? Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration) : 100;
+                            
                             if (cent.stageTimeRemaining <= 0) {
                                 cent.state = 'purging';
                                 cent.stageTimeRemaining = centrifugePurgeTime;
@@ -1347,10 +1354,13 @@ export default function OperationsClient({
                             break;
                         }
                         case 'purging': {
-                            stageDuration = centrifugePurgeTime;
-                            if (stageDuration > 0) {
+                            const stageDuration = centrifugePurgeTime;
+                             if (stageDuration > 0) {
                                 const qqPerSecond = centrifugeBatchSizeQQ / stageDuration;
                                 qqPurgedThisTick += qqPerSecond * elapsedIncrement;
+                                cent.stageProgress = Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration);
+                            } else {
+                                cent.stageProgress = cent.stageTimeRemaining <= 0 ? 100 : 0;
                             }
 
                             if (cent.stageTimeRemaining <= 0) {
@@ -1364,11 +1374,6 @@ export default function OperationsClient({
                             break;
                         }
                     }
-                     if (stageDuration > 0) {
-                        cent.stageProgress = Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration);
-                    } else {
-                        cent.stageProgress = cent.stageTimeRemaining <= 0 ? 100 : 0;
-                    }
                 });
 
                 // Now, check if any idle machines can start
@@ -1377,13 +1382,12 @@ export default function OperationsClient({
                         const availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ >= centrifugeBatchSizeQQ && r.drainingBy === null);
                         if (!availableReceiver) continue;
 
-                        const runningCentrifuges = nextState.centrifuges.filter(c => c.id !== idleCent.id && c.state !== 'idle');
+                        const otherCent = nextState.centrifuges.find(c => c.id !== idleCent.id);
                         let canStart = false;
-                        if (runningCentrifuges.length === 0) {
+                        if (!otherCent || otherCent.state === 'idle') {
                             canStart = true;
                         } else {
-                           const otherCentHasWaited = runningCentrifuges.every(other => other.timeIntoCycle >= centrifugeStartInterval);
-                            if (otherCentHasWaited) {
+                           if (otherCent.timeIntoCycle >= centrifugeStartInterval) {
                                 canStart = true;
                             }
                         }
@@ -2304,5 +2308,3 @@ export default function OperationsClient({
     </div>
   );
 }
-
-    
