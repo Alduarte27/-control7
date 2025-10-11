@@ -143,6 +143,7 @@ type SimulationState = {
     totalQQProduced: number;
     totalQQPacked: number;
     timeToProcessReceivers: number;
+    initialQQInReceivers: number;
 };
 
 const CustomPieTooltip = ({ active, payload, label }: any) => {
@@ -518,7 +519,7 @@ function CentrifugeEditDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                     <p className="text-sm text-muted-foreground">
-                        Define los tiempos que gobiernan el ciclo de trabajo de las centrífugas.
+                        Define los tiempos en segundos que gobiernan el ciclo de trabajo de las centrífugas.
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
@@ -782,6 +783,7 @@ export default function OperationsClient({
     React.useEffect(() => { wrappersRef.current = wrappers; }, [wrappers]);
 
     const createInitialSimulationState = React.useCallback((): SimulationState => {
+        const initialQQInReceivers = receivers.reduce((sum, r) => sum + r.currentQQ, 0);
         return {
             elapsedTime: 0,
             machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
@@ -809,6 +811,7 @@ export default function OperationsClient({
             totalQQProduced: 0,
             totalQQPacked: 0,
             timeToProcessReceivers: 0,
+            initialQQInReceivers: initialQQInReceivers,
         };
     }, [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
     
@@ -816,17 +819,19 @@ export default function OperationsClient({
     
     const handleManualSendMasa = () => {
         const currentState = simulationState;
-        
+    
         if (currentState.tachos.state !== 'idle') {
             toast({ title: 'Tachos no está libre', description: 'El tacho está actualmente ocupado.', variant: 'destructive'});
             return;
         }
-
+    
         const availableReceiver = currentState.receivers.find(r => r.state === 'idle');
         if (!availableReceiver) {
             toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
             return;
         }
+
+        toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
         
         setSimulationState(prev => {
             const newReceivers = prev.receivers.map(r => 
@@ -843,9 +848,9 @@ export default function OperationsClient({
                     timeRemaining: prev.tachos.transferTimeSeconds,
                     progress: 0,
                 },
+                totalMasasSent: prev.totalMasasSent + 1,
             };
         });
-        toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
     };
 
     React.useEffect(() => {
@@ -1193,6 +1198,7 @@ export default function OperationsClient({
         setSimulationState(prev => ({
             ...prev,
             isFinished: false,
+            initialQQInReceivers: prev.receivers.reduce((sum, r) => sum + r.currentQQ, 0),
         }));
         
         const tickRateMs = 50; 
@@ -1266,35 +1272,24 @@ export default function OperationsClient({
                 }
 
                 // 2. Centrifuges Logic
-                let qqDrainedThisTick = 0;
                 let qqPurgedThisTick = 0;
                 
                 nextState.centrifuges.forEach((cent, index) => {
                     if (cent.cycleTimeRemaining > 0) {
                         cent.cycleTimeRemaining = Math.max(0, cent.cycleTimeRemaining - elapsedIncrement);
                     }
-                    
-                    let stageDuration = 0;
-                    switch (cent.state) {
-                        case 'loading': stageDuration = centrifugeLoadTime; break;
-                        case 'washing': stageDuration = centrifugeWashTime; break;
-                        case 'purging': stageDuration = centrifugePurgeTime; break;
-                    }
-                    if (stageDuration > 0) {
-                        cent.stageProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / stageDuration));
-                    } else {
-                        cent.stageProgress = 100;
-                    }
 
                     switch (cent.state) {
                         case 'loading': {
+                            const qqPerSecond = centrifugeLoadTime > 0 ? masaQQAmount / centrifugeLoadTime : masaQQAmount;
+                            const consumption = qqPerSecond * elapsedIncrement;
                             const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
                             if (drainingReceiver) {
-                                const qqPerSecond = centrifugeLoadTime > 0 ? masaQQAmount / centrifugeLoadTime : masaQQAmount;
-                                const consumption = Math.min(drainingReceiver.currentQQ, qqPerSecond * elapsedIncrement);
-                                drainingReceiver.currentQQ -= consumption;
-                                qqDrainedThisTick += consumption;
+                                const amountToDrain = Math.min(consumption, drainingReceiver.currentQQ);
+                                drainingReceiver.currentQQ -= amountToDrain;
                             }
+                             cent.stageProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / centrifugeLoadTime));
+
                             if (cent.cycleTimeRemaining <= 0) {
                                 cent.state = 'washing';
                                 cent.cycleTimeRemaining = centrifugeWashTime;
@@ -1302,6 +1297,8 @@ export default function OperationsClient({
                             break;
                         }
                         case 'washing': {
+                             const timeIntoWash = centrifugeWashTime - cent.cycleTimeRemaining;
+                             cent.stageProgress = Math.min(100, (timeIntoWash / centrifugeWashTime) * 100);
                             if (cent.cycleTimeRemaining <= 0) {
                                 cent.state = 'purging';
                                 cent.cycleTimeRemaining = centrifugePurgeTime;
@@ -1311,6 +1308,7 @@ export default function OperationsClient({
                         case 'purging': {
                             const qqPerSecond = centrifugePurgeTime > 0 ? masaQQAmount / centrifugePurgeTime : masaQQAmount;
                             qqPurgedThisTick += qqPerSecond * elapsedIncrement;
+                            cent.stageProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / centrifugePurgeTime));
 
                             if (cent.cycleTimeRemaining <= 0) {
                                 const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
@@ -1374,7 +1372,7 @@ export default function OperationsClient({
                 }
                 
                 const totalQQinReceivers = nextState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
-                const centrifugeThroughputQQperHour = nextState.qqInCentrifuges;
+                const centrifugeThroughputQQperHour = nextState.qqInCentrifuges > 0 ? nextState.qqInCentrifuges : (masaQQAmount * 3600) / (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime);
                 nextState.timeToProcessReceivers = centrifugeThroughputQQperHour > 0 ? (totalQQinReceivers / centrifugeThroughputQQperHour) : 0;
 
 
@@ -1542,6 +1540,10 @@ export default function OperationsClient({
             bottleneck = 'centrifuge';
         }
 
+        const totalQQinReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
+        const processedQQ = simulationState.initialQQInReceivers - totalQQinReceivers;
+        const processingProgress = simulationState.initialQQInReceivers > 0 ? (processedQQ / simulationState.initialQQInReceivers) * 100 : 0;
+
         return {
             totalBundlesProduced: Object.values(simulationState.wrappers).reduce((sum, w) => sum + w.totalBundles, 0),
             timeToEmptyHours: timeToEmptySeconds / 3600,
@@ -1549,6 +1551,7 @@ export default function OperationsClient({
             bottleneck,
             qqRateFromCentrifuges,
             qqRateToPackers,
+            processingProgress,
         }
 
     }, [simulationState, machines, staticSimulationResults.isWrapperBottleneck, products]);
@@ -1630,9 +1633,9 @@ export default function OperationsClient({
                         <div className="flex flex-col items-center gap-2 text-center min-w-[90px]">
                             <PackageCheck className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Enfardado</h4>
-                             <p className="text-sm text-muted-foreground">{liveSimulationResults.totalBundlesProduced.toLocaleString()} Fardos</p>
+                             <p className="text-sm text-muted-foreground">{staticSimulationResults.bundlesPerMinute.toLocaleString(undefined, { maximumFractionDigits: 2 })} Fardos/Min</p>
                         </div>
-                    </TooltipTrigger> <TooltipContent><p>Empaque final en fardos.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger> <TooltipContent><p>Capacidad teórica de empaque final en fardos por minuto.</p></TooltipContent> </Tooltip> </TooltipProvider>
                 </div>
             </div>
             
@@ -1789,7 +1792,13 @@ export default function OperationsClient({
                             <div className='flex justify-between items-center mb-2'>
                                 <div className="space-y-1">
                                     <h3 className="font-bold text-lg">Centrífugas</h3>
-                                     <p className="text-xs text-muted-foreground">Tiempo para Procesar: <span className="font-bold text-primary">{formatElapsedTime(simulationState.timeToProcessReceivers * 3600)}</span></p>
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between items-center text-xs">
+                                          <Label className="text-muted-foreground">Tiempo para Procesar</Label>
+                                          <span className="font-bold text-primary">{formatElapsedTime(simulationState.timeToProcessReceivers * 3600)}</span>
+                                        </div>
+                                        <Progress value={liveSimulationResults.processingProgress} />
+                                    </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                      <div className="flex items-center space-x-2">
@@ -1811,7 +1820,7 @@ export default function OperationsClient({
                                     const stateConfig = {
                                         idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
                                         loading: { text: "Cargando", color: "text-blue-600", icon: Droplets },
-                                        washing: { text: "Lavando", color: "text-purple-600", icon: Waves },
+                                        washing: { text: "Lavando y Centrifugando", color: "text-purple-600", icon: Waves },
                                         purging: { text: "Purgando", color: "text-amber-600", icon: Wind },
                                     };
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
@@ -2088,11 +2097,11 @@ export default function OperationsClient({
                             fractionDigits={0} 
                         />
                         <KpiCard 
-                            title="Total Fardos Producidos" 
-                            value={liveSimulationResults.totalBundlesProduced} 
-                            icon={PackageCheck} 
-                            description="Suma total de fardos que han completado todas las enfardadoras." 
-                            fractionDigits={0} 
+                            title="Total QQ Empacados"
+                            value={simulationState.totalQQPacked}
+                            icon={Box}
+                            description="Total de quintales que han sido consumidos por las envasadoras desde el silo."
+                            fractionDigits={1}
                         />
                     </div>
                     <Card>
