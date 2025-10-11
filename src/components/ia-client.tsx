@@ -30,7 +30,6 @@ const KG_PER_QUINTAL = 50;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 const LOCAL_STORAGE_CONFIG_KEY = 'simulationConfig';
 const FIRESTORE_ASSETS_PATH = 'simulation_assets';
-const CENTRIFUGE_LOADING_TIME_SECONDS = 60; // 1 minute fixed loading time
 
 type MachineState = {
     id: number;
@@ -63,7 +62,7 @@ type ReceiverState = {
 type CentrifugeState = {
     id: string;
     name: string;
-    state: 'idle' | 'purging' | 'loading';
+    state: 'idle' | 'loading' | 'washing' | 'purging';
     imageUrl: string | null;
     cycleProgress: number;
     cycleTimeRemaining: number;
@@ -113,7 +112,9 @@ type SimulationParams = {
     isTachosAuto: boolean;
     isTachosGoalEnabled: boolean;
     masaQQAmount: number;
-    centrifugePurgeCycleTime: number;
+    centrifugeLoadTime: number;
+    centrifugeWashTime: number;
+    centrifugePurgeTime: number;
     centrifugeStartInterval: number; 
     isCentrifugesAuto: boolean;
 };
@@ -141,6 +142,7 @@ type SimulationState = {
     qqInCentrifuges: number;
     totalQQProduced: number;
     totalQQPacked: number;
+    timeToProcessReceivers: number;
 };
 
 const CustomPieTooltip = ({ active, payload, label }: any) => {
@@ -483,26 +485,29 @@ function CentrifugeEditDialog({
     open,
     onOpenChange,
     onSave,
-    purgeCycleTime,
-    startInterval,
+    config,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (config: { purgeCycleTime: number, startInterval: number }) => void;
-    purgeCycleTime: number;
-    startInterval: number;
+    onSave: (config: { loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => void;
+    config: { loadTime: number, washTime: number, purgeTime: number, startInterval: number };
 }) {
-    const [localPurgeCycleTime, setLocalPurgeCycleTime] = React.useState(purgeCycleTime);
-    const [localStartInterval, setLocalStartInterval] = React.useState(startInterval);
+    const [localConfig, setLocalConfig] = React.useState(config);
 
     React.useEffect(() => {
-        setLocalPurgeCycleTime(purgeCycleTime);
-        setLocalStartInterval(startInterval);
-    }, [purgeCycleTime, startInterval]);
+        setLocalConfig(config);
+    }, [config]);
 
-    const handleSaveChanges = () => {
-        onSave({ purgeCycleTime: localPurgeCycleTime, startInterval: localStartInterval });
+    const handleSave = () => {
+        onSave(localConfig);
         onOpenChange(false);
+    };
+    
+    const handleValueChange = (field: keyof typeof config, value: string) => {
+        const numValue = Number(value);
+        if (!isNaN(numValue) && numValue >= 0) {
+            setLocalConfig(prev => ({ ...prev, [field]: numValue }));
+        }
     };
 
     return (
@@ -513,38 +518,57 @@ function CentrifugeEditDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                     <p className="text-sm text-muted-foreground">
-                        Define los tiempos que gobiernan el trabajo en equipo de las centrífugas.
+                        Define los tiempos que gobiernan el ciclo de trabajo de las centrífugas.
                     </p>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="cycle-time">Duración del Ciclo de Purga (minutos)</Label>
-                        <Input
-                            id="cycle-time"
-                            type="number"
-                            value={localPurgeCycleTime}
-                            onChange={(e) => setLocalPurgeCycleTime(Number(e.target.value))}
-                            min="1"
-                        />
-                         <p className="text-xs text-muted-foreground">
-                            Tiempo total que tarda **una centrífuga** en completar un ciclo de trabajo (cargar, lavar, purgar y descargar).
-                        </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="load-time">Tiempo de Carga (min)</Label>
+                            <Input
+                                id="load-time"
+                                type="number"
+                                value={localConfig.loadTime}
+                                onChange={(e) => handleValueChange('loadTime', e.target.value)}
+                                min="0"
+                            />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="wash-time">Tiempo de Lavado (min)</Label>
+                            <Input
+                                id="wash-time"
+                                type="number"
+                                value={localConfig.washTime}
+                                onChange={(e) => handleValueChange('washTime', e.target.value)}
+                                min="0"
+                            />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="purge-time">Tiempo de Purga (min)</Label>
+                            <Input
+                                id="purge-time"
+                                type="number"
+                                value={localConfig.purgeTime}
+                                onChange={(e) => handleValueChange('purgeTime', e.target.value)}
+                                min="0"
+                            />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="start-interval">Intervalo de Inicio (min)</Label>
+                            <Input
+                                id="start-interval"
+                                type="number"
+                                value={localConfig.startInterval}
+                                onChange={(e) => handleValueChange('startInterval', e.target.value)}
+                                min="0"
+                            />
+                        </div>
                     </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="start-interval">Intervalo de Inicio (minutos)</Label>
-                        <Input
-                            id="start-interval"
-                            type="number"
-                            value={localStartInterval}
-                            onChange={(e) => setLocalStartInterval(Number(e.target.value))}
-                            min="0"
-                        />
-                         <p className="text-xs text-muted-foreground">
-                            Tiempo de espera entre el inicio de la primera y la segunda centrífuga.
-                        </p>
-                    </div>
+                     <p className="text-xs text-muted-foreground pt-2">
+                        El **Intervalo de Inicio** es el tiempo de espera entre el inicio de la primera y la segunda centrífuga para asegurar el trabajo alternado.
+                    </p>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
-                    <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
+                    <Button onClick={handleSave}>Guardar Cambios</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -729,7 +753,9 @@ export default function OperationsClient({
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
     const [masaQQAmount, setMasaQQAmount] = React.useState(380);
     const [tachosImageUrl, setTachosImageUrl] = React.useState<string | null>(null);
-    const [centrifugePurgeCycleTime, setCentrifugePurgeCycleTime] = React.useState(5);
+    const [centrifugeLoadTime, setCentrifugeLoadTime] = React.useState(1);
+    const [centrifugeWashTime, setCentrifugeWashTime] = React.useState(2);
+    const [centrifugePurgeTime, setCentrifugePurgeTime] = React.useState(1);
     const [centrifugeStartInterval, setCentrifugeStartInterval] = React.useState(2);
     const [isCentrifugesAuto, setIsCentrifugesAuto] = React.useState(true);
 
@@ -782,6 +808,7 @@ export default function OperationsClient({
             qqInCentrifuges: 0,
             totalQQProduced: 0,
             totalQQPacked: 0,
+            timeToProcessReceivers: 0,
         };
     }, [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
     
@@ -800,7 +827,7 @@ export default function OperationsClient({
             toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados. Espere a que uno se vacíe.', variant: 'destructive' });
             return;
         }
-
+        
         setSimulationState(prev => {
             const newReceivers = prev.receivers.map(r => 
                 r.id === availableReceiver.id ? { ...r, state: 'filling' } : r
@@ -819,7 +846,6 @@ export default function OperationsClient({
                 totalMasasSent: prev.totalMasasSent + 1,
             };
         });
-        
         toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
     };
 
@@ -873,7 +899,9 @@ export default function OperationsClient({
             isTachosAuto: false,
             isTachosGoalEnabled: false,
             masaQQAmount: 380,
-            centrifugePurgeCycleTime: 5,
+            centrifugeLoadTime: 1,
+            centrifugeWashTime: 2,
+            centrifugePurgeTime: 1,
             centrifugeStartInterval: 2,
             isCentrifugesAuto: true,
         },
@@ -985,7 +1013,9 @@ export default function OperationsClient({
             setIsTachosAuto(params.isTachosAuto);
             setIsTachosGoalEnabled(params.isTachosGoalEnabled);
             setMasaQQAmount(params.masaQQAmount || 380);
-            setCentrifugePurgeCycleTime(params.centrifugePurgeCycleTime || 5);
+            setCentrifugeLoadTime(params.centrifugeLoadTime || 1);
+            setCentrifugeWashTime(params.centrifugeWashTime || 2);
+            setCentrifugePurgeTime(params.centrifugePurgeTime || 1);
             setCentrifugeStartInterval(params.centrifugeStartInterval ?? 2);
             setIsCentrifugesAuto(params.isCentrifugesAuto ?? true);
 
@@ -1022,7 +1052,9 @@ export default function OperationsClient({
             isTachosAuto: isTachosAuto,
             isTachosGoalEnabled: isTachosGoalEnabled,
             masaQQAmount: masaQQAmount,
-            centrifugePurgeCycleTime: centrifugePurgeCycleTime,
+            centrifugeLoadTime: centrifugeLoadTime,
+            centrifugeWashTime: centrifugeWashTime,
+            centrifugePurgeTime: centrifugePurgeTime,
             centrifugeStartInterval: centrifugeStartInterval,
             isCentrifugesAuto: isCentrifugesAuto,
         };
@@ -1031,7 +1063,7 @@ export default function OperationsClient({
         } catch (error) {
             console.error("Error saving params to localStorage", error);
         }
-    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosTransferTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, masaQQAmount, centrifugePurgeCycleTime, centrifugeStartInterval, isCentrifugesAuto]);
+    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosTransferTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, masaQQAmount, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeStartInterval, isCentrifugesAuto]);
 
     React.useEffect(() => {
         saveParamsToLocalStorage();
@@ -1120,8 +1152,10 @@ export default function OperationsClient({
         setMasaQQAmount(config.masaQQAmount);
     };
 
-    const handleCentrifugeConfigSave = (config: { purgeCycleTime: number, startInterval: number }) => {
-        setCentrifugePurgeCycleTime(config.purgeCycleTime);
+    const handleCentrifugeConfigSave = (config: { loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => {
+        setCentrifugeLoadTime(config.loadTime);
+        setCentrifugeWashTime(config.washTime);
+        setCentrifugePurgeTime(config.purgeTime);
         setCentrifugeStartInterval(config.startInterval);
         toast({ title: 'Configuración de Centrífugas Guardada' });
     };
@@ -1233,10 +1267,13 @@ export default function OperationsClient({
                 }
 
                 // 2. Centrifuges Logic
-                const purgeCycleTimeSeconds = centrifugePurgeCycleTime * 60;
-                let qqDrainedFromReceivers = 0;
-                
-                const activeReceivers = nextState.receivers.filter(r => r.state === 'ready' && r.currentQQ > 0);
+                const loadTimeSeconds = centrifugeLoadTime * 60;
+                const washTimeSeconds = centrifugeWashTime * 60;
+                const purgeTimeSeconds = centrifugePurgeTime * 60;
+                const totalCycleTimeSeconds = loadTimeSeconds + washTimeSeconds + purgeTimeSeconds;
+
+                let qqDrainedThisTick = 0;
+                let qqPurgedThisTick = 0;
                 
                 nextState.centrifuges.forEach((cent, index) => {
                     if (cent.cycleTimeRemaining > 0) {
@@ -1244,105 +1281,93 @@ export default function OperationsClient({
                     }
 
                     switch (cent.state) {
-                        case 'purging': {
-                            cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / purgeCycleTimeSeconds));
+                        case 'loading': {
                             const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
                             if (drainingReceiver) {
-                                // Assuming 2 centrifuges drain one receiver in one cycle time.
-                                // So one centrifuge drains half a receiver in one cycle time.
-                                const qqPerCentrifugePerSecond = (drainingReceiver.capacityQQ / 2) / purgeCycleTimeSeconds;
-                                const consumption = qqPerCentrifugePerSecond * elapsedIncrement;
-                                drainingReceiver.currentQQ = Math.max(0, drainingReceiver.currentQQ - consumption);
-                                qqDrainedFromReceivers += consumption;
+                                const qqPerSecond = drainingReceiver.capacityQQ / loadTimeSeconds;
+                                const consumption = Math.min(drainingReceiver.currentQQ, qqPerSecond * elapsedIncrement);
+                                drainingReceiver.currentQQ -= consumption;
+                                qqDrainedThisTick += consumption;
                             }
+                            if (cent.cycleTimeRemaining <= 0) {
+                                cent.state = 'washing';
+                                cent.cycleTimeRemaining = washTimeSeconds;
+                            }
+                            break;
+                        }
+                        case 'washing': {
+                            if (cent.cycleTimeRemaining <= 0) {
+                                cent.state = 'purging';
+                                cent.cycleTimeRemaining = purgeTimeSeconds;
+                            }
+                            break;
+                        }
+                        case 'purging': {
+                            const qqPerSecond = masaQQAmount / purgeTimeSeconds;
+                            qqPurgedThisTick += qqPerSecond * elapsedIncrement;
 
                             if (cent.cycleTimeRemaining <= 0) {
-                                cent.state = 'loading';
-                                cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
-                            }
-                            break;
-                        }
-                        
-                        case 'loading': {
-                            cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / CENTRIFUGE_LOADING_TIME_SECONDS));
-                            if (cent.cycleTimeRemaining <= 0) {
-                                 const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
-                                if (drainingReceiver && drainingReceiver.currentQQ > 0) {
-                                    cent.state = 'purging';
-                                    cent.cycleTimeRemaining = purgeCycleTimeSeconds;
-                                } else {
-                                     cent.state = 'idle';
-                                     if(drainingReceiver) drainingReceiver.drainingBy = null;
+                                const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
+                                if (drainingReceiver && drainingReceiver.currentQQ <= 0.1) {
+                                    drainingReceiver.drainingBy = null;
                                 }
+                                cent.state = 'idle';
                             }
                             break;
                         }
-                            
                         case 'idle': {
                             if (isCentrifugesAuto) {
-                                let availableReceiver = activeReceivers.find(r => r.drainingBy === null || r.drainingBy === cent.id);
-                                if (!availableReceiver) {
-                                    const partiallyDrainedReceiver = activeReceivers.find(r => r.drainingBy !== null);
-                                    if(partiallyDrainedReceiver) availableReceiver = partiallyDrainedReceiver;
-                                }
-
+                                const availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ > 0 && r.drainingBy === null);
                                 if (availableReceiver) {
                                     const otherCentrifuge = nextState.centrifuges[1 - index];
-                                    const isOtherCentrifugeDrainingThisReceiver = otherCentrifuge.state !== 'idle' && availableReceiver.drainingBy === otherCentrifuge.id;
-
                                     let canStart = false;
-                                    if (!isOtherCentrifugeDrainingThisReceiver) {
+                                    if (otherCentrifuge.state === 'idle') {
                                         canStart = true;
                                     } else {
-                                        const otherCentrifugeTimeIntoCycle = (otherCentrifuge.state === 'loading' ? CENTRIFUGE_LOADING_TIME_SECONDS : purgeCycleTimeSeconds) - otherCentrifuge.cycleTimeRemaining;
-                                        if (otherCentrifugeTimeIntoCycle >= centrifugeStartInterval * 60) {
+                                        const otherCentTotalCycle = (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime) * 60;
+                                        const otherCentTimeIntoCycle = otherCentTotalCycle - otherCentrifuge.cycleTimeRemaining;
+                                        if (otherCentTimeIntoCycle >= centrifugeStartInterval * 60) {
                                             canStart = true;
                                         }
                                     }
-
                                     if (canStart) {
                                         availableReceiver.drainingBy = cent.id;
                                         cent.state = 'loading';
-                                        cent.cycleTimeRemaining = CENTRIFUGE_LOADING_TIME_SECONDS;
+                                        cent.cycleTimeRemaining = loadTimeSeconds;
                                     }
                                 }
                             }
                             break;
                         }
                     }
-                    if (cent.state === 'idle') cent.cycleProgress = 0;
+
+                    if (cent.state !== 'idle') {
+                         cent.cycleProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / totalCycleTimeSeconds));
+                    } else {
+                        cent.cycleProgress = 0;
+                    }
                 });
-                
-                nextState.qqInCentrifuges = qqDrainedFromReceivers / elapsedIncrement * 3600;
+
+                nextState.qqInCentrifuges = (qqDrainedThisTick / elapsedIncrement) * 3600;
 
                 nextState.receivers.forEach(r => {
-                    if (r.currentQQ <= 0.1 && r.state === 'ready') {
+                    if (r.currentQQ <= 0.1 && r.state === 'ready' && r.drainingBy === null) {
                        r.state = 'idle';
-                       r.drainingBy = null;
                     }
                 });
-                
-                // Distribute produced QQ to silos
-                if (qqDrainedFromReceivers > 0) {
-                    let productionToDistribute = qqDrainedFromReceivers;
-                    nextState.totalQQProduced += productionToDistribute;
-                    
+
+                if (qqPurgedThisTick > 0) {
+                    nextState.totalQQProduced += qqPurgedThisTick;
                     const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
-                    const granelSilo = nextState.silos.find(s => s.id === 'granel');
-
                     if (familiarSilo) {
-                        const spaceInFamiliar = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-                        const toFamiliar = Math.min(productionToDistribute, spaceInFamiliar);
-                        familiarSilo.currentQQ += toFamiliar;
-                        productionToDistribute -= toFamiliar;
-                    }
-
-                    if (productionToDistribute > 0 && granelSilo) {
-                        const spaceInGranel = granelSilo.capacityQQ - granelSilo.currentQQ;
-                        const toGranel = Math.min(productionToDistribute, spaceInGranel);
-                        granelSilo.currentQQ += toGranel;
+                        familiarSilo.currentQQ = Math.min(familiarSilo.capacityQQ, familiarSilo.currentQQ + qqPurgedThisTick);
                     }
                 }
+                
+                const totalQQinReceivers = nextState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
+                const centrifugeThroughputQQperHour = nextState.qqInCentrifuges;
+                nextState.timeToProcessReceivers = centrifugeThroughputQQperHour > 0 ? (totalQQinReceivers / centrifugeThroughputQQperHour) * 3600 : 0;
+
 
                 // 3. Envasadoras & Enfardadoras Logic
                 const totalKgConsumedPerSecond = machinesRef.current
@@ -1712,7 +1737,7 @@ export default function OperationsClient({
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
                                 {!isTachosAuto && (
-                                    <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa</Button>
+                                    <Button className="w-full" onClick={handleManualSendMasa} disabled={simTachos.state !== 'idle'}>Enviar Masa</Button>
                                 )}
                              </div>
                         </div>
@@ -1753,7 +1778,10 @@ export default function OperationsClient({
                         {/* Centrifuges */}
                         <div className="p-4 border rounded-lg bg-background flex flex-col h-full">
                             <div className='flex justify-between items-center mb-2'>
-                                <h3 className="font-bold text-lg">Centrífugas</h3>
+                                <div className="space-y-1">
+                                    <h3 className="font-bold text-lg">Centrífugas</h3>
+                                     <p className="text-xs text-muted-foreground">Tiempo para Procesar: <span className="font-bold text-primary">{formatElapsedTime(simulationState.timeToProcessReceivers)}</span></p>
+                                </div>
                                 <div className="flex items-center gap-2">
                                      <div className="flex items-center space-x-2">
                                         <Label htmlFor="cent-auto-switch" className="text-xs">Auto</Label>
@@ -1773,8 +1801,9 @@ export default function OperationsClient({
                                     const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
                                     const stateConfig = {
                                         idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
-                                        purging: { text: "Purgando", color: "text-amber-600", icon: Waves },
                                         loading: { text: "Cargando", color: "text-blue-600", icon: Droplets },
+                                        washing: { text: "Lavando", color: "text-purple-600", icon: Waves },
+                                        purging: { text: "Purgando", color: "text-amber-600", icon: Wind },
                                     };
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
                                     return (
@@ -1787,6 +1816,7 @@ export default function OperationsClient({
                                                 </div>
                                                 <Progress value={simCentrifuge.cycleProgress} indicatorClassName={cn(
                                                     simCentrifuge.state === 'loading' ? 'bg-blue-500' :
+                                                    simCentrifuge.state === 'washing' ? 'bg-purple-500' :
                                                     simCentrifuge.state === 'purging' ? 'bg-amber-500' :
                                                     'bg-primary'
                                                 )} />
@@ -2185,8 +2215,12 @@ export default function OperationsClient({
                     open={editingCentrifuges}
                     onOpenChange={setEditingCentrifuges}
                     onSave={handleCentrifugeConfigSave}
-                    purgeCycleTime={centrifugePurgeCycleTime}
-                    startInterval={centrifugeStartInterval}
+                    config={{
+                        loadTime: centrifugeLoadTime,
+                        washTime: centrifugeWashTime,
+                        purgeTime: centrifugePurgeTime,
+                        startInterval: centrifugeStartInterval,
+                    }}
                 />
             )}
             {editingWrapper && (
