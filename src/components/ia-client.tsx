@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -63,7 +64,7 @@ type ReceiverState = {
 type CentrifugeState = {
     id: string;
     name: string;
-    state: 'idle' | 'loading' | 'washing' | 'purging';
+    state: 'idle' | 'loading' | 'washing' | 'centrifuging' | 'purging';
     imageUrl: string | null;
     cycleTimeRemaining: number;
     stageProgress: number;
@@ -847,8 +848,6 @@ export default function OperationsClient({
             return;
         }
 
-        toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
-        
         setSimulationState(prev => {
             const newReceivers = prev.receivers.map(r => 
                 r.id === availableReceiver.id ? { ...r, state: 'filling' } : r
@@ -867,6 +866,7 @@ export default function OperationsClient({
                 totalMasasSent: prev.totalMasasSent + 1,
             };
         });
+        toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver.name}.` });
     };
 
     React.useEffect(() => {
@@ -1305,10 +1305,10 @@ export default function OperationsClient({
                             const consumption = qqPerSecond * elapsedIncrement;
                             const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
                             if (drainingReceiver) {
-                                const amountToDrain = Math.min(consumption, drainingReceiver.currentQQ);
+                                const amountToDrain = Math.min(consumption, drainingReceiver.currentQQ, centrifugeBatchSizeQQ);
                                 drainingReceiver.currentQQ -= amountToDrain;
                             }
-                             cent.stageProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / centrifugeLoadTime));
+                            cent.stageProgress = Math.min(100, 100 * (1 - cent.cycleTimeRemaining / centrifugeLoadTime));
 
                             if (cent.cycleTimeRemaining <= 0) {
                                 cent.state = 'washing';
@@ -1317,8 +1317,8 @@ export default function OperationsClient({
                             break;
                         }
                         case 'washing': {
-                             const timeIntoWash = centrifugeWashTime - cent.cycleTimeRemaining;
-                             cent.stageProgress = Math.min(100, (timeIntoWash / centrifugeWashTime) * 100);
+                            const timeIntoWash = centrifugeWashTime - cent.cycleTimeRemaining;
+                            cent.stageProgress = Math.min(100, (timeIntoWash / centrifugeWashTime) * 100);
                             if (cent.cycleTimeRemaining <= 0) {
                                 cent.state = 'purging';
                                 cent.cycleTimeRemaining = centrifugePurgeTime;
@@ -1341,7 +1341,7 @@ export default function OperationsClient({
                         }
                         case 'idle': {
                             if (isCentrifugesAuto) {
-                                const availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ > centrifugeBatchSizeQQ && r.drainingBy === null);
+                                const availableReceiver = nextState.receivers.find((r: ReceiverState) => r.state === 'ready' && r.currentQQ >= centrifugeBatchSizeQQ && r.drainingBy === null);
                                 if (availableReceiver) {
                                     const otherCentrifuge = nextState.centrifuges[1 - index];
                                     let canStart = false;
@@ -1354,6 +1354,7 @@ export default function OperationsClient({
                                             case 'loading': otherCentTimeIntoCycle = centrifugeLoadTime - otherCentrifuge.cycleTimeRemaining; break;
                                             case 'washing': otherCentTimeIntoCycle = centrifugeLoadTime + (centrifugeWashTime - otherCentrifuge.cycleTimeRemaining); break;
                                             case 'purging': otherCentTimeIntoCycle = centrifugeLoadTime + centrifugeWashTime + (centrifugePurgeTime - otherCentrifuge.cycleTimeRemaining); break;
+                                            default: break;
                                         }
                                         if (otherCentTimeIntoCycle >= centrifugeStartInterval) {
                                             canStart = true;
@@ -1368,6 +1369,7 @@ export default function OperationsClient({
                             }
                             break;
                         }
+                        default: break;
                     }
 
                     if (cent.state === 'idle') {
@@ -1768,7 +1770,7 @@ export default function OperationsClient({
                                     <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
                                     <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
                                 </div>
-                                {!isTachosAuto && simTachos.state === 'idle' && (
+                                {!isTachosAuto && (
                                      <Button className="w-full" onClick={handleManualSendMasa}>Enviar Masa</Button>
                                 )}
                              </div>
@@ -1809,19 +1811,10 @@ export default function OperationsClient({
 
                         {/* Centrifuges */}
                         <div className="p-4 border rounded-lg bg-background flex flex-col h-full">
-                            <div className='flex justify-between items-center mb-2'>
+                             <div className="flex justify-between items-start mb-2">
                                 <div className="space-y-1">
                                     <h3 className="font-bold text-lg">Centrífugas</h3>
-                                    <div className="space-y-1">
-                                        <div className="flex justify-between items-center text-xs">
-                                          <Label className="text-muted-foreground">Tiempo para Procesar</Label>
-                                          <span className="font-bold text-primary">{formatElapsedTime(simulationState.timeToProcessReceivers * 3600)}</span>
-                                        </div>
-                                        <Progress value={liveSimulationResults.processingProgress} />
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                     <div className="flex items-center space-x-2">
+                                    <div className="flex items-center gap-2">
                                         <Label htmlFor="cent-auto-switch" className="text-xs">Auto</Label>
                                         <Switch
                                             id="cent-auto-switch"
@@ -1829,19 +1822,27 @@ export default function OperationsClient({
                                             onCheckedChange={setIsCentrifugesAuto}
                                         />
                                     </div>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
                                 </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
+                                    <Edit className="h-4 w-4" />
+                                </Button>
                             </div>
+                            <div className="space-y-2 mb-3">
+                               <div className="flex justify-between items-center text-xs">
+                                 <Label className="text-muted-foreground">Tiempo para Procesar</Label>
+                                 <span className="font-bold text-primary">{formatElapsedTime(simulationState.timeToProcessReceivers * 3600)}</span>
+                               </div>
+                               <Progress value={liveSimulationResults.processingProgress} />
+                           </div>
                             <div className="grid grid-cols-2 gap-4 flex-grow">
                                 {centrifuges.map((centrifuge) => {
                                     const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
                                     const stateConfig = {
                                         idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
                                         loading: { text: "Cargando", color: "text-blue-600", icon: Droplets },
-                                        washing: { text: "Lavando y Centrifugando", color: "text-purple-600", icon: Waves },
-                                        purging: { text: "Purgando", color: "text-amber-600", icon: Wind },
+                                        washing: { text: "Lavando", color: "text-purple-600", icon: Waves },
+                                        centrifuging: { text: "Centrifugando", color: "text-teal-500", icon: Wind },
+                                        purging: { text: "Purgando", color: "text-amber-600", icon: Snowflake },
                                     };
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
                                     return (
@@ -1855,6 +1856,7 @@ export default function OperationsClient({
                                                 <Progress value={simCentrifuge.stageProgress} indicatorClassName={cn(
                                                     simCentrifuge.state === 'loading' ? 'bg-blue-500' :
                                                     simCentrifuge.state === 'washing' ? 'bg-purple-500' :
+                                                    simCentrifuge.state === 'centrifuging' ? 'bg-teal-500' :
                                                     simCentrifuge.state === 'purging' ? 'bg-amber-500' :
                                                     'bg-primary'
                                                 )} />
@@ -2280,3 +2282,6 @@ export default function OperationsClient({
   );
 }
 
+
+
+    
