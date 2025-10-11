@@ -522,7 +522,7 @@ function CentrifugeEditDialog({
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="load-time">Tiempo de Carga (min)</Label>
+                            <Label htmlFor="load-time">Tiempo de Carga (seg)</Label>
                             <Input
                                 id="load-time"
                                 type="number"
@@ -532,7 +532,7 @@ function CentrifugeEditDialog({
                             />
                         </div>
                          <div className="space-y-1.5">
-                            <Label htmlFor="wash-time">Tiempo de Lavado (min)</Label>
+                            <Label htmlFor="wash-time">Tiempo de Lavado (seg)</Label>
                             <Input
                                 id="wash-time"
                                 type="number"
@@ -542,7 +542,7 @@ function CentrifugeEditDialog({
                             />
                         </div>
                          <div className="space-y-1.5">
-                            <Label htmlFor="purge-time">Tiempo de Purga (min)</Label>
+                            <Label htmlFor="purge-time">Tiempo de Purga (seg)</Label>
                             <Input
                                 id="purge-time"
                                 type="number"
@@ -552,7 +552,7 @@ function CentrifugeEditDialog({
                             />
                         </div>
                          <div className="space-y-1.5">
-                            <Label htmlFor="start-interval">Intervalo de Inicio (min)</Label>
+                            <Label htmlFor="start-interval">Intervalo de Inicio (seg)</Label>
                             <Input
                                 id="start-interval"
                                 type="number"
@@ -753,10 +753,10 @@ export default function OperationsClient({
     const [isTachosGoalEnabled, setIsTachosGoalEnabled] = React.useState(false);
     const [masaQQAmount, setMasaQQAmount] = React.useState(380);
     const [tachosImageUrl, setTachosImageUrl] = React.useState<string | null>(null);
-    const [centrifugeLoadTime, setCentrifugeLoadTime] = React.useState(1);
-    const [centrifugeWashTime, setCentrifugeWashTime] = React.useState(2);
-    const [centrifugePurgeTime, setCentrifugePurgeTime] = React.useState(1);
-    const [centrifugeStartInterval, setCentrifugeStartInterval] = React.useState(2);
+    const [centrifugeLoadTime, setCentrifugeLoadTime] = React.useState(60);
+    const [centrifugeWashTime, setCentrifugeWashTime] = React.useState(120);
+    const [centrifugePurgeTime, setCentrifugePurgeTime] = React.useState(60);
+    const [centrifugeStartInterval, setCentrifugeStartInterval] = React.useState(120);
     const [isCentrifugesAuto, setIsCentrifugesAuto] = React.useState(true);
 
     // --- UI State ---
@@ -899,10 +899,10 @@ export default function OperationsClient({
             isTachosAuto: false,
             isTachosGoalEnabled: false,
             masaQQAmount: 380,
-            centrifugeLoadTime: 1,
-            centrifugeWashTime: 2,
-            centrifugePurgeTime: 1,
-            centrifugeStartInterval: 2,
+            centrifugeLoadTime: 60,
+            centrifugeWashTime: 120,
+            centrifugePurgeTime: 60,
+            centrifugeStartInterval: 120,
             isCentrifugesAuto: true,
         },
         images: {
@@ -1013,10 +1013,10 @@ export default function OperationsClient({
             setIsTachosAuto(params.isTachosAuto);
             setIsTachosGoalEnabled(params.isTachosGoalEnabled);
             setMasaQQAmount(params.masaQQAmount || 380);
-            setCentrifugeLoadTime(params.centrifugeLoadTime || 1);
-            setCentrifugeWashTime(params.centrifugeWashTime || 2);
-            setCentrifugePurgeTime(params.centrifugePurgeTime || 1);
-            setCentrifugeStartInterval(params.centrifugeStartInterval ?? 2);
+            setCentrifugeLoadTime(params.centrifugeLoadTime || 60);
+            setCentrifugeWashTime(params.centrifugeWashTime || 120);
+            setCentrifugePurgeTime(params.centrifugePurgeTime || 60);
+            setCentrifugeStartInterval(params.centrifugeStartInterval ?? 120);
             setIsCentrifugesAuto(params.isCentrifugesAuto ?? true);
 
         } catch (error) {
@@ -1267,9 +1267,9 @@ export default function OperationsClient({
                 }
 
                 // 2. Centrifuges Logic
-                const loadTimeSeconds = centrifugeLoadTime * 60;
-                const washTimeSeconds = centrifugeWashTime * 60;
-                const purgeTimeSeconds = centrifugePurgeTime * 60;
+                const loadTimeSeconds = centrifugeLoadTime;
+                const washTimeSeconds = centrifugeWashTime;
+                const purgeTimeSeconds = centrifugePurgeTime;
                 const totalCycleTimeSeconds = loadTimeSeconds + washTimeSeconds + purgeTimeSeconds;
 
                 let qqDrainedThisTick = 0;
@@ -1324,9 +1324,9 @@ export default function OperationsClient({
                                     if (otherCentrifuge.state === 'idle') {
                                         canStart = true;
                                     } else {
-                                        const otherCentTotalCycle = (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime) * 60;
+                                        const otherCentTotalCycle = (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime);
                                         const otherCentTimeIntoCycle = otherCentTotalCycle - otherCentrifuge.cycleTimeRemaining;
-                                        if (otherCentTimeIntoCycle >= centrifugeStartInterval * 60) {
+                                        if (otherCentTimeIntoCycle >= centrifugeStartInterval) {
                                             canStart = true;
                                         }
                                     }
