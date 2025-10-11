@@ -1376,19 +1376,18 @@ export default function OperationsClient({
                 if (isCentrifugesAuto) {
                     const idleCentrifuges = nextState.centrifuges.filter(c => c.state === 'idle');
                     const runningCentrifuges = nextState.centrifuges.filter(c => c.state !== 'idle');
-
+                    
                     for (const idleCent of idleCentrifuges) {
                         const availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ >= centrifugeBatchSizeQQ);
                         if (!availableReceiver) continue;
 
                         let canStart = false;
                         if (runningCentrifuges.length === 0) {
-                            canStart = true;
+                            canStart = true; // First one can always start
                         } else {
-                            const allOthersHavePassedInterval = runningCentrifuges.every(
-                                c => c.timeIntoCycle >= centrifugeStartInterval
-                            );
-                            if (allOthersHavePassedInterval) {
+                            // Check if the OTHER centrifuge has been running for longer than the interval
+                            const otherCentrifuge = runningCentrifuges.find(c => c.id !== idleCent.id);
+                            if (!otherCentrifuge || (otherCentrifuge.timeIntoCycle >= centrifugeStartInterval)) {
                                 canStart = true;
                             }
                         }
@@ -1398,7 +1397,7 @@ export default function OperationsClient({
                             idleCent.stageTimeRemaining = centrifugeLoadTime;
                             idleCent.timeIntoCycle = 0; // Reset cycle timer on start
                             availableReceiver.drainingBy.push(idleCent.id);
-                            runningCentrifuges.push(idleCent);
+                            runningCentrifuges.push(idleCent); // Add to running list for next tick
                         }
                     }
                 }
@@ -1420,9 +1419,9 @@ export default function OperationsClient({
                     }
                 }
                 
-                const totalQQinReceivers = nextState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
+                const totalQQinReceiversNow = nextState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
                 const centrifugeThroughputQQperHour = nextState.qqInCentrifuges > 0 ? nextState.qqInCentrifuges : (centrifugeBatchSizeQQ * 3600) / (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime);
-                nextState.timeToProcessReceivers = centrifugeThroughputQQperHour > 0 ? (totalQQinReceivers / centrifugeThroughputQQperHour) : 0;
+                nextState.timeToProcessReceivers = centrifugeThroughputQQperHour > 0 ? (totalQQinReceiversNow / centrifugeThroughputQQperHour) : 0;
 
 
                 // 3. Envasadoras & Enfardadoras Logic
@@ -1603,7 +1602,7 @@ export default function OperationsClient({
             processingProgress,
         }
 
-    }, [simulationState, machines, staticSimulationResults.isWrapperBottleneck]);
+    }, [simulationState, machines, products, staticSimulationResults.isWrapperBottleneck]);
     
     const simTachos = simulationState.tachos;
     const tachosStateConfig = {
@@ -2307,3 +2306,5 @@ export default function OperationsClient({
     </div>
   );
 }
+
+    
