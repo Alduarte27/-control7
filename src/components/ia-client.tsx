@@ -862,6 +862,7 @@ export default function OperationsClient({
                     timeRemaining: prev.tachos.transferTimeSeconds,
                     progress: 0,
                 },
+                totalMasasSent: prev.totalMasasSent + 1,
             };
         });
 
@@ -1267,7 +1268,6 @@ export default function OperationsClient({
                         nextState.tachos.state = 'idle';
                         nextState.tachos.progress = 0;
                         nextState.tachos.targetReceiverId = null;
-                        nextState.totalMasasSent += 1;
                     }
                 }
 
@@ -1284,6 +1284,7 @@ export default function OperationsClient({
                             nextState.tachos.timeRemaining = nextState.tachos.transferTimeSeconds;
                             nextState.tachos.progress = 0;
                             availableReceiver.state = 'filling';
+                            nextState.totalMasasSent += 1;
                         }
                     }
                 } else if (goalMet && isTachosAuto) {
@@ -1345,14 +1346,13 @@ export default function OperationsClient({
                                 if (availableReceiver) {
                                     const otherCentrifuge = nextState.centrifuges[1 - index];
                                     let canStart = false;
-
+                                    
                                     if (otherCentrifuge.state === 'idle') {
                                         canStart = true;
-                                    } else {
-                                        if (otherCentrifuge.timeIntoCycle >= centrifugeStartInterval) {
-                                            canStart = true;
-                                        }
+                                    } else if (otherCentrifuge.timeIntoCycle >= centrifugeStartInterval) {
+                                        canStart = true;
                                     }
+                                    
                                     if (canStart) {
                                         availableReceiver.drainingBy = cent.id;
                                         cent.state = 'loading';
@@ -1584,7 +1584,7 @@ export default function OperationsClient({
 
     const tachosStateForDialog = { id: 'tachos', name: 'Tachos', ...simulationState.tachos };
 
-    const totalQQinReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
+    const totalQQInReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
 
   return (
     <div className="bg-background min-h-screen text-foreground">
@@ -2280,3 +2280,4 @@ export default function OperationsClient({
 
 
     
+
