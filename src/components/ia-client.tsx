@@ -57,14 +57,14 @@ type ReceiverState = {
     currentQQ: number; 
     state: 'idle' | 'filling' | 'ready' | 'draining';
     fillProgress: number;
-    drainingBy: string | null;
+    drainingBy: string[]; // Now an array of centrifuge IDs
     imageUrl: string | null;
 };
 
 type CentrifugeState = {
     id: string;
     name: string;
-    state: 'idle' | 'loading' | 'washing' | 'centrifuging' | 'purging';
+    state: 'idle' | 'loading' | 'washing_centrifuging' | 'purging';
     imageUrl: string | null;
     stageTimeRemaining: number;
     stageProgress: number;
@@ -811,7 +811,7 @@ export default function OperationsClient({
             },
             isFinished: false,
             silos: silos.map(s => ({...s, currentQQ: 0})),
-            receivers: receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null})),
+            receivers: receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: []})),
             centrifuges: centrifuges.map(c => ({...c, state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 })),
             tachos: {
                 id: 'tachos',
@@ -1039,7 +1039,7 @@ export default function OperationsClient({
                 currentQQ: 0,
                 state: 'idle',
                 fillProgress: 0,
-                drainingBy: null,
+                drainingBy: [],
                 imageUrl: imageUrls.receivers[r.id] || null,
             })));
             setCentrifuges([
@@ -1067,7 +1067,7 @@ export default function OperationsClient({
             setMachines(params.machines.map(m => ({ ...m, imageUrl: images.machines[m.id] || null, isSimulatingActive: false })));
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
             setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null, currentQQ: 0 })));
-            setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: null, imageUrl: images.receivers[r.id] || null })));
+            setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: [], imageUrl: images.receivers[r.id] || null })));
             setCentrifuges([
                 { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: images.centrifuges['cent1'], stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
                 { id: 'cent2', name: 'Centrífuga 2', state: 'idle', imageUrl: images.centrifuges['cent2'], stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
@@ -1311,42 +1311,45 @@ export default function OperationsClient({
                     setIsTachosAuto(false);
                 }
 
-                // 2. Centrifuges Logic - Update running machines first
+                // 2. Centrifuges Logic
                 let qqPurgedThisTick = 0;
-                
+
                 nextState.centrifuges.forEach((cent) => {
+                    // Update cycle time if not idle
                     if (cent.state !== 'idle') {
                         cent.timeIntoCycle += elapsedIncrement;
                     }
-                    
-                    cent.stageTimeRemaining = Math.max(0, cent.stageTimeRemaining - elapsedIncrement);
+
+                    if (cent.stageTimeRemaining > 0) {
+                        cent.stageTimeRemaining = Math.max(0, cent.stageTimeRemaining - elapsedIncrement);
+                    }
 
                     switch (cent.state) {
                         case 'loading': {
                             const stageDuration = centrifugeLoadTime;
-                            if (stageDuration > 0) {
-                                const qqPerSecond = centrifugeBatchSizeQQ / stageDuration;
-                                const consumption = qqPerSecond * elapsedIncrement;
-                                const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
-                                if (drainingReceiver) {
-                                    const amountToDrain = Math.min(consumption, drainingReceiver.currentQQ);
-                                    drainingReceiver.currentQQ -= amountToDrain;
-                                }
-                                cent.stageProgress = Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration);
-                            } else {
-                                cent.stageProgress = cent.stageTimeRemaining <= 0 ? 100 : 0;
+                            const consumption = (centrifugeBatchSizeQQ / stageDuration) * elapsedIncrement;
+                            const drainingReceiver = nextState.receivers.find(r => r.drainingBy.includes(cent.id));
+
+                            if (drainingReceiver) {
+                                const amountToDrain = Math.min(consumption, drainingReceiver.currentQQ);
+                                drainingReceiver.currentQQ -= amountToDrain;
                             }
                             
+                            cent.stageProgress = Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration);
+
                             if (cent.stageTimeRemaining <= 0) {
-                                cent.state = 'washing';
-                                cent.stageTimeRemaining = centrifugeWashTime;
+                                if (drainingReceiver) {
+                                    drainingReceiver.drainingBy = drainingReceiver.drainingBy.filter(id => id !== cent.id);
+                                }
+                                cent.state = 'washing_centrifuging';
+                                cent.stageTimeRemaining = centrifugeWashTime; 
                             }
                             break;
                         }
-                        case 'washing': {
+                        case 'washing_centrifuging': {
                             const stageDuration = centrifugeWashTime;
                             cent.stageProgress = stageDuration > 0 ? Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration) : 100;
-                            
+
                             if (cent.stageTimeRemaining <= 0) {
                                 cent.state = 'purging';
                                 cent.stageTimeRemaining = centrifugePurgeTime;
@@ -1359,15 +1362,9 @@ export default function OperationsClient({
                                 const qqPerSecond = centrifugeBatchSizeQQ / stageDuration;
                                 qqPurgedThisTick += qqPerSecond * elapsedIncrement;
                                 cent.stageProgress = Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration);
-                            } else {
-                                cent.stageProgress = cent.stageTimeRemaining <= 0 ? 100 : 0;
                             }
 
                             if (cent.stageTimeRemaining <= 0) {
-                                const drainingReceiver = nextState.receivers.find(r => r.drainingBy === cent.id);
-                                if (drainingReceiver) {
-                                    drainingReceiver.drainingBy = null;
-                                }
                                 cent.state = 'idle';
                                 cent.timeIntoCycle = 0;
                             }
@@ -1376,18 +1373,22 @@ export default function OperationsClient({
                     }
                 });
 
-                // Now, check if any idle machines can start
                 if (isCentrifugesAuto) {
-                    for (const idleCent of nextState.centrifuges.filter(c => c.state === 'idle')) {
-                        const availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ >= centrifugeBatchSizeQQ && r.drainingBy === null);
+                    const idleCentrifuges = nextState.centrifuges.filter(c => c.state === 'idle');
+                    const runningCentrifuges = nextState.centrifuges.filter(c => c.state !== 'idle');
+
+                    for (const idleCent of idleCentrifuges) {
+                        const availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ >= centrifugeBatchSizeQQ);
                         if (!availableReceiver) continue;
 
-                        const otherCent = nextState.centrifuges.find(c => c.id !== idleCent.id);
                         let canStart = false;
-                        if (!otherCent || otherCent.state === 'idle') {
+                        if (runningCentrifuges.length === 0) {
                             canStart = true;
                         } else {
-                           if (otherCent.timeIntoCycle >= centrifugeStartInterval) {
+                            const allOthersHavePassedInterval = runningCentrifuges.every(
+                                c => c.timeIntoCycle >= centrifugeStartInterval
+                            );
+                            if (allOthersHavePassedInterval) {
                                 canStart = true;
                             }
                         }
@@ -1396,8 +1397,8 @@ export default function OperationsClient({
                             idleCent.state = 'loading';
                             idleCent.stageTimeRemaining = centrifugeLoadTime;
                             idleCent.timeIntoCycle = 0; // Reset cycle timer on start
-                            availableReceiver.drainingBy = idleCent.id;
-                            break; 
+                            availableReceiver.drainingBy.push(idleCent.id);
+                            runningCentrifuges.push(idleCent);
                         }
                     }
                 }
@@ -1406,7 +1407,7 @@ export default function OperationsClient({
                 nextState.qqInCentrifuges = (qqPurgedThisTick / elapsedIncrement) * 3600;
 
                 nextState.receivers.forEach(r => {
-                    if (r.currentQQ <= 0.1 && r.state === 'ready' && r.drainingBy === null) {
+                    if (r.currentQQ <= 0.1 && r.state === 'ready' && r.drainingBy.length === 0) {
                        r.state = 'idle';
                     }
                 });
@@ -1867,8 +1868,7 @@ export default function OperationsClient({
                                     const stateConfig = {
                                         idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
                                         loading: { text: "Cargando", color: "text-blue-600", icon: Droplets },
-                                        washing: { text: "Lavando", color: "text-purple-600", icon: Waves },
-                                        centrifuging: { text: "Centrifugando", color: "text-teal-500", icon: Wind },
+                                        washing_centrifuging: { text: "Lavando/Girar", color: "text-purple-600", icon: Waves },
                                         purging: { text: "Purgando", color: "text-amber-600", icon: Snowflake },
                                     };
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
@@ -1882,8 +1882,7 @@ export default function OperationsClient({
                                                 </div>
                                                 <Progress value={simCentrifuge.stageProgress} indicatorClassName={cn(
                                                     simCentrifuge.state === 'loading' ? 'bg-blue-500' :
-                                                    simCentrifuge.state === 'washing' ? 'bg-purple-500' :
-                                                    simCentrifuge.state === 'centrifuging' ? 'bg-teal-500' :
+                                                    simCentrifuge.state === 'washing_centrifuging' ? 'bg-purple-500' :
                                                     simCentrifuge.state === 'purging' ? 'bg-amber-500' :
                                                     'bg-primary'
                                                 )} />
