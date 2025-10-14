@@ -1646,16 +1646,20 @@ export default function OperationsClient({
         const singleCycleTime = centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime;
         const qqPerCycle = centrifugeBatchSizeQQ;
         
-        // Effective time per batch for the whole system is the interval between starts
         const effectiveTimePerBatch = centrifugeStartInterval > 0 ? centrifugeStartInterval : singleCycleTime;
         const qqRateFromCentrifuges = effectiveTimePerBatch > 0 ? (qqPerCycle * 3600) / effectiveTimePerBatch : 0;
         
         const qqRateToPackers = (totalKgConsumedPerSecond * 3600) / KG_PER_QUINTAL;
         
-        let bottleneck = 'none';
-        if (staticSimulationResults.isWrapperBottleneck) {
+        let bottleneck: 'none' | 'wrapper' | 'centrifuge' | 'inactive' = 'none';
+
+        const anyMachineActive = machines.some(m => m.isSimulatingActive);
+
+        if (!anyMachineActive) {
+            bottleneck = 'inactive';
+        } else if (staticSimulationResults.isWrapperBottleneck) {
             bottleneck = 'wrapper';
-        } else if (qqRateToPackers > qqRateFromCentrifuges && machines.some(m => m.isSimulatingActive)) {
+        } else if (qqRateToPackers > qqRateFromCentrifuges) {
             bottleneck = 'centrifuge';
         }
 
@@ -1762,44 +1766,48 @@ export default function OperationsClient({
             <div className="space-y-8">
                 <Card>
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                         <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4">
                             <CardTitle>Controles de Simulación</CardTitle>
-                             <TooltipProvider>
-                                 <Tooltip>
-                                     <TooltipTrigger asChild>
-                                          <Button variant="ghost" size="icon" onClick={handleShowImagesChange}>
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" onClick={handleShowImagesChange}>
                                             {showImages ? <ImageOff className="h-5 w-5" /> : <ImageIcon className="h-5 w-5" />}
                                         </Button>
                                     </TooltipTrigger>
-                                      <TooltipContent> <p>{showImages ? 'Ocultar Imágenes' : 'Mostrar Imágenes'}</p> </TooltipContent>
-                                 </Tooltip>
-                                 <Tooltip>
-                                     <TooltipTrigger asChild>
-                                          <AlertDialog>
-                                              <AlertDialogTrigger asChild>
-                                                   <Button variant="ghost" size="icon">
-                                                        <RotateCcw className="h-5 w-5 text-muted-foreground" />
-                                                   </Button>
-                                              </AlertDialogTrigger>
-                                              <AlertDialogContent>
-                                                  <AlertDialogHeader>
-                                                        <AlertDialogTitle>Restaurar Configuración por Defecto</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            ¿Estás seguro? Esto restaurará todos los parámetros de la simulación (en este navegador) y las imágenes (para todos los usuarios) a sus valores originales.
-                                                        </AlertDialogDescription>
-                                                  </AlertDialogHeader>
-                                                  <AlertDialogFooter>
-                                                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                       <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
-                                                  </AlertDialogFooter>
-                                              </AlertDialogContent>
-                                          </AlertDialog>
-                                     </TooltipTrigger>
-                                      <TooltipContent> <p>Restaurar valores por defecto</p> </TooltipContent>
-                                 </Tooltip>
-                             </TooltipProvider>
-                         </div>
-                          <div className="flex flex-wrap items-center gap-2">
+                                    <TooltipContent>
+                                        <p>{showImages ? 'Ocultar Imágenes' : 'Mostrar Imágenes'}</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <RotateCcw className="h-5 w-5 text-muted-foreground" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Restaurar Configuración por Defecto</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        ¿Estás seguro? Esto restaurará todos los parámetros de la simulación (en este navegador) y las imágenes (para todos los usuarios) a sus valores originales.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Restaurar valores por defecto</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
                            <Button onClick={startClock} disabled={isSimulating} variant="secondary">
                                 <Play className="mr-2 h-4 w-4" /> Iniciar
                            </Button>
@@ -2246,6 +2254,15 @@ export default function OperationsClient({
                             <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
                         </CardHeader>
                         <CardContent>
+                             {liveSimulationResults.bottleneck === 'inactive' && (
+                                 <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-blue-500/10 text-blue-600">
+                                     <PowerOff className="h-5 w-5 mt-0.5" />
+                                     <div>
+                                         <h4 className="font-bold mb-1">Línea Detenida</h4>
+                                         <p>Inicia una o más envasadoras para analizar el flujo de producción y detectar posibles cuellos de botella.</p>
+                                     </div>
+                                 </div>
+                            )}
                              {liveSimulationResults.bottleneck === 'none' && (
                                  <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-green-600/10 text-green-700">
                                      <CheckCircle2 className="h-5 w-5 mt-0.5" />
@@ -2401,5 +2418,3 @@ export default function OperationsClient({
     </div>
   );
 }
-
-    
