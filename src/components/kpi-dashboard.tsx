@@ -1,7 +1,7 @@
 'use client';
 
 import KpiCard from './kpi-card';
-import { Target, PackageCheck, CheckCircle2, ClipboardPlus, ClipboardCheck, Sun, Moon } from 'lucide-react';
+import { Target, PackageCheck, CheckCircle2, TrendingUp, TrendingDown, ClipboardPlus } from 'lucide-react';
 import type { ProductData } from '@/lib/types';
 import type { KpiCardProps } from './kpi-card';
 
@@ -13,17 +13,12 @@ const KG_PER_QUINTAL = 50;
 
 export default function KpiDashboard({ data }: KpiDashboardProps) {
   // --- Helper function to calculate total weight ---
-  const calculateWeight = (products: ProductData[], type: 'planned' | 'actual' | 'day' | 'night'): number => {
+  const calculateWeight = (products: ProductData[], type: 'planned' | 'actual'): number => {
     return products.reduce((totalWeight, item) => {
-      let sacks = 0;
-      if (type === 'planned') {
-        sacks = item.planned || 0;
-      } else if (type === 'actual') {
-        sacks = Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0);
-      } else { // 'day' or 'night'
-        sacks = Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal[type] || 0), 0);
-      }
-      const itemWeight = sacks * (item.sackWeight || 50); // Default to 50kg if not specified
+      const sacks = type === 'planned'
+        ? (item.planned || 0)
+        : Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+      const itemWeight = sacks * (item.sackWeight || 50);
       return totalWeight + itemWeight;
     }, 0);
   };
@@ -43,60 +38,75 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
     item => item.categoryIsPlanned && (item.planned || 0) === 0
   );
 
+  const unplannedProductionSacos = unplannedProductionProducts.reduce((sum, item) =>
+    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
+  );
+  const unplannedProductionQq = calculateWeight(unplannedProductionProducts, 'actual') / KG_PER_QUINTAL;
+
   // Calculate totals for all products for overall display
   const totalActualSacks = data.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
   const totalActualQuintales = calculateWeight(data, 'actual') / KG_PER_QUINTAL;
-
+  
   const totalActualForComplianceSacks = productsForCompliance.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
+  const totalActualForComplianceQuintales = calculateWeight(productsForCompliance, 'actual') / KG_PER_QUINTAL;
 
-  const plannedProductionSacos = totalActualForComplianceSacks;
-  const plannedProductionQq = calculateWeight(productsForCompliance, 'actual') / KG_PER_QUINTAL;
+  const variance = totalActualForComplianceSacks - totalPlannedForComplianceSacks;
+  const compliancePercentage = totalPlannedForComplianceSacks > 0
+    ? (totalActualForComplianceSacks / totalPlannedForComplianceSacks) * 100
+    : 0;
 
-  const unplannedProductionSacos = unplannedProductionProducts.reduce((sum, item) =>
-    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
-  );
-  const unplannedProductionQq = calculateWeight(unplannedProductionProducts, 'actual') / KG_PER_QUINTAL;
-  
-  const totalMixProduction = plannedProductionSacos + unplannedProductionSacos;
-  const plannedPercentage = totalMixProduction > 0 ? (plannedProductionSacos / totalMixProduction) * 100 : 0;
-  const unplannedPercentage = totalMixProduction > 0 ? (unplannedProductionSacos / totalMixProduction) * 100 : 0;
+  const kpiCards: KpiCardProps[] = [
+    {
+      title: "Total Planificado (Sacos)",
+      value: totalPlannedForComplianceSacks,
+      icon: Target,
+      description: "Suma de producción planificada para productos en categorías planificables.",
+      subValue: `(${totalPlannedForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`,
+    },
+    {
+      title: "Real s/Plan (Sacos)",
+      value: totalActualForComplianceSacks,
+      icon: PackageCheck,
+      description: "Producción real de los productos que tenían un plan.",
+      subValue: `(${totalActualForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`,
+    },
+    {
+      title: "No Programado (Sacos)",
+      value: unplannedProductionSacos,
+      icon: ClipboardPlus,
+      description: "Producción de productos planificables que no tenían un plan (plan = 0).",
+      subValue: `(${unplannedProductionQq.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`,
+    },
+    {
+      title: "Producción Total Real (Sacos)",
+      value: totalActualSacks,
+      icon: PackageCheck,
+      description: "Suma de toda la producción real, incluyendo no programada y no planificable.",
+      subValue: `(${totalActualQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`,
+    },
+    {
+      title: "Varianza vs. Plan Total",
+      value: variance,
+      icon: variance >= 0 ? TrendingUp : TrendingDown,
+      valueColor: variance >= 0 ? 'text-green-600' : 'text-destructive',
+      description: "Diferencia entre la producción real (sobre plan) y la producción planificada.",
+    },
+    {
+      title: "Cumplimiento del Plan",
+      value: `${compliancePercentage.toFixed(1)}%`,
+      icon: CheckCircle2,
+      description: "Porcentaje de la producción planificada que se logró.",
+      valueColor: compliancePercentage >= 95 ? 'text-green-600' : compliancePercentage >= 90 ? 'text-yellow-600' : 'text-destructive',
+    }
+  ];
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-      <KpiCard 
-        title="Total Planificado (Sacos)" 
-        value={totalPlannedForComplianceSacks.toLocaleString()} 
-        icon={Target}
-        description="Suma total de la producción planificada para todos los productos de categorías planificables."
-        subValue={`(${totalPlannedForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
-      />
-      <KpiCard 
-        title="Producción Total Real (Sacos)" 
-        value={totalActualSacks.toLocaleString()} 
-        icon={PackageCheck}
-        description="Suma total de toda la producción real, incluyendo planificada, no programada y de categorías no planificadas."
-        subValue={`(${totalActualQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
-      />
-       <KpiCard
-        title="Producción Planificada"
-        value={plannedProductionSacos.toLocaleString()}
-        subValue={`${plannedProductionQq.toFixed(1)} qq (${plannedPercentage.toFixed(1)}%)`}
-        icon={ClipboardCheck}
-        description="Producción real que correspondía a un producto con un plan > 0. El porcentaje es sobre el total real de producción planificable."
-        fractionDigits={0}
-      />
-      <KpiCard
-        title="Producción No Planificada"
-        value={unplannedProductionSacos.toLocaleString()}
-        subValue={`${unplannedProductionQq.toFixed(1)} qq (${unplannedPercentage.toFixed(1)}%)`}
-        icon={ClipboardPlus}
-        description="Producción real de productos planificables que tenían un plan de 0. El porcentaje es sobre el total real de producción planificable."
-        fractionDigits={0}
-      />
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      {kpiCards.map((props) => <KpiCard key={props.title} {...props} />)}
     </div>
   );
 }
