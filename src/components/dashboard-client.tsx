@@ -18,6 +18,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
 
+const KG_PER_QUINTAL = 50;
 
 type WeeklySummaryData = {
   week: number;
@@ -26,6 +27,10 @@ type WeeklySummaryData = {
   totalActual: number;
   actualForPlanned: number;
   unplannedProduction: number;
+  plannedQQ: number;
+  actualForPlannedQQ: number;
+  unplannedProductionQQ: number;
+  totalActualQQ: number;
 };
 
 type WeeklyShiftSummaryData = {
@@ -33,12 +38,16 @@ type WeeklyShiftSummaryData = {
     day: number;
     night: number;
     week: number;
+    dayQQ: number;
+    nightQQ: number;
 }
 
 type DailySummaryData = {
   name: string;
   day: number;
   night: number;
+  dayQQ: number;
+  nightQQ: number;
 }
 
 type ProductSummaryData = {
@@ -46,6 +55,7 @@ type ProductSummaryData = {
   planned: number;
   actual: number;
   color?: string;
+  sackWeight: number;
 };
 
 const weeklyChartConfig = {
@@ -131,10 +141,63 @@ type FullPlanDoc = {
   year: number;
 }
 
+const ProductTooltipContent = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload as ProductSummaryData;
+      const sackWeight = data.sackWeight || 50;
+
+      const plannedQQ = (data.planned * sackWeight) / KG_PER_QUINTAL;
+      const actualQQ = (data.actual * sackWeight) / KG_PER_QUINTAL;
+
+      return (
+        <div className="rounded-lg border bg-background p-2 shadow-sm text-sm min-w-[250px]">
+          <p className="font-bold mb-2">{label}</p>
+          <div className="grid grid-cols-[1fr,auto] gap-x-4 gap-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--accent))'}} />
+              <span>Planificado:</span>
+            </div>
+            <span className="text-right font-medium">{data.planned.toLocaleString()} sacos ({plannedQQ.toFixed(1)} qq)</span>
+            
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--chart-2))'}} />
+              <span>Real:</span>
+            </div>
+            <span className="text-right font-medium">{data.actual.toLocaleString()} sacos ({actualQQ.toFixed(1)} qq)</span>
+          </div>
+        </div>
+      );
+    }
+    return null;
+};
+
+const CustomShiftTooltipContent = ({ active, payload, label, config }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="rounded-lg border bg-background p-2 shadow-sm text-sm">
+        <p className="font-bold mb-2">{label}</p>
+        {payload.map((item: any) => (
+          <div key={item.dataKey} className="grid grid-cols-[1fr,auto] gap-x-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+              <span>{config[item.dataKey]?.label}:</span>
+            </div>
+            <span className="text-right font-medium">
+              {item.value.toLocaleString()} sacos ({item.payload[`${item.dataKey}QQ`]?.toFixed(1)} qq)
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+};
+
 const WeeklyTooltipContent = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload as WeeklySummaryData;
       const variance = data.actualForPlanned - data.planned;
+      const varianceQQ = data.actualForPlannedQQ - data.plannedQQ;
       const varianceColor = variance >= 0 ? 'text-green-600' : 'text-destructive';
       const VarianceIcon = variance >= 0 ? TrendingUp : TrendingDown;
 
@@ -146,25 +209,25 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
               <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--accent))'}} />
               <span>Planificado:</span>
             </div>
-            <span className="text-right font-medium">{data.planned.toLocaleString()}</span>
+            <span className="text-right font-medium">{data.planned.toLocaleString()} ({data.plannedQQ.toFixed(1)} qq)</span>
             
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--chart-2))'}} />
               <span>Ejecutado (s/Plan):</span>
             </div>
-            <span className="text-right font-medium">{data.actualForPlanned.toLocaleString()}</span>
+            <span className="text-right font-medium">{data.actualForPlanned.toLocaleString()} ({data.actualForPlannedQQ.toFixed(1)} qq)</span>
 
             <div className={cn("flex items-center gap-2 pl-4 text-xs", varianceColor)}>
               <VarianceIcon className="h-3 w-3" />
               <span>Varianza (s/Plan):</span>
             </div>
-            <span className={cn("text-right font-medium text-xs", varianceColor)}>{variance.toLocaleString()}</span>
+            <span className={cn("text-right font-medium text-xs", varianceColor)}>{variance.toLocaleString()} ({varianceQQ.toFixed(1)} qq)</span>
             
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full" style={{backgroundColor: 'hsl(var(--chart-3))'}} />
               <span>No Programado:</span>
             </div>
-            <span className="text-right font-medium">{data.unplannedProduction.toLocaleString()}</span>
+            <span className="text-right font-medium">{data.unplannedProduction.toLocaleString()} ({data.unplannedProductionQQ.toFixed(1) } qq)</span>
 
             <div className="col-span-2 border-t my-1"></div>
             
@@ -172,7 +235,7 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
               <div className="w-1 h-1 rounded-full bg-foreground/50 ml-1 mr-1" />
               <span>Producción Total:</span>
             </div>
-            <span className="text-right font-bold">{data.totalActual.toLocaleString()}</span>
+            <span className="text-right font-bold">{data.totalActual.toLocaleString()} ({data.totalActualQQ.toFixed(1)} qq)</span>
           </div>
         </div>
       );
@@ -245,60 +308,129 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   React.useEffect(() => {
     if (loading) return;
     
+    const plansMap = new Map(allPlans.map(p => [p.id, p]));
+    const plannableCategories = categories.filter(c => c.isPlanned).map(c => c.id);
+
+    const calculateWeight = (products: ProductData[], type: 'planned' | 'actual', categoryIdFilter?: string): number => {
+      return products.reduce((totalWeight, item) => {
+        if (categoryIdFilter && item.categoryId !== categoryIdFilter) return totalWeight;
+        
+        let sacks = 0;
+        if (type === 'planned') {
+          sacks = item.planned || 0;
+        } else { // actual
+          sacks = Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+        }
+        const itemWeight = sacks * (item.sackWeight || 50);
+        return totalWeight + itemWeight;
+      }, 0);
+    };
+    
     // --- Data for Weekly Summary Charts (Unaffected by specific week filter) ---
     const summariesForCharts = filteredSummaries;
     
     // NEW LOGIC: Group actual production by plannable categories for the main chart
     const weeklySummaryForChart: WeeklySummaryData[] = summariesForCharts.map(summary => {
-        const plannableCategories = categories.filter(c => c.isPlanned).map(c => c.id);
+        const plan = plansMap.get(summary.id);
+        if (!plan) return null; // Should not happen if data is consistent
+
         const nonPlannableCategories = categories.filter(c => !c.isPlanned).map(c => c.id);
 
-        let totalPlanned = 0;
-        let actualForPlanned = 0;
-        let unplannedProduction = 0; // This will now represent production from non-plannable categories
+        let totalPlannedSacks = 0, actualForPlannedSacks = 0, unplannedProductionSacks = 0;
+        let totalPlannedQQ = 0, actualForPlannedQQ = 0, unplannedProductionQQ = 0;
 
-        // Calculate based on the categoryTotals stored in the summary
-        for (const catId in summary.categoryTotals) {
-            if (plannableCategories.includes(catId)) {
-                const catTotals = summary.categoryTotals[catId];
-                totalPlanned += catTotals.planned || 0;
-                // Sum ALL actual production from plannable categories, regardless of original plan
-                actualForPlanned += catTotals.totalActual || 0; 
-            } else if (nonPlannableCategories.includes(catId)) {
-                unplannedProduction += summary.categoryTotals[catId].totalActual || 0;
-            }
+        if (selectedCategoryId === 'all') {
+            plan.products.forEach(p => {
+                const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
+                const productWeight = p.sackWeight || 50;
+
+                if (plannableCategories.includes(p.categoryId)) {
+                    totalPlannedSacks += p.planned || 0;
+                    totalPlannedQQ += (p.planned || 0) * productWeight / KG_PER_QUINTAL;
+                    actualForPlannedSacks += productTotalActual;
+                    actualForPlannedQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
+                } else {
+                    unplannedProductionSacks += productTotalActual;
+                    unplannedProductionQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
+                }
+            });
+        } else {
+            plan.products.filter(p => p.categoryId === selectedCategoryId).forEach(p => {
+                const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
+                const productWeight = p.sackWeight || 50;
+
+                if (plannableCategories.includes(p.categoryId)) {
+                    totalPlannedSacks += p.planned || 0;
+                    totalPlannedQQ += (p.planned || 0) * productWeight / KG_PER_QUINTAL;
+                    actualForPlannedSacks += productTotalActual;
+                    actualForPlannedQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
+                } else {
+                    unplannedProductionSacks += productTotalActual;
+                    unplannedProductionQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
+                }
+            });
         }
+
+        const totalActualSacks = actualForPlannedSacks + unplannedProductionSacks;
+        const totalActualQQ = actualForPlannedQQ + unplannedProductionQQ;
         
-        // Handle filter by a specific category
-        if (selectedCategoryId !== 'all') {
-            const catIsPlannable = plannableCategories.includes(selectedCategoryId);
-            const totals = summary.categoryTotals?.[selectedCategoryId] || { planned: 0, totalActual: 0, actualForPlanned: 0, unplannedProduction: 0 };
-            
-            totalPlanned = totals.planned || 0;
-            actualForPlanned = catIsPlannable ? (totals.totalActual || 0) : 0;
-            unplannedProduction = !catIsPlannable ? (totals.totalActual || 0) : 0;
-        }
-
         return {
             week: summary.week,
             name: `S${summary.week}`,
-            planned: totalPlanned,
-            actualForPlanned: actualForPlanned,
-            unplannedProduction: unplannedProduction,
-            totalActual: summary.totalActual,
+            planned: totalPlannedSacks,
+            actualForPlanned: actualForPlannedSacks,
+            unplannedProduction: unplannedProductionSacks,
+            totalActual: totalActualSacks,
+            plannedQQ: totalPlannedQQ,
+            actualForPlannedQQ: actualForPlannedQQ,
+            unplannedProductionQQ: unplannedProductionQQ,
+            totalActualQQ: totalActualQQ,
         };
-    }).reverse();
+    }).filter((s): s is WeeklySummaryData => s !== null).reverse();
     setWeeklySummaryData(weeklySummaryForChart);
     
     const weeklyShiftDataForChart = summariesForCharts.map(summary => {
-        // NOTE: Per-category shift data is not stored, so this chart is always for all categories.
-        const totalDay = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.day, 0);
-        const totalNight = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.night, 0);
+        const plan = plansMap.get(summary.id);
+        let totalDayQQ = 0, totalNightQQ = 0;
+        
+        if (plan) {
+            plan.products.forEach(p => {
+                const sackWeight = p.sackWeight || 50;
+                for (const dayKey in summary.dailyShiftTotals) {
+                    const shift = summary.dailyShiftTotals[dayKey as keyof typeof summary.dailyShiftTotals];
+                    // This is an approximation as we don't have per-product shift data.
+                    // We distribute the day's total QQ based on the overall shift ratio.
+                    const dayTotal = shift.day + shift.night;
+                    if (dayTotal > 0) {
+                        // This logic is flawed because shift totals are for ALL products.
+                        // A better approach is to recalculate from plan products.
+                    }
+                }
+            });
+        }
+
+        // Recalculate totals from plan data for accuracy
+        let totalDaySacks = 0;
+        let totalNightSacks = 0;
+        if(plan) {
+            plan.products.forEach(p => {
+                const sackWeight = p.sackWeight || 50;
+                for(const day of Object.values(p.actual)) {
+                    totalDaySacks += day.day || 0;
+                    totalNightSacks += day.night || 0;
+                    totalDayQQ += (day.day || 0) * sackWeight / KG_PER_QUINTAL;
+                    totalNightQQ += (day.night || 0) * sackWeight / KG_PER_QUINTAL;
+                }
+            });
+        }
+
         return {
             name: `S${summary.week}`,
-            day: totalDay,
-            night: totalNight,
-            week: summary.week
+            day: totalDaySacks,
+            night: totalNightSacks,
+            week: summary.week,
+            dayQQ: totalDayQQ,
+            nightQQ: totalNightQQ,
         };
     }).reverse(); // reverse to show chronologically
     setWeeklyShiftData(weeklyShiftDataForChart);
@@ -308,28 +440,41 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         ? summariesForCharts
         : summariesForCharts.filter(summary => summary.id === selectedWeek);
 
+    const plansForDetailCharts = summariesForDetailCharts.map(s => plansMap.get(s.id)).filter(p => !!p) as FullPlanDoc[];
+
     const dailyTotals = {
-        mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
-        thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
-        sun: { day: 0, night: 0 } 
+        mon: { day: 0, night: 0, dayQQ: 0, nightQQ: 0 }, 
+        tue: { day: 0, night: 0, dayQQ: 0, nightQQ: 0 }, 
+        wed: { day: 0, night: 0, dayQQ: 0, nightQQ: 0 }, 
+        thu: { day: 0, night: 0, dayQQ: 0, nightQQ: 0 }, 
+        fri: { day: 0, night: 0, dayQQ: 0, nightQQ: 0 }, 
+        sat: { day: 0, night: 0, dayQQ: 0, nightQQ: 0 }, 
+        sun: { day: 0, night: 0, dayQQ: 0, nightQQ: 0 } 
     };
 
-    summariesForDetailCharts.forEach(summary => {
-         // NOTE: Per-category daily shift data is not stored, so this chart is always for all categories.
-        for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
-            dailyTotals[day].day += summary.dailyShiftTotals[day]?.day || 0;
-            dailyTotals[day].night += summary.dailyShiftTotals[day]?.night || 0;
-        }
+    plansForDetailCharts.forEach(plan => {
+        plan.products.forEach(product => {
+            const sackWeight = product.sackWeight || 50;
+            for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
+                const shiftData = product.actual[day];
+                if (shiftData) {
+                    dailyTotals[day].day += shiftData.day || 0;
+                    dailyTotals[day].night += shiftData.night || 0;
+                    dailyTotals[day].dayQQ += (shiftData.day || 0) * sackWeight / KG_PER_QUINTAL;
+                    dailyTotals[day].nightQQ += (shiftData.night || 0) * sackWeight / KG_PER_QUINTAL;
+                }
+            }
+        });
     });
 
     setDailyData([
-        { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
-        { name: 'Martes', day: dailyTotals.tue.day, night: dailyTotals.tue.night },
-        { name: 'Miércoles', day: dailyTotals.wed.day, night: dailyTotals.wed.night },
-        { name: 'Jueves', day: dailyTotals.thu.day, night: dailyTotals.thu.night },
-        { name: 'Viernes', day: dailyTotals.fri.day, night: dailyTotals.fri.night },
-        { name: 'Sábado', day: dailyTotals.sat.day, night: dailyTotals.sat.night },
-        { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
+        { name: 'Lunes', ...dailyTotals.mon },
+        { name: 'Martes', ...dailyTotals.tue },
+        { name: 'Miércoles', ...dailyTotals.wed },
+        { name: 'Jueves', ...dailyTotals.thu },
+        { name: 'Viernes', ...dailyTotals.fri },
+        { name: 'Sábado', ...dailyTotals.sat },
+        { name: 'Domingo', ...dailyTotals.sun },
     ]);
     
     // --- Single Week Product Chart Logic (Only runs if a specific week is selected) ---
@@ -345,8 +490,9 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                 .map((p: ProductData) => ({
                     name: p.productName,
                     planned: p.planned,
-                    actual: Object.values(p.actual).reduce((sum, dayVal) => sum + dayVal.day + dayVal.night, 0),
+                    actual: Object.values(p.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0),
                     color: p.color,
+                    sackWeight: p.sackWeight || 50,
                 }));
             setProductData(productChartData);
         } else {
@@ -357,24 +503,22 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     }
 
     // --- Aggregated Product Chart Logic (Rendimiento Histórico) ---
-    const plannedCategoryIds = new Set(categories.filter(c => c.isPlanned).map(c => c.id));
     const filteredPlanIds = new Set(summariesForCharts.map(s => s.id));
     const relevantPlans = allPlans.filter(p => filteredPlanIds.has(p.id));
-    const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string } } = {};
+    const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string; sackWeight: number; } } = {};
 
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
-            const isCategoryPlanned = plannedCategoryIds.has(product.categoryId);
-            
-            // Apply category filter if checkbox is checked
-            if (showOnlyPlannedInHistory && !isCategoryPlanned) {
+            if (showOnlyPlannedInHistory && !plannableCategories.has(product.categoryId)) {
                 return;
             }
 
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
-            if (categoryMatch) {
+            const hasActivity = (product.planned || 0) > 0 || Object.values(product.actual).some(d => (d.day || 0) > 0 || (d.night || 0) > 0);
+            
+            if (categoryMatch && hasActivity) {
                 if (!productTotals[product.id]) {
-                    productTotals[product.id] = { name: product.productName, planned: 0, actual: 0, color: product.color };
+                    productTotals[product.id] = { name: product.productName, planned: 0, actual: 0, color: product.color, sackWeight: product.sackWeight || 50 };
                 }
                 productTotals[product.id].planned += product.planned || 0;
                 productTotals[product.id].actual += Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
@@ -382,7 +526,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         });
     });
 
-    const aggregatedData = Object.values(productTotals).filter(p => p.planned > 0 || p.actual > 0);
+    const aggregatedData = Object.values(productTotals);
     setAggregatedProductData(aggregatedData);
 
   }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory]);
@@ -531,7 +675,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                                 <CartesianGrid vertical={false} />
                                 <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
                                 <YAxis />
-                                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                                <RechartsTooltip cursor={false} content={<CustomShiftTooltipContent config={shiftChartConfig} />} />
                                 <ChartLegend content={<ChartLegendContent />} />
                                 <Bar dataKey="day" fill="var(--color-day)" radius={4} />
                                 <Bar dataKey="night" fill="var(--color-night)" radius={4} />
@@ -552,7 +696,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                                 <CartesianGrid vertical={false} />
                                 <XAxis dataKey="name" tickLine={false} tickMargin={10} axisLine={false} />
                                 <YAxis />
-                                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                                <RechartsTooltip cursor={false} content={<CustomShiftTooltipContent config={dailyChartConfig} />} />
                                 <ChartLegend content={<ChartLegendContent />} />
                                 <Bar dataKey="day" fill="var(--color-day)" radius={4} />
                                 <Bar dataKey="night" fill="var(--color-night)" radius={4} />
@@ -588,7 +732,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                                     tickFormatter={(value) => value.slice(0, 15) + (value.length > 15 ? '...' : '')}
                                 />
                                 <YAxis />
-                                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                                <RechartsTooltip cursor={false} content={<ProductTooltipContent />} />
                                 <ChartLegend content={<ChartLegendContent />} />
                                 <Bar dataKey="planned" fill="var(--color-planned)" radius={4}>
                                     {productData.map((entry, index) => (
@@ -643,7 +787,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                                     tickFormatter={(value) => value.slice(0, 15) + (value.length > 15 ? '...' : '')}
                                 />
                                 <YAxis />
-                                <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                                <RechartsTooltip cursor={false} content={<ProductTooltipContent />} />
                                 <ChartLegend content={<ChartLegendContent />} />
                                 <Bar dataKey="planned" fill="var(--color-planned)" radius={4}>
                                     {aggregatedProductData.map((entry, index) => (
