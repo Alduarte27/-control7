@@ -1,5 +1,6 @@
 
 
+
 'use client';
 
 import React from 'react';
@@ -7,7 +8,7 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown, Activity, Box } from 'lucide-react';
+import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown, Activity, Box, PackageCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query } from 'firebase/firestore';
@@ -265,6 +266,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
 
   // New state for the involved products count
   const [involvedProductsCount, setInvolvedProductsCount] = React.useState({ planned: 0, unplanned: 0 });
+  const [totalProduction, setTotalProduction] = React.useState({ sacos: 0, qq: 0 });
 
   const weekOptions = React.useMemo(() => {
     return filteredSummaries
@@ -319,29 +321,29 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     
     const weeklySummaryForChart: WeeklySummaryData[] = summariesForCharts.map(summary => {
         const plan = plansMap.get(summary.id);
-        if (!plan) return null;
-
+        
         let totalPlannedSacks = 0, actualForPlannedSacks = 0, unplannedProductionSacks = 0;
         let totalPlannedQQ = 0, actualForPlannedQQ = 0, unplannedProductionQQ = 0;
 
-        plan.products.forEach(p => {
-            const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
-            if (!categoryMatch) return;
+        if (plan) {
+            plan.products.forEach(p => {
+                const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
+                if (!categoryMatch) return;
 
-            const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
-            const productWeight = p.sackWeight || 50;
-            const isProductPlannable = plannableCategories.has(p.categoryId);
+                const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
+                const productWeight = p.sackWeight || 50;
 
-            if (isProductPlannable) {
-                totalPlannedSacks += p.planned || 0;
-                totalPlannedQQ += (p.planned || 0) * productWeight / KG_PER_QUINTAL;
-                actualForPlannedSacks += productTotalActual;
-                actualForPlannedQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
-            } else {
-                unplannedProductionSacks += productTotalActual;
-                unplannedProductionQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
-            }
-        });
+                if (plannableCategories.has(p.categoryId)) {
+                    totalPlannedSacks += p.planned || 0;
+                    totalPlannedQQ += (p.planned || 0) * productWeight / KG_PER_QUINTAL;
+                    actualForPlannedSacks += productTotalActual;
+                    actualForPlannedQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
+                } else {
+                    unplannedProductionSacks += productTotalActual;
+                    unplannedProductionQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
+                }
+            });
+        }
 
         const totalActualSacks = actualForPlannedSacks + unplannedProductionSacks;
         const totalActualQQ = actualForPlannedQQ + unplannedProductionQQ;
@@ -444,6 +446,9 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
         if (plan) {
             const productChartData = plan.products
                 .filter((p: ProductData) => {
+                    if (showOnlyPlannedInHistory && !plannableCategories.has(p.categoryId)) {
+                        return false;
+                    }
                     const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
                     const hasActivity = p.planned > 0 || Object.values(p.actual).some(d => d.day > 0 || d.night > 0);
                     return categoryMatch && hasActivity;
@@ -473,12 +478,16 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
 
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
-            const isProductPlannable = plannableCategories.has(product.categoryId);
-            const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
-            const hasActivity = (product.planned || 0) > 0 || totalActual > 0;
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
             
-            if (categoryMatch && hasActivity && (!showOnlyPlannedInHistory || isProductPlannable)) {
+            if (showOnlyPlannedInHistory && !plannableCategories.has(product.categoryId)) {
+                return;
+            }
+
+            const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+            const hasActivity = (product.planned || 0) > 0 || totalActual > 0;
+            
+            if (categoryMatch && hasActivity) {
                  if (!productTotals[product.id]) {
                     productTotals[product.id] = { name: product.productName, planned: 0, actual: 0, color: product.color, sackWeight: product.sackWeight || 50 };
                 }
@@ -504,6 +513,11 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
 
     const aggregatedData = Object.values(productTotals).filter(p => (p.planned > 0 || p.actual > 0));
     setAggregatedProductData(aggregatedData);
+    
+    const totalSacos = aggregatedData.reduce((sum, p) => sum + p.actual, 0);
+    const totalQq = aggregatedData.reduce((sum, p) => sum + (p.actual * p.sackWeight / KG_PER_QUINTAL), 0);
+    setTotalProduction({ sacos: totalSacos, qq: totalQq });
+
 
   }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory]);
 
@@ -597,6 +611,14 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
         </Collapsible>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <KpiCard
+                title="Producción Total en Período"
+                value={totalProduction.sacos}
+                subValue={`${totalProduction.qq.toLocaleString(undefined, { maximumFractionDigits: 1, })} qq`}
+                icon={PackageCheck}
+                description="Suma total de la producción real (en sacos y quintales) para el período y filtros seleccionados."
+                fractionDigits={0}
+            />
             <KpiCard
                 title="Productos Involucrados"
                 value={involvedProductsCount.planned + involvedProductsCount.unplanned}
