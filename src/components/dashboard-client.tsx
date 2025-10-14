@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown, Activity, Box, PackageCheck, ClipboardCheck, ClipboardPlus } from 'lucide-react';
+import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown, Activity, Box, PackageCheck, ClipboardCheck, ClipboardPlus, Sun, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query } from 'firebase/firestore';
@@ -15,7 +15,6 @@ import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
-import KpiDashboard from './kpi-dashboard';
 import KpiCard from './kpi-card';
 
 const KG_PER_QUINTAL = 50;
@@ -273,6 +272,12 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
       unplannedQq: 0,
       unplannedPercentage: 0,
   });
+  const [shiftTotals, setShiftTotals] = React.useState({
+    daySacos: 0,
+    dayQq: 0,
+    nightSacos: 0,
+    nightQq: 0,
+  });
 
   const weekOptions = React.useMemo(() => {
     return filteredSummaries
@@ -488,23 +493,32 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     let plannedProductionQq = 0;
     let unplannedProductionSacos = 0;
     let unplannedProductionQq = 0;
+    let totalDaySacos = 0;
+    let totalDayQq = 0;
+    let totalNightSacos = 0;
+    let totalNightQq = 0;
 
 
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
             const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
             
-            // Grand Total KPI (ignores category filter)
-            if (!showOnlyPlannedInHistory || plannableCategories.has(product.categoryId)) {
-                const totalActualQq = totalActual * (product.sackWeight || 50) / KG_PER_QUINTAL;
-                totalSacosGlobal += totalActual;
-                totalQqGlobal += totalActualQq;
+            // Grand Total KPI & Shift KPIs (ignore category filter)
+            const sackWeight = product.sackWeight || 50;
+            const totalActualQq = totalActual * sackWeight / KG_PER_QUINTAL;
+            totalSacosGlobal += totalActual;
+            totalQqGlobal += totalActualQq;
+            
+            for (const day of Object.values(product.actual)) {
+                totalDaySacos += day.day || 0;
+                totalNightSacos += day.night || 0;
+                totalDayQq += (day.day || 0) * sackWeight / KG_PER_QUINTAL;
+                totalNightQq += (day.night || 0) * sackWeight / KG_PER_QUINTAL;
             }
 
             
             // Production Mix KPI
             if (plannableCategories.has(product.categoryId)) {
-                const totalActualQq = totalActual * (product.sackWeight || 50) / KG_PER_QUINTAL;
                 if (product.planned > 0) {
                     plannedProductionSacos += totalActual;
                     plannedProductionQq += totalActualQq;
@@ -561,6 +575,13 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
         unplannedSacos: unplannedProductionSacos,
         unplannedQq: unplannedProductionQq,
         unplannedPercentage: totalMixProduction > 0 ? (unplannedProductionSacos / totalMixProduction) * 100 : 0,
+    });
+
+    setShiftTotals({
+        daySacos: totalDaySacos,
+        dayQq: totalDayQq,
+        nightSacos: totalNightSacos,
+        nightQq: totalNightQq,
     });
 
 
@@ -655,7 +676,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
             </CollapsibleContent>
         </Collapsible>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-4">
             <KpiCard
                 title="Producción Total"
                 value={totalProduction.sacos}
@@ -686,6 +707,22 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
                 subValue={`Plan: ${involvedProductsCount.planned} / No Plan: ${involvedProductsCount.unplanned}`}
                 icon={Activity}
                 description="Total de productos distintos con actividad (planificada o real) en el período."
+            />
+             <KpiCard
+                title="Producción Turno Día"
+                value={shiftTotals.daySacos}
+                subValue={`${shiftTotals.dayQq.toLocaleString(undefined, { maximumFractionDigits: 1, })} qq`}
+                icon={Sun}
+                description="Suma total de la producción real durante el turno de día para el período y filtros seleccionados."
+                fractionDigits={0}
+            />
+             <KpiCard
+                title="Producción Turno Noche"
+                value={shiftTotals.nightSacos}
+                subValue={`${shiftTotals.nightQq.toLocaleString(undefined, { maximumFractionDigits: 1, })} qq`}
+                icon={Moon}
+                description="Suma total de la producción real durante el turno de noche para el período y filtros seleccionados."
+                fractionDigits={0}
             />
             <KpiCard
                 title="Total Productos Definidos"

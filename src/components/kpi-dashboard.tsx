@@ -65,20 +65,8 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   const plannedPercentage = totalMixProduction > 0 ? (plannedProductionSacos / totalMixProduction) * 100 : 0;
   const unplannedPercentage = totalMixProduction > 0 ? (unplannedProductionSacos / totalMixProduction) * 100 : 0;
 
-  // Shift totals
-  const totalDaySacks = data.reduce((sum, item) => 
-    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0), 0), 0
-  );
-  const totalDayQuintales = calculateWeight(data, 'day') / KG_PER_QUINTAL;
-
-  const totalNightSacks = data.reduce((sum, item) => 
-    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.night || 0), 0), 0
-  );
-  const totalNightQuintales = calculateWeight(data, 'night') / KG_PER_QUINTAL;
-
-
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <KpiCard 
         title="Total Planificado (Sacos)" 
         value={totalPlannedForComplianceSacks.toLocaleString()} 
@@ -108,20 +96,6 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         icon={ClipboardPlus}
         description="Producción real de productos planificables que tenían un plan de 0. El porcentaje es sobre el total real de producción planificable."
         fractionDigits={0}
-      />
-      <KpiCard 
-        title="Producción Turno Día" 
-        value={totalDaySacks.toLocaleString()} 
-        icon={Sun}
-        description="Suma de toda la producción real registrada en el turno de día."
-        subValue={`(${totalDayQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
-      />
-      <KpiCard
-        title="Producción Turno Noche"
-        value={totalNightSacks.toLocaleString()}
-        icon={Moon}
-        description="Suma de toda la producción real registrada en el turno de noche."
-        subValue={`(${totalNightQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
       />
     </div>
   );
