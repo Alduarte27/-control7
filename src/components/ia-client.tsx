@@ -32,6 +32,8 @@ const KG_PER_QUINTAL = 50;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 const LOCAL_STORAGE_CONFIG_KEY = 'simulationConfig';
 const FIRESTORE_ASSETS_PATH = 'simulation_assets';
+const LOCAL_STORAGE_SHOW_IMAGES_KEY = 'simulationShowImages';
+
 
 type MachineState = {
     id: number;
@@ -296,6 +298,8 @@ function SiloEditDialog({
     isTachos,
     tachosConfig,
     onTachosConfigChange,
+    onImageSave,
+    isUploading
 }: {
     silo: SiloState | TachosSimState;
     open: boolean;
@@ -304,6 +308,8 @@ function SiloEditDialog({
     isTachos?: boolean;
     tachosConfig?: { isAuto: boolean; cookTime: number; transferTime: number; isGoalEnabled: boolean; goal: number; masaQQAmount: number };
     onTachosConfigChange?: (config: { isAuto: boolean; cookTime: number; transferTime: number; isGoalEnabled: boolean; goal: number; masaQQAmount: number }) => void;
+    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => Promise<void>;
+    isUploading: boolean;
 }) {
     const [editedSilo, setEditedSilo] = React.useState(silo);
     const [localTachosConfig, setLocalTachosConfig] = React.useState(tachosConfig);
@@ -322,6 +328,14 @@ function SiloEditDialog({
     const handleTachosConfigFieldChange = (field: keyof typeof localTachosConfig, value: any) => {
         setLocalTachosConfig(prev => (prev ? { ...prev, [field]: value } : undefined));
     };
+
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await onImageSave(isTachos ? 'tachos' : 'silo', silo.id, file);
+    };
+
+    const fileInputId = `silo-image-upload-${silo.id}`;
     
     const handleSaveChanges = () => {
         const { imageUrl, currentQQ, ...configToSave } = editedSilo as any;
@@ -339,6 +353,32 @@ function SiloEditDialog({
                     <DialogTitle>Editar {silo.name}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
+                     <div className="space-y-2">
+                        <Label>Previsualización de la Imagen</Label>
+                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                           {isUploading ? (
+                               <div className="flex flex-col items-center gap-2">
+                                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                                   <p className="text-sm text-muted-foreground">Subiendo...</p>
+                               </div>
+                           ) : (
+                                <Image
+                                    src={silo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media"}
+                                    alt={editedSilo.name}
+                                    width={600}
+                                    height={400}
+                                    className="object-contain w-full h-full"
+                                    unoptimized
+                                />
+                           )}
+                        </div>
+                        <input type="file" id={fileInputId} className="hidden" accept="image/*" onChange={handleFileSelect} disabled={isUploading}/>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()} disabled={isUploading}>
+                            <Upload className="mr-2 h-3 w-3" />
+                            {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
+                        </Button>
+                    </div>
+                    <Separator />
                     <div className="space-y-1.5">
                         <Label htmlFor={`silo-name-${silo.id}`}>Nombre</Label>
                         <Input id={`silo-name-${silo.id}`} type="text" value={editedSilo.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
@@ -438,11 +478,15 @@ function ReceiverEditDialog({
     open,
     onOpenChange,
     onSave,
+    onImageSave,
+    isUploading
 }: {
     receiver: ReceiverState;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress' | 'drainingBy'>) => void;
+    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => Promise<void>;
+    isUploading: boolean;
 }) {
     const [editedReceiver, setEditedReceiver] = React.useState(receiver);
 
@@ -454,6 +498,14 @@ function ReceiverEditDialog({
         setEditedReceiver(prev => ({ ...prev, [field]: value }));
     };
     
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await onImageSave('receiver', receiver.id, file);
+    };
+
+    const fileInputId = `receiver-image-upload-${receiver.id}`;
+
     const handleSaveChanges = () => {
         const { imageUrl, currentQQ, state, fillProgress, drainingBy, ...configToSave } = editedReceiver;
         onSave(configToSave);
@@ -467,6 +519,32 @@ function ReceiverEditDialog({
                     <DialogTitle>Editar {receiver.name}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
+                     <div className="space-y-2">
+                        <Label>Previsualización de la Imagen</Label>
+                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                           {isUploading ? (
+                               <div className="flex flex-col items-center gap-2">
+                                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+                                   <p className="text-sm text-muted-foreground">Subiendo...</p>
+                               </div>
+                           ) : (
+                                <Image
+                                    src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"}
+                                    alt={editedReceiver.name}
+                                    width={600}
+                                    height={400}
+                                    className="object-contain w-full h-full"
+                                    unoptimized
+                                />
+                           )}
+                        </div>
+                        <input type="file" id={fileInputId} className="hidden" accept="image/*" onChange={handleFileSelect} disabled={isUploading}/>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()} disabled={isUploading}>
+                            <Upload className="mr-2 h-3 w-3" />
+                            {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
+                        </Button>
+                    </div>
+                    <Separator />
                     <div className="space-y-1.5">
                         <Label htmlFor={`rec-name-${receiver.id}`}>Nombre</Label>
                         <Input id={`rec-name-${receiver.id}`} type="text" value={editedReceiver.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
@@ -491,11 +569,15 @@ function CentrifugeEditDialog({
     onOpenChange,
     onSave,
     config,
+    onImageSave,
+    isUploading
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => void;
     config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number };
+    onImageSave: (type: 'centrifuge', id: string, file: File) => Promise<void>;
+    isUploading: boolean;
 }) {
     const [localConfig, setLocalConfig] = React.useState(config);
 
@@ -514,6 +596,12 @@ function CentrifugeEditDialog({
             setLocalConfig(prev => ({ ...prev, [field]: numValue }));
         }
     };
+    
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, id: 'cent1' | 'cent2') => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        await onImageSave('centrifuge', id, file);
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -523,8 +611,19 @@ function CentrifugeEditDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                      <p className="text-sm text-muted-foreground">
-                        Define la cantidad de masa a procesar y los tiempos que gobiernan el ciclo de trabajo.
+                        Define la cantidad de masa a procesar, los tiempos del ciclo y personaliza las imágenes.
                     </p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <Button variant="outline" size="sm" onClick={() => document.getElementById('cent1-img-upload')?.click()} disabled={isUploading}>
+                            <Upload className="mr-2 h-3 w-3" /> {isUploading ? 'Subiendo...' : 'Cambiar Foto Centrífuga 1'}
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => document.getElementById('cent2-img-upload')?.click()} disabled={isUploading}>
+                            <Upload className="mr-2 h-3 w-3" /> {isUploading ? 'Subiendo...' : 'Cambiar Foto Centrífuga 2'}
+                        </Button>
+                        <input type="file" id="cent1-img-upload" className="hidden" accept="image/*" onChange={(e) => handleFileSelect(e, 'cent1')} />
+                        <input type="file" id="cent2-img-upload" className="hidden" accept="image/*" onChange={(e) => handleFileSelect(e, 'cent2')} />
+                    </div>
+                    <Separator />
                     <div className="p-3 border rounded-lg bg-muted/30">
                         <div className="space-y-1.5">
                             <Label htmlFor="batch-size">Cantidad de Carga por Ciclo (QQ)</Label>
@@ -785,6 +884,7 @@ export default function OperationsClient({
     const [editingCentrifuges, setEditingCentrifuges] = React.useState(false);
     const [editingWrapper, setEditingWrapper] = React.useState<WrapperState | null>(null);
     const [isUploading, setIsUploading] = React.useState(false);
+    const [showImages, setShowImages] = React.useState(true);
 
      // --- SIMULATION STATE AND LOGIC ---
     const [isSimulating, setIsSimulating] = React.useState(false);
@@ -976,6 +1076,9 @@ export default function OperationsClient({
     const loadConfig = React.useCallback(async () => {
         const { params: defaultParams } = getDefaultConfig();
         try {
+            const showImagesPref = window.localStorage.getItem(LOCAL_STORAGE_SHOW_IMAGES_KEY);
+            setShowImages(showImagesPref === null || showImagesPref === 'true');
+
             const localConfigStr = window.localStorage.getItem(LOCAL_STORAGE_CONFIG_KEY);
             let params: SimulationParams;
             if (localConfigStr) {
@@ -1111,6 +1214,13 @@ export default function OperationsClient({
     React.useEffect(() => {
         saveParamsToLocalStorage();
     }, [saveParamsToLocalStorage]);
+
+     const handleShowImagesChange = (checked: boolean) => {
+        setShowImages(checked);
+        if (isClient) {
+            window.localStorage.setItem(LOCAL_STORAGE_SHOW_IMAGES_KEY, String(checked));
+        }
+    };
     
     const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => {
         setIsUploading(true);
@@ -1705,7 +1815,7 @@ export default function OperationsClient({
                            </Button>
                        </div>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                        <div className="space-y-4">
                            <div className="space-y-1.5">
                                 <div className='flex justify-between items-center'>
@@ -1732,6 +1842,13 @@ export default function OperationsClient({
                                </p>
                            )}
                        </div>
+                       <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
+                            <div className="flex items-center space-x-2">
+                                <Switch id="show-images-switch" checked={showImages} onCheckedChange={handleShowImagesChange} />
+                                <Label htmlFor="show-images-switch">Mostrar Imágenes</Label>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2 text-center">Activa/desactiva las imágenes para una vista de datos o gráfica.</p>
+                        </div>
                    </CardContent>
                 </Card>
 
@@ -1780,6 +1897,11 @@ export default function OperationsClient({
                                     <Edit className="h-4 w-4" />
                                 </Button>
                             </div>
+                            {showImages && (
+                                <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                    <Image src={simTachos.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt={simTachos.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                </div>
+                            )}
                             <div className="mt-auto space-y-3 flex-grow flex flex-col justify-end">
                                 <div className="space-y-1">
                                     <div className={cn("flex justify-between items-center text-xs font-medium", currentTachosConfig.color)}>
@@ -1816,6 +1938,11 @@ export default function OperationsClient({
                                                 <Edit className="h-4 w-4" />
                                             </Button>
                                         </div>
+                                         {showImages && (
+                                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                                <Image src={simReceiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={simReceiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                            </div>
+                                        )}
                                         <div className="space-y-3 pt-2 mt-auto flex-grow flex flex-col justify-end">
                                             <div className="space-y-1">
                                                 <Label className="text-xs text-muted-foreground">Llenado</Label>
@@ -1873,7 +2000,14 @@ export default function OperationsClient({
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
                                     return (
                                         <div key={centrifuge.id} className="border p-3 rounded-lg flex flex-col justify-between">
-                                            <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
+                                            <div>
+                                                <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
+                                                {showImages && (
+                                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden mb-2">
+                                                        <Image src={simCentrifuge.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media"} alt={simCentrifuge.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div className="space-y-1">
                                                 <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
                                                     <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
@@ -1913,9 +2047,11 @@ export default function OperationsClient({
                                             <Edit className="h-4 w-4" />
                                         </Button>
                                     </div>
-                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                        <Image src={simSilo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media"} alt={simSilo.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                    </div>
+                                    {showImages && (
+                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                            <Image src={simSilo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media"} alt={simSilo.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                        </div>
+                                    )}
                                     <div className="space-y-1.5">
                                         <Label className='text-xs text-muted-foreground'>Capacidad: {simSilo.capacityQQ.toLocaleString()} QQ</Label>
                                     </div>
@@ -1977,16 +2113,18 @@ export default function OperationsClient({
                                             </div>
                                         </div>
                                         
-                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                                            <Image 
-                                                src={machine.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} 
-                                                alt={`Máquina ${machine.id}`}
-                                                width={600}
-                                                height={400}
-                                                className="object-contain w-full h-full"
-                                                unoptimized
-                                            />
-                                        </div>
+                                        {showImages && (
+                                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                                <Image 
+                                                    src={machine.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} 
+                                                    alt={`Máquina ${machine.id}`}
+                                                    width={600}
+                                                    height={400}
+                                                    className="object-contain w-full h-full"
+                                                    unoptimized
+                                                />
+                                            </div>
+                                        )}
 
                                         <div className="space-y-1">
                                             <p className="text-xs text-muted-foreground">Producto</p>
@@ -2057,16 +2195,18 @@ export default function OperationsClient({
                                         </Button>
                                     </div>
 
-                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                                        <Image
-                                            src={wrapperConfig.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media"}
-                                            alt={wrapperConfig.name}
-                                            width={600}
-                                            height={400}
-                                            className="object-contain w-full h-full"
-                                            unoptimized
-                                        />
-                                    </div>
+                                    {showImages && (
+                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                            <Image
+                                                src={wrapperConfig.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media"}
+                                                alt={wrapperConfig.name}
+                                                width={600}
+                                                height={400}
+                                                className="object-contain w-full h-full"
+                                                unoptimized
+                                            />
+                                        </div>
+                                    )}
                                     
                                      <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
                                         <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
@@ -2265,6 +2405,8 @@ export default function OperationsClient({
                         masaQQAmount: masaQQAmount,
                     }}
                     onTachosConfigChange={handleTachosConfigChange}
+                    onImageSave={handleImageSave}
+                    isUploading={isUploading}
                 />
             )}
             {editingReceiver && (
@@ -2273,6 +2415,8 @@ export default function OperationsClient({
                     onOpenChange={(isOpen) => !isOpen && setEditingReceiver(null)}
                     receiver={editingReceiver}
                     onSave={handleReceiverSave}
+                    onImageSave={handleImageSave}
+                    isUploading={isUploading}
                 />
             )}
              {editingCentrifuges && (
@@ -2287,6 +2431,8 @@ export default function OperationsClient({
                         purgeTime: centrifugePurgeTime,
                         startInterval: centrifugeStartInterval,
                     }}
+                    onImageSave={handleImageSave}
+                    isUploading={isUploading}
                 />
             )}
             {editingWrapper && (
