@@ -2,6 +2,7 @@
 
 
 
+
 'use client';
 
 import React from 'react';
@@ -9,7 +10,7 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown, Activity, Box, PackageCheck } from 'lucide-react';
+import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown, Activity, Box, PackageCheck, ClipboardCheck, ClipboardPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query } from 'firebase/firestore';
@@ -19,7 +20,7 @@ import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
-import KpiCard from './kpi-card';
+import KpiDashboard from './kpi-dashboard';
 
 const KG_PER_QUINTAL = 50;
 
@@ -265,9 +266,17 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
   const [dateRange, setDateRange] = React.useState('12');
   const [showOnlyPlannedInHistory, setShowOnlyPlannedInHistory] = React.useState(true);
 
-  // New state for the involved products count
+  // New state for KPIs
   const [involvedProductsCount, setInvolvedProductsCount] = React.useState({ planned: 0, unplanned: 0 });
   const [totalProduction, setTotalProduction] = React.useState({ sacos: 0, qq: 0 });
+  const [productionMix, setProductionMix] = React.useState({
+      plannedSacos: 0,
+      plannedQq: 0,
+      plannedPercentage: 0,
+      unplannedSacos: 0,
+      unplannedQq: 0,
+      unplannedPercentage: 0,
+  });
 
   const weekOptions = React.useMemo(() => {
     return filteredSummaries
@@ -469,7 +478,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
         setProductData([]);
     }
 
-    // --- Aggregated Product Chart Logic (Rendimiento Histórico) & Involved Products Count ---
+    // --- Aggregated Product Chart Logic & KPIs ---
     const filteredPlanIds = new Set(summariesForCharts.map(s => s.id));
     const relevantPlans = allPlans.filter(p => filteredPlanIds.has(p.id));
     const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string; sackWeight: number; } } = {};
@@ -479,20 +488,33 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
 
     let totalSacosGlobal = 0;
     let totalQqGlobal = 0;
+    let plannedProductionSacos = 0;
+    let plannedProductionQq = 0;
+    let unplannedProductionSacos = 0;
+    let unplannedProductionQq = 0;
+
 
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
-            const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
-            
             const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+            const totalActualQq = totalActual * (product.sackWeight || 50) / KG_PER_QUINTAL;
             
-            // For Grand Total KPI
-            if(categoryMatch) {
-              totalSacosGlobal += totalActual;
-              totalQqGlobal += totalActual * (product.sackWeight || 50) / KG_PER_QUINTAL;
+            // Grand Total KPI (ignores category filter)
+            totalSacosGlobal += totalActual;
+            totalQqGlobal += totalActualQq;
+            
+            // Production Mix KPI (ignores category filter)
+            if (product.planned > 0) {
+                plannedProductionSacos += totalActual;
+                plannedProductionQq += totalActualQq;
+            } else if (totalActual > 0) {
+                unplannedProductionSacos += totalActual;
+                unplannedProductionQq += totalActualQq;
             }
 
-            // For "Rendimiento Histórico" chart
+            const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
+
+            // "Rendimiento Histórico" chart
             if (showOnlyPlannedInHistory && !plannableCategories.has(product.categoryId)) {
                 return;
             }
@@ -507,7 +529,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
                 productTotals[product.id].actual += totalActual;
             }
 
-            // Logic for "Involved Products" KPI
+            // "Involved Products" KPI
             if (categoryMatch && hasActivity) {
                 if ((product.planned || 0) > 0) {
                     involvedPlannedIds.add(product.id);
@@ -527,6 +549,16 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     setAggregatedProductData(aggregatedData);
     
     setTotalProduction({ sacos: totalSacosGlobal, qq: totalQqGlobal });
+
+    const totalMixProduction = plannedProductionSacos + unplannedProductionSacos;
+    setProductionMix({
+        plannedSacos: plannedProductionSacos,
+        plannedQq: plannedProductionQq,
+        plannedPercentage: totalMixProduction > 0 ? (plannedProductionSacos / totalMixProduction) * 100 : 0,
+        unplannedSacos: unplannedProductionSacos,
+        unplannedQq: unplannedProductionQq,
+        unplannedPercentage: totalMixProduction > 0 ? (unplannedProductionSacos / totalMixProduction) * 100 : 0,
+    });
 
 
   }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory]);
@@ -620,19 +652,35 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
             </CollapsibleContent>
         </Collapsible>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <KpiCard
-                title="Producción Total en Período"
+                title="Producción Total"
                 value={totalProduction.sacos}
                 subValue={`${totalProduction.qq.toLocaleString(undefined, { maximumFractionDigits: 1, })} qq`}
                 icon={PackageCheck}
                 description="Suma total de la producción real (en sacos y quintales) para el período y filtros seleccionados."
                 fractionDigits={0}
             />
+             <KpiCard
+                title="Producción Planificada"
+                value={productionMix.plannedSacos}
+                subValue={`${productionMix.plannedQq.toFixed(1)} qq (${productionMix.plannedPercentage.toFixed(1)}%)`}
+                icon={ClipboardCheck}
+                description="Producción real que correspondía a un producto con un plan > 0. El porcentaje es sobre el total real."
+                fractionDigits={0}
+            />
+            <KpiCard
+                title="Producción No Planificada"
+                value={productionMix.unplannedSacos}
+                subValue={`${productionMix.unplannedQq.toFixed(1)} qq (${productionMix.unplannedPercentage.toFixed(1)}%)`}
+                icon={ClipboardPlus}
+                description="Producción real de productos que tenían un plan de 0. El porcentaje es sobre el total real."
+                fractionDigits={0}
+            />
             <KpiCard
                 title="Productos Involucrados"
                 value={involvedProductsCount.planned + involvedProductsCount.unplanned}
-                subValue={`Planificados: ${involvedProductsCount.planned} / No Planificados: ${involvedProductsCount.unplanned}`}
+                subValue={`Plan: ${involvedProductsCount.planned} / No Plan: ${involvedProductsCount.unplanned}`}
                 icon={Activity}
                 description="Total de productos distintos con actividad (planificada o real) en el período."
             />
