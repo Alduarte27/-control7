@@ -400,7 +400,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     if (loading) return;
     
     const plansMap = new Map(allPlans.map(p => [p.id, p]));
-    const plannableCategories = new Set(categories.filter(c => c.isPlanned).map(c => c.id));
+    const plannableCategoryIds = new Set(categories.filter(c => c.isPlanned).map(c => c.id));
     
     // --- Data for Weekly Summary Charts (Unaffected by specific week filter) ---
     const summariesForCharts = filteredSummaries;
@@ -412,27 +412,37 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
         let actualForPlannedSacks = 0;
         let unplannedProductionSacks = 0;
 
+        let totalPlannedWeight = 0;
+        let actualForPlannedWeight = 0;
+        let unplannedProductionWeight = 0;
+
         if (plan) {
             plan.products.forEach(p => {
                 const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
                 if (!categoryMatch) return;
 
                 const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
-
-                if (plannableCategories.has(p.categoryId)) {
+                const sackWeight = p.sackWeight || 50;
+                
+                if (plannableCategoryIds.has(p.categoryId)) {
+                  if (p.planned > 0) {
                     totalPlannedSacks += p.planned || 0;
                     actualForPlannedSacks += productTotalActual;
-                } else {
+                    totalPlannedWeight += (p.planned || 0) * sackWeight;
+                    actualForPlannedWeight += productTotalActual * sackWeight;
+                  } else if (productTotalActual > 0) {
                     unplannedProductionSacks += productTotalActual;
+                    unplannedProductionWeight += productTotalActual * sackWeight;
+                  }
                 }
             });
         }
         
         const totalActualSacks = actualForPlannedSacks + unplannedProductionSacks;
         // QQ Calculations for tooltip
-        const plannedQQ = totalPlannedSacks * 50 / KG_PER_QUINTAL; // Approximation, better to do per product
-        const actualForPlannedQQ = actualForPlannedSacks * 50 / KG_PER_QUINTAL;
-        const unplannedProductionQQ = unplannedProductionSacks * 50 / KG_PER_QUINTAL;
+        const plannedQQ = totalPlannedWeight / KG_PER_QUINTAL;
+        const actualForPlannedQQ = actualForPlannedWeight / KG_PER_QUINTAL;
+        const unplannedProductionQQ = unplannedProductionWeight / KG_PER_QUINTAL;
         
         return {
             week: summary.week,
@@ -532,7 +542,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
         if (plan) {
             const productChartData = plan.products
                 .filter((p: ProductData) => {
-                    if (showOnlyPlannedInHistory && !plannableCategories.has(p.categoryId)) {
+                    if (showOnlyPlannedInHistory && !plannableCategoryIds.has(p.categoryId)) {
                         return false;
                     }
                     const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
@@ -580,9 +590,9 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
             totalProductionAllCategoriesSacos += totalActual;
             totalProductionAllCategoriesQq += totalActualQq;
             
+            // Mix de Producción & Shift Totals KPI Calculation
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
             
-            // Mix de Producción & Shift Totals KPI Calculation
             if (categoryMatch) {
               if ((product.planned || 0) > 0) {
                   kpiPlannedSacos += totalActual;
@@ -601,7 +611,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
             }
 
             // "Rendimiento Histórico" chart
-            if (showOnlyPlannedInHistory && !plannableCategories.has(product.categoryId)) {
+            if (showOnlyPlannedInHistory && !plannableCategoryIds.has(product.categoryId)) {
                 return;
             }
 
