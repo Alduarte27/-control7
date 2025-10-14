@@ -280,6 +280,43 @@ const ShiftKpiCard = ({ daySacos, dayQq, nightSacos, nightQq }: { daySacos: numb
   );
 };
 
+const ProductionMixKpiCard = ({ plannedSacos, plannedQq, plannedPercentage, unplannedSacos, unplannedQq, unplannedPercentage }: { plannedSacos: number; plannedQq: number; plannedPercentage: number; unplannedSacos: number; unplannedQq: number; unplannedPercentage: number; }) => {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Card className="col-span-1 md:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Mix de Producción</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <ClipboardCheck className="h-4 w-4" />
+                  <span>Planificado</span>
+                </div>
+                <p className="text-xl font-bold">{plannedSacos.toLocaleString()}</p>
+                <p className="text-xs font-medium text-muted-foreground">{plannedQq.toLocaleString(undefined, { maximumFractionDigits: 1 })} qq ({plannedPercentage.toFixed(1)}%)</p>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <ClipboardPlus className="h-4 w-4" />
+                  <span>No Planificado</span>
+                </div>
+                <p className="text-xl font-bold">{unplannedSacos.toLocaleString()}</p>
+                <p className="text-xs font-medium text-muted-foreground">{unplannedQq.toLocaleString(undefined, { maximumFractionDigits: 1 })} qq ({unplannedPercentage.toFixed(1)}%)</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Desglose de la producción real entre lo que estaba planificado y lo que no.</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
 
 export default function DashboardClient({ prefetchedCategories, prefetchedProducts }: { prefetchedCategories: CategoryDefinition[], prefetchedProducts: ProductDefinition[] }) {
   const [weeklySummaryData, setWeeklySummaryData] = React.useState<WeeklySummaryData[]>([]);
@@ -540,7 +577,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
             const sackWeight = product.sackWeight || 50;
             const totalActualQq = totalActual * sackWeight / KG_PER_QUINTAL;
             
-            // Grand Total KPI (ignores all filters)
+            // Grand Total KPI (ignores category filter, respects date range)
             totalProductionAllCategoriesSacos += totalActual;
             totalProductionAllCategoriesQq += totalActualQq;
             
@@ -705,7 +742,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
             </CollapsibleContent>
         </Collapsible>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
              <KpiCard
                 title="Producción Total en Período"
                 value={totalPeriodProduction.sacos}
@@ -714,22 +751,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
                 description="Suma total de la producción real de TODAS las categorías en el período seleccionado, ignorando filtros."
                 fractionDigits={0}
             />
-             <KpiCard
-                title="Producción Planificada"
-                value={productionMix.plannedSacos}
-                subValue={`${productionMix.plannedQq.toFixed(1)} qq (${productionMix.plannedPercentage.toFixed(1)}%)`}
-                icon={ClipboardCheck}
-                description="Producción real que correspondía a un producto con un plan > 0. El porcentaje es sobre el total real de categorías planificables."
-                fractionDigits={0}
-            />
-            <KpiCard
-                title="Producción No Planificada"
-                value={productionMix.unplannedSacos}
-                subValue={`${productionMix.unplannedQq.toFixed(1)} qq (${productionMix.unplannedPercentage.toFixed(1)}%)`}
-                icon={ClipboardPlus}
-                description="Producción real de productos que tenían un plan de 0. El porcentaje es sobre el total real de categorías planificables."
-                fractionDigits={0}
-            />
+             <ProductionMixKpiCard {...productionMix} />
             <ShiftKpiCard 
                 daySacos={shiftTotals.daySacos} 
                 dayQq={shiftTotals.dayQq} 
