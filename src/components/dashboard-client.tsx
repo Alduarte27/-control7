@@ -1,6 +1,7 @@
 
 
 
+
 'use client';
 
 import React from 'react';
@@ -476,15 +477,26 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     const involvedPlannedIds = new Set<string>();
     const involvedUnplannedIds = new Set<string>();
 
+    let totalSacosGlobal = 0;
+    let totalQqGlobal = 0;
+
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
             
+            const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+            
+            // For Grand Total KPI
+            if(categoryMatch) {
+              totalSacosGlobal += totalActual;
+              totalQqGlobal += totalActual * (product.sackWeight || 50) / KG_PER_QUINTAL;
+            }
+
+            // For "Rendimiento Histórico" chart
             if (showOnlyPlannedInHistory && !plannableCategories.has(product.categoryId)) {
                 return;
             }
 
-            const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
             const hasActivity = (product.planned || 0) > 0 || totalActual > 0;
             
             if (categoryMatch && hasActivity) {
@@ -495,7 +507,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
                 productTotals[product.id].actual += totalActual;
             }
 
-            // Logic for the new KPI
+            // Logic for "Involved Products" KPI
             if (categoryMatch && hasActivity) {
                 if ((product.planned || 0) > 0) {
                     involvedPlannedIds.add(product.id);
@@ -514,9 +526,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     const aggregatedData = Object.values(productTotals).filter(p => (p.planned > 0 || p.actual > 0));
     setAggregatedProductData(aggregatedData);
     
-    const totalSacos = aggregatedData.reduce((sum, p) => sum + p.actual, 0);
-    const totalQq = aggregatedData.reduce((sum, p) => sum + (p.actual * p.sackWeight / KG_PER_QUINTAL), 0);
-    setTotalProduction({ sacos: totalSacos, qq: totalQq });
+    setTotalProduction({ sacos: totalSacosGlobal, qq: totalQqGlobal });
 
 
   }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory]);
