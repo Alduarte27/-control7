@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import React from 'react';
@@ -1469,7 +1468,7 @@ export default function OperationsClient({
                 }
 
 
-                nextState.qqInCentrifuges = (qqPurgedThisTick / elapsedIncrement) * 3600;
+                nextState.qqInCentrifuges = qqPurgedThisTick > 0 ? (qqPurgedThisTick / elapsedIncrement) * 3600 : prev.qqInCentrifuges;
 
                 nextState.receivers.forEach(r => {
                     if (r.currentQQ <= 0.1 && r.state === 'ready' && r.drainingBy.length === 0) {
@@ -1643,8 +1642,14 @@ export default function OperationsClient({
         const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
         const familiarSiloKg = (familiarSilo?.currentQQ || 0) * KG_PER_QUINTAL;
         const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
-
-        const qqRateFromCentrifuges = simulationState.qqInCentrifuges;
+        
+        const singleCycleTime = centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime;
+        const qqPerCycle = centrifugeBatchSizeQQ;
+        
+        // Effective time per batch for the whole system is the interval between starts
+        const effectiveTimePerBatch = centrifugeStartInterval > 0 ? centrifugeStartInterval : singleCycleTime;
+        const qqRateFromCentrifuges = effectiveTimePerBatch > 0 ? (qqPerCycle * 3600) / effectiveTimePerBatch : 0;
+        
         const qqRateToPackers = (totalKgConsumedPerSecond * 3600) / KG_PER_QUINTAL;
         
         let bottleneck = 'none';
@@ -1668,7 +1673,7 @@ export default function OperationsClient({
             processingProgress,
         }
 
-    }, [simulationState, machines, products, staticSimulationResults.isWrapperBottleneck]);
+    }, [simulationState, machines, products, staticSimulationResults.isWrapperBottleneck, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeBatchSizeQQ, centrifugeStartInterval]);
     
     const simTachos = simulationState.tachos;
     const tachosStateConfig = {
@@ -1726,31 +1731,31 @@ export default function OperationsClient({
                             <h4 className="font-semibold">Centrífugas</h4>
                              <p className="text-sm text-muted-foreground">{simulationState.totalQQProduced.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                         </div>
-                    </TooltipTrigger> <TooltipContent><p>Total de azúcar purgada y lavada.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger>  <TooltipContent> <p>Total de azúcar purgada y lavada.</p> </TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
-                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                    <TooltipProvider>  <Tooltip>  <TooltipTrigger>
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Warehouse className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Silos</h4>
                             <p className="text-sm text-muted-foreground">{simulationState.silos.find(s => s.id === 'familiar')?.currentQQ.toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
                         </div>
-                    </TooltipTrigger> <TooltipContent><p>Almacenamiento de azúcar seca.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger>  <TooltipContent> <p>Almacenamiento de azúcar seca.</p> </TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
-                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                    <TooltipProvider>  <Tooltip>  <TooltipTrigger>
                         <div className={cn("flex flex-col items-center gap-2 text-center p-2 rounded-md min-w-[90px]", liveSimulationResults.bottleneck === 'wrapper' && 'bg-destructive/10')}>
                             <Package className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Envasado</h4>
                             <p className="text-sm text-muted-foreground">{Math.floor(liveSimulationResults.totalUnitsProduced).toLocaleString()} Fundas</p>
                         </div>
-                    </TooltipTrigger> <TooltipContent><p>Producción de las envasadoras.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger>  <TooltipContent> <p>Producción de las envasadoras.</p> </TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
-                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                    <TooltipProvider>  <Tooltip>  <TooltipTrigger>
                         <div className="flex flex-col items-center gap-2 text-center min-w-[90px]">
                             <PackageCheck className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Enfardado</h4>
                              <p className="text-sm text-muted-foreground">{staticSimulationResults.bundlesPerMinute.toLocaleString(undefined, { maximumFractionDigits: 2 })} Fardos/Min</p>
                         </div>
-                    </TooltipTrigger> <TooltipContent><p>Capacidad teórica de empaque final en fardos por minuto.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger>  <TooltipContent> <p>Capacidad teórica de empaque final en fardos por minuto.</p> </TooltipContent> </Tooltip> </TooltipProvider>
                 </div>
             </div>
             
@@ -1759,78 +1764,78 @@ export default function OperationsClient({
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
                          <div className="flex items-center gap-4">
                             <CardTitle>Controles de Simulación</CardTitle>
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                         <Button variant="ghost" size="icon" onClick={handleShowImagesChange}>
+                             <TooltipProvider>
+                                 <Tooltip>
+                                     <TooltipTrigger asChild>
+                                          <Button variant="ghost" size="icon" onClick={handleShowImagesChange}>
                                             {showImages ? <ImageOff className="h-5 w-5" /> : <ImageIcon className="h-5 w-5" />}
                                         </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent><p>{showImages ? 'Ocultar Imágenes' : 'Mostrar Imágenes'}</p></TooltipContent>
-                                </Tooltip>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <RotateCcw className="h-5 w-5 text-muted-foreground" />
-                                                </Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>Restaurar Configuración por Defecto</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                        ¿Estás seguro? Esto restaurará todos los parámetros de la simulación (en este navegador) y las imágenes (para todos los usuarios) a sus valores originales.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                        </AlertDialog>
-                                    </TooltipTrigger>
-                                    <TooltipContent><p>Restaurar valores por defecto</p></TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
+                                      <TooltipContent> <p>{showImages ? 'Ocultar Imágenes' : 'Mostrar Imágenes'}</p> </TooltipContent>
+                                 </Tooltip>
+                                 <Tooltip>
+                                     <TooltipTrigger asChild>
+                                          <AlertDialog>
+                                              <AlertDialogTrigger asChild>
+                                                   <Button variant="ghost" size="icon">
+                                                        <RotateCcw className="h-5 w-5 text-muted-foreground" />
+                                                   </Button>
+                                              </AlertDialogTrigger>
+                                              <AlertDialogContent>
+                                                  <AlertDialogHeader>
+                                                        <AlertDialogTitle>Restaurar Configuración por Defecto</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            ¿Estás seguro? Esto restaurará todos los parámetros de la simulación (en este navegador) y las imágenes (para todos los usuarios) a sus valores originales.
+                                                        </AlertDialogDescription>
+                                                  </AlertDialogHeader>
+                                                  <AlertDialogFooter>
+                                                       <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                       <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
+                                                  </AlertDialogFooter>
+                                              </AlertDialogContent>
+                                          </AlertDialog>
+                                     </TooltipTrigger>
+                                      <TooltipContent> <p>Restaurar valores por defecto</p> </TooltipContent>
+                                 </Tooltip>
+                             </TooltipProvider>
                          </div>
-                         <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                            <Button onClick={startClock} disabled={isSimulating} variant="secondary">
-                               <Play className="mr-2 h-4 w-4" /> Iniciar
+                                <Play className="mr-2 h-4 w-4" /> Iniciar
                            </Button>
                            <Button onClick={pauseClock} disabled={!isSimulating} variant="destructive">
-                               <Pause className="mr-2 h-4 w-4" /> Detener
+                                <Pause className="mr-2 h-4 w-4" /> Detener
                            </Button>
                            <Separator orientation="vertical" className="h-6 mx-2" />
                            <Button onClick={resetSimulation} variant="outline">
-                               <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Todo
+                                <RefreshCw className="mr-2 h-4 w-4" /> Reiniciar Todo
                            </Button>
                        </div>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                        <div className="space-y-4">
-                           <div className="space-y-1.5">
-                                <div className='flex justify-between items-center'>
-                                  <Label htmlFor="sim-speed">Acelerador de Tiempo (x{simulationSpeed.toLocaleString()})</Label>
-                                </div>
-                                <Slider
-                                   id="sim-speed"
-                                   min={1}
-                                   max={1000}
-                                   step={1}
-                                   value={[simulationSpeed]}
-                                   onValueChange={(value) => setSimulationSpeed(value[0])}
-                                />
-                           </div>
+                            <div className="space-y-1.5">
+                                 <div className='flex justify-between items-center'>
+                                   <Label htmlFor="sim-speed">Acelerador de Tiempo (x{simulationSpeed.toLocaleString()})</Label>
+                                 </div>
+                                 <Slider
+                                    id="sim-speed"
+                                    min={1}
+                                    max={1000}
+                                    step={1}
+                                    value={[simulationSpeed]}
+                                    onValueChange={(value) => setSimulationSpeed(value[0])}
+                                 />
+                            </div>
                        </div>
                        <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
                            <Clock className="h-6 w-6 text-muted-foreground mb-2" />
                            <p className="text-sm text-muted-foreground">Tiempo Transcurrido</p>
                            <p className="text-4xl font-bold font-mono text-primary">{formatElapsedTime(simulationState.elapsedTime)}</p>
-                           {simulationState.isFinished && simulationState.elapsedTime > 0 && (
+                            {simulationState.isFinished && simulationState.elapsedTime > 0 && (
                                <p className="text-destructive font-semibold mt-2 flex items-center gap-2">
-                                   <AlertTriangle className="h-4 w-4" />
-                                   ¡Sin Materia Prima en Silo Familiar!
+                                    <AlertTriangle className="h-4 w-4" />
+                                    ¡Sin Materia Prima en Silo Familiar!
                                </p>
                            )}
                        </div>
@@ -1842,103 +1847,103 @@ export default function OperationsClient({
                         <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
-                        {/* Tachos */}
-                        <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col h-full">
-                            <div className='flex justify-between items-start'>
-                                <h3 className="font-bold text-lg flex items-center gap-2">{simTachos.name}
-                                {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
-                                </h3>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosStateForDialog)}>
-                                    <Edit className="h-4 w-4" />
-                                </Button>
-                            </div>
-                            {showImages && (
-                                <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                    <Image src={simTachos.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt={simTachos.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                </div>
-                            )}
-                            <div className="mt-auto space-y-3 flex-grow flex flex-col justify-end">
-                                <div className="space-y-1">
-                                    <div className={cn("flex justify-between items-center text-xs font-medium", currentTachosConfig.color)}>
-                                        <span className="flex items-center gap-1.5"><currentTachosConfig.icon className="h-3 w-3" /> {currentTachosConfig.text}</span>
-                                        <span>{formatElapsedTime(simTachos.timeRemaining)}</span>
-                                    </div>
-                                    <Progress value={simTachos.progress} indicatorClassName={cn(
-                                        simTachos.state === 'cooking' ? 'bg-amber-500' : 
-                                        simTachos.state === 'ready' ? 'bg-green-500' : 
-                                        simTachos.state === 'sending' ? 'bg-blue-500' : 
-                                        'bg-primary'
-                                    )} />
-                                </div>
-                                <div className='text-center border bg-muted/30 rounded-lg p-2'>
-                                    <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
-                                    <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
-                                </div>
-                                 {!isTachosAuto && (
-                                     <Button className="w-full" onClick={handleManualSendMasa} disabled={isSimulating && simTachos.state !== 'idle'}>Enviar Masa</Button>
-                                 )}
+                         {/* Tachos */}
+                         <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col h-full">
+                             <div className='flex justify-between items-start'>
+                                 <h3 className="font-bold text-lg flex items-center gap-2">{simTachos.name}
+                                 {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
+                                 </h3>
+                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosStateForDialog)}>
+                                      <Edit className="h-4 w-4" />
+                                 </Button>
                              </div>
-                        </div>
+                            {showImages && (
+                                 <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                      <Image src={simTachos.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media"} alt={simTachos.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
+                                 </div>
+                            )}
+                             <div className="mt-auto space-y-3 flex-grow flex flex-col justify-end">
+                                 <div className="space-y-1">
+                                      <div className={cn("flex justify-between items-center text-xs font-medium", currentTachosConfig.color)}>
+                                          <span className="flex items-center gap-1.5"><currentTachosConfig.icon className="h-3 w-3" /> {currentTachosConfig.text}</span>
+                                          <span>{formatElapsedTime(simTachos.timeRemaining)}</span>
+                                     </div>
+                                     <Progress value={simTachos.progress} indicatorClassName={cn(
+                                         simTachos.state === 'cooking' ? 'bg-amber-500' : 
+                                         simTachos.state === 'ready' ? 'bg-green-500' : 
+                                         simTachos.state === 'sending' ? 'bg-blue-500' : 
+                                         'bg-primary'
+                                     )} />
+                                 </div>
+                                  <div className='text-center border bg-muted/30 rounded-lg p-2'>
+                                      <p className="text-xs text-muted-foreground">Total Masas Enviadas</p>
+                                      <p className="text-lg font-bold text-primary">{simulationState.totalMasasSent}</p>
+                                 </div>
+                                  {!isTachosAuto && (
+                                      <Button className="w-full" onClick={handleManualSendMasa} disabled={isSimulating && simTachos.state !== 'idle'}>Enviar Masa</Button>
+                                  )}
+                             </div>
+                         </div>
                         
-                        {/* Receivers */}
+                         {/* Receivers */}
                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
                             {receivers.map((receiver) => {
                                 const simReceiver = simulationState.receivers.find(r => r.id === receiver.id) || receiver;
                                 const consumptionPercentage = simReceiver.capacityQQ > 0 ? (simReceiver.currentQQ / simReceiver.capacityQQ) * 100 : 0;
                                 return (
-                                    <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col h-full">
-                                        <div className='flex justify-between items-start mb-2'>
-                                            <h3 className="font-bold text-lg">{receiver.name}</h3>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
-                                                <Edit className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                        <div className="space-y-3 pt-2 mt-auto flex-grow flex flex-col justify-end">
-                                            <div className="space-y-1">
-                                                <Label className="text-xs text-muted-foreground">Llenado</Label>
-                                                <Progress value={simReceiver.state === 'filling' ? simReceiver.fillProgress : (simReceiver.state === 'ready' || simReceiver.state === 'draining') ? 100 : 0} indicatorClassName="bg-green-500" />
-                                            </div>
-                                            <div className="space-y-1">
-                                                 <div className="flex justify-between items-baseline">
-                                                    <Label className="text-xs text-muted-foreground">Consumo</Label>
-                                                </div>
-                                                <Progress value={consumptionPercentage} indicatorClassName="bg-amber-500" />
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="text-sm">Nivel: {simReceiver.currentQQ.toFixed(0)} / {simReceiver.capacityQQ.toLocaleString()} QQ</p>
-                                            </div>
-                                        </div>
-                                    </div>
+                                     <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col h-full">
+                                         <div className='flex justify-between items-start mb-2'>
+                                             <h3 className="font-bold text-lg">{receiver.name}</h3>
+                                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
+                                                  <Edit className="h-4 w-4" />
+                                             </Button>
+                                         </div>
+                                          <div className="space-y-3 pt-2 mt-auto flex-grow flex flex-col justify-end">
+                                              <div className="space-y-1">
+                                                  <Label className="text-xs text-muted-foreground">Llenado</Label>
+                                                  <Progress value={simReceiver.state === 'filling' ? simReceiver.fillProgress : (simReceiver.state === 'ready' || simReceiver.state === 'draining') ? 100 : 0} indicatorClassName="bg-green-500" />
+                                             </div>
+                                              <div className="space-y-1">
+                                                   <div className="flex justify-between items-baseline">
+                                                      <Label className="text-xs text-muted-foreground">Consumo</Label>
+                                                  </div>
+                                                  <Progress value={consumptionPercentage} indicatorClassName="bg-amber-500" />
+                                             </div>
+                                              <div className="text-center">
+                                                  <p className="text-sm">Nivel: {simReceiver.currentQQ.toFixed(0)} / {simReceiver.capacityQQ.toLocaleString()} QQ</p>
+                                             </div>
+                                         </div>
+                                     </div>
                                 )
                             })}
-                        </div>
+                         </div>
 
-                        {/* Centrifuges */}
-                        <div className="p-4 border rounded-lg bg-background flex flex-col h-full">
+                         {/* Centrifuges */}
+                         <div className="p-4 border rounded-lg bg-background flex flex-col h-full">
                              <div className="flex justify-between items-start mb-2">
-                                <div className="space-y-1">
-                                    <h3 className="font-bold text-lg">Centrífugas</h3>
-                                    <div className="flex items-center gap-2">
-                                        <Label htmlFor="cent-auto-switch" className="text-xs">Auto</Label>
-                                        <Switch
-                                            id="cent-auto-switch"
-                                            checked={isCentrifugesAuto}
-                                            onCheckedChange={setIsCentrifugesAuto}
-                                        />
-                                    </div>
+                                 <div className="space-y-1">
+                                     <h3 className="font-bold text-lg">Centrífugas</h3>
+                                      <div className="flex items-center gap-2">
+                                          <Label htmlFor="cent-auto-switch" className="text-xs">Auto</Label>
+                                          <Switch
+                                             id="cent-auto-switch"
+                                             checked={isCentrifugesAuto}
+                                             onCheckedChange={setIsCentrifugesAuto}
+                                          />
+                                     </div>
+                                 </div>
+                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
+                                      <Edit className="h-4 w-4" />
+                                 </Button>
+                             </div>
+                             <div className="space-y-2 mb-3">
+                                <div className="flex justify-between items-center text-xs">
+                                  <Label className="text-muted-foreground">Tiempo para Procesar</Label>
+                                  <span className="font-bold text-primary">{formatElapsedTime(simulationState.timeToProcessReceivers * 3600)}</span>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
-                                    <Edit className="h-4 w-4" />
-                                </Button>
+                                <Progress value={liveSimulationResults.processingProgress} />
                             </div>
-                            <div className="space-y-2 mb-3">
-                               <div className="flex justify-between items-center text-xs">
-                                 <Label className="text-muted-foreground">Tiempo para Procesar</Label>
-                                 <span className="font-bold text-primary">{formatElapsedTime(simulationState.timeToProcessReceivers * 3600)}</span>
-                               </div>
-                               <Progress value={liveSimulationResults.processingProgress} />
-                           </div>
-                            <div className="grid grid-cols-2 gap-4 flex-grow">
+                             <div className="grid grid-cols-2 gap-4 flex-grow">
                                 {centrifuges.map((centrifuge) => {
                                     const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
                                     const stateConfig = {
@@ -1949,27 +1954,27 @@ export default function OperationsClient({
                                     };
                                     const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
                                     return (
-                                        <div key={centrifuge.id} className="border p-3 rounded-lg flex flex-col justify-between">
-                                            <div>
-                                                <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
-                                                    <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
-                                                    <span>{formatElapsedTime(simCentrifuge.stageTimeRemaining)}</span>
-                                                </div>
-                                                <Progress value={simCentrifuge.stageProgress} indicatorClassName={cn(
-                                                    simCentrifuge.state === 'loading' ? 'bg-blue-500' :
-                                                    simCentrifuge.state === 'washing_centrifuging' ? 'bg-purple-500' :
-                                                    simCentrifuge.state === 'purging' ? 'bg-amber-500' :
-                                                    'bg-primary'
-                                                )} />
-                                            </div>
-                                        </div>
+                                         <div key={centrifuge.id} className="border p-3 rounded-lg flex flex-col justify-between">
+                                             <div>
+                                                 <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
+                                             </div>
+                                             <div className="space-y-1">
+                                                 <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
+                                                     <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
+                                                     <span>{formatElapsedTime(simCentrifuge.stageTimeRemaining)}</span>
+                                                 </div>
+                                                  <Progress value={simCentrifuge.stageProgress} indicatorClassName={cn(
+                                                     simCentrifuge.state === 'loading' ? 'bg-blue-500' :
+                                                     simCentrifuge.state === 'washing_centrifuging' ? 'bg-purple-500' :
+                                                     simCentrifuge.state === 'purging' ? 'bg-amber-500' :
+                                                     'bg-primary'
+                                                 )} />
+                                             </div>
+                                         </div>
                                     )
                                 })}
-                            </div>
-                        </div>
+                             </div>
+                         </div>
                     </CardContent>
                 </Card>
 
@@ -1985,32 +1990,32 @@ export default function OperationsClient({
                             const isProductionSilo = simSilo.id === 'familiar';
 
                             return (
-                                <div key={simSilo.id} className="p-4 border rounded-lg space-y-3 bg-background">
-                                     <div className='flex justify-between items-start'>
-                                        <h3 className="font-bold text-lg">{simSilo.name}</h3>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                    </div>
+                                 <div key={simSilo.id} className="p-4 border rounded-lg space-y-3 bg-background">
+                                      <div className='flex justify-between items-start'>
+                                         <h3 className="font-bold text-lg">{simSilo.name}</h3>
+                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
+                                              <Edit className="h-4 w-4" />
+                                         </Button>
+                                     </div>
                                     {showImages && (
-                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                            <Image src={simSilo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media"} alt={simSilo.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                        </div>
-                                    )}
-                                    <div className="space-y-1.5">
-                                        <Label className='text-xs text-muted-foreground'>Capacidad: {simSilo.capacityQQ.toLocaleString()} QQ</Label>
-                                    </div>
-                                    <div className="space-y-2 pt-2">
-                                        <Label className="text-sm">Nivel: {simSilo.currentQQ.toLocaleString(undefined, {maximumFractionDigits:1})} QQ ({fillPercentage.toFixed(1)}%)</Label>
-                                        <Progress value={fillPercentage} indicatorClassName={fillColorClass} />
-                                    </div>
-                                     {isProductionSilo && (
-                                         <div className="text-center border bg-muted/30 rounded-lg p-2">
-                                              <p className="text-xs text-muted-foreground">Tiempo de Producción Restante</p>
-                                              <p className="text-lg font-bold text-primary">{formatTime(liveSimulationResults.timeToEmptyHours)}</p>
+                                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
+                                             <Image src={simSilo.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media"} alt={simSilo.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
                                          </div>
+                                    )}
+                                     <div className="space-y-1.5">
+                                         <Label className='text-xs text-muted-foreground'>Capacidad: {simSilo.capacityQQ.toLocaleString()} QQ</Label>
+                                    </div>
+                                     <div className="space-y-2 pt-2">
+                                         <Label className="text-sm">Nivel: {simSilo.currentQQ.toLocaleString(undefined, {maximumFractionDigits:1})} QQ ({fillPercentage.toFixed(1)}%)</Label>
+                                         <Progress value={fillPercentage} indicatorClassName={fillColorClass} />
+                                     </div>
+                                      {isProductionSilo && (
+                                          <div className="text-center border bg-muted/30 rounded-lg p-2">
+                                               <p className="text-xs text-muted-foreground">Tiempo de Producción Restante</p>
+                                               <p className="text-lg font-bold text-primary">{formatTime(liveSimulationResults.timeToEmptyHours)}</p>
+                                          </div>
                                      )}
-                                </div>
+                                 </div>
                             )
                         })}
                     </CardContent>
@@ -2021,7 +2026,7 @@ export default function OperationsClient({
                         <CardTitle className="flex items-center gap-2">3. Envasadoras</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                         <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                             {machines.map((machine) => {
                                 const product = products.find(p => p.id === machine.productId);
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
@@ -2030,93 +2035,93 @@ export default function OperationsClient({
                                 const unitsProducedByMachine = simulationState.machineTotals[machine.id] || 0;
                                 
                                 return (
-                                    <div key={machine.id} className={cn("p-3 border rounded-lg space-y-3 bg-background relative transition-all", machine.isSimulatingActive && "ring-2 ring-green-500")}>
-                                        <div className="flex justify-between items-start">
-                                            <Label className="font-bold text-primary">Máquina {machine.id}</Label>
-                                            <div className="flex items-center gap-1">
-                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingMachine(machine)}>
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                <TooltipProvider>
-                                                    <Tooltip>
-                                                        <TooltipTrigger asChild>
-                                                            <Button
-                                                                variant={machine.isSimulatingActive ? 'destructive' : 'secondary'}
-                                                                size="icon"
-                                                                className="h-7 w-7"
-                                                                onClick={() => toggleMachineActive(machine.id)}
-                                                                disabled={machine.productId === 'inactive'}
-                                                            >
-                                                                {machine.isSimulatingActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
-                                                            </Button>
-                                                        </TooltipTrigger>
-                                                        <TooltipContent>
-                                                            <p>{machine.isSimulatingActive ? 'Apagar Máquina' : 'Encender Máquina'}</p>
-                                                        </TooltipContent>
-                                                    </Tooltip>
-                                                </TooltipProvider>
-                                            </div>
-                                        </div>
-                                        
-                                        {showImages && (
-                                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                                                <Image 
-                                                    src={machine.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} 
-                                                    alt={`Máquina ${machine.id}`}
-                                                    width={600}
-                                                    height={400}
-                                                    className="object-contain w-full h-full"
-                                                    unoptimized
-                                                />
-                                            </div>
-                                        )}
+                                     <div key={machine.id} className={cn("p-3 border rounded-lg space-y-3 bg-background relative transition-all", machine.isSimulatingActive && "ring-2 ring-green-500")}>
+                                         <div className="flex justify-between items-start">
+                                             <Label className="font-bold text-primary">Máquina {machine.id}</Label>
+                                             <div className="flex items-center gap-1">
+                                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingMachine(machine)}>
+                                                      <Edit className="h-4 w-4" />
+                                                 </Button>
+                                                  <TooltipProvider>
+                                                      <Tooltip>
+                                                          <TooltipTrigger asChild>
+                                                               <Button
+                                                                   variant={machine.isSimulatingActive ? 'destructive' : 'secondary'}
+                                                                   size="icon"
+                                                                   className="h-7 w-7"
+                                                                   onClick={() => toggleMachineActive(machine.id)}
+                                                                   disabled={machine.productId === 'inactive'}
+                                                               >
+                                                                   {machine.isSimulatingActive ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                                                               </Button>
+                                                          </TooltipTrigger>
+                                                          <TooltipContent>
+                                                              <p>{machine.isSimulatingActive ? 'Apagar Máquina' : 'Encender Máquina'}</p>
+                                                         </TooltipContent>
+                                                     </Tooltip>
+                                                 </TooltipProvider>
+                                             </div>
+                                         </div>
+                                         
+                                         {showImages && (
+                                             <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                                 <Image 
+                                                     src={machine.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} 
+                                                     alt={`Máquina ${machine.id}`}
+                                                     width={600}
+                                                     height={400}
+                                                     className="object-contain w-full h-full"
+                                                     unoptimized
+                                                 />
+                                             </div>
+                                         )}
 
-                                        <div className="space-y-1">
-                                            <p className="text-xs text-muted-foreground">Producto</p>
-                                            <p className="font-semibold truncate" title={product?.productName || 'Inactiva'}>
-                                                {product?.productName || 'Inactiva'}
-                                            </p>
-                                        </div>
+                                         <div className="space-y-1">
+                                             <p className="text-xs text-muted-foreground">Producto</p>
+                                             <p className="font-semibold truncate" title={product?.productName || 'Inactiva'}>
+                                                 {product?.productName || 'Inactiva'}
+                                             </p>
+                                         </div>
 
-                                        {machine.productId !== 'inactive' && (
-                                          <>
-                                            <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
-                                                <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
-                                                <div className="grid grid-cols-2 gap-1 text-center">
-                                                    <div className="bg-background p-1 rounded-md border">
-                                                        <p className="text-muted-foreground">Velocidad</p>
-                                                        <p className="font-bold text-sm">{machine.speed} <span className="text-xs font-normal">f/min</span></p>
-                                                    </div>
-                                                    <div className="bg-background p-1 rounded-md border">
-                                                        <p className="text-muted-foreground">Merma</p>
-                                                        <p className="font-bold text-sm">{machine.loss}%</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
-                                                <h3 className="font-semibold text-center text-muted-foreground">Rendimiento (Neto)</h3>
-                                                <div className="grid grid-cols-2 gap-2 text-center">
-                                                    <div className="bg-background p-1 rounded-md border">
-                                                        <p className="text-muted-foreground">Fundas/Min</p>
-                                                        <p className="font-bold text-sm">{unitsPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
-                                                    </div>
-                                                    <div className="bg-background p-1 rounded-md border">
-                                                        <p className="text-muted-foreground">Fardos/Min</p>
-                                                        <p className="font-bold text-sm text-green-600">{fardosPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label className="text-xs">Producción Total (Fundas)</Label>
-                                                <p className="text-lg font-bold text-center text-primary">{Math.floor(unitsProducedByMachine).toLocaleString()}</p>
-                                                <Progress value={(unitsProducedByMachine % machine.speed) / machine.speed * 100} className="h-1" />
-                                            </div>
-                                          </>
-                                        )}
-                                    </div>
+                                         {machine.productId !== 'inactive' && (
+                                           <>
+                                             <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
+                                                 <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
+                                                 <div className="grid grid-cols-2 gap-1 text-center">
+                                                     <div className="bg-background p-1 rounded-md border">
+                                                         <p className="text-muted-foreground">Velocidad</p>
+                                                         <p className="font-bold text-sm">{machine.speed} <span className="text-xs font-normal">f/min</span></p>
+                                                     </div>
+                                                     <div className="bg-background p-1 rounded-md border">
+                                                         <p className="text-muted-foreground">Merma</p>
+                                                         <p className="font-bold text-sm">{machine.loss}%</p>
+                                                     </div>
+                                                 </div>
+                                             </div>
+                                             <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
+                                                 <h3 className="font-semibold text-center text-muted-foreground">Rendimiento (Neto)</h3>
+                                                 <div className="grid grid-cols-2 gap-2 text-center">
+                                                     <div className="bg-background p-1 rounded-md border">
+                                                         <p className="text-muted-foreground">Fundas/Min</p>
+                                                         <p className="font-bold text-sm">{unitsPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                                                     </div>
+                                                     <div className="bg-background p-1 rounded-md border">
+                                                         <p className="text-muted-foreground">Fardos/Min</p>
+                                                         <p className="font-bold text-sm text-green-600">{fardosPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
+                                                     </div>
+                                                 </div>
+                                             </div>
+                                             <div className="space-y-1">
+                                                 <Label className="text-xs">Producción Total (Fundas)</Label>
+                                                 <p className="text-lg font-bold text-center text-primary">{Math.floor(unitsProducedByMachine).toLocaleString()}</p>
+                                                 <Progress value={(unitsProducedByMachine % machine.speed) / machine.speed * 100} className="h-1" />
+                                             </div>
+                                           </>
+                                         )}
+                                     </div>
                                 )
                             })}
-                        </div>
+                         </div>
                     </CardContent>
                 </Card>
 
@@ -2132,83 +2137,83 @@ export default function OperationsClient({
                             const unitsInTransit = wrapperState.conveyorBelt.reduce((sum, item) => sum + item.units, 0);
 
                             return (
-                                <div key={wrapperConfig.id} className="p-4 border rounded-lg space-y-3 bg-background">
-                                    <div className="flex justify-between items-start">
-                                        <Label className="font-bold text-primary">{wrapperConfig.name}</Label>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingWrapper(wrapperConfig)}>
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                    </div>
+                                 <div key={wrapperConfig.id} className="p-4 border rounded-lg space-y-3 bg-background">
+                                     <div className="flex justify-between items-start">
+                                         <Label className="font-bold text-primary">{wrapperConfig.name}</Label>
+                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingWrapper(wrapperConfig)}>
+                                              <Edit className="h-4 w-4" />
+                                         </Button>
+                                     </div>
 
-                                    {showImages && (
-                                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                                            <Image
-                                                src={wrapperConfig.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media"}
-                                                alt={wrapperConfig.name}
-                                                width={600}
-                                                height={400}
-                                                className="object-contain w-full h-full"
-                                                unoptimized
-                                            />
+                                     {showImages && (
+                                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
+                                             <Image
+                                                 src={wrapperConfig.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media"}
+                                                 alt={wrapperConfig.name}
+                                                 width={600}
+                                                 height={400}
+                                                 className="object-contain w-full h-full"
+                                                 unoptimized
+                                             />
+                                         </div>
+                                     )}
+                                     
+                                      <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
+                                         <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
+                                         <div className="grid grid-cols-3 gap-1 text-center">
+                                             <div className="bg-background p-1 rounded-md border">
+                                                 <p className="text-muted-foreground">Capacidad</p>
+                                                 <p className="font-bold text-sm">{wrapperConfig.capacity} <span className="text-xs font-normal">f/min</span></p>
+                                             </div>
+                                             <div className="bg-background p-1 rounded-md border">
+                                                 <p className="text-muted-foreground">Unidades/Fardo</p>
+                                                 <p className="font-bold text-sm">{wrapperConfig.unitsPerBundle}</p>
+                                             </div>
+                                             <div className="bg-background p-1 rounded-md border">
+                                                 <p className="text-muted-foreground">Retraso</p>
+                                                 <p className="font-bold text-sm">{wrapperConfig.conveyorDelay}s</p>
+                                             </div>
+                                         </div>
+                                          <div className="border-t pt-2 mt-2">
+                                             <h4 className="font-semibold text-center text-muted-foreground mb-1">Envasadoras Conectadas</h4>
+                                             <div className="flex justify-center gap-2 flex-wrap">
+                                                 {wrapperConfig.machineIds.length > 0 ? wrapperConfig.machineIds.map(id => (
+                                                     <Badge key={id} variant="secondary">M{id}</Badge>
+                                                 )) : <p className="text-muted-foreground">Ninguna</p>}
+                                             </div>
+                                         </div>
+                                     </div>
+                                     
+                                     <div className="space-y-4 rounded-lg bg-muted/30 p-3 border">
+                                          <div className="grid grid-cols-2 gap-2 text-center">
+                                             <div>
+                                                 <p className="text-xs text-muted-foreground">Fundas en Transporte</p>
+                                                 <p className="font-bold text-lg text-orange-500">{Math.floor(unitsInTransit).toLocaleString()}</p>
+                                             </div>
+                                             <div>
+                                                 <p className="text-xs text-muted-foreground">En Cola</p>
+                                                 <p className="font-bold text-lg text-blue-600">{Math.floor(wrapperState.buffer).toLocaleString()}</p>
+                                             </div>
                                         </div>
-                                    )}
-                                    
-                                     <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
-                                        <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
-                                        <div className="grid grid-cols-3 gap-1 text-center">
-                                            <div className="bg-background p-1 rounded-md border">
-                                                <p className="text-muted-foreground">Capacidad</p>
-                                                <p className="font-bold text-sm">{wrapperConfig.capacity} <span className="text-xs font-normal">f/min</span></p>
-                                            </div>
-                                            <div className="bg-background p-1 rounded-md border">
-                                                <p className="text-muted-foreground">Unidades/Fardo</p>
-                                                <p className="font-bold text-sm">{wrapperConfig.unitsPerBundle}</p>
-                                            </div>
-                                            <div className="bg-background p-1 rounded-md border">
-                                                <p className="text-muted-foreground">Retraso</p>
-                                                <p className="font-bold text-sm">{wrapperConfig.conveyorDelay}s</p>
-                                            </div>
-                                        </div>
-                                         <div className="border-t pt-2 mt-2">
-                                            <h4 className="font-semibold text-center text-muted-foreground mb-1">Envasadoras Conectadas</h4>
-                                            <div className="flex justify-center gap-2 flex-wrap">
-                                                {wrapperConfig.machineIds.length > 0 ? wrapperConfig.machineIds.map(id => (
-                                                    <Badge key={id} variant="secondary">M{id}</Badge>
-                                                )) : <p className="text-muted-foreground">Ninguna</p>}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    <div className="space-y-4 rounded-lg bg-muted/30 p-3 border">
-                                         <div className="grid grid-cols-2 gap-2 text-center">
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">Fundas en Transporte</p>
-                                                <p className="font-bold text-lg text-orange-500">{Math.floor(unitsInTransit).toLocaleString()}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">En Cola</p>
-                                                <p className="font-bold text-lg text-blue-600">{Math.floor(wrapperState.buffer).toLocaleString()}</p>
-                                            </div>
-                                        </div>
-                                         <div>
-                                            <Label className="text-xs">Fardo Actual ({Math.floor(wrapperState.currentBundleProgress)}/{wrapperConfig.unitsPerBundle} fundas)</Label>
-                                            <Progress value={(wrapperState.currentBundleProgress / (wrapperConfig.unitsPerBundle || 1)) * 100} />
+                                          <div>
+                                             <Label className="text-xs">Fardo Actual ({Math.floor(wrapperState.currentBundleProgress)}/{wrapperConfig.unitsPerBundle} fundas)</Label>
+                                             <Progress value={(wrapperState.currentBundleProgress / (wrapperConfig.unitsPerBundle || 1)) * 100} />
                                          </div>
                                          <div className='text-center border bg-background rounded-lg p-2'>
-                                            <p className="text-xs text-muted-foreground">Total Fardos</p>
-                                            <p className="font-bold text-lg text-green-600">{wrapperState.totalBundles.toLocaleString()}</p>
+                                             <p className="text-xs text-muted-foreground">Total Fardos</p>
+                                             <p className="font-bold text-lg text-green-600">{wrapperState.totalBundles.toLocaleString()}</p>
                                          </div>
                                     </div>
                                 </div>
-                            );
+                            )
                         })}
                     </CardContent>
                 </Card>
                 
-                <div className="space-y-6">
+                 <div className="space-y-6">
                     <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                       <KpiCard 
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <KpiCard 
                             title="Tiempo para Agotar Silo" 
                             value={formatTime(liveSimulationResults.timeToEmptyHours)} 
                             icon={Hourglass} 
@@ -2216,7 +2221,7 @@ export default function OperationsClient({
                         />
                         <KpiCard
                             title="Flujo de Producción (QQ/hora)"
-                            value={`${liveSimulationResults.qqRateFromCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })}`}
+                            value={liveSimulationResults.qqRateFromCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                             subValue={`vs ${liveSimulationResults.qqRateToPackers.toLocaleString(undefined, { maximumFractionDigits: 1 })} de Empaque`}
                             icon={Activity}
                             description="Compara la producción de azúcar de las centrífugas con la demanda de las envasadoras."
@@ -2241,38 +2246,38 @@ export default function OperationsClient({
                             <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            {liveSimulationResults.bottleneck === 'none' && (
-                                <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-green-600/10 text-green-700">
-                                    <CheckCircle2 className="h-5 w-5 mt-0.5" />
-                                    <div>
-                                        <h4 className="font-bold mb-1">Operación Óptima</h4>
-                                        <p>La línea de producción está balanceada. Las envasadoras están siendo alimentadas a un ritmo adecuado y las enfardadoras pueden manejar la carga.</p>
-                                    </div>
-                                </div>
+                             {liveSimulationResults.bottleneck === 'none' && (
+                                 <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-green-600/10 text-green-700">
+                                     <CheckCircle2 className="h-5 w-5 mt-0.5" />
+                                     <div>
+                                         <h4 className="font-bold mb-1">Operación Óptima</h4>
+                                         <p>La línea de producción está balanceada. Las envasadoras están siendo alimentadas a un ritmo adecuado y las enfardadoras pueden manejar la carga.</p>
+                                     </div>
+                                 </div>
                             )}
-                            {liveSimulationResults.bottleneck === 'wrapper' && (
-                                <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-destructive/10 text-destructive">
-                                    <AlertTriangle className="h-5 w-5 mt-0.5" />
-                                    <div>
-                                        <h4 className="font-bold mb-1">Cuello de Botella: Empaque</h4>
-                                        <p>
-                                            La capacidad de las enfardadoras ({staticSimulationResults.totalWrapperCapacity.toLocaleString()} f/min) es menor que la producción de las envasadoras ({staticSimulationResults.totalBagsPerMinuteFromPackers.toLocaleString()} f/min).
-                                            Considere aumentar la capacidad de las enfardadoras o reducir la velocidad de las envasadoras.
-                                        </p>
-                                    </div>
-                                </div>
+                             {liveSimulationResults.bottleneck === 'wrapper' && (
+                                 <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-destructive/10 text-destructive">
+                                     <AlertTriangle className="h-5 w-5 mt-0.5" />
+                                     <div>
+                                         <h4 className="font-bold mb-1">Cuello de Botella: Empaque</h4>
+                                         <p>
+                                             La capacidad de las enfardadoras ({staticSimulationResults.totalWrapperCapacity.toLocaleString()} f/min) es menor que la producción de las envasadoras ({staticSimulationResults.totalBagsPerMinuteFromPackers.toLocaleString()} f/min).
+                                             Considere aumentar la capacidad de las enfardadoras o reducir la velocidad de las envasadoras.
+                                         </p>
+                                     </div>
+                                 </div>
                             )}
                              {liveSimulationResults.bottleneck === 'centrifuge' && (
-                                <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-amber-500/10 text-amber-600">
-                                    <Hourglass className="h-5 w-5 mt-0.5" />
-                                    <div>
-                                        <h4 className="font-bold mb-1">Cuello de Botella: Materia Prima</h4>
-                                        <p>
-                                            Las envasadoras demandan {liveSimulationResults.qqRateToPackers.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h, pero las centrífugas solo producen {liveSimulationResults.qqRateFromCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h. 
-                                            Las envasadoras se detendrán por falta de azúcar.
-                                        </p>
-                                    </div>
-                                </div>
+                                 <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-amber-500/10 text-amber-600">
+                                     <Hourglass className="h-5 w-5 mt-0.5" />
+                                     <div>
+                                         <h4 className="font-bold mb-1">Cuello de Botella: Materia Prima</h4>
+                                         <p>
+                                             Las envasadoras demandan {liveSimulationResults.qqRateToPackers.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h, pero las centrífugas solo producen {liveSimulationResults.qqRateFromCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h. 
+                                             Las envasadoras se detendrán por falta de azúcar.
+                                         </p>
+                                     </div>
+                                 </div>
                             )}
                         </CardContent>
                     </Card>
@@ -2282,11 +2287,11 @@ export default function OperationsClient({
                         </CardHeader>
                         <CardContent>
                             {Object.values(simulationState.machineTotals).every(m => m === 0) ? (
-                                <p className="text-center text-muted-foreground h-[200px] flex items-center justify-center">Activa una máquina para ver la contribución.</p>
+                                 <p className="text-center text-muted-foreground h-[200px] flex items-center justify-center">Activa una máquina para ver la contribución.</p>
                             ) : (
                                 <ResponsiveContainer width="100%" height={200}>
-                                    <PieChart>
-                                        <Pie 
+                                     <PieChart>
+                                         <Pie 
                                           data={Object.entries(simulationState.machineTotals)
                                               .map(([machineId, totalUnits]) => {
                                                   const machine = machines.find(m => m.id === parseInt(machineId));
@@ -2302,7 +2307,7 @@ export default function OperationsClient({
                                                   return {
                                                       name: `Máquina ${machineId}`,
                                                       productName: product.productName,
-                                                      value: totalBundles, // Value for pie chart size
+                                                      value: totalBundles,  // Value for pie chart size
                                                       units: totalUnits,
                                                       qqConsumed: totalKg / KG_PER_QUINTAL,
                                                   }
@@ -2311,12 +2316,12 @@ export default function OperationsClient({
                                           } 
                                           dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label
                                         >
-                                            {Object.keys(simulationState.machineTotals).map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                            ))}
+                                             {Object.keys(simulationState.machineTotals).map((entry, index) => (
+                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                             ))}
                                         </Pie>
-                                        <RechartsTooltip content={<CustomPieTooltip />} />
-                                    </PieChart>
+                                         <RechartsTooltip content={<CustomPieTooltip />} />
+                                     </PieChart>
                                 </ResponsiveContainer>
                             )}
                         </CardContent>
@@ -2324,7 +2329,7 @@ export default function OperationsClient({
                 </div>
             </div>
             {editingMachine && (
-                <MachineEditDialog
+                 <MachineEditDialog
                     open={!!editingMachine}
                     onOpenChange={(isOpen) => !isOpen && setEditingMachine(null)}
                     machine={editingMachine}
@@ -2335,7 +2340,7 @@ export default function OperationsClient({
                 />
             )}
              {editingSilo && (
-                <SiloEditDialog
+                 <SiloEditDialog
                     open={!!editingSilo}
                     onOpenChange={(isOpen) => !isOpen && setEditingSilo(null)}
                     silo={editingSilo}
@@ -2355,7 +2360,7 @@ export default function OperationsClient({
                 />
             )}
             {editingReceiver && (
-                <ReceiverEditDialog
+                 <ReceiverEditDialog
                     open={!!editingReceiver}
                     onOpenChange={(isOpen) => !isOpen && setEditingReceiver(null)}
                     receiver={editingReceiver}
@@ -2365,7 +2370,7 @@ export default function OperationsClient({
                 />
             )}
              {editingCentrifuges && (
-                <CentrifugeEditDialog
+                 <CentrifugeEditDialog
                     open={editingCentrifuges}
                     onOpenChange={setEditingCentrifuges}
                     onSave={handleCentrifugeConfigSave}
@@ -2380,7 +2385,7 @@ export default function OperationsClient({
                 />
             )}
             {editingWrapper && (
-                <WrapperEditDialog
+                 <WrapperEditDialog
                     open={!!editingWrapper}
                     onOpenChange={(isOpen) => !isOpen && setEditingWrapper(null)}
                     wrapper={editingWrapper}
