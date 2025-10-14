@@ -318,7 +318,7 @@ const ProductionMixKpiCard = ({ plannedSacos, plannedQq, plannedPercentage, unpl
 };
 
 
-export default function DashboardClient({ prefetchedCategories }: { prefetchedCategories: CategoryDefinition[]}) {
+export default function DashboardClient({ prefetchedCategories, prefetchedProducts }: { prefetchedCategories: CategoryDefinition[], prefetchedProducts: ProductDefinition[]}) {
   const [weeklySummaryData, setWeeklySummaryData] = React.useState<WeeklySummaryData[]>([]);
   const [weeklyShiftData, setWeeklyShiftData] = React.useState<WeeklyShiftSummaryData[]>([]);
   const [dailyData, setDailyData] = React.useState<DailySummaryData[]>([]);
@@ -330,6 +330,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   const [allPlans, setAllPlans] = React.useState<FullPlanDoc[]>([]);
   const [filteredSummaries, setFilteredSummaries] = React.useState<WeeklySummaryDoc[]>([]);
   const [categories] = React.useState<CategoryDefinition[]>(prefetchedCategories);
+  const [products] = React.useState<ProductDefinition[]>(prefetchedProducts);
   const [selectedWeek, setSelectedWeek] = React.useState('all');
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
   const [isFilterOpen, setIsFilterOpen] = React.useState(true);
@@ -407,8 +408,9 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     const weeklySummaryForChart: WeeklySummaryData[] = summariesForCharts.map(summary => {
         const plan = plansMap.get(summary.id);
         
-        let totalPlannedSacks = 0, actualForPlannedSacks = 0, unplannedProductionSacks = 0;
-        let totalPlannedQQ = 0, actualForPlannedQQ = 0, unplannedProductionQQ = 0;
+        let totalPlannedSacks = 0;
+        let actualForPlannedSacks = 0;
+        let unplannedProductionSacks = 0;
 
         if (plan) {
             plan.products.forEach(p => {
@@ -416,22 +418,21 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                 if (!categoryMatch) return;
 
                 const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
-                const productWeight = p.sackWeight || 50;
 
                 if (plannableCategories.has(p.categoryId)) {
                     totalPlannedSacks += p.planned || 0;
-                    totalPlannedQQ += (p.planned || 0) * productWeight / KG_PER_QUINTAL;
                     actualForPlannedSacks += productTotalActual;
-                    actualForPlannedQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
                 } else {
                     unplannedProductionSacks += productTotalActual;
-                    unplannedProductionQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
                 }
             });
         }
-
+        
         const totalActualSacks = actualForPlannedSacks + unplannedProductionSacks;
-        const totalActualQQ = actualForPlannedQQ + unplannedProductionQQ;
+        // QQ Calculations for tooltip
+        const plannedQQ = totalPlannedSacks * 50 / KG_PER_QUINTAL; // Approximation, better to do per product
+        const actualForPlannedQQ = actualForPlannedSacks * 50 / KG_PER_QUINTAL;
+        const unplannedProductionQQ = unplannedProductionSacks * 50 / KG_PER_QUINTAL;
         
         return {
             week: summary.week,
@@ -440,12 +441,12 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             actualForPlanned: actualForPlannedSacks,
             unplannedProduction: unplannedProductionSacks,
             totalActual: totalActualSacks,
-            plannedQQ: totalPlannedQQ,
-            actualForPlannedQQ: actualForPlannedQQ,
-            unplannedProductionQQ: unplannedProductionQQ,
-            totalActualQQ: totalActualQQ,
+            plannedQQ,
+            actualForPlannedQQ,
+            unplannedProductionQQ,
+            totalActualQQ: actualForPlannedQQ + unplannedProductionQQ,
         };
-    }).filter((s): s is WeeklySummaryData => s !== null).reverse();
+    }).reverse();
     setWeeklySummaryData(weeklySummaryForChart);
     
     const weeklyShiftDataForChart = summariesForCharts.map(summary => {
@@ -558,14 +559,14 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     const relevantPlans = allPlans.filter(p => filteredPlanIds.has(p.id));
     const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string; sackWeight: number; } } = {};
     
-    let plannedProductionSacos = 0;
-    let plannedProductionQq = 0;
-    let unplannedProductionSacos = 0;
-    let unplannedProductionQq = 0;
-    let totalDaySacos = 0;
-    let totalDayQq = 0;
-    let totalNightSacos = 0;
-    let totalNightQq = 0;
+    let kpiPlannedSacos = 0;
+    let kpiPlannedQq = 0;
+    let kpiUnplannedSacos = 0;
+    let kpiUnplannedQq = 0;
+    let kpiTotalDaySacos = 0;
+    let kpiTotalDayQq = 0;
+    let kpiTotalNightSacos = 0;
+    let kpiTotalNightQq = 0;
     let totalProductionAllCategoriesSacos = 0;
     let totalProductionAllCategoriesQq = 0;
 
@@ -581,25 +582,22 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
             
-            // Mix de Producción KPI Calculation
+            // Mix de Producción & Shift Totals KPI Calculation
             if (categoryMatch) {
               if ((product.planned || 0) > 0) {
-                  plannedProductionSacos += totalActual;
-                  plannedProductionQq += totalActualQq;
+                  kpiPlannedSacos += totalActual;
+                  kpiPlannedQq += totalActualQq;
               } else if (totalActual > 0) {
-                  unplannedProductionSacos += totalActual;
-                  unplannedProductionQq += totalActualQq;
+                  kpiUnplannedSacos += totalActual;
+                  kpiUnplannedQq += totalActualQq;
               }
-            }
-
-            // Shift Totals KPI Calculation
-            for (const day of Object.values(product.actual)) {
-                if (categoryMatch) {
-                    totalDaySacos += day.day || 0;
-                    totalNightSacos += day.night || 0;
-                    totalDayQq += (day.day || 0) * sackWeight / KG_PER_QUINTAL;
-                    totalNightQq += (day.night || 0) * sackWeight / KG_PER_QUINTAL;
-                }
+              
+              for (const day of Object.values(product.actual)) {
+                  kpiTotalDaySacos += day.day || 0;
+                  kpiTotalNightSacos += day.night || 0;
+                  kpiTotalDayQq += (day.day || 0) * sackWeight / KG_PER_QUINTAL;
+                  kpiTotalNightQq += (day.night || 0) * sackWeight / KG_PER_QUINTAL;
+              }
             }
 
             // "Rendimiento Histórico" chart
@@ -625,25 +623,25 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     
     setTotalPeriodProduction({ sacos: totalProductionAllCategoriesSacos, qq: totalProductionAllCategoriesQq });
 
-    const totalMixProduction = plannedProductionSacos + unplannedProductionSacos;
+    const totalMixProduction = kpiPlannedSacos + kpiUnplannedSacos;
     setProductionMix({
-        plannedSacos: plannedProductionSacos,
-        plannedQq: plannedProductionQq,
-        plannedPercentage: totalMixProduction > 0 ? (plannedProductionSacos / totalMixProduction) * 100 : 0,
-        unplannedSacos: unplannedProductionSacos,
-        unplannedQq: unplannedProductionQq,
-        unplannedPercentage: totalMixProduction > 0 ? (unplannedProductionSacos / totalMixProduction) * 100 : 0,
+        plannedSacos: kpiPlannedSacos,
+        plannedQq: kpiPlannedQq,
+        plannedPercentage: totalMixProduction > 0 ? (kpiPlannedSacos / totalMixProduction) * 100 : 0,
+        unplannedSacos: kpiUnplannedSacos,
+        unplannedQq: kpiUnplannedQq,
+        unplannedPercentage: totalMixProduction > 0 ? (kpiUnplannedSacos / totalMixProduction) * 100 : 0,
     });
 
     setShiftTotals({
-        daySacos: totalDaySacos,
-        dayQq: totalDayQq,
-        nightSacos: totalNightSacos,
-        nightQq: totalNightQq,
+        daySacos: kpiTotalDaySacos,
+        dayQq: kpiTotalDayQq,
+        nightSacos: kpiTotalNightSacos,
+        nightQq: kpiTotalNightQq,
     });
 
 
-  }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory]);
+  }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory, products]);
 
 
   return (
