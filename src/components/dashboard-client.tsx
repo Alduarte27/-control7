@@ -1,8 +1,3 @@
-
-
-
-
-
 'use client';
 
 import React from 'react';
@@ -21,6 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
 import KpiDashboard from './kpi-dashboard';
+import KpiCard from './kpi-card';
 
 const KG_PER_QUINTAL = 50;
 
@@ -497,20 +493,27 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
             const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
-            const totalActualQq = totalActual * (product.sackWeight || 50) / KG_PER_QUINTAL;
             
             // Grand Total KPI (ignores category filter)
-            totalSacosGlobal += totalActual;
-            totalQqGlobal += totalActualQq;
-            
-            // Production Mix KPI (ignores category filter)
-            if (product.planned > 0) {
-                plannedProductionSacos += totalActual;
-                plannedProductionQq += totalActualQq;
-            } else if (totalActual > 0) {
-                unplannedProductionSacos += totalActual;
-                unplannedProductionQq += totalActualQq;
+            if (!showOnlyPlannedInHistory || plannableCategories.has(product.categoryId)) {
+                const totalActualQq = totalActual * (product.sackWeight || 50) / KG_PER_QUINTAL;
+                totalSacosGlobal += totalActual;
+                totalQqGlobal += totalActualQq;
             }
+
+            
+            // Production Mix KPI
+            if (plannableCategories.has(product.categoryId)) {
+                const totalActualQq = totalActual * (product.sackWeight || 50) / KG_PER_QUINTAL;
+                if (product.planned > 0) {
+                    plannedProductionSacos += totalActual;
+                    plannedProductionQq += totalActualQq;
+                } else if (totalActual > 0) {
+                    unplannedProductionSacos += totalActual;
+                    unplannedProductionQq += totalActualQq;
+                }
+            }
+
 
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
 
