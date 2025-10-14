@@ -240,124 +240,139 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   }, [dateRange, allSummaries]);
 
   React.useEffect(() => {
-    const processData = async () => {
-        if (loading) return;
-        
-        // --- Data for Weekly Summary Charts (Unaffected by specific week filter) ---
-        const summariesForCharts = filteredSummaries;
+    if (loading) return;
+    
+    // --- Data for Weekly Summary Charts (Unaffected by specific week filter) ---
+    const summariesForCharts = filteredSummaries;
+    
+    // NEW LOGIC: Group actual production by plannable categories for the main chart
+    const weeklySummaryForChart: WeeklySummaryData[] = summariesForCharts.map(summary => {
+        const plannableCategories = categories.filter(c => c.isPlanned).map(c => c.id);
+        const nonPlannableCategories = categories.filter(c => !c.isPlanned).map(c => c.id);
 
-        const weeklySummaryForChart: WeeklySummaryData[] = summariesForCharts.map(summary => {
-            const totals = selectedCategoryId === 'all'
-                ? {
-                    planned: summary.totalPlanned,
-                    totalActual: summary.totalActual,
-                    actualForPlanned: summary.totalActualForPlanned,
-                    unplannedProduction: summary.totalUnplannedProduction,
-                  }
-                : summary.categoryTotals?.[selectedCategoryId] || { planned: 0, totalActual: 0, actualForPlanned: 0, unplannedProduction: 0 };
+        let totalPlanned = 0;
+        let actualForPlanned = 0;
+        let unplannedProduction = 0; // This will now represent production from non-plannable categories
+
+        // Calculate based on the categoryTotals stored in the summary
+        for (const catId in summary.categoryTotals) {
+            if (plannableCategories.includes(catId)) {
+                const catTotals = summary.categoryTotals[catId];
+                totalPlanned += catTotals.planned || 0;
+                // Sum ALL actual production from plannable categories, regardless of original plan
+                actualForPlanned += catTotals.totalActual || 0; 
+            } else if (nonPlannableCategories.includes(catId)) {
+                unplannedProduction += summary.categoryTotals[catId].totalActual || 0;
+            }
+        }
+        
+        // Handle filter by a specific category
+        if (selectedCategoryId !== 'all') {
+            const catIsPlannable = plannableCategories.includes(selectedCategoryId);
+            const totals = summary.categoryTotals?.[selectedCategoryId] || { planned: 0, totalActual: 0, actualForPlanned: 0, unplannedProduction: 0 };
             
-            return {
-                week: summary.week,
-                name: `S${summary.week}`,
-                planned: totals.planned,
-                totalActual: totals.totalActual,
-                actualForPlanned: totals.actualForPlanned,
-                unplannedProduction: totals.unplannedProduction,
-            };
-        }).reverse(); // reverse to show chronologically
-        setWeeklySummaryData(weeklySummaryForChart);
-        
-        const weeklyShiftDataForChart = summariesForCharts.map(summary => {
-            // NOTE: Per-category shift data is not stored, so this chart is always for all categories.
-            const totalDay = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.day, 0);
-            const totalNight = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.night, 0);
-            return {
-                name: `S${summary.week}`,
-                day: totalDay,
-                night: totalNight,
-                week: summary.week
-            };
-        }).reverse(); // reverse to show chronologically
-        setWeeklyShiftData(weeklyShiftDataForChart);
-        
-        // --- Data for Detail Charts (Affected by specific week filter) ---
-        const summariesForDetailCharts = selectedWeek === 'all'
-            ? summariesForCharts
-            : summariesForCharts.filter(summary => summary.id === selectedWeek);
+            totalPlanned = totals.planned || 0;
+            actualForPlanned = catIsPlannable ? (totals.totalActual || 0) : 0;
+            unplannedProduction = !catIsPlannable ? (totals.totalActual || 0) : 0;
+        }
 
-        const dailyTotals = {
-            mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
-            thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
-            sun: { day: 0, night: 0 } 
+        return {
+            week: summary.week,
+            name: `S${summary.week}`,
+            planned: totalPlanned,
+            actualForPlanned: actualForPlanned,
+            unplannedProduction: unplannedProduction,
+            totalActual: summary.totalActual,
         };
+    }).reverse();
+    setWeeklySummaryData(weeklySummaryForChart);
+    
+    const weeklyShiftDataForChart = summariesForCharts.map(summary => {
+        // NOTE: Per-category shift data is not stored, so this chart is always for all categories.
+        const totalDay = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.day, 0);
+        const totalNight = Object.values(summary.dailyShiftTotals).reduce((sum, s) => sum + s.night, 0);
+        return {
+            name: `S${summary.week}`,
+            day: totalDay,
+            night: totalNight,
+            week: summary.week
+        };
+    }).reverse(); // reverse to show chronologically
+    setWeeklyShiftData(weeklyShiftDataForChart);
+    
+    // --- Data for Detail Charts (Affected by specific week filter) ---
+    const summariesForDetailCharts = selectedWeek === 'all'
+        ? summariesForCharts
+        : summariesForCharts.filter(summary => summary.id === selectedWeek);
 
-        summariesForDetailCharts.forEach(summary => {
-             // NOTE: Per-category daily shift data is not stored, so this chart is always for all categories.
-            for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
-                dailyTotals[day].day += summary.dailyShiftTotals[day]?.day || 0;
-                dailyTotals[day].night += summary.dailyShiftTotals[day]?.night || 0;
-            }
-        });
+    const dailyTotals = {
+        mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 }, 
+        thu: { day: 0, night: 0 }, fri: { day: 0, night: 0 }, sat: { day: 0, night: 0 }, 
+        sun: { day: 0, night: 0 } 
+    };
 
-        setDailyData([
-            { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
-            { name: 'Martes', day: dailyTotals.tue.day, night: dailyTotals.tue.night },
-            { name: 'Miércoles', day: dailyTotals.wed.day, night: dailyTotals.wed.night },
-            { name: 'Jueves', day: dailyTotals.thu.day, night: dailyTotals.thu.night },
-            { name: 'Viernes', day: dailyTotals.fri.day, night: dailyTotals.fri.night },
-            { name: 'Sábado', day: dailyTotals.sat.day, night: dailyTotals.sat.night },
-            { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
-        ]);
-        
-        // --- Single Week Product Chart Logic (Only runs if a specific week is selected) ---
-        if (selectedWeek !== 'all') {
-            const plan = allPlans.find(p => p.id === selectedWeek);
-            if (plan) {
-                const productChartData = plan.products
-                    .filter((p: ProductData) => {
-                        const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
-                        const isPlannable = p.categoryIsPlanned;
-                        const hasActivity = p.planned > 0 || Object.values(p.actual).some(d => d.day > 0 || d.night > 0);
-                        return categoryMatch && isPlannable && hasActivity;
-                    })
-                    .map((p: ProductData) => ({
-                        name: p.productName,
-                        planned: p.planned,
-                        actual: Object.values(p.actual).reduce((sum, dayVal) => sum + dayVal.day + dayVal.night, 0),
-                        color: p.color,
-                    }));
-                setProductData(productChartData);
-            } else {
-                setProductData([]);
-            }
+    summariesForDetailCharts.forEach(summary => {
+         // NOTE: Per-category daily shift data is not stored, so this chart is always for all categories.
+        for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
+            dailyTotals[day].day += summary.dailyShiftTotals[day]?.day || 0;
+            dailyTotals[day].night += summary.dailyShiftTotals[day]?.night || 0;
+        }
+    });
+
+    setDailyData([
+        { name: 'Lunes', day: dailyTotals.mon.day, night: dailyTotals.mon.night },
+        { name: 'Martes', day: dailyTotals.tue.day, night: dailyTotals.tue.night },
+        { name: 'Miércoles', day: dailyTotals.wed.day, night: dailyTotals.wed.night },
+        { name: 'Jueves', day: dailyTotals.thu.day, night: dailyTotals.thu.night },
+        { name: 'Viernes', day: dailyTotals.fri.day, night: dailyTotals.fri.night },
+        { name: 'Sábado', day: dailyTotals.sat.day, night: dailyTotals.sat.night },
+        { name: 'Domingo', day: dailyTotals.sun.day, night: dailyTotals.sun.night },
+    ]);
+    
+    // --- Single Week Product Chart Logic (Only runs if a specific week is selected) ---
+    if (selectedWeek !== 'all') {
+        const plan = allPlans.find(p => p.id === selectedWeek);
+        if (plan) {
+            const productChartData = plan.products
+                .filter((p: ProductData) => {
+                    const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
+                    const hasActivity = p.planned > 0 || Object.values(p.actual).some(d => d.day > 0 || d.night > 0);
+                    return categoryMatch && hasActivity;
+                })
+                .map((p: ProductData) => ({
+                    name: p.productName,
+                    planned: p.planned,
+                    actual: Object.values(p.actual).reduce((sum, dayVal) => sum + dayVal.day + dayVal.night, 0),
+                    color: p.color,
+                }));
+            setProductData(productChartData);
         } else {
             setProductData([]);
         }
+    } else {
+        setProductData([]);
+    }
 
-        // --- Aggregated Product Chart Logic ---
-        const filteredPlanIds = new Set(summariesForCharts.map(s => s.id));
-        const relevantPlans = allPlans.filter(p => filteredPlanIds.has(p.id));
-        const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string } } = {};
+    // --- Aggregated Product Chart Logic (Rendimiento Histórico) ---
+    const filteredPlanIds = new Set(summariesForCharts.map(s => s.id));
+    const relevantPlans = allPlans.filter(p => filteredPlanIds.has(p.id));
+    const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string } } = {};
 
-        relevantPlans.forEach(plan => {
-            plan.products.forEach((product: ProductData) => {
-                const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
-                if (categoryMatch && product.categoryIsPlanned) {
-                    if (!productTotals[product.id]) {
-                        productTotals[product.id] = { name: product.productName, planned: 0, actual: 0, color: product.color };
-                    }
-                    productTotals[product.id].planned += product.planned || 0;
-                    productTotals[product.id].actual += Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+    relevantPlans.forEach(plan => {
+        plan.products.forEach((product: ProductData) => {
+            const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
+            if (categoryMatch) {
+                if (!productTotals[product.id]) {
+                    productTotals[product.id] = { name: product.productName, planned: 0, actual: 0, color: product.color };
                 }
-            });
+                productTotals[product.id].planned += product.planned || 0;
+                productTotals[product.id].actual += Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+            }
         });
+    });
 
-        const aggregatedData = Object.values(productTotals).filter(p => p.planned > 0 || p.actual > 0);
-        setAggregatedProductData(aggregatedData);
-
-    };
-
-    processData();
+    const aggregatedData = Object.values(productTotals).filter(p => p.planned > 0 || p.actual > 0);
+    setAggregatedProductData(aggregatedData);
 
   }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans]);
 
