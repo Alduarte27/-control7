@@ -1,7 +1,7 @@
 'use client';
 
 import KpiCard from './kpi-card';
-import { Target, PackageCheck, CheckCircle2, ClipboardPlus, ClipboardCheck } from 'lucide-react';
+import { Target, PackageCheck, CheckCircle2, ClipboardPlus, ClipboardCheck, Sun, Moon } from 'lucide-react';
 import type { ProductData } from '@/lib/types';
 import type { KpiCardProps } from './kpi-card';
 
@@ -13,13 +13,15 @@ const KG_PER_QUINTAL = 50;
 
 export default function KpiDashboard({ data }: KpiDashboardProps) {
   // --- Helper function to calculate total weight ---
-  const calculateWeight = (products: ProductData[], type: 'planned' | 'actual'): number => {
+  const calculateWeight = (products: ProductData[], type: 'planned' | 'actual' | 'day' | 'night'): number => {
     return products.reduce((totalWeight, item) => {
       let sacks = 0;
       if (type === 'planned') {
         sacks = item.planned || 0;
-      } else { // actual
+      } else if (type === 'actual') {
         sacks = Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+      } else { // 'day' or 'night'
+        sacks = Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal[type] || 0), 0);
       }
       const itemWeight = sacks * (item.sackWeight || 50); // Default to 50kg if not specified
       return totalWeight + itemWeight;
@@ -36,20 +38,10 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   const totalPlannedForComplianceSacks = productsForCompliance.reduce((sum, item) => sum + (item.planned || 0), 0);
   const totalPlannedForComplianceQuintales = calculateWeight(productsForCompliance, 'planned') / KG_PER_QUINTAL;
 
-  const totalActualForComplianceSacks = productsForCompliance.reduce((sum, item) => 
-    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
-  );
-  const totalActualForComplianceQuintales = calculateWeight(productsForCompliance, 'actual') / KG_PER_QUINTAL;
-
-
   // Production from planned categories that had no plan for the week (plan === 0)
   const unplannedProductionProducts = data.filter(
     item => item.categoryIsPlanned && (item.planned || 0) === 0
   );
-  const totalUnplannedProductionSacks = unplannedProductionProducts.reduce((sum, item) =>
-    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
-  );
-  const totalUnplannedProductionQuintales = calculateWeight(unplannedProductionProducts, 'actual') / KG_PER_QUINTAL;
 
   // Calculate totals for all products for overall display
   const totalActualSacks = data.reduce((sum, item) => 
@@ -57,13 +49,32 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   );
   const totalActualQuintales = calculateWeight(data, 'actual') / KG_PER_QUINTAL;
 
+  const totalActualForComplianceSacks = productsForCompliance.reduce((sum, item) => 
+    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
+  );
+
   const plannedProductionSacos = totalActualForComplianceSacks;
-  const plannedProductionQq = totalActualForComplianceQuintales;
-  const unplannedProductionSacos = totalUnplannedProductionSacks;
-  const unplannedProductionQq = totalUnplannedProductionQuintales;
+  const plannedProductionQq = calculateWeight(productsForCompliance, 'actual') / KG_PER_QUINTAL;
+
+  const unplannedProductionSacos = unplannedProductionProducts.reduce((sum, item) =>
+    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
+  );
+  const unplannedProductionQq = calculateWeight(unplannedProductionProducts, 'actual') / KG_PER_QUINTAL;
+  
   const totalMixProduction = plannedProductionSacos + unplannedProductionSacos;
   const plannedPercentage = totalMixProduction > 0 ? (plannedProductionSacos / totalMixProduction) * 100 : 0;
   const unplannedPercentage = totalMixProduction > 0 ? (unplannedProductionSacos / totalMixProduction) * 100 : 0;
+
+  // Shift totals
+  const totalDaySacks = data.reduce((sum, item) => 
+    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0), 0), 0
+  );
+  const totalDayQuintales = calculateWeight(data, 'day') / KG_PER_QUINTAL;
+
+  const totalNightSacks = data.reduce((sum, item) => 
+    sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.night || 0), 0), 0
+  );
+  const totalNightQuintales = calculateWeight(data, 'night') / KG_PER_QUINTAL;
 
 
   return (
@@ -99,18 +110,18 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
         fractionDigits={0}
       />
       <KpiCard 
-        title="Real s/Plan (Sacos)" 
-        value={totalActualForComplianceSacks.toLocaleString()} 
-        icon={CheckCircle2}
-        description="Suma de la producción real que responde directamente a un plan (productos de categorías planificables con plan > 0)."
-        subValue={`(${totalActualForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
+        title="Producción Turno Día" 
+        value={totalDaySacks.toLocaleString()} 
+        icon={Sun}
+        description="Suma de toda la producción real registrada en el turno de día."
+        subValue={`(${totalDayQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
       />
       <KpiCard
-        title="No Programado (Sacos)"
-        value={totalUnplannedProductionSacks.toLocaleString()}
-        icon={ClipboardPlus}
-        description="Producción real de productos de categorías planificables que NO tenían un plan para la semana (plan = 0)."
-        subValue={`(${totalUnplannedProductionQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
+        title="Producción Turno Noche"
+        value={totalNightSacks.toLocaleString()}
+        icon={Moon}
+        description="Suma de toda la producción real registrada en el turno de noche."
+        subValue={`(${totalNightQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`}
       />
     </div>
   );
