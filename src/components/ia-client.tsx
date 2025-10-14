@@ -59,14 +59,12 @@ type ReceiverState = {
     state: 'idle' | 'filling' | 'ready' | 'draining';
     fillProgress: number;
     drainingBy: string[]; // Now an array of centrifuge IDs
-    imageUrl: string | null;
 };
 
 type CentrifugeState = {
     id: string;
     name: string;
     state: 'idle' | 'loading' | 'washing_centrifuging' | 'purging';
-    imageUrl: string | null;
     stageTimeRemaining: number;
     stageProgress: number;
     timeIntoCycle: number;
@@ -477,14 +475,12 @@ function ReceiverEditDialog({
     open,
     onOpenChange,
     onSave,
-    onImageSave,
     isUploading
 }: {
     receiver: ReceiverState;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (updatedSilo: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress' | 'drainingBy'>) => void;
-    onImageSave: (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => Promise<void>;
     isUploading: boolean;
 }) {
     const [editedReceiver, setEditedReceiver] = React.useState(receiver);
@@ -497,17 +493,9 @@ function ReceiverEditDialog({
         setEditedReceiver(prev => ({ ...prev, [field]: value }));
     };
     
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        await onImageSave('receiver', receiver.id, file);
-    };
-
-    const fileInputId = `receiver-image-upload-${receiver.id}`;
-
     const handleSaveChanges = () => {
-        const { imageUrl, currentQQ, state, fillProgress, drainingBy, ...configToSave } = editedReceiver;
-        onSave(configToSave);
+        const { currentQQ, state, fillProgress, drainingBy, ...configToSave } = editedReceiver;
+        onSave(configToSave as any); // Type assertion to satisfy Omit
         onOpenChange(false);
     };
 
@@ -1015,14 +1003,8 @@ export default function OperationsClient({
                 'familiar': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media',
                 'granel': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.%20Gran.jpeg?alt=media',
             },
-            receivers: {
-                'rec1': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media',
-                'rec2': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media',
-            },
-            centrifuges: {
-                'cent1': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
-                'cent2': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media',
-            },
+            receivers: {},
+            centrifuges: {},
             tachos: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/Tachos.jpg?alt=media',
         }
     });
@@ -1097,11 +1079,10 @@ export default function OperationsClient({
                 state: 'idle',
                 fillProgress: 0,
                 drainingBy: [],
-                imageUrl: imageUrls.receivers[r.id] || null,
             })));
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: imageUrls.centrifuges['cent1'], stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', imageUrl: imageUrls.centrifuges['cent2'], stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
             ]);
             setTachosImageUrl(imageUrls.tachos);
             
@@ -1124,10 +1105,10 @@ export default function OperationsClient({
             setMachines(params.machines.map(m => ({ ...m, imageUrl: images.machines[m.id] || null, isSimulatingActive: false })));
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
             setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null, currentQQ: 0 })));
-            setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: [], imageUrl: images.receivers[r.id] || null })));
+            setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: [] })));
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', imageUrl: images.centrifuges['cent1'], stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', imageUrl: images.centrifuges['cent2'], stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
             ]);
             setTachosImageUrl(images.tachos);
         }
@@ -1144,7 +1125,7 @@ export default function OperationsClient({
             machines: machines.map(({ isSimulatingActive, imageUrl, ...m }) => m),
             wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, imageUrl, ...w }) => w),
             silos: silos.map(({imageUrl, currentQQ, ...s}) => s),
-            receivers: receivers.map(({imageUrl, currentQQ, state, fillProgress, drainingBy, ...r}) => r),
+            receivers: receivers.map(({currentQQ, state, fillProgress, drainingBy, ...r}) => r),
             tachosCookTime: tachosCookTime,
             tachosTransferTime: tachosTransferTime,
             tachosGoal: tachosGoal,
@@ -1215,11 +1196,11 @@ export default function OperationsClient({
             } else if (type === 'wrapper') {
                 setWrappers(prev => prev.map(w => w.id === id ? { ...w, imageUrl: downloadURL } : w));
             } else if (type === 'receiver') {
-                setReceivers(prev => prev.map(r => r.id === id ? { ...r, imageUrl: downloadURL } : r));
+                // This part is effectively not used anymore as receivers don't show images.
             } else if (type === 'tachos') {
                 setTachosImageUrl(downloadURL);
             } else if (type === 'centrifuge') {
-                setCentrifuges(prev => prev.map(c => c.id === id ? { ...c, imageUrl: downloadURL } : c));
+                // This part is effectively not used anymore as centrifuges don't show images.
             }
             toast({ title: "Imagen actualizada", description: "La nueva imagen se ha guardado correctamente."});
 
@@ -1485,7 +1466,10 @@ export default function OperationsClient({
                 }
                 
                 const totalQQinReceiversNow = nextState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
-                const centrifugeThroughputQQperHour = nextState.qqInCentrifuges > 0 ? nextState.qqInCentrifuges : (centrifugeBatchSizeQQ * 3600) / (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime);
+                const singleCycleTime = centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime;
+                const effectiveTimePerBatch = centrifugeStartInterval > 0 ? centrifugeStartInterval : singleCycleTime;
+                const centrifugeThroughputQQperHour = effectiveTimePerBatch > 0 ? (centrifugeBatchSizeQQ * 3600) / effectiveTimePerBatch : 0;
+                
                 nextState.timeToProcessReceivers = centrifugeThroughputQQperHour > 0 ? (totalQQinReceiversNow / centrifugeThroughputQQperHour) : 0;
 
 
@@ -1766,7 +1750,7 @@ export default function OperationsClient({
             <div className="space-y-8">
                 <Card>
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
                             <CardTitle>Controles de Simulación</CardTitle>
                             <TooltipProvider>
                                 <Tooltip>
@@ -2220,7 +2204,7 @@ export default function OperationsClient({
                 
                  <div className="space-y-6">
                     <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                         <KpiCard 
                             title="Tiempo para Agotar Silo" 
                             value={formatTime(liveSimulationResults.timeToEmptyHours)} 
@@ -2248,13 +2232,20 @@ export default function OperationsClient({
                             description="Total de quintales que han sido consumidos por las envasadoras desde el silo."
                             fractionDigits={1}
                         />
+                        <KpiCard
+                            title="Total Fardos Producidos"
+                            value={liveSimulationResults.totalBundlesProduced}
+                            icon={Archive}
+                            description="Suma total de fardos que han sido completados por las enfardadoras."
+                            fractionDigits={0}
+                        />
                     </div>
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
                         </CardHeader>
                         <CardContent>
-                             {liveSimulationResults.bottleneck === 'inactive' && (
+                             {liveSimulationResults.bottleneck === 'inactive' ? (
                                  <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-blue-500/10 text-blue-600">
                                      <PowerOff className="h-5 w-5 mt-0.5" />
                                      <div>
@@ -2262,8 +2253,7 @@ export default function OperationsClient({
                                          <p>Inicia una o más envasadoras para analizar el flujo de producción y detectar posibles cuellos de botella.</p>
                                      </div>
                                  </div>
-                            )}
-                             {liveSimulationResults.bottleneck === 'none' && (
+                            ) : liveSimulationResults.bottleneck === 'none' ? (
                                  <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-green-600/10 text-green-700">
                                      <CheckCircle2 className="h-5 w-5 mt-0.5" />
                                      <div>
@@ -2271,8 +2261,7 @@ export default function OperationsClient({
                                          <p>La línea de producción está balanceada. Las envasadoras están siendo alimentadas a un ritmo adecuado y las enfardadoras pueden manejar la carga.</p>
                                      </div>
                                  </div>
-                            )}
-                             {liveSimulationResults.bottleneck === 'wrapper' && (
+                            ) : liveSimulationResults.bottleneck === 'wrapper' ? (
                                  <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-destructive/10 text-destructive">
                                      <AlertTriangle className="h-5 w-5 mt-0.5" />
                                      <div>
@@ -2283,8 +2272,7 @@ export default function OperationsClient({
                                          </p>
                                      </div>
                                  </div>
-                            )}
-                             {liveSimulationResults.bottleneck === 'centrifuge' && (
+                            ) : liveSimulationResults.bottleneck === 'centrifuge' ? (
                                  <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-amber-500/10 text-amber-600">
                                      <Hourglass className="h-5 w-5 mt-0.5" />
                                      <div>
@@ -2295,7 +2283,7 @@ export default function OperationsClient({
                                          </p>
                                      </div>
                                  </div>
-                            )}
+                            ) : null}
                         </CardContent>
                     </Card>
                     <Card>
@@ -2382,7 +2370,6 @@ export default function OperationsClient({
                     onOpenChange={(isOpen) => !isOpen && setEditingReceiver(null)}
                     receiver={editingReceiver}
                     onSave={handleReceiverSave}
-                    onImageSave={handleImageSave}
                     isUploading={isUploading}
                 />
             )}
