@@ -309,7 +309,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     if (loading) return;
     
     const plansMap = new Map(allPlans.map(p => [p.id, p]));
-    const plannableCategories = categories.filter(c => c.isPlanned).map(c => c.id);
+    const plannableCategories = new Set(categories.filter(c => c.isPlanned).map(c => c.id));
 
     const calculateWeight = (products: ProductData[], type: 'planned' | 'actual', categoryIdFilter?: string): number => {
       return products.reduce((totalWeight, item) => {
@@ -334,42 +334,26 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         const plan = plansMap.get(summary.id);
         if (!plan) return null; // Should not happen if data is consistent
 
-        const nonPlannableCategories = categories.filter(c => !c.isPlanned).map(c => c.id);
-
         let totalPlannedSacks = 0, actualForPlannedSacks = 0, unplannedProductionSacks = 0;
         let totalPlannedQQ = 0, actualForPlannedQQ = 0, unplannedProductionQQ = 0;
 
-        if (selectedCategoryId === 'all') {
-            plan.products.forEach(p => {
-                const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
-                const productWeight = p.sackWeight || 50;
+        plan.products.forEach(p => {
+            const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
+            if (!categoryMatch) return;
 
-                if (plannableCategories.includes(p.categoryId)) {
-                    totalPlannedSacks += p.planned || 0;
-                    totalPlannedQQ += (p.planned || 0) * productWeight / KG_PER_QUINTAL;
-                    actualForPlannedSacks += productTotalActual;
-                    actualForPlannedQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
-                } else {
-                    unplannedProductionSacks += productTotalActual;
-                    unplannedProductionQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
-                }
-            });
-        } else {
-            plan.products.filter(p => p.categoryId === selectedCategoryId).forEach(p => {
-                const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
-                const productWeight = p.sackWeight || 50;
+            const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
+            const productWeight = p.sackWeight || 50;
 
-                if (plannableCategories.includes(p.categoryId)) {
-                    totalPlannedSacks += p.planned || 0;
-                    totalPlannedQQ += (p.planned || 0) * productWeight / KG_PER_QUINTAL;
-                    actualForPlannedSacks += productTotalActual;
-                    actualForPlannedQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
-                } else {
-                    unplannedProductionSacks += productTotalActual;
-                    unplannedProductionQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
-                }
-            });
-        }
+            if (plannableCategories.has(p.categoryId)) {
+                totalPlannedSacks += p.planned || 0;
+                totalPlannedQQ += (p.planned || 0) * productWeight / KG_PER_QUINTAL;
+                actualForPlannedSacks += productTotalActual;
+                actualForPlannedQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
+            } else {
+                unplannedProductionSacks += productTotalActual;
+                unplannedProductionQQ += productTotalActual * productWeight / KG_PER_QUINTAL;
+            }
+        });
 
         const totalActualSacks = actualForPlannedSacks + unplannedProductionSacks;
         const totalActualQQ = actualForPlannedQQ + unplannedProductionQQ;
@@ -393,27 +377,14 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         const plan = plansMap.get(summary.id);
         let totalDayQQ = 0, totalNightQQ = 0;
         
-        if (plan) {
-            plan.products.forEach(p => {
-                const sackWeight = p.sackWeight || 50;
-                for (const dayKey in summary.dailyShiftTotals) {
-                    const shift = summary.dailyShiftTotals[dayKey as keyof typeof summary.dailyShiftTotals];
-                    // This is an approximation as we don't have per-product shift data.
-                    // We distribute the day's total QQ based on the overall shift ratio.
-                    const dayTotal = shift.day + shift.night;
-                    if (dayTotal > 0) {
-                        // This logic is flawed because shift totals are for ALL products.
-                        // A better approach is to recalculate from plan products.
-                    }
-                }
-            });
-        }
-
         // Recalculate totals from plan data for accuracy
         let totalDaySacks = 0;
         let totalNightSacks = 0;
         if(plan) {
             plan.products.forEach(p => {
+                const categoryMatch = selectedCategoryId === 'all' || p.categoryId === selectedCategoryId;
+                if (!categoryMatch) return;
+
                 const sackWeight = p.sackWeight || 50;
                 for(const day of Object.values(p.actual)) {
                     totalDaySacks += day.day || 0;
@@ -454,6 +425,9 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
 
     plansForDetailCharts.forEach(plan => {
         plan.products.forEach(product => {
+            const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
+            if (!categoryMatch) return;
+
             const sackWeight = product.sackWeight || 50;
             for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
                 const shiftData = product.actual[day];
