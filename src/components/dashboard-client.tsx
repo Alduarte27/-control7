@@ -16,6 +16,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
 import KpiCard from './kpi-card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 const KG_PER_QUINTAL = 50;
 
@@ -242,6 +243,43 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
     return null;
 };
 
+const ShiftKpiCard = ({ daySacos, dayQq, nightSacos, nightQq }: { daySacos: number; dayQq: number; nightSacos: number; nightQq: number; }) => {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Card className="col-span-1 md:col-span-2">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Producción por Turno</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Sun className="h-4 w-4" />
+                  <span>Turno Día</span>
+                </div>
+                <p className="text-xl font-bold">{daySacos.toLocaleString()}</p>
+                <p className="text-xs font-medium text-muted-foreground">{dayQq.toLocaleString(undefined, { maximumFractionDigits: 1 })} qq</p>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Moon className="h-4 w-4" />
+                  <span>Turno Noche</span>
+                </div>
+                <p className="text-xl font-bold">{nightSacos.toLocaleString()}</p>
+                <p className="text-xs font-medium text-muted-foreground">{nightQq.toLocaleString(undefined, { maximumFractionDigits: 1 })} qq</p>
+              </div>
+            </CardContent>
+          </Card>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Suma total de la producción real para cada turno en el período y filtros seleccionados.</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+};
+
 
 export default function DashboardClient({ prefetchedCategories, prefetchedProducts }: { prefetchedCategories: CategoryDefinition[], prefetchedProducts: ProductDefinition[] }) {
   const [weeklySummaryData, setWeeklySummaryData] = React.useState<WeeklySummaryData[]>([]);
@@ -262,7 +300,6 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
   const [showOnlyPlannedInHistory, setShowOnlyPlannedInHistory] = React.useState(true);
 
   // New state for KPIs
-  const [totalProduction, setTotalProduction] = React.useState({ sacos: 0, qq: 0 });
   const [productionMix, setProductionMix] = React.useState({
       plannedSacos: 0,
       plannedQq: 0,
@@ -277,6 +314,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     nightSacos: 0,
     nightQq: 0,
   });
+  const [totalPeriodProduction, setTotalPeriodProduction] = React.useState({ sacos: 0, qq: 0 });
 
   const weekOptions = React.useMemo(() => {
     return filteredSummaries
@@ -493,44 +531,47 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     let totalDayQq = 0;
     let totalNightSacos = 0;
     let totalNightQq = 0;
-
+    let totalProductionAllCategoriesSacos = 0;
+    let totalProductionAllCategoriesQq = 0;
 
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
             const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
-            
-            // Grand Total KPI & Shift KPIs (ignore category filter)
             const sackWeight = product.sackWeight || 50;
             const totalActualQq = totalActual * sackWeight / KG_PER_QUINTAL;
             
-            if (selectedCategoryId === 'all' || product.categoryId === selectedCategoryId) {
+            // Grand Total KPI (ignores all filters)
+            totalProductionAllCategoriesSacos += totalActual;
+            totalProductionAllCategoriesQq += totalActualQq;
+            
+            // Other KPIs (respect category filter)
+            const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
+            
+            if (categoryMatch) {
                 totalSacosGlobal += totalActual;
                 totalQqGlobal += totalActualQq;
             }
             
             for (const day of Object.values(product.actual)) {
-                if (selectedCategoryId === 'all' || product.categoryId === selectedCategoryId) {
+                if (categoryMatch) {
                     totalDaySacos += day.day || 0;
                     totalNightSacos += day.night || 0;
                     totalDayQq += (day.day || 0) * sackWeight / KG_PER_QUINTAL;
                     totalNightQq += (day.night || 0) * sackWeight / KG_PER_QUINTAL;
                 }
             }
-
             
-            // Production Mix KPI
-            if (plannableCategories.has(product.categoryId)) {
-                if (product.planned > 0) {
-                    plannedProductionSacos += totalActual;
-                    plannedProductionQq += totalActualQq;
-                } else if (totalActual > 0) {
-                    unplannedProductionSacos += totalActual;
-                    unplannedProductionQq += totalActualQq;
+            if (categoryMatch) {
+                if (plannableCategories.has(product.categoryId)) {
+                    if (product.planned > 0) {
+                        plannedProductionSacos += totalActual;
+                        plannedProductionQq += totalActualQq;
+                    } else if (totalActual > 0) {
+                        unplannedProductionSacos += totalActual;
+                        unplannedProductionQq += totalActualQq;
+                    }
                 }
             }
-
-
-            const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
 
             // "Rendimiento Histórico" chart
             if (showOnlyPlannedInHistory && !plannableCategories.has(product.categoryId)) {
@@ -553,7 +594,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     const aggregatedData = Object.values(productTotals).filter(p => (p.planned > 0 || p.actual > 0));
     setAggregatedProductData(aggregatedData);
     
-    setTotalProduction({ sacos: totalSacosGlobal, qq: totalQqGlobal });
+    setTotalPeriodProduction({ sacos: totalProductionAllCategoriesSacos, qq: totalProductionAllCategoriesQq });
 
     const totalMixProduction = plannedProductionSacos + unplannedProductionSacos;
     setProductionMix({
@@ -573,7 +614,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     });
 
 
-  }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory]);
+  }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory, prefetchedProducts.length]);
 
 
   return (
@@ -664,13 +705,13 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
             </CollapsibleContent>
         </Collapsible>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-4">
-            <KpiCard
-                title="Producción Total"
-                value={totalProduction.sacos}
-                subValue={`${totalProduction.qq.toLocaleString(undefined, { maximumFractionDigits: 1, })} qq`}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+             <KpiCard
+                title="Producción Total en Período"
+                value={totalPeriodProduction.sacos}
+                subValue={`${totalPeriodProduction.qq.toLocaleString(undefined, { maximumFractionDigits: 1, })} qq`}
                 icon={PackageCheck}
-                description="Suma total de la producción real (en sacos y quintales) para el período y filtros seleccionados."
+                description="Suma total de la producción real de TODAS las categorías en el período seleccionado, ignorando filtros."
                 fractionDigits={0}
             />
              <KpiCard
@@ -678,7 +719,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
                 value={productionMix.plannedSacos}
                 subValue={`${productionMix.plannedQq.toFixed(1)} qq (${productionMix.plannedPercentage.toFixed(1)}%)`}
                 icon={ClipboardCheck}
-                description="Producción real que correspondía a un producto con un plan > 0. El porcentaje es sobre el total real."
+                description="Producción real que correspondía a un producto con un plan > 0. El porcentaje es sobre el total real de categorías planificables."
                 fractionDigits={0}
             />
             <KpiCard
@@ -686,24 +727,14 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
                 value={productionMix.unplannedSacos}
                 subValue={`${productionMix.unplannedQq.toFixed(1)} qq (${productionMix.unplannedPercentage.toFixed(1)}%)`}
                 icon={ClipboardPlus}
-                description="Producción real de productos que tenían un plan de 0. El porcentaje es sobre el total real."
+                description="Producción real de productos que tenían un plan de 0. El porcentaje es sobre el total real de categorías planificables."
                 fractionDigits={0}
             />
-             <KpiCard
-                title="Producción Turno Día"
-                value={shiftTotals.daySacos}
-                subValue={`${shiftTotals.dayQq.toLocaleString(undefined, { maximumFractionDigits: 1, })} qq`}
-                icon={Sun}
-                description="Suma total de la producción real durante el turno de día para el período y filtros seleccionados."
-                fractionDigits={0}
-            />
-             <KpiCard
-                title="Producción Turno Noche"
-                value={shiftTotals.nightSacos}
-                subValue={`${shiftTotals.nightQq.toLocaleString(undefined, { maximumFractionDigits: 1, })} qq`}
-                icon={Moon}
-                description="Suma total de la producción real durante el turno de noche para el período y filtros seleccionados."
-                fractionDigits={0}
+            <ShiftKpiCard 
+                daySacos={shiftTotals.daySacos} 
+                dayQq={shiftTotals.dayQq} 
+                nightSacos={shiftTotals.nightSacos} 
+                nightQq={shiftTotals.nightQq} 
             />
         </div>
 
