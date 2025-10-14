@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown } from 'lucide-react';
+import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query } from 'firebase/firestore';
@@ -17,6 +17,7 @@ import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { Checkbox } from './ui/checkbox';
+import KpiCard from './kpi-card';
 
 const KG_PER_QUINTAL = 50;
 
@@ -262,6 +263,8 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   const [dateRange, setDateRange] = React.useState('12');
   const [showOnlyPlannedInHistory, setShowOnlyPlannedInHistory] = React.useState(true);
 
+  // New state for the involved products count
+  const [involvedProductsCount, setInvolvedProductsCount] = React.useState({ planned: 0, unplanned: 0 });
 
   const weekOptions = React.useMemo(() => {
     return filteredSummaries
@@ -310,29 +313,13 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     
     const plansMap = new Map(allPlans.map(p => [p.id, p]));
     const plannableCategories = new Set(categories.filter(c => c.isPlanned).map(c => c.id));
-
-    const calculateWeight = (products: ProductData[], type: 'planned' | 'actual', categoryIdFilter?: string): number => {
-      return products.reduce((totalWeight, item) => {
-        if (categoryIdFilter && item.categoryId !== categoryIdFilter) return totalWeight;
-        
-        let sacks = 0;
-        if (type === 'planned') {
-          sacks = item.planned || 0;
-        } else { // actual
-          sacks = Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0);
-        }
-        const itemWeight = sacks * (item.sackWeight || 50);
-        return totalWeight + itemWeight;
-      }, 0);
-    };
     
     // --- Data for Weekly Summary Charts (Unaffected by specific week filter) ---
     const summariesForCharts = filteredSummaries;
     
-    // NEW LOGIC: Group actual production by plannable categories for the main chart
     const weeklySummaryForChart: WeeklySummaryData[] = summariesForCharts.map(summary => {
         const plan = plansMap.get(summary.id);
-        if (!plan) return null; // Should not happen if data is consistent
+        if (!plan) return null;
 
         let totalPlannedSacks = 0, actualForPlannedSacks = 0, unplannedProductionSacks = 0;
         let totalPlannedQQ = 0, actualForPlannedQQ = 0, unplannedProductionQQ = 0;
@@ -377,7 +364,6 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         const plan = plansMap.get(summary.id);
         let totalDayQQ = 0, totalNightQQ = 0;
         
-        // Recalculate totals from plan data for accuracy
         let totalDaySacks = 0;
         let totalNightSacks = 0;
         if(plan) {
@@ -403,7 +389,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             dayQQ: totalDayQQ,
             nightQQ: totalNightQQ,
         };
-    }).reverse(); // reverse to show chronologically
+    }).reverse();
     setWeeklyShiftData(weeklyShiftDataForChart);
     
     // --- Data for Detail Charts (Affected by specific week filter) ---
@@ -476,31 +462,46 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
         setProductData([]);
     }
 
-    // --- Aggregated Product Chart Logic (Rendimiento Histórico) ---
+    // --- Aggregated Product Chart Logic (Rendimiento Histórico) & Involved Products Count ---
     const filteredPlanIds = new Set(summariesForCharts.map(s => s.id));
     const relevantPlans = allPlans.filter(p => filteredPlanIds.has(p.id));
     const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string; sackWeight: number; } } = {};
+    
+    const involvedPlannedIds = new Set<string>();
+    const involvedUnplannedIds = new Set<string>();
 
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
-            if (showOnlyPlannedInHistory && !plannableCategories.has(product.categoryId)) {
-                return;
-            }
-
+            const isPlannable = plannableCategories.has(product.categoryId);
+            const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+            const hasActivity = (product.planned || 0) > 0 || totalActual > 0;
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
-            const hasActivity = (product.planned || 0) > 0 || Object.values(product.actual).some(d => (d.day || 0) > 0 || (d.night || 0) > 0);
             
-            if (categoryMatch && hasActivity) {
+            if (categoryMatch && hasActivity && (!showOnlyPlannedInHistory || isPlannable)) {
                 if (!productTotals[product.id]) {
                     productTotals[product.id] = { name: product.productName, planned: 0, actual: 0, color: product.color, sackWeight: product.sackWeight || 50 };
                 }
                 productTotals[product.id].planned += product.planned || 0;
-                productTotals[product.id].actual += Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+                productTotals[product.id].actual += totalActual;
+            }
+
+            // Logic for the new KPI
+            if (categoryMatch && hasActivity) {
+                if ((product.planned || 0) > 0) {
+                    involvedPlannedIds.add(product.id);
+                } else if (totalActual > 0) {
+                    involvedUnplannedIds.add(product.id);
+                }
             }
         });
     });
 
-    const aggregatedData = Object.values(productTotals);
+    setInvolvedProductsCount({
+        planned: involvedPlannedIds.size,
+        unplanned: involvedUnplannedIds.size,
+    });
+
+    const aggregatedData = Object.values(productTotals).filter(p => (p.planned > 0 || p.actual > 0));
     setAggregatedProductData(aggregatedData);
 
   }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory]);
@@ -593,6 +594,16 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                 </div>
             </CollapsibleContent>
         </Collapsible>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <KpiCard
+                title="Productos Involucrados"
+                value={involvedProductsCount.planned + involvedProductsCount.unplanned}
+                subValue={`Planificados: ${involvedProductsCount.planned} / No Planificados: ${involvedProductsCount.unplanned}`}
+                icon={Activity}
+                description="Total de productos distintos con actividad (planificada o real) en el período."
+            />
+        </div>
 
         <Card className="md:col-span-2">
           <CardHeader>
