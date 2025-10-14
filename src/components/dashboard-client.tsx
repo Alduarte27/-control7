@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -354,12 +355,16 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     }
 
     // --- Aggregated Product Chart Logic (Rendimiento Histórico) ---
+    const plannedCategoryIds = new Set(categories.filter(c => c.isPlanned).map(c => c.id));
     const filteredPlanIds = new Set(summariesForCharts.map(s => s.id));
     const relevantPlans = allPlans.filter(p => filteredPlanIds.has(p.id));
     const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string } } = {};
 
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
+            // Check if category is planned
+            if (!plannedCategoryIds.has(product.categoryId)) return;
+            
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
             if (categoryMatch) {
                 if (!productTotals[product.id]) {
