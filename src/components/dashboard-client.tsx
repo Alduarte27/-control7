@@ -262,7 +262,6 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
   const [showOnlyPlannedInHistory, setShowOnlyPlannedInHistory] = React.useState(true);
 
   // New state for KPIs
-  const [involvedProductsCount, setInvolvedProductsCount] = React.useState({ planned: 0, unplanned: 0 });
   const [totalProduction, setTotalProduction] = React.useState({ sacos: 0, qq: 0 });
   const [productionMix, setProductionMix] = React.useState({
       plannedSacos: 0,
@@ -484,9 +483,6 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
     const relevantPlans = allPlans.filter(p => filteredPlanIds.has(p.id));
     const productTotals: { [productId: string]: { name: string; planned: number; actual: number; color?: string; sackWeight: number; } } = {};
     
-    const involvedPlannedIds = new Set<string>();
-    const involvedUnplannedIds = new Set<string>();
-
     let totalSacosGlobal = 0;
     let totalQqGlobal = 0;
     let plannedProductionSacos = 0;
@@ -506,14 +502,19 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
             // Grand Total KPI & Shift KPIs (ignore category filter)
             const sackWeight = product.sackWeight || 50;
             const totalActualQq = totalActual * sackWeight / KG_PER_QUINTAL;
-            totalSacosGlobal += totalActual;
-            totalQqGlobal += totalActualQq;
+            
+            if (selectedCategoryId === 'all' || product.categoryId === selectedCategoryId) {
+                totalSacosGlobal += totalActual;
+                totalQqGlobal += totalActualQq;
+            }
             
             for (const day of Object.values(product.actual)) {
-                totalDaySacos += day.day || 0;
-                totalNightSacos += day.night || 0;
-                totalDayQq += (day.day || 0) * sackWeight / KG_PER_QUINTAL;
-                totalNightQq += (day.night || 0) * sackWeight / KG_PER_QUINTAL;
+                if (selectedCategoryId === 'all' || product.categoryId === selectedCategoryId) {
+                    totalDaySacos += day.day || 0;
+                    totalNightSacos += day.night || 0;
+                    totalDayQq += (day.day || 0) * sackWeight / KG_PER_QUINTAL;
+                    totalNightQq += (day.night || 0) * sackWeight / KG_PER_QUINTAL;
+                }
             }
 
             
@@ -545,22 +546,9 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
                 productTotals[product.id].planned += product.planned || 0;
                 productTotals[product.id].actual += totalActual;
             }
-
-            // "Involved Products" KPI
-            if (categoryMatch && hasActivity) {
-                if ((product.planned || 0) > 0) {
-                    involvedPlannedIds.add(product.id);
-                } else if (totalActual > 0) {
-                    involvedUnplannedIds.add(product.id);
-                }
-            }
         });
     });
 
-    setInvolvedProductsCount({
-        planned: involvedPlannedIds.size,
-        unplanned: involvedUnplannedIds.size,
-    });
 
     const aggregatedData = Object.values(productTotals).filter(p => (p.planned > 0 || p.actual > 0));
     setAggregatedProductData(aggregatedData);
@@ -701,13 +689,6 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
                 description="Producción real de productos que tenían un plan de 0. El porcentaje es sobre el total real."
                 fractionDigits={0}
             />
-            <KpiCard
-                title="Productos Involucrados"
-                value={involvedProductsCount.planned + involvedProductsCount.unplanned}
-                subValue={`Plan: ${involvedProductsCount.planned} / No Plan: ${involvedProductsCount.unplanned}`}
-                icon={Activity}
-                description="Total de productos distintos con actividad (planificada o real) en el período."
-            />
              <KpiCard
                 title="Producción Turno Día"
                 value={shiftTotals.daySacos}
@@ -723,12 +704,6 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
                 icon={Moon}
                 description="Suma total de la producción real durante el turno de noche para el período y filtros seleccionados."
                 fractionDigits={0}
-            />
-            <KpiCard
-                title="Total Productos Definidos"
-                value={prefetchedProducts.filter(p => p.isActive).length}
-                icon={Box}
-                description="Número total de productos activos en el sistema."
             />
         </div>
 
