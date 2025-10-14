@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import { Checkbox } from './ui/checkbox';
 
 
 type WeeklySummaryData = {
@@ -196,6 +197,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('all');
   const [isFilterOpen, setIsFilterOpen] = React.useState(true);
   const [dateRange, setDateRange] = React.useState('12');
+  const [showOnlyPlannedInHistory, setShowOnlyPlannedInHistory] = React.useState(true);
 
 
   const weekOptions = React.useMemo(() => {
@@ -362,9 +364,13 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
 
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
-            // Check if category is planned
-            if (!plannedCategoryIds.has(product.categoryId)) return;
+            const isCategoryPlanned = plannedCategoryIds.has(product.categoryId);
             
+            // Apply category filter if checkbox is checked
+            if (showOnlyPlannedInHistory && !isCategoryPlanned) {
+                return;
+            }
+
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
             if (categoryMatch) {
                 if (!productTotals[product.id]) {
@@ -379,7 +385,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
     const aggregatedData = Object.values(productTotals).filter(p => p.planned > 0 || p.actual > 0);
     setAggregatedProductData(aggregatedData);
 
-  }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans]);
+  }, [filteredSummaries, selectedWeek, selectedCategoryId, categories, loading, allPlans, showOnlyPlannedInHistory]);
 
 
   return (
@@ -603,10 +609,24 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             </Card>
             <Card className="md:col-span-2">
                 <CardHeader>
-                    <CardTitle>Rendimiento Histórico por Producto</CardTitle>
-                    <CardDescription>
-                        Total planificado vs. real para cada producto en el rango de fechas seleccionado.
-                    </CardDescription>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle>Rendimiento Histórico por Producto</CardTitle>
+                            <CardDescription>
+                                Total planificado vs. real para cada producto en el rango de fechas seleccionado.
+                            </CardDescription>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="show-only-planned-history"
+                                checked={showOnlyPlannedInHistory}
+                                onCheckedChange={(checked) => setShowOnlyPlannedInHistory(!!checked)}
+                            />
+                            <Label htmlFor="show-only-planned-history" className="text-sm font-normal">
+                                Mostrar solo categorías planificadas
+                            </Label>
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
@@ -638,7 +658,7 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
                             </BarChart>
                         </ChartContainer>
                     ) : (
-                        <p className="text-center text-muted-foreground py-8">No hay datos de productos planificados en el rango seleccionado para mostrar.</p>
+                        <p className="text-center text-muted-foreground py-8">No hay datos de productos en el rango seleccionado para mostrar.</p>
                     )}
                 </CardContent>
             </Card>
