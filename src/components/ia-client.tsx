@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -1461,7 +1462,17 @@ export default function OperationsClient({
                     nextState.totalQQProduced += qqPurgedThisTick;
                     const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
                     if (familiarSilo) {
-                        familiarSilo.currentQQ = Math.min(familiarSilo.capacityQQ, familiarSilo.currentQQ + qqPurgedThisTick);
+                        const availableCapacity = familiarSilo.capacityQQ - familiarSilo.currentQQ;
+                        const toFamiliar = Math.min(qqPurgedThisTick, availableCapacity);
+                        familiarSilo.currentQQ += toFamiliar;
+
+                        const overflow = qqPurgedThisTick - toFamiliar;
+                        if (overflow > 0) {
+                            const granelSilo = nextState.silos.find(s => s.id === 'granel');
+                            if (granelSilo) {
+                                granelSilo.currentQQ = Math.min(granelSilo.capacityQQ, granelSilo.currentQQ + overflow);
+                            }
+                        }
                     }
                 }
                 
@@ -1630,8 +1641,9 @@ export default function OperationsClient({
         const singleCycleTime = centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime;
         const qqPerCycle = centrifugeBatchSizeQQ;
         
+        // This is the correct throughput calculation for the two-centrifuge system
         const effectiveTimePerBatch = centrifugeStartInterval > 0 ? centrifugeStartInterval : singleCycleTime;
-        const qqRateFromCentrifuges = effectiveTimePerBatch > 0 ? (qqPerCycle * 3600) / effectiveTimePerBatch : 0;
+        const qqRateFromCentrifuges = effectiveTimePerBatch > 0 ? (qqPerCycle * 3600) / effectiveTimePerBatch * 2 : 0;
         
         const qqRateToPackers = (totalKgConsumedPerSecond * 3600) / KG_PER_QUINTAL;
         
@@ -1643,9 +1655,10 @@ export default function OperationsClient({
             bottleneck = 'inactive';
         } else if (staticSimulationResults.isWrapperBottleneck) {
             bottleneck = 'wrapper';
-        } else if (qqRateToPackers > qqRateFromCentrifuges) {
+        } else if (qqRateToPackers > qqRateFromCentrifuges && qqRateFromCentrifuges > 0) {
             bottleneck = 'centrifuge';
         }
+
 
         const totalQQinReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
         const processedQQ = simulationState.initialQQInReceivers > 0 ? simulationState.initialQQInReceivers - totalQQinReceivers : 0;
