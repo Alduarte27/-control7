@@ -7,11 +7,11 @@ import Link from 'next/link';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Legend, Cell, Tooltip as RechartsTooltip } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import { Factory, ChevronLeft, Filter, TrendingUp, TrendingDown, Activity, Box } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query } from 'firebase/firestore';
-import type { ProductData, CategoryDefinition } from '@/lib/types';
+import type { ProductData, CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -245,7 +245,7 @@ const WeeklyTooltipContent = ({ active, payload, label }: any) => {
 };
 
 
-export default function DashboardClient({ prefetchedCategories }: { prefetchedCategories: CategoryDefinition[] }) {
+export default function DashboardClient({ prefetchedCategories, prefetchedProducts }: { prefetchedCategories: CategoryDefinition[], prefetchedProducts: ProductDefinition[] }) {
   const [weeklySummaryData, setWeeklySummaryData] = React.useState<WeeklySummaryData[]>([]);
   const [weeklyShiftData, setWeeklyShiftData] = React.useState<WeeklyShiftSummaryData[]>([]);
   const [dailyData, setDailyData] = React.useState<DailySummaryData[]>([]);
@@ -330,8 +330,9 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
 
             const productTotalActual = Object.values(p.actual).reduce((sum, day) => sum + (day.day || 0) + (day.night || 0), 0);
             const productWeight = p.sackWeight || 50;
+            const isProductPlannable = plannableCategories.has(p.categoryId);
 
-            if (plannableCategories.has(p.categoryId)) {
+            if (isProductPlannable) {
                 totalPlannedSacks += p.planned || 0;
                 totalPlannedQQ += (p.planned || 0) * productWeight / KG_PER_QUINTAL;
                 actualForPlannedSacks += productTotalActual;
@@ -472,13 +473,13 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
 
     relevantPlans.forEach(plan => {
         plan.products.forEach((product: ProductData) => {
-            const isPlannable = plannableCategories.has(product.categoryId);
+            const isProductPlannable = plannableCategories.has(product.categoryId);
             const totalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
             const hasActivity = (product.planned || 0) > 0 || totalActual > 0;
             const categoryMatch = selectedCategoryId === 'all' || product.categoryId === selectedCategoryId;
             
-            if (categoryMatch && hasActivity && (!showOnlyPlannedInHistory || isPlannable)) {
-                if (!productTotals[product.id]) {
+            if (categoryMatch && hasActivity && (!showOnlyPlannedInHistory || isProductPlannable)) {
+                 if (!productTotals[product.id]) {
                     productTotals[product.id] = { name: product.productName, planned: 0, actual: 0, color: product.color, sackWeight: product.sackWeight || 50 };
                 }
                 productTotals[product.id].planned += product.planned || 0;
@@ -595,13 +596,19 @@ export default function DashboardClient({ prefetchedCategories }: { prefetchedCa
             </CollapsibleContent>
         </Collapsible>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <KpiCard
                 title="Productos Involucrados"
                 value={involvedProductsCount.planned + involvedProductsCount.unplanned}
                 subValue={`Planificados: ${involvedProductsCount.planned} / No Planificados: ${involvedProductsCount.unplanned}`}
                 icon={Activity}
                 description="Total de productos distintos con actividad (planificada o real) en el período."
+            />
+            <KpiCard
+                title="Total Productos Definidos"
+                value={prefetchedProducts.filter(p => p.isActive).length}
+                icon={Box}
+                description="Número total de productos activos en el sistema."
             />
         </div>
 
