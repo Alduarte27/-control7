@@ -248,7 +248,7 @@ const ShiftKpiCard = ({ daySacos, dayQq, nightSacos, nightQq }: { daySacos: numb
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Card className="col-span-1 md:col-span-2">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Producción por Turno</CardTitle>
             </CardHeader>
@@ -285,7 +285,7 @@ const ProductionMixKpiCard = ({ plannedSacos, plannedQq, plannedPercentage, unpl
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Card className="col-span-1 md:col-span-2">
+          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Mix de Producción</CardTitle>
             </CardHeader>
@@ -742,7 +742,7 @@ export default function DashboardClient({ prefetchedCategories, prefetchedProduc
             </CollapsibleContent>
         </Collapsible>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
              <KpiCard
                 title="Producción Total en Período"
                 value={totalPeriodProduction.sacos}
