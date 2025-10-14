@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Package2 } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Package2, Image as ImageIcon, ImageOff, RotateCcw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
@@ -519,32 +519,6 @@ function ReceiverEditDialog({
                     <DialogTitle>Editar {receiver.name}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
-                     <div className="space-y-2">
-                        <Label>Previsualización de la Imagen</Label>
-                        <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
-                           {isUploading ? (
-                               <div className="flex flex-col items-center gap-2">
-                                   <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
-                                   <p className="text-sm text-muted-foreground">Subiendo...</p>
-                               </div>
-                           ) : (
-                                <Image
-                                    src={receiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"}
-                                    alt={editedReceiver.name}
-                                    width={600}
-                                    height={400}
-                                    className="object-contain w-full h-full"
-                                    unoptimized
-                                />
-                           )}
-                        </div>
-                        <input type="file" id={fileInputId} className="hidden" accept="image/*" onChange={handleFileSelect} disabled={isUploading}/>
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => document.getElementById(fileInputId)?.click()} disabled={isUploading}>
-                            <Upload className="mr-2 h-3 w-3" />
-                            {isUploading ? 'Subiendo...' : 'Cambiar Foto'}
-                        </Button>
-                    </div>
-                    <Separator />
                     <div className="space-y-1.5">
                         <Label htmlFor={`rec-name-${receiver.id}`}>Nombre</Label>
                         <Input id={`rec-name-${receiver.id}`} type="text" value={editedReceiver.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
@@ -569,14 +543,12 @@ function CentrifugeEditDialog({
     onOpenChange,
     onSave,
     config,
-    onImageSave,
     isUploading
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSave: (config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => void;
     config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number };
-    onImageSave: (type: 'centrifuge', id: string, file: File) => Promise<void>;
     isUploading: boolean;
 }) {
     const [localConfig, setLocalConfig] = React.useState(config);
@@ -597,12 +569,6 @@ function CentrifugeEditDialog({
         }
     };
     
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>, id: 'cent1' | 'cent2') => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        await onImageSave('centrifuge', id, file);
-    };
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
@@ -611,19 +577,8 @@ function CentrifugeEditDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                      <p className="text-sm text-muted-foreground">
-                        Define la cantidad de masa a procesar, los tiempos del ciclo y personaliza las imágenes.
+                        Define la cantidad de masa a procesar y los tiempos del ciclo.
                     </p>
-                    <div className="grid grid-cols-2 gap-4">
-                        <Button variant="outline" size="sm" onClick={() => document.getElementById('cent1-img-upload')?.click()} disabled={isUploading}>
-                            <Upload className="mr-2 h-3 w-3" /> {isUploading ? 'Subiendo...' : 'Cambiar Foto Centrífuga 1'}
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => document.getElementById('cent2-img-upload')?.click()} disabled={isUploading}>
-                            <Upload className="mr-2 h-3 w-3" /> {isUploading ? 'Subiendo...' : 'Cambiar Foto Centrífuga 2'}
-                        </Button>
-                        <input type="file" id="cent1-img-upload" className="hidden" accept="image/*" onChange={(e) => handleFileSelect(e, 'cent1')} />
-                        <input type="file" id="cent2-img-upload" className="hidden" accept="image/*" onChange={(e) => handleFileSelect(e, 'cent2')} />
-                    </div>
-                    <Separator />
                     <div className="p-3 border rounded-lg bg-muted/30">
                         <div className="space-y-1.5">
                             <Label htmlFor="batch-size">Cantidad de Carga por Ciclo (QQ)</Label>
@@ -1215,10 +1170,11 @@ export default function OperationsClient({
         saveParamsToLocalStorage();
     }, [saveParamsToLocalStorage]);
 
-     const handleShowImagesChange = (checked: boolean) => {
-        setShowImages(checked);
+     const handleShowImagesChange = () => {
+        const newShowImages = !showImages;
+        setShowImages(newShowImages);
         if (isClient) {
-            window.localStorage.setItem(LOCAL_STORAGE_SHOW_IMAGES_KEY, String(checked));
+            window.localStorage.setItem(LOCAL_STORAGE_SHOW_IMAGES_KEY, String(newShowImages));
         }
     };
     
@@ -1801,7 +1757,43 @@ export default function OperationsClient({
             <div className="space-y-8">
                 <Card>
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                        <CardTitle>Controles de Simulación</CardTitle>
+                         <div className="flex items-center gap-4">
+                            <CardTitle>Controles de Simulación</CardTitle>
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                         <Button variant="ghost" size="icon" onClick={handleShowImagesChange}>
+                                            {showImages ? <ImageOff className="h-5 w-5" /> : <ImageIcon className="h-5 w-5" />}
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>{showImages ? 'Ocultar Imágenes' : 'Mostrar Imágenes'}</p></TooltipContent>
+                                </Tooltip>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <RotateCcw className="h-5 w-5 text-muted-foreground" />
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Restaurar Configuración por Defecto</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        ¿Estás seguro? Esto restaurará todos los parámetros de la simulación (en este navegador) y las imágenes (para todos los usuarios) a sus valores originales.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TooltipTrigger>
+                                    <TooltipContent><p>Restaurar valores por defecto</p></TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                         </div>
                          <div className="flex flex-wrap items-center gap-2">
                            <Button onClick={startClock} disabled={isSimulating} variant="secondary">
                                <Play className="mr-2 h-4 w-4" /> Iniciar
@@ -1815,7 +1807,7 @@ export default function OperationsClient({
                            </Button>
                        </div>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                        <div className="space-y-4">
                            <div className="space-y-1.5">
                                 <div className='flex justify-between items-center'>
@@ -1842,49 +1834,12 @@ export default function OperationsClient({
                                </p>
                            )}
                        </div>
-                       <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
-                            <div className="flex items-center space-x-2">
-                                <Switch id="show-images-switch" checked={showImages} onCheckedChange={handleShowImagesChange} />
-                                <Label htmlFor="show-images-switch">Mostrar Imágenes</Label>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2 text-center">Activa/desactiva las imágenes para una vista de datos o gráfica.</p>
-                        </div>
                    </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader>
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7">
-                                                    <RefreshCw className="h-4 w-4 text-muted-foreground" />
-                                                </Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>Restaurar Configuración</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                        ¿Estás seguro? Esto restaurará todos los parámetros de la simulación (en este navegador) y las imágenes (para todos los usuarios) a sus valores por defecto.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                        </AlertDialog>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>Restaurar valores por defecto</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        </div>
+                        <CardTitle className="flex items-center gap-2">1. Materia Prima</CardTitle>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch">
                         {/* Tachos */}
@@ -2421,7 +2376,6 @@ export default function OperationsClient({
                         purgeTime: centrifugePurgeTime,
                         startInterval: centrifugeStartInterval,
                     }}
-                    onImageSave={handleImageSave}
                     isUploading={isUploading}
                 />
             )}
