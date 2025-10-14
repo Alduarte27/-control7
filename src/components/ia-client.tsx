@@ -1938,11 +1938,6 @@ export default function OperationsClient({
                                                 <Edit className="h-4 w-4" />
                                             </Button>
                                         </div>
-                                         {showImages && (
-                                            <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
-                                                <Image src={simReceiver.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/recibidor.png?alt=media"} alt={simReceiver.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                            </div>
-                                        )}
                                         <div className="space-y-3 pt-2 mt-auto flex-grow flex flex-col justify-end">
                                             <div className="space-y-1">
                                                 <Label className="text-xs text-muted-foreground">Llenado</Label>
@@ -2002,11 +1997,6 @@ export default function OperationsClient({
                                         <div key={centrifuge.id} className="border p-3 rounded-lg flex flex-col justify-between">
                                             <div>
                                                 <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
-                                                {showImages && (
-                                                    <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden mb-2">
-                                                        <Image src={simCentrifuge.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/centrifuga.png?alt=media"} alt={simCentrifuge.name} width={600} height={400} className="object-contain w-full h-full" unoptimized/>
-                                                    </div>
-                                                )}
                                             </div>
                                             <div className="space-y-1">
                                                 <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
