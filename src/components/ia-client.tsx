@@ -535,8 +535,8 @@ function CentrifugeEditDialog({
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => void;
-    config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number };
+    onSave: (config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => void;
+    config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number };
     isUploading: boolean;
 }) {
     const [localConfig, setLocalConfig] = React.useState(config);
@@ -550,10 +550,14 @@ function CentrifugeEditDialog({
         onOpenChange(false);
     };
     
-    const handleValueChange = (field: keyof typeof config, value: string) => {
-        const numValue = Number(value);
-        if (!isNaN(numValue) && numValue >= 0) {
-            setLocalConfig(prev => ({ ...prev, [field]: numValue }));
+    const handleValueChange = (field: keyof typeof config, value: string | boolean) => {
+        if (typeof value === 'boolean') {
+             setLocalConfig(prev => ({ ...prev, [field]: value }));
+        } else {
+            const numValue = Number(value);
+            if (!isNaN(numValue) && numValue >= 0) {
+                setLocalConfig(prev => ({ ...prev, [field]: numValue }));
+            }
         }
     };
     
@@ -565,9 +569,17 @@ function CentrifugeEditDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                      <p className="text-sm text-muted-foreground">
-                        Define la cantidad de masa a procesar y los tiempos del ciclo.
+                        Define la cantidad de masa a procesar, los tiempos del ciclo y el modo de operación.
                     </p>
-                    <div className="p-3 border rounded-lg bg-muted/30">
+                    <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                        <Label htmlFor="cent-auto-switch" className="text-sm font-medium">Modo Automático</Label>
+                        <Switch
+                           id="cent-auto-switch"
+                           checked={localConfig.isAuto}
+                           onCheckedChange={(val) => handleValueChange('isAuto', val)}
+                        />
+                    </div>
+                    <div className={cn("space-y-4", !localConfig.isAuto && "opacity-50 pointer-events-none")}>
                         <div className="space-y-1.5">
                             <Label htmlFor="batch-size">Cantidad de Carga por Ciclo (QQ)</Label>
                              <Input
@@ -579,52 +591,52 @@ function CentrifugeEditDialog({
                             />
                             <p className="text-xs text-muted-foreground">La cantidad de masa que cada centrífuga tomará del recibidor en cada ciclo de carga.</p>
                         </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="load-time">Tiempo de Carga (seg)</Label>
+                                <Input
+                                    id="load-time"
+                                    type="number"
+                                    value={localConfig.loadTime}
+                                    onChange={(e) => handleValueChange('loadTime', e.target.value)}
+                                    min="0"
+                                />
+                            </div>
+                             <div className="space-y-1.5">
+                                <Label htmlFor="wash-time">Tiempo de Lavado (seg)</Label>
+                                <Input
+                                    id="wash-time"
+                                    type="number"
+                                    value={localConfig.washTime}
+                                    onChange={(e) => handleValueChange('washTime', e.target.value)}
+                                    min="0"
+                                />
+                            </div>
+                             <div className="space-y-1.5">
+                                <Label htmlFor="purge-time">Tiempo de Purga (seg)</Label>
+                                <Input
+                                    id="purge-time"
+                                    type="number"
+                                    value={localConfig.purgeTime}
+                                    onChange={(e) => handleValueChange('purgeTime', e.target.value)}
+                                    min="0"
+                                />
+                            </div>
+                             <div className="space-y-1.5">
+                                <Label htmlFor="start-interval">Intervalo de Inicio (seg)</Label>
+                                <Input
+                                    id="start-interval"
+                                    type="number"
+                                    value={localConfig.startInterval}
+                                    onChange={(e) => handleValueChange('startInterval', e.target.value)}
+                                    min="0"
+                                />
+                            </div>
+                        </div>
+                         <p className="text-xs text-muted-foreground pt-2">
+                            El **Intervalo de Inicio** es el tiempo de espera entre el inicio de la primera y la segunda centrífuga para asegurar el trabajo alternado.
+                        </p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="load-time">Tiempo de Carga (seg)</Label>
-                            <Input
-                                id="load-time"
-                                type="number"
-                                value={localConfig.loadTime}
-                                onChange={(e) => handleValueChange('loadTime', e.target.value)}
-                                min="0"
-                            />
-                        </div>
-                         <div className="space-y-1.5">
-                            <Label htmlFor="wash-time">Tiempo de Lavado (seg)</Label>
-                            <Input
-                                id="wash-time"
-                                type="number"
-                                value={localConfig.washTime}
-                                onChange={(e) => handleValueChange('washTime', e.target.value)}
-                                min="0"
-                            />
-                        </div>
-                         <div className="space-y-1.5">
-                            <Label htmlFor="purge-time">Tiempo de Purga (seg)</Label>
-                            <Input
-                                id="purge-time"
-                                type="number"
-                                value={localConfig.purgeTime}
-                                onChange={(e) => handleValueChange('purgeTime', e.target.value)}
-                                min="0"
-                            />
-                        </div>
-                         <div className="space-y-1.5">
-                            <Label htmlFor="start-interval">Intervalo de Inicio (seg)</Label>
-                            <Input
-                                id="start-interval"
-                                type="number"
-                                value={localConfig.startInterval}
-                                onChange={(e) => handleValueChange('startInterval', e.target.value)}
-                                min="0"
-                            />
-                        </div>
-                    </div>
-                     <p className="text-xs text-muted-foreground pt-2">
-                        El **Intervalo de Inicio** es el tiempo de espera entre el inicio de la primera y la segunda centrífuga para asegurar el trabajo alternado.
-                    </p>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
@@ -1242,7 +1254,8 @@ export default function OperationsClient({
         setMasaQQAmount(config.masaQQAmount);
     };
 
-    const handleCentrifugeConfigSave = (config: { batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => {
+    const handleCentrifugeConfigSave = (config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => {
+        setIsCentrifugesAuto(config.isAuto);
         setCentrifugeBatchSizeQQ(config.batchSizeQQ);
         setCentrifugeLoadTime(config.loadTime);
         setCentrifugeWashTime(config.washTime);
@@ -1625,40 +1638,27 @@ export default function OperationsClient({
             }
         });
         
-        const totalKgConsumedPerSecond = machinesRef.current
-            .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
-            .reduce((sum, m) => {
-                const product = productsRef.current.find(p => p.id === m.productId);
-                if (!product || !product.presentationWeight) return sum;
-                const bagsPerMinute = m.speed * (1 - m.loss / 100);
-                return sum + (bagsPerMinute * product.presentationWeight) / 60;
-            }, 0);
+        const anyMachineActive = machines.some(m => m.isSimulatingActive);
+        
+        const qqRateToPackers = (staticSimulationResults.totalBagsPerMinuteFromPackers * 60 / 1000) * KG_PER_QUINTAL;
+        
+        const effectiveTimePerBatch = centrifugeStartInterval > 0 ? centrifugeStartInterval : (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime);
+        const qqRateFromCentrifuges = effectiveTimePerBatch > 0 ? (centrifugeBatchSizeQQ * 3600) / effectiveTimePerBatch * 2 : 0;
         
         const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
         const familiarSiloKg = (familiarSilo?.currentQQ || 0) * KG_PER_QUINTAL;
+        const totalKgConsumedPerSecond = (qqRateToPackers / 3600) * KG_PER_QUINTAL;
         const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
         
-        const singleCycleTime = centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime;
-        const qqPerCycle = centrifugeBatchSizeQQ;
-        
-        // This is the correct throughput calculation for the two-centrifuge system
-        const effectiveTimePerBatch = centrifugeStartInterval > 0 ? centrifugeStartInterval : singleCycleTime;
-        const qqRateFromCentrifuges = effectiveTimePerBatch > 0 ? (qqPerCycle * 3600) / effectiveTimePerBatch * 2 : 0;
-        
-        const qqRateToPackers = (totalKgConsumedPerSecond * 3600) / KG_PER_QUINTAL;
-        
         let bottleneck: 'none' | 'wrapper' | 'centrifuge' | 'inactive' = 'none';
-
-        const anyMachineActive = machines.some(m => m.isSimulatingActive);
 
         if (!anyMachineActive) {
             bottleneck = 'inactive';
         } else if (staticSimulationResults.isWrapperBottleneck) {
             bottleneck = 'wrapper';
-        } else if (qqRateToPackers > qqRateFromCentrifuges && qqRateFromCentrifuges > 0) {
+        } else if (isSimulating && qqRateToPackers > qqRateFromCentrifuges && qqRateFromCentrifuges > 0) {
             bottleneck = 'centrifuge';
         }
-
 
         const totalQQinReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
         const processedQQ = simulationState.initialQQInReceivers > 0 ? simulationState.initialQQInReceivers - totalQQinReceivers : 0;
@@ -1669,12 +1669,12 @@ export default function OperationsClient({
             timeToEmptyHours: timeToEmptySeconds / 3600,
             totalUnitsProduced,
             bottleneck,
-            qqRateFromCentrifuges,
-            qqRateToPackers,
+            qqRateFromCentrifuges: isSimulating && anyMachineActive ? qqRateFromCentrifuges : 0,
+            qqRateToPackers: isSimulating && anyMachineActive ? qqRateToPackers : 0,
             processingProgress,
         }
 
-    }, [simulationState, machines, products, staticSimulationResults.isWrapperBottleneck, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeBatchSizeQQ, centrifugeStartInterval]);
+    }, [simulationState, machines, staticSimulationResults, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeBatchSizeQQ, centrifugeStartInterval, isSimulating]);
     
     const simTachos = simulationState.tachos;
     const tachosStateConfig = {
@@ -1928,14 +1928,6 @@ export default function OperationsClient({
                              <div className="flex justify-between items-start mb-2">
                                  <div className="space-y-1">
                                      <h3 className="font-bold text-lg">Centrífugas</h3>
-                                      <div className="flex items-center gap-2">
-                                          <Label htmlFor="cent-auto-switch" className="text-xs">Auto</Label>
-                                          <Switch
-                                             id="cent-auto-switch"
-                                             checked={isCentrifugesAuto}
-                                             onCheckedChange={setIsCentrifugesAuto}
-                                          />
-                                     </div>
                                  </div>
                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
                                       <Edit className="h-4 w-4" />
@@ -2392,6 +2384,7 @@ export default function OperationsClient({
                     onOpenChange={setEditingCentrifuges}
                     onSave={handleCentrifugeConfigSave}
                     config={{
+                        isAuto: isCentrifugesAuto,
                         batchSizeQQ: centrifugeBatchSizeQQ,
                         loadTime: centrifugeLoadTime,
                         washTime: centrifugeWashTime,
