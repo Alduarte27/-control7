@@ -47,12 +47,17 @@ export type ProductData = ProductDefinition & {
 // --- Production Log (Stops) Types ---
 
 export type TimeSlotLog = {
-    // Machine specific
-    observation?: string;
-    weight?: string;
+    // Machine specific observations are nested under machine ID
+    [machineId: string]: {
+      observation?: string;
+      weight?: string;
+    },
     // Quality Input
     masa?: string;
     flujo?: string;
+    ns_fam?: string;
+    ns_1?: string;
+    ns_2?: string;
     in_color?: string;
     in_hum?: string;
     in_turb?: string;
@@ -74,9 +79,10 @@ export type MachineLog = {
 
 export type DailyLog = {
   id: string; // YYYY-MM-DD
+  operador: string;
   supervisor: string;
   lote: string;
   shift: 'day' | 'night';
   machines: { [machineId: string]: MachineLog };
-  timeSlots: { [time: string]: TimeSlotLog };
+  timeSlots: { [time: string]: Partial<TimeSlotLog> };
 };

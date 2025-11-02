@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, DailyLog, MachineLog, TimeSlotLog } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { format } from 'date-fns';
+import { format, getDayOfYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -48,8 +48,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         }
         return {
             id: format(logDate, 'yyyy-MM-dd'),
+            operador: '',
             supervisor: '',
-            lote: '',
+            lote: String(getDayOfYear(logDate)),
             shift: 'day',
             machines: machineEntries,
             timeSlots: {}
@@ -69,6 +70,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     // Ensure machines object exists
                     if (!data.machines) {
                         data.machines = createEmptyLog(date).machines;
+                    }
+                    if (!data.lote) { // Auto-populate lot if it's missing
+                        data.lote = String(getDayOfYear(date));
                     }
                     setDailyLog(data);
                 } else {
@@ -185,7 +189,11 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                 {loading ? <p>Cargando bitácora...</p> : dailyLog && (
                     <div className="space-y-4">
                         {/* Header */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-lg bg-card">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
+                            <div className="space-y-1.5">
+                                <Label>Operador</Label>
+                                <Input value={dailyLog.operador} onChange={e => handleHeaderChange('operador', e.target.value)} />
+                            </div>
                             <div className="space-y-1.5">
                                 <Label>Supervisor</Label>
                                 <Input value={dailyLog.supervisor} onChange={e => handleHeaderChange('supervisor', e.target.value)} />
@@ -224,35 +232,15 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                             <table className="min-w-full text-xs">
                                 <thead className="bg-muted/50 text-center">
                                     <tr className="divide-x divide-border">
-                                        <th rowSpan={2} className="p-1 w-24 sticky left-0 bg-muted/50 z-10">Hora</th>
+                                        <th rowSpan={3} className="p-1 w-24 sticky left-0 bg-muted/50 z-10">Hora</th>
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                             <th key={`machine_header_${i}`} colSpan={2} className="p-2">Máquina #{i + 1}</th>
                                         ))}
                                         <th colSpan={9} className="p-2 bg-green-100 dark:bg-green-900/50">INGRESO DE PRODUCTO FINAL/GRASSHOPPER</th>
                                         <th colSpan={6} className="p-2 bg-blue-100 dark:bg-blue-900/50">SALIDA DE PRODUCTO TERMINADO</th>
-                                        <th rowSpan={2} className="p-2 w-80">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                        <th rowSpan={3} className="p-2 w-80">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                     </tr>
                                     <tr className="divide-x divide-border">
-                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                            <React.Fragment key={`sub_header_${i}`}>
-                                                <th className="p-1 font-normal text-muted-foreground w-48">Observación</th>
-                                                <th className="p-1 font-normal text-muted-foreground w-24">Peso/Saco KG</th>
-                                            </React.Fragment>
-                                        ))}
-                                        <th className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">Masa</th>
-                                        <th className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">Flujo</th>
-                                        <th className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS-FAM</th>
-                                        <th className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS% 1</th>
-                                        <th className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS% 2</th>
-                                        <th className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">Color</th>
-                                        <th className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">Hum</th>
-                                        <th className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">Turb</th>
-                                        <th className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">CV</th>
-                                        <th colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50">Familiar</th>
-                                        <th colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50">Granel 50 KG</th>
-                                    </tr>
-                                     <tr className="divide-x divide-border">
-                                        <th className="p-1 sticky left-0 bg-muted/50 z-10"></th>
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                             <th key={`product_selector_${i}`} className="p-1" colSpan={2}>
                                                 <Select value={dailyLog.machines[`machine_${i + 1}`]?.productId} onValueChange={(val) => handleMachineProductChange(`machine_${i + 1}`, val)}>
@@ -267,18 +255,31 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                 </Select>
                                             </th>
                                         ))}
-                                        <th colSpan={5} className="p-1 bg-green-100 dark:bg-green-900/50"></th>
-                                        <th className="p-1 bg-yellow-100 dark:bg-yellow-900/50"></th>
-                                        <th className="p-1 bg-yellow-100 dark:bg-yellow-900/50"></th>
-                                        <th className="p-1 bg-yellow-100 dark:bg-yellow-900/50"></th>
-                                        <th className="p-1 bg-yellow-100 dark:bg-yellow-900/50"></th>
+                                        <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">Masa</th>
+                                        <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">Flujo</th>
+                                        <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS-FAM</th>
+                                        <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS% 1</th>
+                                        <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS% 2</th>
+                                        <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">Color</th>
+                                        <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">Hum</th>
+                                        <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">Turb</th>
+                                        <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">CV</th>
+                                        <th colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50">Familiar</th>
+                                        <th colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50">Granel 50 KG</th>
+                                    </tr>
+                                     <tr className="divide-x divide-border">
+                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => (
+                                            <React.Fragment key={`sub_header_${i}`}>
+                                                <th className="p-1 font-normal text-muted-foreground w-48">Observación</th>
+                                                <th className="p-1 font-normal text-muted-foreground w-24">Peso/Saco KG</th>
+                                            </React.Fragment>
+                                        ))}
                                         <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Color</th>
                                         <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Hum</th>
                                         <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Turb</th>
                                         <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Color</th>
                                         <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Hum</th>
                                         <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Turb</th>
-                                        <th></th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
@@ -296,9 +297,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                             })}
                                             {inputCell(time, 'masa')}
                                             {inputCell(time, 'flujo')}
-                                            {inputCell(time, 'in_color', 'ns_fam')}
-                                            {inputCell(time, 'in_color', 'ns_1')}
-                                            {inputCell(time, 'in_color', 'ns_2')}
+                                            {inputCell(time, 'ns_fam')}
+                                            {inputCell(time, 'ns_1')}
+                                            {inputCell(time, 'ns_2')}
                                             {inputCell(time, 'in_color')}
                                             {inputCell(time, 'in_hum')}
                                             {inputCell(time, 'in_turb')}
