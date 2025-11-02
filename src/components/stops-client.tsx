@@ -155,8 +155,8 @@ function ConfigurationModal({
                                         <Select value={newCauseType} onValueChange={(v: any) => setNewCauseType(v)}>
                                             <SelectTrigger><SelectValue/></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="unplanned">No Planificada</SelectItem>
                                                 <SelectItem value="planned">Planificada</SelectItem>
+                                                <SelectItem value="unplanned">No Planificada</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -760,20 +760,34 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                         <th rowSpan={3} className="p-2 w-80">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                     </tr>
                                     <tr className="divide-x divide-border">
-                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                            <th key={`product_selector_${i}`} className="p-1" colSpan={2}>
-                                                <Select value={dailyLog.machines[`machine_${i + 1}`]?.productId || ''} onValueChange={(val) => handleMachineProductChange(`machine_${i + 1}`, val)}>
-                                                    <SelectTrigger className="h-8 text-xs">
-                                                        <SelectValue placeholder="Producto" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {prefetchedProducts.map(p => (
-                                                            <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </th>
-                                        ))}
+                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => {
+                                            const machineId = `machine_${i + 1}`;
+                                            const selectedProductId = dailyLog.machines[machineId]?.productId || '';
+                                            const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
+
+                                            return (
+                                                <th key={`product_selector_${i}`} className="p-1" colSpan={2}>
+                                                    <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
+                                                        <SelectTrigger className="h-8 text-xs">
+                                                            <div className="flex items-center gap-2 truncate">
+                                                                {selectedProduct && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedProduct.color || '#ccc' }}></span>}
+                                                                <SelectValue placeholder="Producto" />
+                                                            </div>
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {prefetchedProducts.map(p => (
+                                                                <SelectItem key={p.id} value={p.id}>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
+                                                                        <span>{p.productName}</span>
+                                                                    </div>
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </th>
+                                            );
+                                        })}
                                         <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">Masa</th>
                                         <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">Flujo</th>
                                         <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS-FAM</th>
