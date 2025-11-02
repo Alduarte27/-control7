@@ -47,6 +47,7 @@ export type ProductData = ProductDefinition & {
 // --- Production Log (Stops) Types ---
 
 export type StopData = {
+    id: string; // Unique ID for the stop event, e.g., a timestamp or UUID
     startTime: string; // The time slot, e.g., "07:00"
     endTime: string;
     duration: number; // in minutes
@@ -58,7 +59,7 @@ export type StopData = {
 export type TimeSlotLog = {
     // Machine specific observations are nested under machine ID
     [machineId: string]: {
-      observation?: StopData; // Now holds structured stop data
+      stops?: StopData[]; // Now holds an array of structured stop data
       weight?: string;
     };
     // Quality Input

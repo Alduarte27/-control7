@@ -26,15 +26,22 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     const [solution, setSolution] = React.useState(stopData?.solution || '');
 
     React.useEffect(() => {
-        // When the modal opens for a new stop, ensure end time is not before start time
-        if (!stopData) {
-            setActualStartTime(startTime);
-            setEndTime(startTime);
-        } else {
+        if (stopData) {
             setActualStartTime(stopData.startTime);
             setEndTime(stopData.endTime);
+            setCause(stopData.cause);
+            setType(stopData.type);
+            setSolution(stopData.solution || '');
+        } else {
+            // Reset for new entry
+            setActualStartTime(startTime);
+            setEndTime(startTime);
+            setCause('');
+            setType('unplanned');
+            setSolution('');
         }
-    }, [startTime, stopData]);
+    }, [isOpen, stopData, startTime]);
+
 
     const calculateDuration = (start: string, end: string): number => {
         try {
@@ -66,6 +73,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
             return;
         }
         onSave({
+            id: stopData?.id || new Date().toISOString(), // Use existing ID or generate a new one
             startTime: actualStartTime,
             endTime,
             duration,
@@ -81,7 +89,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Registrar Parada - Máquina {machineId.split('_')[1]}</DialogTitle>
+                    <DialogTitle>{stopData ? 'Editar' : 'Registrar'} Parada - Máquina {machineId.split('_')[1]}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div className="grid grid-cols-2 gap-4">

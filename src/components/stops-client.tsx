@@ -81,6 +81,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         data.lote = String(getDayOfYear(date));
                     }
                     if(!data.operador) data.operador = '';
+                    if(!data.supervisor) data.supervisor = '';
                     setDailyLog(data);
                 } else {
                     setDailyLog(createEmptyLog(date));
@@ -104,7 +105,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const handleDateChange = (newDate: Date | undefined) => {
         if (newDate) {
             setDate(newDate);
-            setDailyLog(prev => prev ? { ...prev, lote: String(getDayOfYear(newDate)) } : createEmptyLog(newDate));
+            setDailyLog(prev => prev ? { ...prev, id: format(newDate, 'yyyy-MM-dd'), lote: String(getDayOfYear(newDate)) } : createEmptyLog(newDate));
         }
     };
 
@@ -138,26 +139,27 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         setDailyLog(prev => {
             if (!prev) return null;
             const { machineId, timeSlot } = modalState;
-            const newTimeSlots = { ...prev.timeSlots };
+            const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
-            // We use the start time of the stop as the key, even if the user clicked a different cell originally
-            const registrationSlot = timeSlot; // Keep original slot for now, could be changed to stopData.startTime
+            const registrationSlot = timeSlot;
             
             if (!newTimeSlots[registrationSlot]) newTimeSlots[registrationSlot] = {};
             
-            const machineObservations = { ...(newTimeSlots[registrationSlot] as any)[machineId] || {} };
-            
-            // Remove old stop data if start time changed
-            if (modalState.stopData && modalState.stopData.startTime !== stopData.startTime) {
-                 const oldTimeSlot = modalState.timeSlot;
-                 if (newTimeSlots[oldTimeSlot] && (newTimeSlots[oldTimeSlot] as any)[machineId]) {
-                    delete (newTimeSlots[oldTimeSlot] as any)[machineId].observation;
-                 }
+            const machineSlot = (newTimeSlots[registrationSlot][machineId] || {}) as { stops?: StopData[], weight?: string };
+            if (!machineSlot.stops) {
+                machineSlot.stops = [];
             }
             
-            machineObservations['observation'] = stopData;
-            
-            (newTimeSlots[registrationSlot] as any)[machineId] = machineObservations;
+            const existingStopIndex = machineSlot.stops.findIndex(s => s.id === stopData.id);
+            if (existingStopIndex > -1) {
+                // Update existing stop
+                machineSlot.stops[existingStopIndex] = stopData;
+            } else {
+                // Add new stop
+                machineSlot.stops.push(stopData);
+            }
+
+            newTimeSlots[registrationSlot][machineId] = machineSlot;
 
             return { ...prev, timeSlots: newTimeSlots };
         });
@@ -179,33 +181,46 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     };
     
     const observationCell = (time: string, machineId: string) => {
-        const stopData = (dailyLog?.timeSlots[time] as any)?.[machineId]?.observation as StopData | undefined;
-
-        const handleClick = () => {
-            setModalState({ isOpen: true, machineId, timeSlot: time, stopData });
+        const stops = (dailyLog?.timeSlots[time]?.[machineId] as { stops?: StopData[] })?.stops || [];
+        
+        const handleCellClick = () => {
+            // Open modal to create a new stop
+            setModalState({ isOpen: true, machineId, timeSlot: time });
+        };
+        
+        const handleStopClick = (e: React.MouseEvent, stop: StopData) => {
+            e.stopPropagation(); // Prevent cell click from firing
+            // Open modal to edit existing stop
+            setModalState({ isOpen: true, machineId, timeSlot: time, stopData: stop });
         };
 
         return (
-            <td className="p-0.5" onClick={handleClick}>
-                <div className="w-full h-8 flex items-center justify-center cursor-pointer hover:bg-accent/50 rounded-sm">
-                    {stopData ? (
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Badge variant={stopData.type === 'planned' ? 'secondary' : 'destructive'} className="truncate">
-                                        {stopData.cause} ({stopData.duration} min)
-                                    </Badge>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                    <div className="space-y-1 text-xs">
-                                        <p><strong>Causa:</strong> {stopData.cause}</p>
-                                        <p><strong>Tipo:</strong> {stopData.type === 'planned' ? 'Planificada' : 'No Planificada'}</p>
-                                        <p><strong>Duración:</strong> {stopData.duration} min ({stopData.startTime} - {stopData.endTime})</p>
-                                        {stopData.solution && <p><strong>Solución:</strong> {stopData.solution}</p>}
-                                    </div>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
+            <td className="p-0.5" onClick={handleCellClick}>
+                <div className="w-full h-8 flex items-center justify-start gap-1 cursor-pointer hover:bg-accent/50 rounded-sm px-1 overflow-hidden">
+                    {stops.length > 0 ? (
+                        stops.map(stopData => (
+                           <TooltipProvider key={stopData.id}>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Badge
+                                            variant={stopData.type === 'planned' ? 'secondary' : 'destructive'}
+                                            className="truncate cursor-pointer flex-shrink-0"
+                                            onClick={(e) => handleStopClick(e, stopData)}
+                                        >
+                                            {stopData.cause} ({stopData.duration}m)
+                                        </Badge>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div className="space-y-1 text-xs">
+                                            <p><strong>Causa:</strong> {stopData.cause}</p>
+                                            <p><strong>Tipo:</strong> {stopData.type === 'planned' ? 'Planificada' : 'No Planificada'}</p>
+                                            <p><strong>Duración:</strong> {stopData.duration} min ({stopData.startTime} - {stopData.endTime})</p>
+                                            {stopData.solution && <p><strong>Solución:</strong> {stopData.solution}</p>}
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        ))
                     ) : (
                         <span className="text-muted-foreground text-xs opacity-0 group-hover:opacity-100">Registrar...</span>
                     )}
