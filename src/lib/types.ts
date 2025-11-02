@@ -42,3 +42,13 @@ export type ProductData = ProductDefinition & {
   actual: DailyProduction;
   isSuggested?: boolean; // To flag if the plan was AI-suggested
 };
+
+export type StopData = {
+  id: string;
+  machineId: string;
+  cause: string;
+  startTime: string; // ISO 8601 format
+  endTime: string;   // ISO 8601 format
+  durationMinutes: number;
+  type: 'planned' | 'unplanned';
+};

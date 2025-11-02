@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, TimerOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -86,6 +86,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
           
           <NavButton href="/ia" icon={Sparkles} label="Operaciones" />
           <NavButton href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
+          <NavButton href="/stops" icon={TimerOff} label="Paradas" />
           <NavButton href="/history" icon={History} label="Historial" />
           <NavButton href="/admin" icon={Settings} label="Admin" />
           
@@ -134,6 +135,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem asChild><Link href="/ia" className="flex items-center"><Sparkles className="mr-2 h-4 w-4" />Operaciones</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/dashboard" className="flex items-center"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</Link></DropdownMenuItem>
+                    <DropdownMenuItem asChild><Link href="/stops" className="flex items-center"><TimerOff className="mr-2 h-4 w-4" />Paradas</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/admin" className="flex items-center"><Settings className="mr-2 h-4 w-4" />Admin</Link></DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
