@@ -428,7 +428,10 @@ export default function StopsClient({
             if (!newTimeSlots[timeSlot]) {
                 newTimeSlots[timeSlot] = {};
             }
-            newTimeSlots[timeSlot][field] = value;
+            // Create a new object for the specific time slot to ensure we don't mutate state
+            const updatedTimeSlot = { ...newTimeSlots[timeSlot], [field]: value };
+            newTimeSlots[timeSlot] = updatedTimeSlot;
+
             return { ...prev, timeSlots: newTimeSlots };
         });
     };
@@ -560,7 +563,7 @@ export default function StopsClient({
         if (!dailyLog) return [];
         const stops: (StopData & { machineId: string })[] = [];
         Object.values(dailyLog.timeSlots).forEach(slot => {
-            if (!slot || typeof slot !== 'object') return; // Defensive check
+            if (!slot || typeof slot !== 'object') return;
             Object.entries(slot).forEach(([machineId, machineData]) => {
                 if (machineData && typeof machineData === 'object' && 'stops' in machineData && Array.isArray(machineData.stops)) {
                     machineData.stops.forEach(stop => {
@@ -668,25 +671,23 @@ export default function StopsClient({
         );
     }
     
-    const inputCell = (time: string, field: keyof Omit<TimeSlot, 'masa' | 'stops' | 'weight'>, machineId?: string) => {
+    const inputCell = (time: string, field: keyof Omit<TimeSlot, 'masa' | 'stops'>, machineId?: string) => {
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             const valueToSet = e.target.value;
             setDailyLog(prev => {
                 if (!prev) return null;
-                const newTimeSlots = { ...prev.timeSlots };
-                
-                // Ensure the timeslot object exists
+                const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
+    
                 if (!newTimeSlots[time]) {
                     newTimeSlots[time] = {};
                 }
     
                 if (machineId) {
-                    // It's a machine-specific field like 'weight'
-                    const machineObservations = { ...(newTimeSlots[time][machineId] as object || {}) };
-                    (machineObservations as any)[field] = valueToSet;
-                    newTimeSlots[time][machineId] = machineObservations;
+                    if (!newTimeSlots[time][machineId]) {
+                        newTimeSlots[time][machineId] = {};
+                    }
+                    (newTimeSlots[time][machineId] as any)[field] = valueToSet;
                 } else {
-                    // It's a general field like 'flujo'
                     (newTimeSlots[time] as any)[field] = valueToSet;
                 }
     
@@ -695,12 +696,12 @@ export default function StopsClient({
         };
     
         let value;
+        const timeSlotData = dailyLog?.timeSlots[time];
         if (machineId) {
-            const machineData = dailyLog?.timeSlots[time]?.[machineId];
+            const machineData = timeSlotData?.[machineId];
             value = (machineData && typeof machineData === 'object' && field in machineData) ? (machineData as any)[field] : '';
         } else {
-            const slotData = dailyLog?.timeSlots[time];
-            value = (slotData && field in slotData) ? slotData[field as keyof typeof slotData] : '';
+            value = (timeSlotData && typeof timeSlotData === 'object' && field in timeSlotData) ? (timeSlotData as any)[field] : '';
         }
     
         return (
