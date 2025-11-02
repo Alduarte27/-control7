@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from './ui/separator';
 
 type StopRegistrationModalProps = {
     isOpen: boolean;
@@ -22,26 +23,32 @@ type StopRegistrationModalProps = {
 export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopCauses, stopData }: StopRegistrationModalProps) {
     const [actualStartTime, setActualStartTime] = React.useState(stopData?.startTime || startTime);
     const [endTime, setEndTime] = React.useState(stopData?.endTime || actualStartTime);
-    const [cause, setCause] = React.useState(stopData?.cause || '');
     const [type, setType] = React.useState<'planned' | 'unplanned'>(stopData?.type || 'unplanned');
+    const [maintenanceType, setMaintenanceType] = React.useState<'preventive' | 'corrective' | 'predictive' | undefined>(stopData?.maintenanceType);
+    const [reason, setReason] = React.useState(stopData?.reason || '');
+    const [cause, setCause] = React.useState(stopData?.cause || '');
     const [solution, setSolution] = React.useState(stopData?.solution || '');
 
     React.useEffect(() => {
         if (stopData) {
             setActualStartTime(stopData.startTime);
             setEndTime(stopData.endTime);
-            setCause(stopData.cause);
             setType(stopData.type);
+            setMaintenanceType(stopData.maintenanceType);
+            setReason(stopData.reason || '');
+            setCause(stopData.cause || '');
             setSolution(stopData.solution || '');
         } else {
             // Reset for new entry
             setActualStartTime(startTime);
             setEndTime(startTime);
-            setCause(stopCauses.length > 0 ? stopCauses[0].name : '');
             setType('unplanned');
+            setMaintenanceType(undefined);
+            setReason('');
+            setCause('');
             setSolution('');
         }
-    }, [isOpen, stopData, startTime, stopCauses]);
+    }, [isOpen, stopData, startTime]);
 
 
     const calculateDuration = (start: string, end: string): number => {
@@ -73,16 +80,16 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
             console.error("End time cannot be before start time.");
             return;
         }
-        const selectedCause = stopCauses.find(c => c.name === cause);
 
         onSave({
             id: stopData?.id || new Date().toISOString(), // Use existing ID or generate a new one
             startTime: actualStartTime,
             endTime,
             duration,
-            cause,
-            causeColor: selectedCause?.color,
             type,
+            maintenanceType: type === 'planned' ? maintenanceType : undefined,
+            reason,
+            cause,
             solution,
         });
     };
@@ -95,7 +102,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                 <DialogHeader>
                     <DialogTitle>{stopData ? 'Editar' : 'Registrar'} Parada - Máquina {machineId.split('_')[1]}</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4 py-4">
+                <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="start-time">Hora de Inicio</Label>
@@ -121,51 +128,76 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                         <Label>Duración (minutos)</Label>
                         <Input value={duration} disabled />
                     </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor="stop-cause">Causa de la Parada</Label>
-                        <Select value={cause} onValueChange={(val) => setCause(val)}>
-                            <SelectTrigger id="stop-cause">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {stopCauses.map(c => (
-                                     <SelectItem key={c.id} value={c.name}>
-                                        <div className="flex items-center gap-2">
-                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }}></span>
-                                            {c.name}
-                                        </div>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor="stop-type">Tipo de Parada</Label>
-                        <Select value={type} onValueChange={(val: 'planned' | 'unplanned') => setType(val)}>
-                            <SelectTrigger id="stop-type">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="unplanned">No Planificada</SelectItem>
-                                <SelectItem value="planned">Planificada</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor="stop-solution">Solución Aplicada</Label>
-                        <Textarea
-                            id="stop-solution"
-                            placeholder="Ej: Se reemplazó el sensor, se realizó ajuste..."
-                            value={solution}
-                            onChange={(e) => setSolution(e.target.value)}
-                        />
+                    
+                    <Separator />
+                    
+                    <div className="space-y-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="stop-type">Tipo de Parada</Label>
+                            <Select value={type} onValueChange={(val: 'planned' | 'unplanned') => {
+                                setType(val);
+                                if (val === 'unplanned') {
+                                    setMaintenanceType(undefined);
+                                }
+                            }}>
+                                <SelectTrigger id="stop-type">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="unplanned">No Planificada</SelectItem>
+                                    <SelectItem value="planned">Planificada</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {type === 'planned' && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="maint-type">Tipo de Mantenimiento</Label>
+                                <Select value={maintenanceType} onValueChange={(val: any) => setMaintenanceType(val)}>
+                                    <SelectTrigger id="maint-type">
+                                        <SelectValue placeholder="Seleccionar tipo de mtto."/>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="preventive">Preventivo</SelectItem>
+                                        <SelectItem value="corrective">Correctivo</SelectItem>
+                                        <SelectItem value="predictive">Predictivo</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="stop-reason">Motivo</Label>
+                            <Input
+                                id="stop-reason"
+                                placeholder="Ej: Daño eléctrico, Falla mecánica..."
+                                value={reason}
+                                onChange={(e) => setReason(e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="stop-cause">Causa de la Parada</Label>
+                            <Input
+                                id="stop-cause"
+                                placeholder="Ej: Cable suelto, Sensor dañado..."
+                                value={cause}
+                                onChange={(e) => setCause(e.target.value)}
+                            />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="stop-solution">Solución Aplicada</Label>
+                            <Textarea
+                                id="stop-solution"
+                                placeholder="Ej: Se reemplazó el sensor, se realizó ajuste..."
+                                value={solution}
+                                onChange={(e) => setSolution(e.target.value)}
+                            />
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
                         <Button variant="secondary">Cancelar</Button>
                     </DialogClose>
-                    <Button onClick={handleSave} disabled={!cause || duration < 0}>Guardar Parada</Button>
+                    <Button onClick={handleSave} disabled={!type || !cause || duration < 0}>Guardar Parada</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

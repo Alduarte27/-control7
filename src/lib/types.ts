@@ -67,9 +67,11 @@ export type StopData = {
     startTime: string; // The time slot, e.g., "07:00"
     endTime: string;
     duration: number; // in minutes
-    cause: string; // The name of the cause
-    causeColor?: string; // The color associated with the cause
     type: 'planned' | 'unplanned';
+    maintenanceType?: 'preventive' | 'corrective' | 'predictive'; // For planned stops
+    reason?: string; // General reason (e.g., "Daño eléctrico")
+    cause: string; // Specific cause (e.g., "Cable suelto")
+    causeColor?: string; // The color associated with the cause
     solution?: string;
 };
 

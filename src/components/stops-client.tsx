@@ -322,6 +322,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             const { machineId } = modalState;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
+            // The stop is always keyed to its *start* time slot for simplicity of lookup
             const registrationSlot = stopData.startTime.substring(0, 5);
             
             if (!newTimeSlots[registrationSlot]) newTimeSlots[registrationSlot] = {};
@@ -477,7 +478,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     {stopsInCell.length > 0 ? (
                         stopsInCell.map(stopData => {
                            const isStartingCell = time === stopData.startTime.substring(0,5);
-                           const badgeColor = stopData.causeColor || (stopData.type === 'planned' ? '#3b82f6' : '#ef4444');
+                           const badgeColor = stopData.type === 'planned' ? '#3b82f6' : '#ef4444';
 
                            return (
                              <TooltipProvider key={stopData.id}>
@@ -525,11 +526,13 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                         </div>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                        <div className="space-y-1 text-xs">
-                                            <p><strong>Causa:</strong> {stopData.cause}</p>
-                                            <p><strong>Tipo:</strong> {stopData.type === 'planned' ? 'Planificada' : 'No Planificada'}</p>
-                                            <p><strong>Duración:</strong> {stopData.duration} min ({stopData.startTime} - {stopData.endTime})</p>
-                                            {stopData.solution && <p><strong>Solución:</strong> {stopData.solution}</p>}
+                                        <div className="space-y-1 text-xs max-w-xs">
+                                            <p><strong className="font-semibold">Tipo:</strong> {stopData.type === 'planned' ? 'Planificada' : 'No Planificada'}</p>
+                                            {stopData.maintenanceType && <p><strong className="font-semibold">Tipo Mtto:</strong> {stopData.maintenanceType}</p>}
+                                            {stopData.reason && <p><strong className="font-semibold">Motivo:</strong> {stopData.reason}</p>}
+                                            <p><strong className="font-semibold">Causa:</strong> {stopData.cause}</p>
+                                            <p><strong className="font-semibold">Duración:</strong> {stopData.duration} min ({stopData.startTime} - {stopData.endTime})</p>
+                                            {stopData.solution && <p><strong className="font-semibold">Solución:</strong> {stopData.solution}</p>}
                                         </div>
                                     </TooltipContent>
                                 </Tooltip>
