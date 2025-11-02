@@ -120,12 +120,12 @@ function ConfigurationModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-7xl">
                 <DialogHeader>
                     <DialogTitle>Configuración de la Bitácora</DialogTitle>
                 </DialogHeader>
-                <div className="py-4 max-h-[70vh] overflow-y-auto space-y-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="py-4 max-h-[70vh] overflow-y-auto">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         {/* Stop Causes */}
                         <div className="space-y-4 p-4 border rounded-lg">
                             <h3 className="font-semibold text-lg">Motivos de Parada</h3>
@@ -192,8 +192,6 @@ function ConfigurationModal({
                                 ))}
                             </ul>
                         </div>
-                    </div>
-                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Operators */}
                         <div className="space-y-4 p-4 border rounded-lg">
                             <h3 className="font-semibold text-lg">Operadores</h3>
@@ -238,7 +236,7 @@ function ConfigurationModal({
                                 ))}
                             </ul>
                         </div>
-                     </div>
+                    </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
