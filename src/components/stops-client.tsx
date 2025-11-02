@@ -272,6 +272,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const { toast } = useToast();
     const [isAdminMode, setIsAdminMode] = React.useState(false);
+    const isInitialMount = React.useRef(true);
     
     const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(dailyLog?.shift || 'day'), [dailyLog?.shift]);
 
@@ -293,6 +294,42 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         };
     }, [prefetchedProducts]);
 
+    const handleSaveLog = React.useCallback(async (logToSave: DailyLog, showToast = false) => {
+        if (!logToSave) return;
+        try {
+            const docRef = doc(db, 'dailyLogs', logToSave.id);
+            await setDoc(docRef, logToSave, { merge: true });
+            if (showToast) {
+                toast({ title: 'Bitácora Guardada', description: `Se ha guardado el registro del día ${logToSave.id}.` });
+            }
+        } catch (error) {
+            console.error("Error saving daily log:", error);
+            if (showToast) {
+                toast({ title: 'Error', description: 'No se pudo guardar la bitácora.', variant: 'destructive' });
+            }
+        }
+    }, [toast]);
+    
+    // Debounced auto-save effect
+    React.useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+
+        if (!dailyLog) return;
+        
+        const handler = setTimeout(() => {
+            handleSaveLog(dailyLog, true);
+        }, 2000); // Save 2 seconds after the user stops typing
+
+        // Cleanup function to cancel the timeout if the user types again
+        return () => {
+            clearTimeout(handler);
+        };
+    }, [dailyLog, handleSaveLog]);
+
+
     const fetchCatalogs = React.useCallback(async () => {
          try {
             const [causesSnap, operatorsSnap, supervisorsSnap, maintTypesSnap] = await Promise.all([
@@ -313,6 +350,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     React.useEffect(() => {
         const fetchLog = async () => {
             setLoading(true);
+            isInitialMount.current = true; // Prevent auto-save on initial fetch
             const logId = format(date, 'yyyy-MM-dd');
             try {
                 const logDocSnap = await getDoc(doc(db, 'dailyLogs', logId));
@@ -443,18 +481,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         toast({ title: "Parada Eliminada", description: "La parada ha sido eliminada. Guarda los cambios para confirmar.", variant: "destructive" });
     };
     
-    const handleSaveLog = async () => {
-        if (!dailyLog) return;
-        try {
-            const docRef = doc(db, 'dailyLogs', dailyLog.id);
-            await setDoc(docRef, dailyLog, { merge: true });
-            toast({ title: 'Bitácora Guardada', description: `Se ha guardado el registro del día ${dailyLog.id}.` });
-        } catch (error) {
-            console.error("Error saving daily log:", error);
-            toast({ title: 'Error', description: 'No se pudo guardar la bitácora.', variant: 'destructive' });
-        }
-    };
-
     const handleToggleAdminMode = () => {
         if (isAdminMode) {
             setIsAdminMode(false);
@@ -688,7 +714,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
-                    <Button onClick={handleSaveLog} disabled={loading}>Guardar Cambios</Button>
+                    <Button onClick={() => dailyLog && handleSaveLog(dailyLog, true)} disabled={loading}>Guardar Cambios</Button>
                     <Link href="/">
                         <Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button>
                     </Link>
