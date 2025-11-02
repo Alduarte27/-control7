@@ -519,13 +519,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         });
 
         const handleCellClick = () => {
-            // If clicking a cell that's part of a long stop, open that stop for editing
-            const longStop = stopsInCell.find(s => s.duration > 30);
-            if (longStop) {
-                setModalState({ isOpen: true, machineId, timeSlot: longStop.startTime, stopData: longStop });
-            } else {
-                setModalState({ isOpen: true, machineId, timeSlot: time });
-            }
+            // Always open for new registration when clicking the cell background
+            setModalState({ isOpen: true, machineId, timeSlot: time });
         };
         
         const handleStopClick = (e: React.MouseEvent, stop: StopData) => {
@@ -535,7 +530,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         
         return (
             <td className="p-0.5" onClick={handleCellClick}>
-                <div className="w-full h-8 flex items-center justify-start gap-1 cursor-pointer hover:bg-accent/50 rounded-sm px-1 overflow-hidden relative group/cell">
+                <div className="w-full h-8 flex flex-col items-center justify-start gap-0.5 cursor-pointer hover:bg-accent/50 rounded-sm p-0.5 overflow-hidden relative group/cell">
                     {stopsInCell.length > 0 ? (
                         stopsInCell.map(stopData => {
                            const isStartingCell = time === stopData.startTime.substring(0,5);
@@ -548,14 +543,13 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                     <TooltipTrigger asChild>
                                         <div 
                                           className={cn(
-                                            'relative group/pill h-full flex-grow flex items-center',
-                                            isStartingCell ? `w-full` : `w-full`
+                                            'relative group/pill w-full flex-grow flex items-center',
                                           )}
                                           onClick={(e) => handleStopClick(e, stopData)}
                                         >
                                             <Badge
                                                 style={{ backgroundColor: badgeColor }}
-                                                className={cn("truncate cursor-pointer h-full w-full flex items-center text-white",
+                                                className={cn("truncate cursor-pointer h-full w-full flex-grow flex items-center text-white",
                                                    !isStartingCell && "opacity-60"
                                                 )}
                                             >
