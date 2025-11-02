@@ -49,6 +49,7 @@ export type StopCause = {
     id: string;
     name: string;
     color: string;
+    type: 'planned' | 'unplanned';
 };
 
 export type Operator = {
@@ -61,6 +62,11 @@ export type Supervisor = {
     name: string;
 };
 
+export type MaintenanceType = {
+    id: string;
+    name: string;
+};
+
 
 export type StopData = {
     id: string; // Unique ID for the stop event, e.g., a timestamp or UUID
@@ -68,8 +74,8 @@ export type StopData = {
     endTime: string;
     duration: number; // in minutes
     type: 'planned' | 'unplanned';
-    maintenanceType?: 'preventive' | 'corrective' | 'predictive'; // For planned stops
-    reason: string; // General category from config (e.g., "Daño eléctrico")
+    maintenanceType?: string; // e.g., 'preventive'
+    reason: string; // The selected stop cause from the catalog (e.g., "Daño Eléctrico")
     cause: string; // Specific detail (e.g., "Cable suelto")
     solution?: string;
 };

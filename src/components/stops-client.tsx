@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor } from '@/lib/types';
+import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { format, getDayOfYear, parse } from 'date-fns';
@@ -48,6 +48,7 @@ function ConfigurationModal({
     stopCauses,
     operators,
     supervisors,
+    maintenanceTypes,
     onConfigSave,
 }: {
     isOpen: boolean;
@@ -55,15 +56,18 @@ function ConfigurationModal({
     stopCauses: StopCause[];
     operators: Operator[];
     supervisors: Supervisor[];
-    onConfigSave: (type: 'stopCause' | 'operator' | 'supervisor', data: any, action: 'add' | 'delete') => Promise<void>;
+    maintenanceTypes: MaintenanceType[];
+    onConfigSave: (type: 'stopCause' | 'operator' | 'supervisor' | 'maintenanceType', data: any, action: 'add' | 'delete') => Promise<void>;
 }) {
     const [newCauseName, setNewCauseName] = React.useState('');
     const [newCauseColor, setNewCauseColor] = React.useState('#ef4444');
+    const [newCauseType, setNewCauseType] = React.useState<'planned' | 'unplanned'>('unplanned');
     const [newOperatorName, setNewOperatorName] = React.useState('');
     const [newSupervisorName, setNewSupervisorName] = React.useState('');
+    const [newMaintTypeName, setNewMaintTypeName] = React.useState('');
     const { toast } = useToast();
 
-    const handleAdd = async (type: 'stopCause' | 'operator' | 'supervisor') => {
+    const handleAdd = async (type: 'stopCause' | 'operator' | 'supervisor' | 'maintenanceType') => {
         let data: any;
         let name: string = '';
         switch (type) {
@@ -73,7 +77,7 @@ function ConfigurationModal({
                     toast({ title: 'Error', description: 'El nombre del motivo es obligatorio.', variant: 'destructive'});
                     return;
                 }
-                data = { name, color: newCauseColor };
+                data = { name, color: newCauseColor, type: newCauseType };
                 await onConfigSave(type, data, 'add');
                 setNewCauseName('');
                 break;
@@ -97,43 +101,66 @@ function ConfigurationModal({
                 await onConfigSave(type, data, 'add');
                 setNewSupervisorName('');
                 break;
+            case 'maintenanceType':
+                name = newMaintTypeName.trim();
+                if (!name) {
+                    toast({ title: 'Error', description: 'El nombre del tipo de mtto. es obligatorio.', variant: 'destructive'});
+                    return;
+                }
+                data = { name };
+                await onConfigSave(type, data, 'add');
+                setNewMaintTypeName('');
+                break;
         }
     };
     
-    const handleDelete = async (type: 'stopCause' | 'operator' | 'supervisor', id: string) => {
+    const handleDelete = async (type: 'stopCause' | 'operator' | 'supervisor' | 'maintenanceType', id: string) => {
         await onConfigSave(type, { id }, 'delete');
     }
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-5xl">
                 <DialogHeader>
                     <DialogTitle>Configuración de la Bitácora</DialogTitle>
                 </DialogHeader>
-                <div className="grid md:grid-cols-3 gap-6 py-4 max-h-[70vh] overflow-y-auto">
+                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 py-4 max-h-[70vh] overflow-y-auto">
                     {/* Stop Causes */}
-                    <div className="md:col-span-1 space-y-4 p-4 border rounded-lg">
+                    <div className="lg:col-span-2 space-y-4 p-4 border rounded-lg">
                         <h3 className="font-semibold text-lg">Motivos de Parada</h3>
-                        <div className="flex items-end gap-2">
+                        <div className="space-y-2">
                              <div className="flex-grow space-y-1.5">
-                                <Label htmlFor="new-cause-name">Nombre</Label>
+                                <Label htmlFor="new-cause-name">Nombre del Motivo</Label>
                                 <Input id="new-cause-name" value={newCauseName} onChange={e => setNewCauseName(e.target.value)} />
                              </div>
-                             <div className="space-y-1.5">
-                                <Label htmlFor="new-cause-color">Color</Label>
-                                <Input id="new-cause-color" type="color" value={newCauseColor} onChange={e => setNewCauseColor(e.target.value)} className="p-1 h-10"/>
+                             <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="new-cause-color">Color</Label>
+                                    <Input id="new-cause-color" type="color" value={newCauseColor} onChange={e => setNewCauseColor(e.target.value)} className="p-1 h-10"/>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="new-cause-type">Tipo</Label>
+                                    <Select value={newCauseType} onValueChange={(v: any) => setNewCauseType(v)}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="unplanned">No Planificada</SelectItem>
+                                            <SelectItem value="planned">Planificada</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                              </div>
                         </div>
                         <Button onClick={() => handleAdd('stopCause')} className="w-full">
                             <PlusCircle className="mr-2" /> Añadir Motivo
                         </Button>
                         <Separator />
-                        <ul className="space-y-2">
+                        <ul className="space-y-2 max-h-60 overflow-y-auto">
                             {stopCauses.map(cause => (
-                                <li key={cause.id} className="flex items-center justify-between text-sm">
+                                <li key={cause.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
                                     <span className="flex items-center gap-2">
                                         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cause.color }} />
                                         {cause.name}
+                                        <Badge variant={cause.type === 'planned' ? 'secondary' : 'destructive'} className='text-xs'>{cause.type === 'planned' ? 'P' : 'NP'}</Badge>
                                     </span>
                                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('stopCause', cause.id)}>
                                         <X className="h-4 w-4 text-destructive" />
@@ -143,7 +170,7 @@ function ConfigurationModal({
                         </ul>
                     </div>
                      {/* Operators */}
-                    <div className="md:col-span-1 space-y-4 p-4 border rounded-lg">
+                    <div className="space-y-4 p-4 border rounded-lg">
                         <h3 className="font-semibold text-lg">Operadores</h3>
                          <div className="flex items-end gap-2">
                              <div className="flex-grow space-y-1.5">
@@ -153,9 +180,9 @@ function ConfigurationModal({
                              <Button onClick={() => handleAdd('operator')}><PlusCircle /></Button>
                         </div>
                         <Separator />
-                        <ul className="space-y-2">
+                        <ul className="space-y-2 max-h-60 overflow-y-auto">
                             {operators.map(op => (
-                                <li key={op.id} className="flex items-center justify-between text-sm">
+                                <li key={op.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
                                     <span>{op.name}</span>
                                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('operator', op.id)}>
                                         <X className="h-4 w-4 text-destructive" />
@@ -164,27 +191,51 @@ function ConfigurationModal({
                             ))}
                         </ul>
                     </div>
-                    {/* Supervisors */}
-                    <div className="md:col-span-1 space-y-4 p-4 border rounded-lg">
-                        <h3 className="font-semibold text-lg">Supervisores</h3>
-                         <div className="flex items-end gap-2">
-                             <div className="flex-grow space-y-1.5">
-                                <Label htmlFor="new-sup-name">Nombre</Label>
-                                <Input id="new-sup-name" value={newSupervisorName} onChange={e => setNewSupervisorName(e.target.value)} />
-                             </div>
-                             <Button onClick={() => handleAdd('supervisor')}><PlusCircle /></Button>
+                    <div className="space-y-4">
+                        {/* Supervisors */}
+                        <div className="space-y-4 p-4 border rounded-lg">
+                            <h3 className="font-semibold text-lg">Supervisores</h3>
+                            <div className="flex items-end gap-2">
+                                <div className="flex-grow space-y-1.5">
+                                    <Label htmlFor="new-sup-name">Nombre</Label>
+                                    <Input id="new-sup-name" value={newSupervisorName} onChange={e => setNewSupervisorName(e.target.value)} />
+                                </div>
+                                <Button onClick={() => handleAdd('supervisor')}><PlusCircle /></Button>
+                            </div>
+                            <Separator />
+                            <ul className="space-y-2 max-h-24 overflow-y-auto">
+                                {supervisors.map(sup => (
+                                    <li key={sup.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                        <span>{sup.name}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('supervisor', sup.id)}>
+                                            <X className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
-                        <Separator />
-                        <ul className="space-y-2">
-                            {supervisors.map(sup => (
-                                <li key={sup.id} className="flex items-center justify-between text-sm">
-                                    <span>{sup.name}</span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('supervisor', sup.id)}>
-                                        <X className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </li>
-                            ))}
-                        </ul>
+                         {/* Maintenance Types */}
+                        <div className="space-y-4 p-4 border rounded-lg">
+                            <h3 className="font-semibold text-lg">Tipos de Mtto.</h3>
+                            <div className="flex items-end gap-2">
+                                <div className="flex-grow space-y-1.5">
+                                    <Label htmlFor="new-maint-name">Nombre</Label>
+                                    <Input id="new-maint-name" value={newMaintTypeName} onChange={e => setNewMaintTypeName(e.target.value)} />
+                                </div>
+                                <Button onClick={() => handleAdd('maintenanceType')}><PlusCircle /></Button>
+                            </div>
+                            <Separator />
+                            <ul className="space-y-2 max-h-24 overflow-y-auto">
+                                {maintenanceTypes.map(mt => (
+                                    <li key={mt.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                        <span>{mt.name}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('maintenanceType', mt.id)}>
+                                            <X className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>
@@ -203,6 +254,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const [stopCauses, setStopCauses] = React.useState<StopCause[]>([]);
     const [operators, setOperators] = React.useState<Operator[]>([]);
     const [supervisors, setSupervisors] = React.useState<Supervisor[]>([]);
+    const [maintenanceTypes, setMaintenanceTypes] = React.useState<MaintenanceType[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [date, setDate] = React.useState<Date>(new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
@@ -231,14 +283,16 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
     const fetchCatalogs = React.useCallback(async () => {
          try {
-            const [causesSnap, operatorsSnap, supervisorsSnap] = await Promise.all([
+            const [causesSnap, operatorsSnap, supervisorsSnap, maintTypesSnap] = await Promise.all([
                 getDocs(query(collection(db, 'stopCauses'), orderBy('name'))),
                 getDocs(query(collection(db, 'operators'), orderBy('name'))),
                 getDocs(query(collection(db, 'supervisors'), orderBy('name'))),
+                getDocs(query(collection(db, 'maintenanceTypes'), orderBy('name'))),
             ]);
             setStopCauses(causesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StopCause)));
             setOperators(operatorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Operator)));
             setSupervisors(supervisorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supervisor)));
+            setMaintenanceTypes(maintTypesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as MaintenanceType)));
         } catch (error) {
             toast({ title: 'Error', description: 'No se pudieron cargar los catálogos de configuración.', variant: 'destructive'});
         }
@@ -405,11 +459,18 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     };
     
     const handleConfigSave = async (
-        type: 'stopCause' | 'operator' | 'supervisor',
+        type: 'stopCause' | 'operator' | 'supervisor' | 'maintenanceType',
         data: any,
         action: 'add' | 'delete'
     ) => {
-        const collectionName = `${type}s`;
+        const collectionNameMap = {
+            stopCause: 'stopCauses',
+            operator: 'operators',
+            supervisor: 'supervisors',
+            maintenanceType: 'maintenanceTypes',
+        };
+        const collectionName = collectionNameMap[type];
+
         try {
             if (action === 'add') {
                 await addDoc(collection(db, collectionName), data);
@@ -780,6 +841,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         startTime={modalState.timeSlot}
                         stopData={modalState.stopData}
                         stopCauses={stopCauses}
+                        maintenanceTypes={maintenanceTypes}
                     />
                 )}
                 {configModalOpen && (
@@ -789,6 +851,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         stopCauses={stopCauses}
                         operators={operators}
                         supervisors={supervisors}
+                        maintenanceTypes={maintenanceTypes}
                         onConfigSave={handleConfigSave}
                     />
                 )}

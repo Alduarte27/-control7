@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { StopData, StopCause } from '@/lib/types';
+import type { StopData, StopCause, MaintenanceType } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -18,38 +18,49 @@ type StopRegistrationModalProps = {
     machineId: string;
     startTime: string; // This is the initial time slot clicked
     stopCauses: StopCause[];
+    maintenanceTypes: MaintenanceType[];
     stopData?: StopData;
 };
 
-export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopCauses, stopData }: StopRegistrationModalProps) {
+export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopCauses, maintenanceTypes, stopData }: StopRegistrationModalProps) {
     const [actualStartTime, setActualStartTime] = React.useState(stopData?.startTime || startTime);
     const [endTime, setEndTime] = React.useState(stopData?.endTime || actualStartTime);
     const [type, setType] = React.useState<'planned' | 'unplanned'>(stopData?.type || 'unplanned');
-    const [maintenanceType, setMaintenanceType] = React.useState<'preventive' | 'corrective' | 'predictive' | undefined>(stopData?.maintenanceType);
+    const [maintenanceType, setMaintenanceType] = React.useState<string | undefined>(stopData?.maintenanceType);
     const [reason, setReason] = React.useState(stopData?.reason || '');
     const [cause, setCause] = React.useState(stopData?.cause || '');
     const [solution, setSolution] = React.useState(stopData?.solution || '');
 
     React.useEffect(() => {
-        if (stopData) {
-            setActualStartTime(stopData.startTime);
-            setEndTime(stopData.endTime);
-            setType(stopData.type);
-            setMaintenanceType(stopData.maintenanceType);
-            setReason(stopData.reason || '');
-            setCause(stopData.cause || '');
-            setSolution(stopData.solution || '');
-        } else {
-            // Reset for new entry
-            setActualStartTime(startTime);
-            setEndTime(startTime);
-            setType('unplanned');
-            setMaintenanceType(undefined);
-            setReason('');
-            setCause('');
-            setSolution('');
+        if (isOpen) {
+            if (stopData) {
+                setActualStartTime(stopData.startTime);
+                setEndTime(stopData.endTime);
+                setType(stopData.type);
+                setMaintenanceType(stopData.maintenanceType);
+                setReason(stopData.reason || '');
+                setCause(stopData.cause || '');
+                setSolution(stopData.solution || '');
+            } else {
+                // Reset for new entry
+                setActualStartTime(startTime);
+                setEndTime(startTime);
+                setType('unplanned');
+                setMaintenanceType(undefined);
+                setReason('');
+                setCause('');
+                setSolution('');
+            }
         }
     }, [isOpen, stopData, startTime]);
+
+    // When changing stop type, reset the reason if it's not compatible
+    React.useEffect(() => {
+        const selectedReason = stopCauses.find(c => c.name === reason);
+        if (selectedReason && selectedReason.type !== type) {
+            setReason('');
+        }
+    }, [type, reason, stopCauses]);
 
 
     const calculateDuration = (start: string, end: string): number => {
@@ -96,6 +107,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     };
     
     const duration = calculateDuration(actualStartTime, endTime);
+    const filteredStopCauses = stopCauses.filter(c => c.type === type);
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -158,9 +170,9 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                         <SelectValue placeholder="Seleccionar tipo"/>
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="preventive">Preventivo</SelectItem>
-                                        <SelectItem value="corrective">Correctivo</SelectItem>
-                                        <SelectItem value="predictive">Predictivo</SelectItem>
+                                        {maintenanceTypes.map(mt => (
+                                          <SelectItem key={mt.id} value={mt.name}>{mt.name}</SelectItem>
+                                        ))}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -173,7 +185,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                     <SelectValue placeholder="Seleccionar motivo..."/>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {stopCauses.map(cause => (
+                                    {filteredStopCauses.map(cause => (
                                         <SelectItem key={cause.id} value={cause.name}>{cause.name}</SelectItem>
                                     ))}
                                 </SelectContent>
