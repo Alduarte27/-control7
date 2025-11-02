@@ -158,8 +158,8 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="unplanned">No Planificada</SelectItem>
                                         <SelectItem value="planned">Planificada</SelectItem>
+                                        <SelectItem value="unplanned">No Planificada</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
