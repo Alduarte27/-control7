@@ -22,7 +22,6 @@ import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, } from '@/components/ui/alert-dialog';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Separator } from './ui/separator';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import KpiCard from './kpi-card';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
@@ -265,6 +264,222 @@ function ConfigurationModal({
     );
 }
 
+// --- Analysis Modal ---
+function AnalysisModal({
+    isOpen,
+    onClose,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+}) {
+    const [oeeDateRange, setOeeDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -7), to: new Date() });
+    const [oeeLoading, setOeeLoading] = React.useState(false);
+    const [machineStops, setMachineStops] = React.useState<{ [machineId: string]: number }>({});
+    const [stopsByReason, setStopsByReason] = React.useState<AggregatedStopData[]>([]);
+    const [stopCauses, setStopCauses] = React.useState<StopCause[]>([]);
+    const toast = useToast();
+
+    const fetchCatalogs = React.useCallback(async () => {
+        try {
+           const causesSnap = await getDocs(query(collection(db, 'stopCauses'), orderBy('name')));
+           setStopCauses(causesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StopCause)));
+       } catch (error) {
+           toast.toast({ title: 'Error', description: 'No se pudieron cargar los catálogos de configuración.', variant: 'destructive'});
+       }
+   }, [toast]);
+   
+   React.useEffect(() => {
+        if(isOpen) {
+            fetchCatalogs();
+        }
+   }, [isOpen, fetchCatalogs]);
+
+
+    const handleFetchOeeData = React.useCallback(async () => {
+        if (!oeeDateRange?.from || !oeeDateRange?.to) {
+            return;
+        }
+
+        setOeeLoading(true);
+        const start = format(oeeDateRange.from, 'yyyy-MM-dd');
+        const end = format(oeeDateRange.to, 'yyyy-MM-dd');
+
+        const aggregatedMachineStops: { [machineId: string]: number } = {};
+        const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
+
+        try {
+            const logsQuery = query(
+                collection(db, 'dailyLogs'),
+                where('id', '>=', start),
+                where('id', '<=', end)
+            );
+            const querySnapshot = await getDocs(logsQuery);
+
+            querySnapshot.forEach(doc => {
+                const log = doc.data() as DailyLog;
+                Object.values(log.timeSlots).forEach(slot => {
+                    Object.entries(slot).forEach(([key, value]) => {
+                        if (key.startsWith('machine_') && typeof value === 'object' && value && 'stops' in value && Array.isArray(value.stops)) {
+                            const machineId = key;
+                            (value.stops as StopData[]).forEach(stop => {
+                                if (!aggregatedMachineStops[machineId]) {
+                                    aggregatedMachineStops[machineId] = 0;
+                                }
+                                aggregatedMachineStops[machineId] += stop.duration;
+
+                                if (!aggregatedStopsByReason[stop.reason]) {
+                                    const causeConfig = stopCauses.find(c => c.name === stop.reason);
+                                    aggregatedStopsByReason[stop.reason] = {
+                                        totalMinutes: 0,
+                                        color: causeConfig?.color || '#8884d8'
+                                    };
+                                }
+                                aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
+                            });
+                        }
+                    });
+                });
+            });
+
+            setMachineStops(aggregatedMachineStops);
+
+            const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, data]) => ({
+                name: reason,
+                totalMinutes: data.totalMinutes,
+                color: data.color,
+            })).sort((a,b) => b.totalMinutes - a.totalMinutes);
+
+            setStopsByReason(reasonData);
+
+        } catch (error) {
+            console.error("Error fetching OEE data:", error);
+        } finally {
+            setOeeLoading(false);
+        }
+    }, [oeeDateRange, stopCauses]);
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                    <DialogTitle>Análisis de Paradas (Disponibilidad)</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 max-h-[80vh] overflow-y-auto space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Filtros de Análisis</CardTitle>
+                            <CardDescription>Selecciona el rango de fechas para analizar las paradas.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex flex-col md:flex-row items-center gap-4">
+                            <div className="grid gap-2">
+                                <Label>Rango de Fechas</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className="w-[300px] justify-start text-left font-normal"
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {oeeDateRange?.from ? (
+                                                oeeDateRange.to ? (
+                                                    <>
+                                                        {format(oeeDateRange.from, "LLL dd, y", { locale: es })} -{" "}
+                                                        {format(oeeDateRange.to, "LLL dd, y", { locale: es })}
+                                                    </>
+                                                ) : (
+                                                    format(oeeDateRange.from, "LLL dd, y", { locale: es })
+                                                )
+                                            ) : (
+                                                <span>Elige un rango</span>
+                                            )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            initialFocus
+                                            mode="range"
+                                            defaultMonth={oeeDateRange?.from}
+                                            selected={oeeDateRange}
+                                            onSelect={setOeeDateRange}
+                                            numberOfMonths={2}
+                                            locale={es}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                            <Button onClick={handleFetchOeeData} disabled={oeeLoading} className="mt-auto">
+                                {oeeLoading ? 'Analizando...' : 'Analizar Datos'}
+                            </Button>
+                        </CardContent>
+                    </Card>
+                    {oeeLoading ? <p className="text-center pt-8">Cargando datos de análisis...</p> : (
+                        <div className='space-y-6'>
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Total de Tiempo de Parada por Máquina</CardTitle>
+                                    <CardDescription>Suma de todos los minutos de parada para cada máquina en el período seleccionado.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    {Object.keys(machineStops).length > 0 ? (
+                                        Object.entries(machineStops).map(([machineId, minutes]) => (
+                                            <KpiCard
+                                                key={machineId}
+                                                title={`Máquina ${machineId.split('_')[1]}`}
+                                                value={`${Math.floor(minutes / 60)}h ${minutes % 60}m`}
+                                                subValue={`${minutes.toLocaleString()} minutos totales`}
+                                                icon={HardHat}
+                                                description="Tiempo total que esta máquina estuvo detenida."
+                                            />
+                                        ))
+                                    ) : (
+                                        <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
+                                    )}
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Desglose de Paradas por Motivo</CardTitle>
+                                    <CardDescription>Tiempo total de parada (en minutos) agrupado por el motivo registrado.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {stopsByReason.length > 0 ? (
+                                        <ChartContainer config={{}} className="w-full h-[400px]">
+                                            <ResponsiveContainer>
+                                                <BarChart layout="vertical" data={stopsByReason} margin={{ left: 50 }}>
+                                                    <CartesianGrid strokeDasharray="3 3" />
+                                                    <XAxis type="number" />
+                                                    <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0}/>
+                                                    <RechartsTooltip
+                                                        cursor={{ fill: 'rgba(200, 200, 200, 0.1)' }}
+                                                        content={<ChartTooltipContent />}
+                                                    />
+                                                    <Bar dataKey="totalMinutes" name="Minutos" radius={[0, 4, 4, 0]}>
+                                                        {stopsByReason.map((entry) => (
+                                                                <Bar key={entry.name} dataKey="totalMinutes" fill={entry.color} />
+                                                        ))}
+                                                    </Bar>
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </ChartContainer>
+                                    ) : (
+                                            <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="secondary">Cerrar</Button>
+                    </DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 interface AggregatedStopData {
     name: string;
     totalMinutes: number;
@@ -281,15 +496,10 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const [date, setDate] = React.useState<Date>(new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
+    const [analysisModalOpen, setAnalysisModalOpen] = React.useState(false);
     const { toast } = useToast();
     const [isAdminMode, setIsAdminMode] = React.useState(false);
     const isInitialMount = React.useRef(true);
-    
-    // OEE State
-    const [oeeDateRange, setOeeDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -7), to: new Date() });
-    const [oeeLoading, setOeeLoading] = React.useState(false);
-    const [machineStops, setMachineStops] = React.useState<{ [machineId: string]: number }>({});
-    const [stopsByReason, setStopsByReason] = React.useState<AggregatedStopData[]>([]);
     
     const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(dailyLog?.shift || 'day'), [dailyLog?.shift]);
 
@@ -340,7 +550,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         if (!dailyLog) return;
         
         const handler = setTimeout(() => {
-            handleSaveLog(dailyLog, true);
+            handleSaveLog(dailyLog);
         }, 2000);
 
         return () => {
@@ -398,66 +608,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     React.useEffect(() => {
         fetchCatalogs();
     }, [fetchCatalogs]);
-
-    const handleFetchOeeData = React.useCallback(async () => {
-        if (!oeeDateRange?.from || !oeeDateRange?.to) {
-            return;
-        }
-
-        setOeeLoading(true);
-        const start = format(oeeDateRange.from, 'yyyy-MM-dd');
-        const end = format(oeeDateRange.to, 'yyyy-MM-dd');
-
-        const aggregatedMachineStops: { [machineId: string]: number } = {};
-        const aggregatedStopsByReason: { [reason: string]: number } = {};
-
-        try {
-            const logsQuery = query(
-                collection(db, 'dailyLogs'),
-                where('id', '>=', start),
-                where('id', '<=', end)
-            );
-            const querySnapshot = await getDocs(logsQuery);
-
-            querySnapshot.forEach(doc => {
-                const log = doc.data() as DailyLog;
-                Object.values(log.timeSlots).forEach(slot => {
-                    Object.entries(slot).forEach(([key, value]) => {
-                        if (key.startsWith('machine_') && typeof value === 'object' && value && 'stops' in value && Array.isArray(value.stops)) {
-                            const machineId = key;
-                            (value.stops as StopData[]).forEach(stop => {
-                                if (!aggregatedMachineStops[machineId]) {
-                                    aggregatedMachineStops[machineId] = 0;
-                                }
-                                aggregatedMachineStops[machineId] += stop.duration;
-
-                                if (!aggregatedStopsByReason[stop.reason]) {
-                                    aggregatedStopsByReason[stop.reason] = 0;
-                                }
-                                aggregatedStopsByReason[stop.reason] += stop.duration;
-                            });
-                        }
-                    });
-                });
-            });
-
-            setMachineStops(aggregatedMachineStops);
-
-            const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, minutes]) => ({
-                name: reason,
-                totalMinutes: minutes,
-                color: stopCausesMap.get(reason)?.color || '#8884d8'
-            })).sort((a,b) => b.totalMinutes - a.totalMinutes);
-
-            setStopsByReason(reasonData);
-
-        } catch (error) {
-            console.error("Error fetching OEE data:", error);
-        } finally {
-            setOeeLoading(false);
-        }
-    }, [oeeDateRange, stopCausesMap]);
-
 
     const handleHeaderChange = (field: keyof Omit<DailyLog, 'id' | 'machines' | 'timeSlots'>, value: string) => {
         if (!dailyLog) return;
@@ -636,71 +786,70 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         return (
             <td className="p-0.5" onClick={handleCellClick}>
                 <div className="w-full h-8 flex flex-col items-center justify-start gap-0.5 cursor-pointer hover:bg-accent/50 rounded-sm p-0.5 overflow-hidden relative group/cell">
-                    {stopsInCell.length > 0 ? (
-                        stopsInCell.map(stopData => {
-                           const isStartingCell = time === stopData.startTime.substring(0,5);
-                           const stopCauseConfig = stopCauses.find(c => c.name === stopData.reason);
-                           const badgeColor = stopCauseConfig ? stopCauseConfig.color : (stopData.type === 'planned' ? '#3b82f6' : '#ef4444');
+                    {stopsInCell.map(stopData => {
+                        const isStartingCell = time === stopData.startTime.substring(0,5);
+                        const stopCauseConfig = stopCausesMap.get(stopData.reason);
+                        const badgeColor = stopCauseConfig ? stopCauseConfig.color : (stopData.type === 'planned' ? '#3b82f6' : '#ef4444');
 
-                           return (
-                             <TooltipProvider key={stopData.id}>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div 
-                                          className={cn(
-                                            'relative group/pill w-full flex-grow flex items-center',
-                                          )}
-                                          onClick={(e) => handleStopClick(e, stopData)}
-                                        >
-                                            <Badge
-                                                style={{ backgroundColor: badgeColor }}
-                                                className={cn("truncate cursor-pointer h-full w-full flex-grow flex items-center text-white",
-                                                   !isStartingCell && "opacity-60"
-                                                )}
-                                            >
-                                               {isStartingCell ? `${stopData.reason} (${stopData.duration}m)` : ''}
-                                            </Badge>
-                                             {isAdminMode && isStartingCell && (
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                         <button 
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-black text-white flex items-center justify-center text-xs opacity-0 group-hover/pill:opacity-100"
-                                                         >
-                                                             &times;
-                                                         </button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Esta acción eliminará permanentemente la parada "{stopData.reason}". No se puede deshacer.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDeleteStop(stopData.startTime, machineId, stopData.id)}>Eliminar</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
+                        return (
+                            <TooltipProvider key={stopData.id}>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <div 
+                                        className={cn(
+                                        'relative group/pill w-full flex-grow flex items-center',
+                                        )}
+                                        onClick={(e) => handleStopClick(e, stopData)}
+                                    >
+                                        <Badge
+                                            style={{ backgroundColor: badgeColor }}
+                                            className={cn("truncate cursor-pointer h-full w-full flex-grow flex items-center text-white",
+                                                !isStartingCell && "opacity-60"
                                             )}
-                                        </div>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <div className="space-y-1 text-xs max-w-xs">
-                                            <p><strong className="font-semibold">Tipo:</strong> {stopData.type === 'planned' ? 'Planificada' : 'No Planificada'}</p>
-                                            {stopData.maintenanceType && <p><strong className="font-semibold">Tipo Mtto:</strong> {stopData.maintenanceType}</p>}
-                                            {stopData.reason && <p><strong className="font-semibold">Motivo:</strong> {stopData.reason}</p>}
-                                            <p><strong className="font-semibold">Causa:</strong> {stopData.cause}</p>
-                                            <p><strong className="font-semibold">Duración:</strong> {stopData.duration} min ({stopData.startTime} - {stopData.endTime})</p>
-                                            {stopData.solution && <p><strong className="font-semibold">Solución:</strong> {stopData.solution}</p>}
-                                        </div>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                           )
-                        })
-                    ) : (
+                                        >
+                                            {isStartingCell ? `${stopData.reason} (${stopData.duration}m)` : ''}
+                                        </Badge>
+                                            {isAdminMode && isStartingCell && (
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                        <button 
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-black text-white flex items-center justify-center text-xs opacity-0 group-hover/pill:opacity-100"
+                                                        >
+                                                            &times;
+                                                        </button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Esta acción eliminará permanentemente la parada "{stopData.reason}". No se puede deshacer.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleDeleteStop(stopData.startTime, machineId, stopData.id)}>Eliminar</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        )}
+                                    </div>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <div className="space-y-1 text-xs max-w-xs">
+                                        <p><strong className="font-semibold">Tipo:</strong> {stopData.type === 'planned' ? 'Planificada' : 'No Planificada'}</p>
+                                        {stopData.maintenanceType && <p><strong className="font-semibold">Tipo Mtto:</strong> {stopData.maintenanceType}</p>}
+                                        {stopData.reason && <p><strong className="font-semibold">Motivo:</strong> {stopData.reason}</p>}
+                                        <p><strong className="font-semibold">Causa:</strong> {stopData.cause}</p>
+                                        <p><strong className="font-semibold">Duración:</strong> {stopData.duration} min ({stopData.startTime} - {stopData.endTime})</p>
+                                        {stopData.solution && <p><strong className="font-semibold">Solución:</strong> {stopData.solution}</p>}
+                                    </div>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                        )
+                    })}
+                    {stopsInCell.length === 0 && (
                         <span className="text-muted-foreground text-xs opacity-0 group-hover/cell:opacity-100">Registrar...</span>
                     )}
                 </div>
@@ -772,6 +921,18 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" onClick={() => setAnalysisModalOpen(true)}>
+                                    <Activity className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Análisis de Paradas</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
                                 <Button variant="outline" size="icon" onClick={() => setConfigModalOpen(true)}>
                                     <Settings className="h-4 w-4" />
                                 </Button>
@@ -788,305 +949,196 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                 </div>
             </header>
             <main className="p-4 md:p-6">
-                 <Tabs defaultValue="log">
-                    <TabsList>
-                        <TabsTrigger value="log">Registro de Bitácora</TabsTrigger>
-                        <TabsTrigger value="oee">Análisis de Paradas (Disponibilidad)</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="log">
-                        {loading ? <p>Cargando bitácora...</p> : dailyLog && (
-                            <div className="space-y-4 pt-4">
-                                {/* Header */}
-                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
-                                    <div className="space-y-1.5">
-                                        <Label>Operador</Label>
-                                        <Select value={dailyLog.operador} onValueChange={val => handleHeaderChange('operador', val)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                {operators.map(o => <SelectItem key={o.id} value={o.name}>{o.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label>Supervisor</Label>
-                                         <Select value={dailyLog.supervisor} onValueChange={val => handleHeaderChange('supervisor', val)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                {supervisors.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label>Lote</Label>
-                                        <Input value={dailyLog.lote} onChange={e => handleHeaderChange('lote', e.target.value)} />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label>Turno</Label>
-                                        <Select value={dailyLog.shift} onValueChange={val => handleHeaderChange('shift', val)}>
-                                            <SelectTrigger><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="day">Día</SelectItem>
-                                                <SelectItem value="night">Noche</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                     <div className="space-y-1.5">
-                                        <Label>Fecha</Label>
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button variant="outline" className="w-full justify-start font-normal">
-                                                    {format(date, "PPP", { locale: es })}
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0">
-                                                <Calendar mode="single" selected={date} onSelect={handleDateChange} />
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                </div>
+                {loading ? <p>Cargando bitácora...</p> : dailyLog && (
+                    <div className="space-y-4 pt-4">
+                        {/* Header */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
+                            <div className="space-y-1.5">
+                                <Label>Operador</Label>
+                                <Select value={dailyLog.operador} onValueChange={val => handleHeaderChange('operador', val)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {operators.map(o => <SelectItem key={o.id} value={o.name}>{o.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Supervisor</Label>
+                                    <Select value={dailyLog.supervisor} onValueChange={val => handleHeaderChange('supervisor', val)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {supervisors.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Lote</Label>
+                                <Input value={dailyLog.lote} onChange={e => handleHeaderChange('lote', e.target.value)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Turno</Label>
+                                <Select value={dailyLog.shift} onValueChange={val => handleHeaderChange('shift', val)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="day">Día</SelectItem>
+                                        <SelectItem value="night">Noche</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                                <div className="space-y-1.5">
+                                <Label>Fecha</Label>
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full justify-start font-normal">
+                                            {format(date, "PPP", { locale: es })}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0">
+                                        <Calendar mode="single" selected={date} onSelect={handleDateChange} />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </div>
 
-                                {/* Log Table */}
-                                <div className="relative">
-                                    <div className="w-full overflow-x-auto border rounded-lg bg-card">
-                                        <table className="min-w-full text-xs">
-                                            <thead className="text-center align-top">
-                                                <tr className="divide-x divide-border">
-                                                    <th rowSpan={3} className="p-1 w-24 sticky left-0 bg-muted/50 z-30 top-0">Hora</th>
-                                                    {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                        <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted/50 z-10" style={{top: 0}}>Máquina #{i + 1}</th>
-                                                    ))}
-                                                    <th colSpan={9} className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: 0}}>INGRESO DE PRODUCTO FINAL/GRASSHOPPER</th>
-                                                    <th colSpan={6} className="p-2 sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
-                                                    <th rowSpan={3} className="p-2 w-80 sticky bg-muted/50 z-10" style={{top: 0, right: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
-                                                </tr>
-                                                <tr className="divide-x divide-border">
-                                                    {Array.from({ length: NUM_MACHINES }).map((_, i) => {
-                                                        const machineId = `machine_${i + 1}`;
-                                                        const selectedProductId = dailyLog.machines[machineId]?.productId || '';
-                                                        const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
+                        {/* Log Table */}
+                        <div className="relative">
+                            <div className="w-full overflow-x-auto border rounded-lg bg-card">
+                                <table className="min-w-full text-xs">
+                                    <thead className="text-center align-top">
+                                        <tr className="divide-x divide-border">
+                                            <th rowSpan={3} className="p-1 w-24 sticky left-0 bg-muted/50 z-30 top-0">Hora</th>
+                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => (
+                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted/50 z-10" style={{top: 0}}>Máquina #{i + 1}</th>
+                                            ))}
+                                            <th colSpan={9} className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: 0}}>INGRESO DE PRODUCTO FINAL/GRASSHOPPER</th>
+                                            <th colSpan={6} className="p-2 sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
+                                            <th rowSpan={3} className="p-2 w-80 sticky bg-muted/50 z-10" style={{top: 0, right: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                        </tr>
+                                        <tr className="divide-x divide-border">
+                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => {
+                                                const machineId = `machine_${i + 1}`;
+                                                const selectedProductId = dailyLog.machines[machineId]?.productId || '';
+                                                const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
 
-                                                        return (
-                                                            <th key={`product_selector_${i}`} className="p-1 sticky z-20 bg-muted/50" colSpan={2} style={{top: '45px'}}>
-                                                                <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
-                                                                    <SelectTrigger className="h-8 text-xs">
-                                                                        <div className="flex items-center gap-2 truncate">
-                                                                            {selectedProduct && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedProduct.color || '#ccc' }}></span>}
-                                                                            <SelectValue placeholder="Producto" />
+                                                return (
+                                                    <th key={`product_selector_${i}`} className="p-1 sticky z-20 bg-muted/50" colSpan={2} style={{top: '45px'}}>
+                                                        <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
+                                                            <SelectTrigger className="h-8 text-xs">
+                                                                <div className="flex items-center gap-2 truncate">
+                                                                    {selectedProduct && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedProduct.color || '#ccc' }}></span>}
+                                                                    <SelectValue placeholder="Producto" />
+                                                                </div>
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {prefetchedProducts.map(p => (
+                                                                    <SelectItem key={p.id} value={p.id}>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
+                                                                            <span>{p.productName}</span>
                                                                         </div>
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {prefetchedProducts.map(p => (
-                                                                            <SelectItem key={p.id} value={p.id}>
-                                                                                <div className="flex items-center gap-2">
-                                                                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
-                                                                                    <span>{p.productName}</span>
-                                                                                </div>
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </th>
-                                                        );
-                                                    })}
-                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>Masa</th>
-                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>Flujo</th>
-                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>NS-FAM</th>
-                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>NS% 1</th>
-                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>NS% 2</th>
-                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>Color</th>
-                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>Hum</th>
-                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>Turb</th>
-                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>CV</th>
-                                                    <th colSpan={3} className="p-1 font-medium sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '45px'}}>Familiar</th>
-                                                    <th colSpan={3} className="p-1 font-medium sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '45px'}}>Granel 50 KG</th>
-                                                </tr>
-                                                <tr className="divide-x divide-border">
-                                                    {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                        <React.Fragment key={`sub_header_${i}`}>
-                                                            <th className="p-1 font-normal text-muted-foreground w-48 sticky z-20 bg-muted/50" style={{top: '90px'}}>Observación</th>
-                                                            <th className="p-1 font-normal text-muted-foreground w-24 sticky z-20 bg-muted/50" style={{top: '90px'}}>Peso/Saco KG</th>
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </th>
+                                                );
+                                            })}
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>Masa</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>Flujo</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>NS-FAM</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>NS% 1</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>NS% 2</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>Color</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>Hum</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>Turb</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>CV</th>
+                                            <th colSpan={3} className="p-1 font-medium sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '45px'}}>Familiar</th>
+                                            <th colSpan={3} className="p-1 font-medium sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '45px'}}>Granel 50 KG</th>
+                                        </tr>
+                                        <tr className="divide-x divide-border">
+                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => (
+                                                <React.Fragment key={`sub_header_${i}`}>
+                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky z-20 bg-muted/50" style={{top: '90px'}}>Observación</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky z-20 bg-muted/50" style={{top: '90px'}}>Peso/Saco KG</th>
+                                                </React.Fragment>
+                                            ))}
+                                            <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Turb</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border">
+                                        {timeSlotsForTable.map((time) => (
+                                            <tr key={time} className="divide-x divide-border">
+                                                <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
+                                                {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
+                                                    const machineId = `machine_${machineIndex + 1}`;
+                                                    return (
+                                                        <React.Fragment key={machineId}>
+                                                            {observationCell(time, machineId)}
+                                                            {inputCell(time, 'weight', machineId)}
                                                         </React.Fragment>
-                                                    ))}
-                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Color</th>
-                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Hum</th>
-                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Turb</th>
-                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Color</th>
-                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Hum</th>
-                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Turb</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-border">
-                                                {timeSlotsForTable.map((time) => (
-                                                    <tr key={time} className="divide-x divide-border">
-                                                        <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
-                                                        {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
-                                                            const machineId = `machine_${machineIndex + 1}`;
-                                                            return (
-                                                                <React.Fragment key={machineId}>
-                                                                    {observationCell(time, machineId)}
-                                                                    {inputCell(time, 'weight', machineId)}
-                                                                </React.Fragment>
-                                                            )
-                                                        })}
-                                                        {inputCell(time, 'masa')}
-                                                        {inputCell(time, 'flujo')}
-                                                        {inputCell(time, 'ns_fam')}
-                                                        {inputCell(time, 'ns_1')}
-                                                        {inputCell(time, 'ns_2')}
-                                                        {inputCell(time, 'in_color')}
-                                                        {inputCell(time, 'in_hum')}
-                                                        {inputCell(time, 'in_turb')}
-                                                        {inputCell(time, 'in_cv')}
-                                                        {inputCell(time, 'out_fam_color')}
-                                                        {inputCell(time, 'out_fam_hum')}
-                                                        {inputCell(time, 'out_fam_turb')}
-                                                        {inputCell(time, 'out_gra_color')}
-                                                        {inputCell(time, 'out_gra_hum')}
-                                                        {inputCell(time, 'out_gra_turb')}
-                                                        {inputCell(time, 'empaque_obs')}
-                                                    </tr>
-                                                ))}
-
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </TabsContent>
-                    <TabsContent value="oee">
-                         <Card>
-                            <CardHeader>
-                                <CardTitle>Filtros de Análisis</CardTitle>
-                                <CardDescription>Selecciona el rango de fechas para analizar las paradas.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex flex-col md:flex-row items-center gap-4">
-                                <div className="grid gap-2">
-                                    <Label>Rango de Fechas</Label>
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant={"outline"}
-                                                className="w-[300px] justify-start text-left font-normal"
-                                            >
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {oeeDateRange?.from ? (
-                                                    oeeDateRange.to ? (
-                                                        <>
-                                                            {format(oeeDateRange.from, "LLL dd, y", { locale: es })} -{" "}
-                                                            {format(oeeDateRange.to, "LLL dd, y", { locale: es })}
-                                                        </>
-                                                    ) : (
-                                                        format(oeeDateRange.from, "LLL dd, y", { locale: es })
                                                     )
-                                                ) : (
-                                                    <span>Elige un rango</span>
-                                                )}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0" align="start">
-                                            <Calendar
-                                                initialFocus
-                                                mode="range"
-                                                defaultMonth={oeeDateRange?.from}
-                                                selected={oeeDateRange}
-                                                onSelect={setOeeDateRange}
-                                                numberOfMonths={2}
-                                                locale={es}
-                                            />
-                                        </PopoverContent>
-                                    </Popover>
-                                </div>
-                                <Button onClick={handleFetchOeeData} disabled={oeeLoading} className="mt-auto">
-                                    {oeeLoading ? 'Analizando...' : 'Analizar Datos'}
-                                </Button>
-                            </CardContent>
-                        </Card>
-                        {oeeLoading ? <p className="text-center pt-8">Cargando datos de análisis...</p> : (
-                            <div className='space-y-6 pt-6'>
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Total de Tiempo de Parada por Máquina</CardTitle>
-                                        <CardDescription>Suma de todos los minutos de parada para cada máquina en el período seleccionado.</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        {Object.keys(machineStops).length > 0 ? (
-                                            Object.entries(machineStops).map(([machineId, minutes]) => (
-                                                <KpiCard 
-                                                    key={machineId}
-                                                    title={`Máquina ${machineId.split('_')[1]}`}
-                                                    value={`${Math.floor(minutes / 60)}h ${minutes % 60}m`}
-                                                    subValue={`${minutes.toLocaleString()} minutos totales`}
-                                                    icon={HardHat}
-                                                    description="Tiempo total que esta máquina estuvo detenida."
-                                                />
-                                            ))
-                                        ) : (
-                                            <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
-                                        )}
-                                    </CardContent>
-                                </Card>
+                                                })}
+                                                {inputCell(time, 'masa')}
+                                                {inputCell(time, 'flujo')}
+                                                {inputCell(time, 'ns_fam')}
+                                                {inputCell(time, 'ns_1')}
+                                                {inputCell(time, 'ns_2')}
+                                                {inputCell(time, 'in_color')}
+                                                {inputCell(time, 'in_hum')}
+                                                {inputCell(time, 'in_turb')}
+                                                {inputCell(time, 'in_cv')}
+                                                {inputCell(time, 'out_fam_color')}
+                                                {inputCell(time, 'out_fam_hum')}
+                                                {inputCell(time, 'out_fam_turb')}
+                                                {inputCell(time, 'out_gra_color')}
+                                                {inputCell(time, 'out_gra_hum')}
+                                                {inputCell(time, 'out_gra_turb')}
+                                                {inputCell(time, 'empaque_obs')}
+                                            </tr>
+                                        ))}
 
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle>Desglose de Paradas por Motivo</CardTitle>
-                                        <CardDescription>Tiempo total de parada (en minutos) agrupado por el motivo registrado.</CardDescription>
-                                    </CardHeader>
-                                    <CardContent>
-                                        {stopsByReason.length > 0 ? (
-                                            <ChartContainer config={{}} className="w-full h-[400px]">
-                                                <ResponsiveContainer>
-                                                    <BarChart layout="vertical" data={stopsByReason}>
-                                                        <CartesianGrid strokeDasharray="3 3" />
-                                                        <XAxis type="number" />
-                                                        <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} />
-                                                        <RechartsTooltip 
-                                                            cursor={{ fill: 'rgba(200, 200, 200, 0.1)' }}
-                                                            content={<ChartTooltipContent />}
-                                                        />
-                                                        <Bar dataKey="totalMinutes" name="Minutos" radius={[0, 4, 4, 0]}>
-                                                            {stopsByReason.map((entry) => (
-                                                                 <Bar key={entry.name} dataKey="totalMinutes" fill={entry.color} />
-                                                            ))}
-                                                        </Bar>
-                                                    </BarChart>
-                                                </ResponsiveContainer>
-                                            </ChartContainer>
-                                        ) : (
-                                             <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
-                                        )}
-                                    </CardContent>
-                                </Card>
+                                    </tbody>
+                                </table>
                             </div>
-                        )}
-                    </TabsContent>
-                </Tabs>
-
-
-                {modalState?.isOpen && (
-                    <StopRegistrationModal 
-                        isOpen={modalState.isOpen}
-                        onClose={() => setModalState(null)}
-                        onSave={handleStopSave}
-                        machineId={modalState.machineId}
-                        startTime={modalState.timeSlot}
-                        stopData={modalState.stopData}
-                        stopCauses={stopCauses}
-                        maintenanceTypes={maintenanceTypes}
-                    />
-                )}
-                {configModalOpen && (
-                    <ConfigurationModal
-                        isOpen={configModalOpen}
-                        onClose={() => setConfigModalOpen(false)}
-                        stopCauses={stopCauses}
-                        operators={operators}
-                        supervisors={supervisors}
-                        maintenanceTypes={maintenanceTypes}
-                        onConfigSave={handleConfigSave}
-                    />
+                        </div>
+                    </div>
                 )}
             </main>
+
+            {modalState?.isOpen && (
+                <StopRegistrationModal 
+                    isOpen={modalState.isOpen}
+                    onClose={() => setModalState(null)}
+                    onSave={handleStopSave}
+                    machineId={modalState.machineId}
+                    startTime={modalState.timeSlot}
+                    stopData={modalState.stopData}
+                    stopCauses={stopCauses}
+                    maintenanceTypes={maintenanceTypes}
+                />
+            )}
+            {configModalOpen && (
+                <ConfigurationModal
+                    isOpen={configModalOpen}
+                    onClose={() => setConfigModalOpen(false)}
+                    stopCauses={stopCauses}
+                    operators={operators}
+                    supervisors={supervisors}
+                    maintenanceTypes={maintenanceTypes}
+                    onConfigSave={handleConfigSave}
+                />
+            )}
+            {analysisModalOpen && (
+                <AnalysisModal
+                    isOpen={analysisModalOpen}
+                    onClose={() => setAnalysisModalOpen(false)}
+                />
+            )}
         </div>
     );
 }
