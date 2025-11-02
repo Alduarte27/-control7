@@ -405,48 +405,57 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
         setDailyLog(prev => {
             if (!prev) return null;
+            
             const { machineId } = modalState;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
-            
-            const startTimeDate = parse(stopData.startTime, 'HH:mm', new Date());
-            const startMinutes = getMinutes(startTimeDate);
-            const registrationMinutes = startMinutes < 30 ? 0 : 30;
-            const registrationTime = setMinutes(startTimeDate, registrationMinutes);
-            const registrationSlot = format(registrationTime, 'HH:mm');
-            
-            if (!newTimeSlots[registrationSlot]) newTimeSlots[registrationSlot] = {};
-            
-            const machineSlot = (newTimeSlots[registrationSlot][machineId] || {}) as { stops?: StopData[], weight?: string };
-            if (!machineSlot.stops) {
-                machineSlot.stops = [];
-            }
-            
-            const existingStopIndex = machineSlot.stops.findIndex(s => s.id === stopData.id);
-            if (existingStopIndex > -1) {
-                // If editing, first remove the old stop from its original slot if the time changed
-                if (modalState.stopData && modalState.stopData.startTime !== stopData.startTime) {
-                    const oldStartTimeDate = parse(modalState.stopData.startTime, 'HH:mm', new Date());
-                    const oldStartMinutes = getMinutes(oldStartTimeDate);
-                    const oldRegistrationMinutes = oldStartMinutes < 30 ? 0 : 30;
-                    const oldRegistrationTime = setMinutes(oldStartTimeDate, oldRegistrationMinutes);
-                    const oldRegistrationSlotKey = format(oldRegistrationTime, 'HH:mm');
 
-                    if (newTimeSlots[oldRegistrationSlotKey] && (newTimeSlots[oldRegistrationSlotKey] as any)[machineId]) {
-                        const oldMachineSlot = (newTimeSlots[oldRegistrationSlotKey] as any)[machineId] as { stops?: StopData[] };
-                        if (oldMachineSlot.stops) {
-                            oldMachineSlot.stops = oldMachineSlot.stops.filter(s => s.id !== stopData.id);
-                             if (oldMachineSlot.stops.length === 0) {
-                                delete oldMachineSlot.stops;
-                            }
+            // --- Robust Deletion of Old Stop if Editing and Time Changed ---
+            if (modalState.stopData && modalState.stopData.startTime !== stopData.startTime) {
+                const oldStartTime = parse(modalState.stopData.startTime, 'HH:mm', new Date());
+                const oldRegistrationSlotKey = format(setMinutes(oldStartTime, getMinutes(oldStartTime) < 30 ? 0 : 30), 'HH:mm');
+
+                if (newTimeSlots[oldRegistrationSlotKey] && newTimeSlots[oldRegistrationSlotKey][machineId]) {
+                    const oldMachineSlot = newTimeSlots[oldRegistrationSlotKey][machineId] as { stops?: StopData[] };
+                    if (oldMachineSlot.stops) {
+                        oldMachineSlot.stops = oldMachineSlot.stops.filter(s => s.id !== stopData.id);
+                        if (oldMachineSlot.stops.length === 0) {
+                            delete oldMachineSlot.stops;
+                        }
+                        // Clean up machine object if it's empty
+                        if (Object.keys(oldMachineSlot).length === 0) {
+                            delete newTimeSlots[oldRegistrationSlotKey][machineId];
                         }
                     }
+                    // Clean up timeslot object if it's empty
+                    if (Object.keys(newTimeSlots[oldRegistrationSlotKey]).length === 0) {
+                        delete newTimeSlots[oldRegistrationSlotKey];
+                    }
                 }
-                 machineSlot.stops[existingStopIndex] = stopData;
-            } else {
-                machineSlot.stops.push(stopData);
             }
 
-            newTimeSlots[registrationSlot][machineId] = machineSlot;
+            // --- Robust Addition/Update of New Stop ---
+            const newStartTime = parse(stopData.startTime, 'HH:mm', new Date());
+            const newRegistrationSlotKey = format(setMinutes(newStartTime, getMinutes(newStartTime) < 30 ? 0 : 30), 'HH:mm');
+
+            // Ensure timeslot and machine objects exist
+            if (!newTimeSlots[newRegistrationSlotKey]) {
+                newTimeSlots[newRegistrationSlotKey] = {};
+            }
+            if (!newTimeSlots[newRegistrationSlotKey][machineId]) {
+                newTimeSlots[newRegistrationSlotKey][machineId] = {};
+            }
+
+            const newMachineSlot = newTimeSlots[newRegistrationSlotKey][machineId] as { stops?: StopData[] };
+            if (!newMachineSlot.stops) {
+                newMachineSlot.stops = [];
+            }
+            
+            const existingStopIndex = newMachineSlot.stops.findIndex(s => s.id === stopData.id);
+            if (existingStopIndex > -1) {
+                newMachineSlot.stops[existingStopIndex] = stopData; // Update existing
+            } else {
+                newMachineSlot.stops.push(stopData); // Add new
+            }
 
             return { ...prev, timeSlots: newTimeSlots };
         });
@@ -582,11 +591,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                     >
                                         <Badge
                                             style={{ backgroundColor: badgeColor }}
-                                            className={cn("truncate cursor-pointer h-full w-full flex-grow flex items-center text-white",
-                                                !isStartingCell && "opacity-60"
-                                            )}
+                                            className={cn("truncate cursor-pointer h-full w-full flex-grow flex items-center text-white")}
                                         >
-                                            {isStartingCell && stopData.reason ? `${stopData.reason} (${stopData.duration}m)` : '\u00A0'}
+                                            {isStartingCell ? `${stopData.reason} (${stopData.duration}m)` : '\u00A0'}
                                         </Badge>
                                             {isAdminMode && isStartingCell && (
                                             <AlertDialog>
@@ -791,7 +798,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10" style={{top: 0}}>Máquina #{i + 1}</th>
                                             ))}
-                                            <th colSpan={9} className="p-2 sticky z-10 bg-green-100 dark:bg-green-900/50" rowSpan={2} style={{top: 0}}>INGRESO DE PRODUCTO <br/> GRASSHOPPER</th>
+                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: 0}} colSpan={9}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50" rowSpan={2} style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
                                             <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20" style={{top: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
@@ -823,6 +830,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     </th>
                                                 );
                                             })}
+                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: '45px'}} colSpan={9}>GRASSHOPPER</th>
                                         </tr>
                                          <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
