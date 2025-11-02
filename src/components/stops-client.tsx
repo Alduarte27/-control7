@@ -26,17 +26,28 @@ import { Separator } from './ui/separator';
 
 const NUM_MACHINES = 3;
 const TIME_SLOTS_PER_HOUR = 2; // 30-minute intervals
-const SHIFT_START_HOUR = 7;
-const SHIFT_HOURS = 12;
 
-// This function generates the display slots for the table, starting from the shift start
-const generateDisplayTimeSlots = () => {
+// This function generates the display slots for the table based on the selected shift
+const generateDisplayTimeSlots = (shift: 'day' | 'night') => {
     const slots = [];
-    for (let i = 0; i < SHIFT_HOURS * TIME_SLOTS_PER_HOUR * 2; i++) { // *2 for 24 hours
-        const hour = (SHIFT_START_HOUR + Math.floor(i / TIME_SLOTS_PER_HOUR)) % 24;
-        const minute = (i % TIME_SLOTS_PER_HOUR) * (60 / TIME_SLOTS_PER_HOUR);
-        const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-        slots.push(time);
+    if (shift === 'day') {
+        const startHour = 7;
+        const endHour = 19;
+        const numSlots = (endHour - startHour) * TIME_SLOTS_PER_HOUR;
+        for (let i = 0; i < numSlots; i++) {
+            const hour = startHour + Math.floor(i / TIME_SLOTS_PER_HOUR);
+            const minute = (i % TIME_SLOTS_PER_HOUR) * (60 / TIME_SLOTS_PER_HOUR);
+            slots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+        }
+    } else { // night shift
+        const startHour = 19;
+        const endHourNextDay = 7;
+        const numSlots = (24 - startHour + endHourNextDay) * TIME_SLOTS_PER_HOUR;
+        for (let i = 0; i < numSlots; i++) {
+            const hour = (startHour + Math.floor(i / TIME_SLOTS_PER_HOUR)) % 24;
+            const minute = (i % TIME_SLOTS_PER_HOUR) * (60 / TIME_SLOTS_PER_HOUR);
+            slots.push(`${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`);
+        }
     }
     return slots;
 };
@@ -125,7 +136,7 @@ function ConfigurationModal({
                     <DialogTitle>Configuración de la Bitácora</DialogTitle>
                 </DialogHeader>
                 <div className="py-4 max-h-[70vh] overflow-y-auto">
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         {/* Stop Causes */}
                         <div className="space-y-4 p-4 border rounded-lg">
                             <h3 className="font-semibold text-lg">Motivos de Parada</h3>
@@ -260,9 +271,10 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const { toast } = useToast();
-    const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(), []);
     const [isAdminMode, setIsAdminMode] = React.useState(false);
     
+    const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(dailyLog?.shift || 'day'), [dailyLog?.shift]);
+
     const createEmptyLog = React.useCallback((logDate: Date): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
         for (let i = 1; i <= NUM_MACHINES; i++) {
