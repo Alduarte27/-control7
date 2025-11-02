@@ -8,10 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, DailyLog, MachineLog, TimeSlotLog, StopData } from '@/lib/types';
+import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { format, getDayOfYear } from 'date-fns';
+import { format, getDayOfYear, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -123,7 +123,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         });
     };
 
-    const handleCellChange = (timeSlot: string, field: keyof TimeSlotLog, value: string) => {
+    const handleCellChange = (timeSlot: string, field: keyof TimeSlot, value: string) => {
        if (!dailyLog) return;
         setDailyLog(prev => {
             if (!prev) return null;
@@ -144,7 +144,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             const { machineId, timeSlot } = modalState;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
-            const registrationSlot = timeSlot;
+            // The registration slot is the start time of the stop.
+            const registrationSlot = stopData.startTime.substring(0, 5);
             
             if (!newTimeSlots[registrationSlot]) newTimeSlots[registrationSlot] = {};
             
@@ -178,10 +179,12 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             if (!prev) return null;
 
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
+            
+            const registrationSlot = timeSlot.substring(0,5);
 
-            if (!newTimeSlots[timeSlot] || !newTimeSlots[timeSlot][machineId]) return prev;
+            if (!newTimeSlots[registrationSlot] || !newTimeSlots[registrationSlot][machineId]) return prev;
 
-            const machineSlot = newTimeSlots[timeSlot][machineId] as { stops?: StopData[] };
+            const machineSlot = newTimeSlots[registrationSlot][machineId] as { stops?: StopData[] };
             
             if (machineSlot.stops) {
                 machineSlot.stops = machineSlot.stops.filter(stop => stop.id !== stopId);
@@ -222,41 +225,87 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             }
         }
     };
+
+    // --- Rendering Logic ---
+
+    // Memoize the calculation of all stops for performance
+    const allStops = React.useMemo(() => {
+        if (!dailyLog) return [];
+        const stops: (StopData & { machineId: string })[] = [];
+        Object.values(dailyLog.timeSlots).forEach(slot => {
+            Object.entries(slot).forEach(([machineId, machineData]) => {
+                if (machineData && 'stops' in machineData && machineData.stops) {
+                     machineData.stops.forEach(stop => {
+                        stops.push({ ...stop, machineId });
+                    });
+                }
+            });
+        });
+        return stops;
+    }, [dailyLog]);
     
     const observationCell = (time: string, machineId: string) => {
-        const stops = (dailyLog?.timeSlots[time]?.[machineId] as { stops?: StopData[] })?.stops || [];
         
+        const parseTime = (timeStr: string) => parse(timeStr, 'HH:mm', new Date());
+
+        const cellStartTime = parseTime(time);
+        const cellEndTime = new Date(cellStartTime.getTime() + 30 * 60 * 1000);
+
+        const stopsInCell = allStops.filter(stop => {
+             if (stop.machineId !== machineId) return false;
+            const stopStartTime = parseTime(stop.startTime);
+            const stopEndTime = parseTime(stop.endTime);
+            // Check for overlap
+            return stopStartTime < cellEndTime && stopEndTime > cellStartTime;
+        });
+
         const handleCellClick = () => {
-            setModalState({ isOpen: true, machineId, timeSlot: time });
+            // If clicking a cell that's part of a long stop, open that stop for editing
+            const longStop = stopsInCell.find(s => s.duration > 30);
+            if (longStop) {
+                setModalState({ isOpen: true, machineId, timeSlot: longStop.startTime, stopData: longStop });
+            } else {
+                setModalState({ isOpen: true, machineId, timeSlot: time });
+            }
         };
         
         const handleStopClick = (e: React.MouseEvent, stop: StopData) => {
             e.stopPropagation(); 
-            setModalState({ isOpen: true, machineId, timeSlot: time, stopData: stop });
+            setModalState({ isOpen: true, machineId, timeSlot: stop.startTime, stopData: stop });
         };
-
+        
         return (
             <td className="p-0.5" onClick={handleCellClick}>
                 <div className="w-full h-8 flex items-center justify-start gap-1 cursor-pointer hover:bg-accent/50 rounded-sm px-1 overflow-hidden relative group/cell">
-                    {stops.length > 0 ? (
-                        stops.map(stopData => (
-                           <TooltipProvider key={stopData.id}>
+                    {stopsInCell.length > 0 ? (
+                        stopsInCell.map(stopData => {
+                           const isStartingCell = time === stopData.startTime.substring(0,5);
+
+                           return (
+                             <TooltipProvider key={stopData.id}>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <div className="relative group/pill">
+                                        <div 
+                                          className={cn(
+                                            'relative group/pill h-full flex-grow flex items-center',
+                                            isStartingCell ? `w-full` : `w-full`
+                                          )}
+                                          onClick={(e) => handleStopClick(e, stopData)}
+                                        >
                                             <Badge
                                                 variant={stopData.type === 'planned' ? 'secondary' : 'destructive'}
-                                                className="truncate cursor-pointer flex-shrink-0"
-                                                onClick={(e) => handleStopClick(e, stopData)}
+                                                className={cn("truncate cursor-pointer h-full w-full flex items-center",
+                                                   !isStartingCell && "opacity-60"
+                                                )}
                                             >
-                                                {stopData.cause} ({stopData.duration}m)
+                                               {isStartingCell ? `${stopData.cause} (${stopData.duration}m)` : ''}
                                             </Badge>
-                                             {isAdminMode && (
+                                             {isAdminMode && isStartingCell && (
                                                 <AlertDialog>
                                                     <AlertDialogTrigger asChild>
                                                          <button 
                                                             onClick={(e) => e.stopPropagation()}
-                                                            className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full bg-black text-white flex items-center justify-center text-xs opacity-0 group-hover/pill:opacity-100"
+                                                            className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-black text-white flex items-center justify-center text-xs opacity-0 group-hover/pill:opacity-100"
                                                          >
                                                              &times;
                                                          </button>
@@ -270,7 +319,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>
                                                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDeleteStop(time, machineId, stopData.id)}>Eliminar</AlertDialogAction>
+                                                            <AlertDialogAction onClick={() => handleDeleteStop(stopData.startTime, machineId, stopData.id)}>Eliminar</AlertDialogAction>
                                                         </AlertDialogFooter>
                                                     </AlertDialogContent>
                                                 </AlertDialog>
@@ -287,7 +336,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
-                        ))
+                           )
+                        })
                     ) : (
                         <span className="text-muted-foreground text-xs opacity-0 group-hover/cell:opacity-100">Registrar...</span>
                     )}
@@ -296,7 +346,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         );
     }
     
-    const inputCell = (time: string, field: keyof TimeSlotLog, machineId?: string) => {
+    const inputCell = (time: string, field: keyof TimeSlot, machineId?: string) => {
         const fieldName = machineId ? `${machineId}_${field}`: field;
         
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

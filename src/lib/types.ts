@@ -56,7 +56,7 @@ export type StopData = {
     solution?: string;
 };
 
-export type TimeSlotLog = {
+export type TimeSlot = {
     // Machine specific observations are nested under machine ID
     [machineId: string]: {
       stops?: StopData[]; // Now holds an array of structured stop data
@@ -95,5 +95,5 @@ export type DailyLog = {
   lote: string;
   shift: 'day' | 'night';
   machines: { [machineId: string]: MachineLog };
-  timeSlots: { [time: string]: Partial<TimeSlotLog> };
+  timeSlots: { [time: string]: Partial<TimeSlot> };
 };
