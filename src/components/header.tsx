@@ -87,8 +87,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
           <NavButton href="/ia" icon={Sparkles} label="Operaciones" tooltipText="Operaciones y Simulación" />
           <NavButton href="/dashboard" icon={LayoutDashboard} label="Dashboard" tooltipText="Dashboard General" />
           <NavButton href="/stops" icon={HardHat} label="Bitácora" tooltipText="Bitácora de Producción" />
-          <NavButton href="/schedule" icon={CalendarCheck2} label="Cronograma" tooltipText="Cronograma de Turnos" />
-          <NavButton href="/log-history" icon={History} label="Historial Bitácora" tooltipText="Historial de Bitácoras" />
           <NavButton href="/history" icon={History} label="Historial Planes" tooltipText="Historial de Planes" />
           <NavButton href="/admin" icon={Settings} label="Admin" tooltipText="Administración" />
           
@@ -138,8 +136,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                     <DropdownMenuItem asChild><Link href="/ia" className="flex items-center"><Sparkles className="mr-2 h-4 w-4" />Operaciones</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/dashboard" className="flex items-center"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/stops" className="flex items-center"><HardHat className="mr-2 h-4 w-4" />Bitácora</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link href="/schedule" className="flex items-center"><CalendarCheck2 className="mr-2 h-4 w-4" />Cronograma</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link href="/log-history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial Bitácora</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial Planes</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/admin" className="flex items-center"><Settings className="mr-2 h-4 w-4" />Admin</Link></DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>

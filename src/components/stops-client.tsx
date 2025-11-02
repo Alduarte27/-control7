@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, CalendarCheck2 } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, CalendarCheck2, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -742,6 +742,12 @@ export default function StopsClient({
                     <h1 className="text-2xl font-bold text-foreground">Bitácora de Producción</h1>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Link href="/schedule">
+                        <Button variant="outline"><CalendarCheck2 className="mr-2 h-4 w-4" />Cronograma</Button>
+                    </Link>
+                    <Link href="/log-history">
+                        <Button variant="outline"><History className="mr-2 h-4 w-4" />Historial</Button>
+                    </Link>
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
