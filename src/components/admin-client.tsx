@@ -9,9 +9,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, CategoryDefinition, ProductData } from '@/lib/types';
+import type { ProductDefinition, CategoryDefinition, ProductData, StopCause } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, writeBatch, doc, query, orderBy, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, writeBatch, doc, query, orderBy, updateDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import {
   DndContext,
   closestCenter,
@@ -176,10 +176,13 @@ function SortableItem({ product, categoryName, onEdit, onToggleStatus }: { produ
 export default function AdminClient() {
   const [products, setProducts] = React.useState<ProductDefinition[]>([]);
   const [categories, setCategories] = React.useState<CategoryDefinition[]>([]);
+  const [stopCauses, setStopCauses] = React.useState<StopCause[]>([]);
   const [newProductName, setNewProductName] = React.useState('');
   const [newProductCategoryId, setNewProductCategoryId] = React.useState<string>('');
   const [newCategoryName, setNewCategoryName] = React.useState('');
   const [newCategoryIsPlanned, setNewCategoryIsPlanned] = React.useState(true);
+  const [newStopCauseName, setNewStopCauseName] = React.useState('');
+  const [newStopCauseColor, setNewStopCauseColor] = React.useState('#f87171'); // Default to a red color
   const [editingProduct, setEditingProduct] = React.useState<ProductDefinition | null>(null);
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [showInfoOnStartup, setShowInfoOnStartup] = React.useState(true);
@@ -194,7 +197,12 @@ export default function AdminClient() {
   React.useEffect(() => {
     const fetchInitialData = async () => {
         try {
-            const categoriesSnapshot = await getDocs(query(collection(db, 'categories'), orderBy('name')));
+            const [categoriesSnapshot, productsSnapshot, stopCausesSnapshot] = await Promise.all([
+                getDocs(query(collection(db, 'categories'), orderBy('name'))),
+                getDocs(query(collection(db, 'products'), orderBy('order'))),
+                getDocs(query(collection(db, 'stopCauses'), orderBy('name'))),
+            ]);
+
             const categoriesList = categoriesSnapshot.docs.map(doc => ({ id: doc.id, isPlanned: true, ...doc.data() } as CategoryDefinition));
             setCategories(categoriesList);
 
@@ -202,9 +210,11 @@ export default function AdminClient() {
               setNewProductCategoryId(categoriesList[0].id);
             }
 
-            const productsSnapshot = await getDocs(query(collection(db, 'products'), orderBy('order')));
             const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, isActive: true, sackWeight: 50, presentationWeight: 1, ...doc.data() } as ProductDefinition));
             setProducts(productsList);
+
+            const stopCausesList = stopCausesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StopCause));
+            setStopCauses(stopCausesList);
         } catch (error) {
             console.error('Error loading data from Firestore', error);
             toast({
@@ -329,6 +339,30 @@ export default function AdminClient() {
           toast({ title: 'Error al actualizar categoría', variant: 'destructive' });
       }
   };
+
+    const handleAddStopCause = async () => {
+        if (newStopCauseName.trim() === '') return;
+        try {
+            const newCauseData = { name: newStopCauseName.trim(), color: newStopCauseColor };
+            const docRef = await addDoc(collection(db, 'stopCauses'), newCauseData);
+            setStopCauses(prev => [...prev, { id: docRef.id, ...newCauseData }].sort((a,b) => a.name.localeCompare(b.name)));
+            setNewStopCauseName('');
+            toast({ title: 'Motivo de Parada Añadido' });
+        } catch (error) {
+            toast({ title: 'Error al añadir motivo', variant: 'destructive' });
+        }
+    };
+
+    const handleDeleteStopCause = async (causeId: string) => {
+        try {
+            await deleteDoc(doc(db, 'stopCauses', causeId));
+            setStopCauses(prev => prev.filter(c => c.id !== causeId));
+            toast({ title: 'Motivo de Parada Eliminado' });
+        } catch (error) {
+            toast({ title: 'Error al eliminar motivo', variant: 'destructive' });
+        }
+    };
+
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -505,10 +539,10 @@ export default function AdminClient() {
       </header>
       <main className="p-4 md:p-8 space-y-6">
         <div className="grid md:grid-cols-2 gap-6">
-            <Card className="md:col-span-2">
+            <Card>
               <CardHeader>
                 <CardTitle>Gestionar Productos y Categorías</CardTitle>
-                <CardDescription>Añade, edita y organiza tus productos y categorías en un solo lugar.</CardDescription>
+                <CardDescription>Añade, edita y organiza tus productos y categorías.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
@@ -538,7 +572,7 @@ export default function AdminClient() {
                       </div>
                        <Button onClick={handleAddProduct}>
                           <PlusCircle className="mr-2 h-4 w-4" />
-                          Añadir Producto
+                          Añadir
                       </Button>
                     </div>
                 </div>
@@ -567,7 +601,7 @@ export default function AdminClient() {
                         </div>
                         <Button onClick={handleAddCategory}>
                             <PlusCircle className="mr-2 h-4 w-4" />
-                            Añadir Categoría
+                            Añadir
                         </Button>
                     </div>
                     <div className="space-y-2 mt-4">
@@ -599,6 +633,63 @@ export default function AdminClient() {
                         )}
                     </div>
                 </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Gestionar Motivos de Parada</CardTitle>
+                <CardDescription>Define las causas de parada que se usarán en la bitácora de producción.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                 <div>
+                    <Label className="text-lg font-semibold">Añadir Nuevo Motivo</Label>
+                    <div className="flex items-end gap-2 mt-2">
+                      <div className="flex-grow">
+                        <Label htmlFor="new-stop-cause">Nombre del Motivo</Label>
+                        <Input 
+                          id="new-stop-cause"
+                          value={newStopCauseName}
+                          onChange={(e) => setNewStopCauseName(e.target.value)}
+                          placeholder="Ej: Daño Eléctrico"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="new-stop-cause-color">Color</Label>
+                         <Input
+                            id="new-stop-cause-color"
+                            type="color"
+                            value={newStopCauseColor}
+                            onChange={(e) => setNewStopCauseColor(e.target.value)}
+                            className="w-16 h-10 p-1"
+                        />
+                      </div>
+                       <Button onClick={handleAddStopCause}>
+                          <PlusCircle className="mr-2 h-4 w-4" />
+                          Añadir
+                      </Button>
+                    </div>
+                </div>
+                <Separator />
+                <div className="space-y-2 mt-4">
+                        <Label>Motivos existentes</Label>
+                        {stopCauses.length > 0 ? (
+                            <ul className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                                {stopCauses.map(cause => (
+                                    <li key={cause.id} className="border p-2 rounded-md flex justify-between items-center text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <span className="h-4 w-4 rounded-full" style={{ backgroundColor: cause.color }}></span>
+                                            <span>{cause.name}</span>
+                                        </div>
+                                        <Button variant="ghost" size="icon" onClick={() => handleDeleteStopCause(cause.id)} className="text-destructive hover:text-destructive">
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-sm text-muted-foreground text-center py-2">No hay motivos definidos.</p>
+                        )}
+                    </div>
               </CardContent>
             </Card>
         </div>

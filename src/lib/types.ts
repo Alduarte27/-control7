@@ -45,13 +45,19 @@ export type ProductData = ProductDefinition & {
 
 
 // --- Production Log (Stops) Types ---
+export type StopCause = {
+    id: string;
+    name: string;
+    color: string;
+};
 
 export type StopData = {
     id: string; // Unique ID for the stop event, e.g., a timestamp or UUID
     startTime: string; // The time slot, e.g., "07:00"
     endTime: string;
     duration: number; // in minutes
-    cause: string;
+    cause: string; // The name of the cause
+    causeColor?: string; // The color associated with the cause
     type: 'planned' | 'unplanned';
     solution?: string;
 };

@@ -8,9 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData } from '@/lib/types';
+import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { format, getDayOfYear, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -42,6 +42,7 @@ const generateDisplayTimeSlots = () => {
 
 export default function StopsClient({ prefetchedProducts }: { prefetchedProducts: ProductDefinition[]}) {
     const [dailyLog, setDailyLog] = React.useState<DailyLog | null>(null);
+    const [stopCauses, setStopCauses] = React.useState<StopCause[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [date, setDate] = React.useState<Date>(new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
@@ -68,36 +69,41 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     }, [prefetchedProducts]);
 
     React.useEffect(() => {
-        const fetchLog = async () => {
+        const fetchLogAndCauses = async () => {
             setLoading(true);
             const logId = format(date, 'yyyy-MM-dd');
             try {
-                const docRef = doc(db, 'dailyLogs', logId);
-                const docSnap = await getDoc(docRef);
+                const [logDocSnap, causesSnapshot] = await Promise.all([
+                    getDoc(doc(db, 'dailyLogs', logId)),
+                    getDocs(query(collection(db, 'stopCauses'), orderBy('name')))
+                ]);
 
-                if (docSnap.exists()) {
-                    const data = docSnap.data() as DailyLog;
-                    if (!data.machines) {
-                        data.machines = createEmptyLog(date).machines;
-                    }
-                     if (!data.lote) {
-                        data.lote = String(getDayOfYear(date));
-                    }
+                // Handle Log
+                if (logDocSnap.exists()) {
+                    const data = logDocSnap.data() as DailyLog;
+                    if (!data.machines) data.machines = createEmptyLog(date).machines;
+                    if (!data.lote) data.lote = String(getDayOfYear(date));
                     if(!data.operador) data.operador = '';
                     if(!data.supervisor) data.supervisor = '';
                     setDailyLog(data);
                 } else {
                     setDailyLog(createEmptyLog(date));
                 }
+
+                // Handle Stop Causes
+                const causesList = causesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StopCause));
+                setStopCauses(causesList);
+
             } catch (error) {
-                console.error("Error fetching daily log:", error);
-                toast({ title: 'Error', description: 'No se pudo cargar la bitácora.', variant: 'destructive' });
+                console.error("Error fetching daily log or causes:", error);
+                toast({ title: 'Error', description: 'No se pudo cargar la bitácora o los motivos de parada.', variant: 'destructive' });
                 setDailyLog(createEmptyLog(date));
+                setStopCauses([]);
             }
             setLoading(false);
         };
 
-        fetchLog();
+        fetchLogAndCauses();
     }, [date, createEmptyLog, toast]);
 
     const handleHeaderChange = (field: keyof Omit<DailyLog, 'id' | 'machines' | 'timeSlots'>, value: string) => {
@@ -141,10 +147,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
         setDailyLog(prev => {
             if (!prev) return null;
-            const { machineId, timeSlot } = modalState;
+            const { machineId } = modalState;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
-            // The registration slot is the start time of the stop.
             const registrationSlot = stopData.startTime.substring(0, 5);
             
             if (!newTimeSlots[registrationSlot]) newTimeSlots[registrationSlot] = {};
@@ -280,6 +285,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     {stopsInCell.length > 0 ? (
                         stopsInCell.map(stopData => {
                            const isStartingCell = time === stopData.startTime.substring(0,5);
+                           const badgeColor = stopData.causeColor || (stopData.type === 'planned' ? '#3b82f6' : '#ef4444');
 
                            return (
                              <TooltipProvider key={stopData.id}>
@@ -293,8 +299,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                           onClick={(e) => handleStopClick(e, stopData)}
                                         >
                                             <Badge
-                                                variant={stopData.type === 'planned' ? 'secondary' : 'destructive'}
-                                                className={cn("truncate cursor-pointer h-full w-full flex items-center",
+                                                style={{ backgroundColor: badgeColor }}
+                                                className={cn("truncate cursor-pointer h-full w-full flex items-center text-white",
                                                    !isStartingCell && "opacity-60"
                                                 )}
                                             >
@@ -555,6 +561,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         machineId={modalState.machineId}
                         startTime={modalState.timeSlot}
                         stopData={modalState.stopData}
+                        stopCauses={stopCauses}
                     />
                 )}
             </main>

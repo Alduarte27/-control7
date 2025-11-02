@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import type { StopData } from '@/lib/types';
+import type { StopData, StopCause } from '@/lib/types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -15,10 +15,11 @@ type StopRegistrationModalProps = {
     onSave: (stopData: StopData) => void;
     machineId: string;
     startTime: string; // This is the initial time slot clicked
+    stopCauses: StopCause[];
     stopData?: StopData;
 };
 
-export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopData }: StopRegistrationModalProps) {
+export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopCauses, stopData }: StopRegistrationModalProps) {
     const [actualStartTime, setActualStartTime] = React.useState(stopData?.startTime || startTime);
     const [endTime, setEndTime] = React.useState(stopData?.endTime || actualStartTime);
     const [cause, setCause] = React.useState(stopData?.cause || '');
@@ -36,11 +37,11 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
             // Reset for new entry
             setActualStartTime(startTime);
             setEndTime(startTime);
-            setCause('');
+            setCause(stopCauses.length > 0 ? stopCauses[0].name : '');
             setType('unplanned');
             setSolution('');
         }
-    }, [isOpen, stopData, startTime]);
+    }, [isOpen, stopData, startTime, stopCauses]);
 
 
     const calculateDuration = (start: string, end: string): number => {
@@ -72,12 +73,15 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
             console.error("End time cannot be before start time.");
             return;
         }
+        const selectedCause = stopCauses.find(c => c.name === cause);
+
         onSave({
             id: stopData?.id || new Date().toISOString(), // Use existing ID or generate a new one
             startTime: actualStartTime,
             endTime,
             duration,
             cause,
+            causeColor: selectedCause?.color,
             type,
             solution,
         });
@@ -118,6 +122,24 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                         <Input value={duration} disabled />
                     </div>
                      <div className="space-y-1.5">
+                        <Label htmlFor="stop-cause">Causa de la Parada</Label>
+                        <Select value={cause} onValueChange={(val) => setCause(val)}>
+                            <SelectTrigger id="stop-cause">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {stopCauses.map(c => (
+                                     <SelectItem key={c.id} value={c.name}>
+                                        <div className="flex items-center gap-2">
+                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color }}></span>
+                                            {c.name}
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="space-y-1.5">
                         <Label htmlFor="stop-type">Tipo de Parada</Label>
                         <Select value={type} onValueChange={(val: 'planned' | 'unplanned') => setType(val)}>
                             <SelectTrigger id="stop-type">
@@ -128,15 +150,6 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                 <SelectItem value="planned">Planificada</SelectItem>
                             </SelectContent>
                         </Select>
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor="stop-cause">Causa de la Parada</Label>
-                        <Textarea
-                            id="stop-cause"
-                            placeholder="Ej: Falla en sensor, cambio de rollo, mantenimiento..."
-                            value={cause}
-                            onChange={(e) => setCause(e.target.value)}
-                        />
                     </div>
                      <div className="space-y-1.5">
                         <Label htmlFor="stop-solution">Solución Aplicada</Label>
