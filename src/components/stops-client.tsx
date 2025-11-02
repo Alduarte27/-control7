@@ -8,13 +8,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, DailyLog, MachineLog, TimeSlotLog } from '@/lib/types';
+import type { ProductDefinition, DailyLog, MachineLog, TimeSlotLog, StopData } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { format, getDayOfYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
+import StopRegistrationModal from './stop-registration-modal';
+import { Badge } from './ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { cn } from '@/lib/utils';
 
 const NUM_MACHINES = 3;
 const TIME_SLOTS_PER_HOUR = 2; // 30-minute intervals
@@ -23,8 +27,8 @@ const SHIFT_HOURS = 12;
 
 const generateTimeSlots = () => {
     const slots = [];
-    for (let i = 0; i < SHIFT_HOURS * TIME_SLOTS_PER_HOUR; i++) {
-        const hour = SHIFT_START_HOUR + Math.floor(i / TIME_SLOTS_PER_HOUR);
+    for (let i = 0; i < SHIFT_HOURS * TIME_SLOTS_PER_HOUR * 2; i++) { // *2 for 24 hours
+        const hour = (SHIFT_START_HOUR + Math.floor(i / TIME_SLOTS_PER_HOUR)) % 24;
         const minute = (i % TIME_SLOTS_PER_HOUR) * (60 / TIME_SLOTS_PER_HOUR);
         const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
         slots.push(time);
@@ -36,10 +40,11 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const [dailyLog, setDailyLog] = React.useState<DailyLog | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [date, setDate] = React.useState<Date>(new Date());
+    const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const { toast } = useToast();
     const timeSlots = React.useMemo(() => generateTimeSlots(), []);
     
-    const createEmptyLog = (logDate: Date): DailyLog => {
+    const createEmptyLog = React.useCallback((logDate: Date): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
         for (let i = 1; i <= NUM_MACHINES; i++) {
             machineEntries[`machine_${i}`] = {
@@ -55,7 +60,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             machines: machineEntries,
             timeSlots: {}
         };
-    };
+    }, [prefetchedProducts]);
 
     React.useEffect(() => {
         const fetchLog = async () => {
@@ -67,11 +72,10 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
                 if (docSnap.exists()) {
                     const data = docSnap.data() as DailyLog;
-                    // Ensure machines object exists
                     if (!data.machines) {
                         data.machines = createEmptyLog(date).machines;
                     }
-                    if (!data.lote) { // Auto-populate lot if it's missing
+                    if (!data.lote) {
                         data.lote = String(getDayOfYear(date));
                     }
                     setDailyLog(data);
@@ -87,12 +91,19 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         };
 
         fetchLog();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [date]);
+    }, [date, createEmptyLog, toast]);
 
-    const handleHeaderChange = (field: keyof DailyLog, value: string) => {
+    const handleHeaderChange = (field: keyof Omit<DailyLog, 'id' | 'machines' | 'timeSlots'>, value: string) => {
         if (!dailyLog) return;
         setDailyLog(prev => prev ? { ...prev, [field]: value } : null);
+    };
+
+    const handleDateChange = (newDate: Date | undefined) => {
+        if (newDate) {
+            setDate(newDate);
+            // Auto-update lot number when date changes
+            setDailyLog(prev => prev ? { ...prev, lote: String(getDayOfYear(newDate)) } : createEmptyLog(newDate));
+        }
     };
 
     const handleMachineProductChange = (machineId: string, productId: string) => {
@@ -100,6 +111,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         setDailyLog(prev => {
             if (!prev) return null;
             const newMachines = { ...prev.machines };
+            if (!newMachines[machineId]) newMachines[machineId] = { productId: '' };
             newMachines[machineId].productId = productId;
             return { ...prev, machines: newMachines };
         });
@@ -117,6 +129,27 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             return { ...prev, timeSlots: newTimeSlots };
         });
     };
+
+    const handleStopSave = (stopData: StopData) => {
+        if (!dailyLog || !modalState) return;
+
+        setDailyLog(prev => {
+            if (!prev) return null;
+            const { machineId, timeSlot } = modalState;
+            const newTimeSlots = { ...prev.timeSlots };
+            if (!newTimeSlots[timeSlot]) newTimeSlots[timeSlot] = {};
+            
+            const machineObservations = { ...(newTimeSlots[timeSlot] as any)[machineId] || {} };
+            machineObservations['observation'] = stopData;
+            
+            (newTimeSlots[timeSlot] as any)[machineId] = machineObservations;
+
+            return { ...prev, timeSlots: newTimeSlots };
+        });
+
+        toast({ title: 'Parada Registrada', description: `Se guardó la parada para la máquina ${modalState.machineId.split('_')[1]} a las ${modalState.timeSlot}.` });
+        setModalState(null);
+    };
     
     const handleSaveLog = async () => {
         if (!dailyLog) return;
@@ -129,6 +162,42 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             toast({ title: 'Error', description: 'No se pudo guardar la bitácora.', variant: 'destructive' });
         }
     };
+    
+    const observationCell = (time: string, machineId: string) => {
+        const stopData = (dailyLog?.timeSlots[time] as any)?.[machineId]?.observation as StopData | undefined;
+
+        const handleClick = () => {
+            setModalState({ isOpen: true, machineId, timeSlot: time, stopData });
+        };
+
+        return (
+            <td className="p-0.5" onClick={handleClick}>
+                <div className="w-full h-8 flex items-center justify-center cursor-pointer hover:bg-accent/50 rounded-sm">
+                    {stopData ? (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Badge variant={stopData.type === 'planned' ? 'secondary' : 'destructive'} className="truncate">
+                                        {stopData.cause} ({stopData.duration} min)
+                                    </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <div className="space-y-1 text-xs">
+                                        <p><strong>Causa:</strong> {stopData.cause}</p>
+                                        <p><strong>Tipo:</strong> {stopData.type === 'planned' ? 'Planificada' : 'No Planificada'}</p>
+                                        <p><strong>Duración:</strong> {stopData.duration} min ({stopData.startTime} - {stopData.endTime})</p>
+                                        {stopData.solution && <p><strong>Solución:</strong> {stopData.solution}</p>}
+                                    </div>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    ) : (
+                        <span className="text-muted-foreground text-xs opacity-0 group-hover:opacity-100">Registrar...</span>
+                    )}
+                </div>
+            </td>
+        );
+    }
     
     const inputCell = (time: string, field: keyof TimeSlotLog, machineId?: string) => {
         const fieldName = machineId ? `${machineId}_${field}`: field;
@@ -221,7 +290,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0">
-                                        <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} />
+                                        <Calendar mode="single" selected={date} onSelect={handleDateChange} />
                                     </PopoverContent>
                                 </Popover>
                             </div>
@@ -243,7 +312,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                     <tr className="divide-x divide-border">
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                             <th key={`product_selector_${i}`} className="p-1" colSpan={2}>
-                                                <Select value={dailyLog.machines[`machine_${i + 1}`]?.productId} onValueChange={(val) => handleMachineProductChange(`machine_${i + 1}`, val)}>
+                                                <Select value={dailyLog.machines[`machine_${i + 1}`]?.productId || ''} onValueChange={(val) => handleMachineProductChange(`machine_${i + 1}`, val)}>
                                                     <SelectTrigger className="h-8 text-xs">
                                                         <SelectValue placeholder="Producto" />
                                                     </SelectTrigger>
@@ -284,13 +353,13 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                 </thead>
                                 <tbody className="divide-y divide-border">
                                     {timeSlots.map((time) => (
-                                        <tr key={time} className="divide-x divide-border">
+                                        <tr key={time} className="divide-x divide-border group">
                                             <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
                                             {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
                                                 const machineId = `machine_${machineIndex + 1}`;
                                                 return (
                                                     <React.Fragment key={machineId}>
-                                                        {inputCell(time, 'observation', machineId)}
+                                                        {observationCell(time, machineId)}
                                                         {inputCell(time, 'weight', machineId)}
                                                     </React.Fragment>
                                                 )
@@ -317,6 +386,17 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                             </table>
                         </div>
                     </div>
+                )}
+                {modalState?.isOpen && (
+                    <StopRegistrationModal 
+                        isOpen={modalState.isOpen}
+                        onClose={() => setModalState(null)}
+                        onSave={handleStopSave}
+                        machineId={modalState.machineId}
+                        startTime={modalState.timeSlot}
+                        stopData={modalState.stopData}
+                        availableTimeSlots={timeSlots}
+                    />
                 )}
             </main>
         </div>

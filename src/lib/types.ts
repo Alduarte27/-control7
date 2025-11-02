@@ -46,12 +46,21 @@ export type ProductData = ProductDefinition & {
 
 // --- Production Log (Stops) Types ---
 
+export type StopData = {
+    startTime: string; // The time slot, e.g., "07:00"
+    endTime: string;
+    duration: number; // in minutes
+    cause: string;
+    type: 'planned' | 'unplanned';
+    solution?: string;
+};
+
 export type TimeSlotLog = {
     // Machine specific observations are nested under machine ID
     [machineId: string]: {
-      observation?: string;
+      observation?: StopData; // Now holds structured stop data
       weight?: string;
-    },
+    };
     // Quality Input
     masa?: string;
     flujo?: string;
@@ -72,6 +81,7 @@ export type TimeSlotLog = {
     // Packaging
     empaque_obs?: string;
 };
+
 
 export type MachineLog = {
   productId: string;
