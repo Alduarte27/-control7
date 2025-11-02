@@ -120,11 +120,11 @@ function ConfigurationModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl">
+            <DialogContent className="max-w-5xl">
                 <DialogHeader>
                     <DialogTitle>Configuración de la Bitácora</DialogTitle>
                 </DialogHeader>
-                <div className="flex flex-col gap-6 py-4 max-h-[70vh] overflow-y-auto">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-4 max-h-[70vh] overflow-y-auto">
                     {/* Stop Causes */}
                     <div className="space-y-4 p-4 border rounded-lg">
                         <h3 className="font-semibold text-lg">Motivos de Parada</h3>
@@ -169,71 +169,71 @@ function ConfigurationModal({
                             ))}
                         </ul>
                     </div>
-                     {/* Operators */}
-                    <div className="space-y-4 p-4 border rounded-lg">
-                        <h3 className="font-semibold text-lg">Operadores</h3>
-                         <div className="flex items-end gap-2">
-                             <div className="flex-grow space-y-1.5">
-                                <Label htmlFor="new-op-name">Nombre</Label>
-                                <Input id="new-op-name" value={newOperatorName} onChange={e => setNewOperatorName(e.target.value)} />
-                             </div>
-                             <Button onClick={() => handleAdd('operator')}><PlusCircle /></Button>
-                        </div>
-                        <Separator />
-                        <ul className="space-y-2 max-h-60 overflow-y-auto">
-                            {operators.map(op => (
-                                <li key={op.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
-                                    <span>{op.name}</span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('operator', op.id)}>
-                                        <X className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                    {/* Supervisors */}
-                    <div className="space-y-4 p-4 border rounded-lg">
-                        <h3 className="font-semibold text-lg">Supervisores</h3>
-                        <div className="flex items-end gap-2">
-                            <div className="flex-grow space-y-1.5">
-                                <Label htmlFor="new-sup-name">Nombre</Label>
-                                <Input id="new-sup-name" value={newSupervisorName} onChange={e => setNewSupervisorName(e.target.value)} />
+                     {/* Operators, Supervisors, Maintenance Types */}
+                     <div className="space-y-6">
+                        <div className="space-y-4 p-4 border rounded-lg">
+                            <h3 className="font-semibold text-lg">Operadores</h3>
+                             <div className="flex items-end gap-2">
+                                 <div className="flex-grow space-y-1.5">
+                                    <Label htmlFor="new-op-name">Nombre</Label>
+                                    <Input id="new-op-name" value={newOperatorName} onChange={e => setNewOperatorName(e.target.value)} />
+                                 </div>
+                                 <Button onClick={() => handleAdd('operator')}><PlusCircle /></Button>
                             </div>
-                            <Button onClick={() => handleAdd('supervisor')}><PlusCircle /></Button>
+                            <Separator />
+                            <ul className="space-y-2 max-h-40 overflow-y-auto">
+                                {operators.map(op => (
+                                    <li key={op.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                        <span>{op.name}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('operator', op.id)}>
+                                            <X className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
-                        <Separator />
-                        <ul className="space-y-2 max-h-60 overflow-y-auto">
-                            {supervisors.map(sup => (
-                                <li key={sup.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
-                                    <span>{sup.name}</span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('supervisor', sup.id)}>
-                                        <X className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                     {/* Maintenance Types */}
-                    <div className="space-y-4 p-4 border rounded-lg">
-                        <h3 className="font-semibold text-lg">Tipos de Mtto.</h3>
-                        <div className="flex items-end gap-2">
-                            <div className="flex-grow space-y-1.5">
-                                <Label htmlFor="new-maint-name">Nombre</Label>
-                                <Input id="new-maint-name" value={newMaintTypeName} onChange={e => setNewMaintTypeName(e.target.value)} />
+                        <div className="space-y-4 p-4 border rounded-lg">
+                            <h3 className="font-semibold text-lg">Supervisores</h3>
+                            <div className="flex items-end gap-2">
+                                <div className="flex-grow space-y-1.5">
+                                    <Label htmlFor="new-sup-name">Nombre</Label>
+                                    <Input id="new-sup-name" value={newSupervisorName} onChange={e => setNewSupervisorName(e.target.value)} />
+                                </div>
+                                <Button onClick={() => handleAdd('supervisor')}><PlusCircle /></Button>
                             </div>
-                            <Button onClick={() => handleAdd('maintenanceType')}><PlusCircle /></Button>
+                            <Separator />
+                            <ul className="space-y-2 max-h-40 overflow-y-auto">
+                                {supervisors.map(sup => (
+                                    <li key={sup.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                        <span>{sup.name}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('supervisor', sup.id)}>
+                                            <X className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
-                        <Separator />
-                        <ul className="space-y-2 max-h-60 overflow-y-auto">
-                            {maintenanceTypes.map(mt => (
-                                <li key={mt.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
-                                    <span>{mt.name}</span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('maintenanceType', mt.id)}>
-                                        <X className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </li>
-                            ))}
-                        </ul>
+                        <div className="space-y-4 p-4 border rounded-lg">
+                            <h3 className="font-semibold text-lg">Tipos de Mtto.</h3>
+                            <div className="flex items-end gap-2">
+                                <div className="flex-grow space-y-1.5">
+                                    <Label htmlFor="new-maint-name">Nombre</Label>
+                                    <Input id="new-maint-name" value={newMaintTypeName} onChange={e => setNewMaintTypeName(e.target.value)} />
+                                </div>
+                                <Button onClick={() => handleAdd('maintenanceType')}><PlusCircle /></Button>
+                            </div>
+                            <Separator />
+                            <ul className="space-y-2 max-h-40 overflow-y-auto">
+                                {maintenanceTypes.map(mt => (
+                                    <li key={mt.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                        <span>{mt.name}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('maintenanceType', mt.id)}>
+                                            <X className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>
