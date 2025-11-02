@@ -51,6 +51,17 @@ export type StopCause = {
     color: string;
 };
 
+export type Operator = {
+    id: string;
+    name: string;
+};
+
+export type Supervisor = {
+    id: string;
+    name: string;
+};
+
+
 export type StopData = {
     id: string; // Unique ID for the stop event, e.g., a timestamp or UUID
     startTime: string; // The time slot, e.g., "07:00"

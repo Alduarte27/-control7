@@ -2,15 +2,15 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause } from '@/lib/types';
+import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { format, getDayOfYear, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -20,6 +20,8 @@ import { Badge } from './ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, } from '@/components/ui/alert-dialog';
+import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
+import { Separator } from './ui/separator';
 
 
 const NUM_MACHINES = 3;
@@ -39,13 +41,172 @@ const generateDisplayTimeSlots = () => {
     return slots;
 };
 
+// --- Configuration Modal ---
+function ConfigurationModal({
+    isOpen,
+    onClose,
+    stopCauses,
+    operators,
+    supervisors,
+    onConfigSave,
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    stopCauses: StopCause[];
+    operators: Operator[];
+    supervisors: Supervisor[];
+    onConfigSave: (type: 'stopCause' | 'operator' | 'supervisor', data: any, action: 'add' | 'delete') => Promise<void>;
+}) {
+    const [newCauseName, setNewCauseName] = React.useState('');
+    const [newCauseColor, setNewCauseColor] = React.useState('#ef4444');
+    const [newOperatorName, setNewOperatorName] = React.useState('');
+    const [newSupervisorName, setNewSupervisorName] = React.useState('');
+    const { toast } = useToast();
+
+    const handleAdd = async (type: 'stopCause' | 'operator' | 'supervisor') => {
+        let data: any;
+        let name: string = '';
+        switch (type) {
+            case 'stopCause':
+                name = newCauseName.trim();
+                if (!name) {
+                    toast({ title: 'Error', description: 'El nombre del motivo es obligatorio.', variant: 'destructive'});
+                    return;
+                }
+                data = { name, color: newCauseColor };
+                await onConfigSave(type, data, 'add');
+                setNewCauseName('');
+                break;
+            case 'operator':
+                name = newOperatorName.trim();
+                if (!name) {
+                    toast({ title: 'Error', description: 'El nombre del operador es obligatorio.', variant: 'destructive'});
+                    return;
+                }
+                data = { name };
+                await onConfigSave(type, data, 'add');
+                setNewOperatorName('');
+                break;
+            case 'supervisor':
+                name = newSupervisorName.trim();
+                if (!name) {
+                    toast({ title: 'Error', description: 'El nombre del supervisor es obligatorio.', variant: 'destructive'});
+                    return;
+                }
+                data = { name };
+                await onConfigSave(type, data, 'add');
+                setNewSupervisorName('');
+                break;
+        }
+    };
+    
+    const handleDelete = async (type: 'stopCause' | 'operator' | 'supervisor', id: string) => {
+        await onConfigSave(type, { id }, 'delete');
+    }
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-4xl">
+                <DialogHeader>
+                    <DialogTitle>Configuración de la Bitácora</DialogTitle>
+                </DialogHeader>
+                <div className="grid md:grid-cols-3 gap-6 py-4 max-h-[70vh] overflow-y-auto">
+                    {/* Stop Causes */}
+                    <div className="md:col-span-1 space-y-4 p-4 border rounded-lg">
+                        <h3 className="font-semibold text-lg">Motivos de Parada</h3>
+                        <div className="flex items-end gap-2">
+                             <div className="flex-grow space-y-1.5">
+                                <Label htmlFor="new-cause-name">Nombre</Label>
+                                <Input id="new-cause-name" value={newCauseName} onChange={e => setNewCauseName(e.target.value)} />
+                             </div>
+                             <div className="space-y-1.5">
+                                <Label htmlFor="new-cause-color">Color</Label>
+                                <Input id="new-cause-color" type="color" value={newCauseColor} onChange={e => setNewCauseColor(e.target.value)} className="p-1 h-10"/>
+                             </div>
+                        </div>
+                        <Button onClick={() => handleAdd('stopCause')} className="w-full">
+                            <PlusCircle className="mr-2" /> Añadir Motivo
+                        </Button>
+                        <Separator />
+                        <ul className="space-y-2">
+                            {stopCauses.map(cause => (
+                                <li key={cause.id} className="flex items-center justify-between text-sm">
+                                    <span className="flex items-center gap-2">
+                                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cause.color }} />
+                                        {cause.name}
+                                    </span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('stopCause', cause.id)}>
+                                        <X className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                     {/* Operators */}
+                    <div className="md:col-span-1 space-y-4 p-4 border rounded-lg">
+                        <h3 className="font-semibold text-lg">Operadores</h3>
+                         <div className="flex items-end gap-2">
+                             <div className="flex-grow space-y-1.5">
+                                <Label htmlFor="new-op-name">Nombre</Label>
+                                <Input id="new-op-name" value={newOperatorName} onChange={e => setNewOperatorName(e.target.value)} />
+                             </div>
+                             <Button onClick={() => handleAdd('operator')}><PlusCircle /></Button>
+                        </div>
+                        <Separator />
+                        <ul className="space-y-2">
+                            {operators.map(op => (
+                                <li key={op.id} className="flex items-center justify-between text-sm">
+                                    <span>{op.name}</span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('operator', op.id)}>
+                                        <X className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                    {/* Supervisors */}
+                    <div className="md:col-span-1 space-y-4 p-4 border rounded-lg">
+                        <h3 className="font-semibold text-lg">Supervisores</h3>
+                         <div className="flex items-end gap-2">
+                             <div className="flex-grow space-y-1.5">
+                                <Label htmlFor="new-sup-name">Nombre</Label>
+                                <Input id="new-sup-name" value={newSupervisorName} onChange={e => setNewSupervisorName(e.target.value)} />
+                             </div>
+                             <Button onClick={() => handleAdd('supervisor')}><PlusCircle /></Button>
+                        </div>
+                        <Separator />
+                        <ul className="space-y-2">
+                            {supervisors.map(sup => (
+                                <li key={sup.id} className="flex items-center justify-between text-sm">
+                                    <span>{sup.name}</span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('supervisor', sup.id)}>
+                                        <X className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="secondary">Cerrar</Button>
+                    </DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 
 export default function StopsClient({ prefetchedProducts }: { prefetchedProducts: ProductDefinition[]}) {
     const [dailyLog, setDailyLog] = React.useState<DailyLog | null>(null);
     const [stopCauses, setStopCauses] = React.useState<StopCause[]>([]);
+    const [operators, setOperators] = React.useState<Operator[]>([]);
+    const [supervisors, setSupervisors] = React.useState<Supervisor[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [date, setDate] = React.useState<Date>(new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
+    const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const { toast } = useToast();
     const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(), []);
     const [isAdminMode, setIsAdminMode] = React.useState(false);
@@ -68,19 +229,31 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         };
     }, [prefetchedProducts]);
 
+    const fetchCatalogs = React.useCallback(async () => {
+         try {
+            const [causesSnap, operatorsSnap, supervisorsSnap] = await Promise.all([
+                getDocs(query(collection(db, 'stopCauses'), orderBy('name'))),
+                getDocs(query(collection(db, 'operators'), orderBy('name'))),
+                getDocs(query(collection(db, 'supervisors'), orderBy('name'))),
+            ]);
+            setStopCauses(causesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StopCause)));
+            setOperators(operatorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Operator)));
+            setSupervisors(supervisorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supervisor)));
+        } catch (error) {
+            toast({ title: 'Error', description: 'No se pudieron cargar los catálogos de configuración.', variant: 'destructive'});
+        }
+    }, [toast]);
+
     React.useEffect(() => {
-        const fetchLogAndCauses = async () => {
+        const fetchLog = async () => {
             setLoading(true);
             const logId = format(date, 'yyyy-MM-dd');
             try {
-                const [logDocSnap, causesSnapshot] = await Promise.all([
-                    getDoc(doc(db, 'dailyLogs', logId)),
-                    getDocs(query(collection(db, 'stopCauses'), orderBy('name')))
-                ]);
+                const logDocSnap = await getDoc(doc(db, 'dailyLogs', logId));
 
-                // Handle Log
                 if (logDocSnap.exists()) {
                     const data = logDocSnap.data() as DailyLog;
+                    // Ensure structure is valid
                     if (!data.machines) data.machines = createEmptyLog(date).machines;
                     if (!data.lote) data.lote = String(getDayOfYear(date));
                     if(!data.operador) data.operador = '';
@@ -89,22 +262,21 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                 } else {
                     setDailyLog(createEmptyLog(date));
                 }
-
-                // Handle Stop Causes
-                const causesList = causesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StopCause));
-                setStopCauses(causesList);
-
             } catch (error) {
-                console.error("Error fetching daily log or causes:", error);
-                toast({ title: 'Error', description: 'No se pudo cargar la bitácora o los motivos de parada.', variant: 'destructive' });
+                console.error("Error fetching daily log:", error);
+                toast({ title: 'Error', description: 'No se pudo cargar la bitácora.', variant: 'destructive' });
                 setDailyLog(createEmptyLog(date));
-                setStopCauses([]);
             }
             setLoading(false);
         };
 
-        fetchLogAndCauses();
+        fetchLog();
     }, [date, createEmptyLog, toast]);
+
+    React.useEffect(() => {
+        fetchCatalogs();
+    }, [fetchCatalogs]);
+
 
     const handleHeaderChange = (field: keyof Omit<DailyLog, 'id' | 'machines' | 'timeSlots'>, value: string) => {
         if (!dailyLog) return;
@@ -228,6 +400,26 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             } else if (password !== null) { // User didn't click cancel
                 toast({ title: "Clave Incorrecta", variant: "destructive" });
             }
+        }
+    };
+    
+    const handleConfigSave = async (
+        type: 'stopCause' | 'operator' | 'supervisor',
+        data: any,
+        action: 'add' | 'delete'
+    ) => {
+        const collectionName = `${type}s`;
+        try {
+            if (action === 'add') {
+                await addDoc(collection(db, collectionName), data);
+                toast({ title: `Nuevo ${type} añadido`});
+            } else if (action === 'delete') {
+                await deleteDoc(doc(db, collectionName, data.id));
+                toast({ title: `${type} eliminado`});
+            }
+            fetchCatalogs(); // Refresh the lists
+        } catch(e) {
+            toast({ title: 'Error', description: `No se pudo actualizar el catálogo de ${type}.`, variant: 'destructive'});
         }
     };
 
@@ -413,6 +605,18 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" onClick={() => setConfigModalOpen(true)}>
+                                    <Settings className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Configuración de Bitácora</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                     <Button onClick={handleSaveLog} disabled={loading}>Guardar Cambios</Button>
                     <Link href="/">
                         <Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button>
@@ -426,11 +630,21 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
                             <div className="space-y-1.5">
                                 <Label>Operador</Label>
-                                <Input value={dailyLog.operador} onChange={e => handleHeaderChange('operador', e.target.value)} />
+                                <Select value={dailyLog.operador} onValueChange={val => handleHeaderChange('operador', val)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {operators.map(o => <SelectItem key={o.id} value={o.name}>{o.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Supervisor</Label>
-                                <Input value={dailyLog.supervisor} onChange={e => handleHeaderChange('supervisor', e.target.value)} />
+                                 <Select value={dailyLog.supervisor} onValueChange={val => handleHeaderChange('supervisor', val)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {supervisors.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Lote</Label>
@@ -562,6 +776,16 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         startTime={modalState.timeSlot}
                         stopData={modalState.stopData}
                         stopCauses={stopCauses}
+                    />
+                )}
+                {configModalOpen && (
+                    <ConfigurationModal
+                        isOpen={configModalOpen}
+                        onClose={() => setConfigModalOpen(false)}
+                        stopCauses={stopCauses}
+                        operators={operators}
+                        supervisors={supervisors}
+                        onConfigSave={handleConfigSave}
                     />
                 )}
             </main>
