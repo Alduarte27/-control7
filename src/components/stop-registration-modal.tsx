@@ -16,10 +16,9 @@ type StopRegistrationModalProps = {
     machineId: string;
     startTime: string; // This is the initial time slot clicked
     stopData?: StopData;
-    availableTimeSlots: string[];
 };
 
-export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopData, availableTimeSlots }: StopRegistrationModalProps) {
+export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopData }: StopRegistrationModalProps) {
     const [actualStartTime, setActualStartTime] = React.useState(stopData?.startTime || startTime);
     const [endTime, setEndTime] = React.useState(stopData?.endTime || actualStartTime);
     const [cause, setCause] = React.useState(stopData?.cause || '');
@@ -31,6 +30,9 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
         if (!stopData) {
             setActualStartTime(startTime);
             setEndTime(startTime);
+        } else {
+            setActualStartTime(stopData.startTime);
+            setEndTime(stopData.endTime);
         }
     }, [startTime, stopData]);
 
@@ -46,7 +48,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
             endDate.setHours(endHour, endMinute, 0, 0);
 
             if (endDate < startDate) {
-                endDate.setDate(endDate.getDate() + 1);
+                endDate.setDate(endDate.getDate() + 1); // Handle overnight duration
             }
 
             const diffMs = endDate.getTime() - startDate.getTime();
@@ -58,6 +60,11 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     
     const handleSave = () => {
         const duration = calculateDuration(actualStartTime, endTime);
+        if (duration < 0) {
+            // Optional: Add a toast or validation message
+            console.error("End time cannot be before start time.");
+            return;
+        }
         onSave({
             startTime: actualStartTime,
             endTime,
@@ -69,13 +76,6 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     };
     
     const duration = calculateDuration(actualStartTime, endTime);
-    
-    // Filter start times to be up to and including the current end time
-    const startIndexForEnd = availableTimeSlots.indexOf(actualStartTime);
-    const validEndTimes = startIndexForEnd !== -1 ? availableTimeSlots.slice(startIndexForEnd) : availableTimeSlots;
-    
-    const endIndexForStart = availableTimeSlots.indexOf(endTime);
-    const validStartTimes = endIndexForStart !== -1 ? availableTimeSlots.slice(0, endIndexForStart + 1) : availableTimeSlots;
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -87,29 +87,22 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="start-time">Hora de Inicio</Label>
-                             <Select value={actualStartTime} onValueChange={setActualStartTime}>
-                                <SelectTrigger id="start-time">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {validStartTimes.map(time => (
-                                        <SelectItem key={`start-${time}`} value={time}>{time}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                             <Input 
+                                id="start-time"
+                                type="time"
+                                value={actualStartTime}
+                                onChange={(e) => setActualStartTime(e.target.value)}
+                             />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="end-time">Hora de Fin</Label>
-                             <Select value={endTime} onValueChange={setEndTime}>
-                                <SelectTrigger id="end-time">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {validEndTimes.map(time => (
-                                        <SelectItem key={`end-${time}`} value={time}>{time}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                             <Input 
+                                id="end-time"
+                                type="time"
+                                value={endTime}
+                                onChange={(e) => setEndTime(e.target.value)}
+                                min={actualStartTime} // Prevents selecting an end time before the start time on the same day
+                             />
                         </div>
                     </div>
                      <div className="space-y-1.5">

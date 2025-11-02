@@ -25,18 +25,6 @@ const TIME_SLOTS_PER_HOUR = 2; // 30-minute intervals
 const SHIFT_START_HOUR = 7;
 const SHIFT_HOURS = 12;
 
-const generateTimeSlots = () => {
-    const slots = [];
-    // Generate slots for a 24-hour cycle to cover both day and night shifts
-    for (let i = 0; i < 24 * TIME_SLOTS_PER_HOUR; i++) {
-        const hour = Math.floor(i / TIME_SLOTS_PER_HOUR);
-        const minute = (i % TIME_SLOTS_PER_HOUR) * (60 / TIME_SLOTS_PER_HOUR);
-        const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
-        slots.push(time);
-    }
-    return slots;
-};
-
 // This function generates the display slots for the table, starting from the shift start
 const generateDisplayTimeSlots = () => {
     const slots = [];
@@ -57,7 +45,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const { toast } = useToast();
     const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(), []);
-    const allTimeSlots = React.useMemo(() => generateTimeSlots(), []);
     
     const createEmptyLog = React.useCallback((logDate: Date): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
@@ -90,7 +77,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     if (!data.machines) {
                         data.machines = createEmptyLog(date).machines;
                     }
-                    if (!data.lote) {
+                     if (!data.lote) {
                         data.lote = String(getDayOfYear(date));
                     }
                     if(!data.operador) data.operador = '';
@@ -152,17 +139,30 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             if (!prev) return null;
             const { machineId, timeSlot } = modalState;
             const newTimeSlots = { ...prev.timeSlots };
-            if (!newTimeSlots[timeSlot]) newTimeSlots[timeSlot] = {};
             
-            const machineObservations = { ...(newTimeSlots[timeSlot] as any)[machineId] || {} };
+            // We use the start time of the stop as the key, even if the user clicked a different cell originally
+            const registrationSlot = timeSlot; // Keep original slot for now, could be changed to stopData.startTime
+            
+            if (!newTimeSlots[registrationSlot]) newTimeSlots[registrationSlot] = {};
+            
+            const machineObservations = { ...(newTimeSlots[registrationSlot] as any)[machineId] || {} };
+            
+            // Remove old stop data if start time changed
+            if (modalState.stopData && modalState.stopData.startTime !== stopData.startTime) {
+                 const oldTimeSlot = modalState.timeSlot;
+                 if (newTimeSlots[oldTimeSlot] && (newTimeSlots[oldTimeSlot] as any)[machineId]) {
+                    delete (newTimeSlots[oldTimeSlot] as any)[machineId].observation;
+                 }
+            }
+            
             machineObservations['observation'] = stopData;
             
-            (newTimeSlots[timeSlot] as any)[machineId] = machineObservations;
+            (newTimeSlots[registrationSlot] as any)[machineId] = machineObservations;
 
             return { ...prev, timeSlots: newTimeSlots };
         });
 
-        toast({ title: 'Parada Registrada', description: `Se guardó la parada para la máquina ${modalState.machineId.split('_')[1]} a las ${modalState.timeSlot}.` });
+        toast({ title: 'Parada Registrada', description: `Se guardó la parada para la máquina ${modalState.machineId.split('_')[1]} de ${stopData.startTime} a ${stopData.endTime}.` });
         setModalState(null);
     };
     
@@ -170,7 +170,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         if (!dailyLog) return;
         try {
             const docRef = doc(db, 'dailyLogs', dailyLog.id);
-            await setDoc(docRef, dailyLog);
+            await setDoc(docRef, dailyLog, { merge: true });
             toast({ title: 'Bitácora Guardada', description: `Se ha guardado el registro del día ${dailyLog.id}.` });
         } catch (error) {
             console.error("Error saving daily log:", error);
@@ -397,6 +397,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                             {inputCell(time, 'empaque_obs')}
                                         </tr>
                                     ))}
+
                                 </tbody>
                             </table>
                         </div>
@@ -410,7 +411,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         machineId={modalState.machineId}
                         startTime={modalState.timeSlot}
                         stopData={modalState.stopData}
-                        availableTimeSlots={allTimeSlots}
                     />
                 )}
             </main>
