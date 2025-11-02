@@ -478,7 +478,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     {stopsInCell.length > 0 ? (
                         stopsInCell.map(stopData => {
                            const isStartingCell = time === stopData.startTime.substring(0,5);
-                           const badgeColor = stopData.type === 'planned' ? '#3b82f6' : '#ef4444';
+                           const stopCauseConfig = stopCauses.find(c => c.name === stopData.reason);
+                           const badgeColor = stopCauseConfig ? stopCauseConfig.color : (stopData.type === 'planned' ? '#3b82f6' : '#ef4444');
 
                            return (
                              <TooltipProvider key={stopData.id}>
@@ -497,7 +498,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                    !isStartingCell && "opacity-60"
                                                 )}
                                             >
-                                               {isStartingCell ? `${stopData.cause} (${stopData.duration}m)` : ''}
+                                               {isStartingCell ? `${stopData.reason} (${stopData.duration}m)` : ''}
                                             </Badge>
                                              {isAdminMode && isStartingCell && (
                                                 <AlertDialog>
@@ -513,7 +514,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                         <AlertDialogHeader>
                                                             <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
                                                             <AlertDialogDescription>
-                                                                Esta acción eliminará permanentemente la parada "{stopData.cause}". No se puede deshacer.
+                                                                Esta acción eliminará permanentemente la parada "{stopData.reason}". No se puede deshacer.
                                                             </AlertDialogDescription>
                                                         </AlertDialogHeader>
                                                         <AlertDialogFooter>

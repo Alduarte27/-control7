@@ -69,9 +69,8 @@ export type StopData = {
     duration: number; // in minutes
     type: 'planned' | 'unplanned';
     maintenanceType?: 'preventive' | 'corrective' | 'predictive'; // For planned stops
-    reason?: string; // General reason (e.g., "Daño eléctrico")
-    cause: string; // Specific cause (e.g., "Cable suelto")
-    causeColor?: string; // The color associated with the cause
+    reason: string; // General category from config (e.g., "Daño eléctrico")
+    cause: string; // Specific detail (e.g., "Cable suelto")
     solution?: string;
 };
 

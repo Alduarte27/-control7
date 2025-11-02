@@ -166,12 +166,16 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                         )}
                         <div className="space-y-1.5">
                             <Label htmlFor="stop-reason">Motivo</Label>
-                            <Input
-                                id="stop-reason"
-                                placeholder="Ej: Daño eléctrico, Falla mecánica..."
-                                value={reason}
-                                onChange={(e) => setReason(e.target.value)}
-                            />
+                             <Select value={reason} onValueChange={setReason}>
+                                <SelectTrigger id="stop-reason">
+                                    <SelectValue placeholder="Seleccionar motivo..."/>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {stopCauses.map(cause => (
+                                        <SelectItem key={cause.id} value={cause.name}>{cause.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="stop-cause">Causa de la Parada</Label>
@@ -197,7 +201,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                     <DialogClose asChild>
                         <Button variant="secondary">Cancelar</Button>
                     </DialogClose>
-                    <Button onClick={handleSave} disabled={!type || !cause || duration < 0}>Guardar Parada</Button>
+                    <Button onClick={handleSave} disabled={!type || !reason || duration < 0}>Guardar Parada</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
