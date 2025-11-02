@@ -327,7 +327,7 @@ export default function StopsClient({
     React.useEffect(() => {
         const fetchLog = async () => {
             setLoading(true);
-            const currentShift = initialShift || dailyLog?.shift || 'day';
+            const currentShift = initialShift || (dailyLog?.shift || 'day');
             const logId = `${format(date, 'yyyy-MM-dd')}_${currentShift}`;
             
             try {
@@ -365,7 +365,10 @@ export default function StopsClient({
         };
 
         fetchLog();
-    }, [date, createEmptyLog, toast, prefetchedProducts, initialShift, dailyLog?.shift]);
+        // Disabling exhaustive-deps because we intentionally don't want to re-run this when dailyLog changes,
+        // only when the external dependencies (date, initialShift) change.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [date, createEmptyLog, toast, prefetchedProducts, initialShift]);
 
 
     const fetchCatalogs = React.useCallback(async () => {
@@ -404,7 +407,6 @@ export default function StopsClient({
 
     const handleDateChange = (newDate: Date | undefined) => {
         if (newDate) {
-            // Do not save here. Only load the new date's data.
             setDate(newDate);
         }
     };
