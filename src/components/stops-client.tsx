@@ -792,13 +792,13 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                 <table className="min-w-full text-xs">
                                      <thead className='text-center align-top'>
                                         <tr className="divide-x divide-border" style={{ position: 'sticky', top: 0, zIndex: 24 }}>
-                                            <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={4}>Hora</th>
+                                            <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={3}>Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10">Máquina #{i + 1}</th>
                                             ))}
                                             <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50">SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={4} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border" style={{ position: 'sticky', top: '41px', zIndex: 23 }}>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
@@ -839,25 +839,21 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10">Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2}>Masa</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2}>Flujo</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2}>NS-FAM</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2}>NS% 1</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2}>NS% 2</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" colSpan={4}>Calidad</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" rowSpan={2}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" rowSpan={2}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" rowSpan={2}>Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" rowSpan={2}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" rowSpan={2}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" rowSpan={2}>Turb</th>
-                                        </tr>
-                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: '127px', zIndex: 21 }}>
-                                            {Array.from({ length: NUM_MACHINES * 2 }).map((_, i) => ( <th key={`empty_header_${i}`} className="p-1 sticky bg-muted z-10"></th> ))}
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">Masa</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">Flujo</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">NS-FAM</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">NS% 1</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">NS% 2</th>
                                             <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10">Color</th>
                                             <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10">Hum</th>
                                             <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10">Turb</th>
                                             <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10">CV</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Turb</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border">
