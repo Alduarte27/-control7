@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, CalendarCheck2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
 import { format, getDayOfYear, parse, setMinutes, getMinutes, getHours } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -259,14 +259,22 @@ function ConfigurationModal({
     );
 }
 
-export default function StopsClient({ prefetchedProducts }: { prefetchedProducts: ProductDefinition[]}) {
+export default function StopsClient({ 
+    prefetchedProducts, 
+    initialDate, 
+    initialShift 
+}: { 
+    prefetchedProducts: ProductDefinition[], 
+    initialDate?: string, 
+    initialShift?: 'day' | 'night' 
+}) {
     const [dailyLog, setDailyLog] = React.useState<DailyLog | null>(null);
     const [stopCauses, setStopCauses] = React.useState<StopCause[]>([]);
     const [operators, setOperators] = React.useState<Operator[]>([]);
     const [supervisors, setSupervisors] = React.useState<Supervisor[]>([]);
     const [maintenanceTypes, setMaintenanceTypes] = React.useState<MaintenanceType[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [date, setDate] = React.useState<Date>(new Date());
+    const [date, setDate] = React.useState<Date>(initialDate ? parse(initialDate, 'yyyy-MM-dd', new Date()) : new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const { toast } = useToast();
@@ -278,7 +286,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         return new Map(stopCauses.map(cause => [cause.name, cause]));
     }, [stopCauses]);
 
-    const createEmptyLog = React.useCallback((logDate: Date): DailyLog => {
+    const createEmptyLog = React.useCallback((logDate: Date, shift: 'day' | 'night'): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
         for (let i = 1; i <= NUM_MACHINES; i++) {
              machineEntries[`machine_${i}`] = {
@@ -286,11 +294,11 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
              };
         }
         return {
-            id: format(logDate, 'yyyy-MM-dd'),
+            id: `${format(logDate, 'yyyy-MM-dd')}_${shift}`,
             operador: '',
             supervisor: '',
             lote: String(getDayOfYear(logDate)),
-            shift: 'day',
+            shift: shift,
             machines: machineEntries,
             timeSlots: {}
         };
@@ -319,7 +327,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     React.useEffect(() => {
         const fetchLog = async () => {
             setLoading(true);
-            const logId = format(date, 'yyyy-MM-dd');
+            const currentShift = initialShift || dailyLog?.shift || 'day';
+            const logId = `${format(date, 'yyyy-MM-dd')}_${currentShift}`;
+            
             try {
                 const logDocSnap = await getDoc(doc(db, 'dailyLogs', logId));
 
@@ -327,34 +337,35 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                 if (logDocSnap.exists()) {
                     logData = logDocSnap.data() as DailyLog;
                 } else {
-                    logData = createEmptyLog(date);
+                    logData = createEmptyLog(date, currentShift);
                 }
 
-                // Ensure the log has all necessary structures, regardless of whether it's new or loaded
-                 if (!logData.machines) logData.machines = {};
-                 for (let i = 1; i <= NUM_MACHINES; i++) {
-                     const machineId = `machine_${i}`;
-                     if (!logData.machines[machineId]) {
-                         logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
-                     }
-                 }
+                if (!logData.machines) logData.machines = {};
+                for (let i = 1; i <= NUM_MACHINES; i++) {
+                    const machineId = `machine_${i}`;
+                    if (!logData.machines[machineId]) {
+                        logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
+                    }
+                }
+
                 if (!logData.lote) logData.lote = String(getDayOfYear(date));
                 if (!logData.operador) logData.operador = '';
                 if (!logData.supervisor) logData.supervisor = '';
                 if (!logData.timeSlots) logData.timeSlots = {};
+                if (!logData.shift) logData.shift = currentShift;
 
                 setDailyLog(logData);
 
             } catch (error) {
                 console.error("Error fetching daily log:", error);
                 toast({ title: 'Error', description: 'No se pudo cargar la bitácora.', variant: 'destructive' });
-                setDailyLog(createEmptyLog(date));
+                setDailyLog(createEmptyLog(date, currentShift));
             }
             setLoading(false);
         };
 
         fetchLog();
-    }, [date, createEmptyLog, toast, prefetchedProducts]);
+    }, [date, createEmptyLog, toast, prefetchedProducts, initialShift, dailyLog?.shift]);
 
 
     const fetchCatalogs = React.useCallback(async () => {
@@ -380,7 +391,16 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
     const handleHeaderChange = (field: keyof Omit<DailyLog, 'id' | 'machines' | 'timeSlots'>, value: string) => {
         if (!dailyLog) return;
-        setDailyLog(prev => prev ? { ...prev, [field]: value } : null);
+
+        const newLog = { ...dailyLog, [field]: value };
+        
+        if (field === 'shift') {
+            handleSaveLog(dailyLog, false);
+            const newId = `${format(date, 'yyyy-MM-dd')}_${value}`;
+            newLog.id = newId;
+        }
+
+        setDailyLog(newLog);
     };
 
     const handleDateChange = (newDate: Date | undefined) => {
@@ -688,6 +708,31 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             </td>
         );
     }
+
+    const masaSelectCell = (time: string) => {
+        const field = 'masa';
+        const value = dailyLog?.timeSlots[time]?.[field] || '';
+
+        const handleValueChange = (newValue: string) => {
+            handleCellChange(time, field, newValue);
+        };
+
+        return (
+            <td className="p-0">
+                <Select value={value} onValueChange={handleValueChange}>
+                    <SelectTrigger className="border-none rounded-none focus:ring-1 focus:ring-inset h-8 text-xs w-full">
+                        <SelectValue placeholder="-" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="">-</SelectItem>
+                        {Array.from({ length: 8 }, (_, i) => i + 1).map(num => (
+                            <SelectItem key={num} value={String(num)}>{num}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </td>
+        );
+    };
     
     return (
         <div className="bg-background min-h-screen text-foreground">
@@ -798,22 +843,22 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                              <div className="w-full overflow-x-auto border rounded-lg bg-card">
                                 <table className="min-w-full text-xs">
                                     <thead className="text-center align-top">
-                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: 0, zIndex: 20 }}>
-                                            <th className="p-2 w-24 sticky left-0 bg-muted z-20" rowSpan={3}>Hora</th>
+                                        <tr className="divide-x divide-border">
+                                            <th className="p-2 w-24 sticky left-0 bg-muted z-20" rowSpan={3} style={{ top: 0 }}>Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10">Máquina #{i + 1}</th>
+                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10" style={{ top: 0 }}>Máquina #{i + 1}</th>
                                             ))}
-                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9}>INGRESO DE PRODUCTO</th>
-                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50">SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9} style={{ top: 0 }}>INGRESO DE PRODUCTO</th>
+                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50" style={{ top: 0 }}>SALIDA DE PRODUCTO TERMINADO</th>
+                                            <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20" style={{ top: 0 }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
-                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: '45px', zIndex: 19 }}>
+                                        <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 sticky bg-muted z-10" colSpan={2}>
+                                                    <th key={`product_selector_${i}`} className="p-1 sticky bg-muted z-10" colSpan={2} style={{ top: '45px' }}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <div className="flex items-center gap-2 truncate">
@@ -835,32 +880,32 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     </th>
                                                 );
                                             })}
-                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9}>GRASSHOPPER</th>
-                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Familiar</th>
-                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Granel 50 KG</th>
+                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9} style={{ top: '45px' }}>GRASSHOPPER</th>
+                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3} style={{ top: '45px' }}>Familiar</th>
+                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3} style={{ top: '45px' }}>Granel 50 KG</th>
                                         </tr>
-                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: '90px', zIndex: 18 }}>
+                                        <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted z-10">Observación</th>
-                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10">Peso/Saco KG</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted z-10" style={{ top: '90px' }}>Observación</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10" style={{ top: '90px' }}>Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">Masa</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">Flujo</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">NS-FAM</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">NS% 1</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">NS% 2</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10">Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10">Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10">Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10">CV</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10">Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>Masa</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>Flujo</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>NS-FAM</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>NS% 1</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>NS% 2</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{ top: '90px' }}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{ top: '90px' }}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{ top: '90px' }}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{ top: '90px' }}>CV</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Turb</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border">
@@ -876,7 +921,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                         </React.Fragment>
                                                     )
                                                 })}
-                                                {inputCell(time, 'masa')}
+                                                {masaSelectCell(time)}
                                                 {inputCell(time, 'flujo')}
                                                 {inputCell(time, 'ns_fam')}
                                                 {inputCell(time, 'ns_1')}
