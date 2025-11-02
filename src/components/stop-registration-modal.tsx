@@ -103,7 +103,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                     <DialogTitle>{stopData ? 'Editar' : 'Registrar'} Parada - Máquina {machineId.split('_')[1]}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4 items-end">
                         <div className="space-y-1.5">
                             <Label htmlFor="start-time">Hora de Inicio</Label>
                              <Input 
@@ -123,10 +123,10 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                 min={actualStartTime} // Prevents selecting an end time before the start time on the same day
                              />
                         </div>
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label>Duración (minutos)</Label>
-                        <Input value={duration} disabled />
+                        <div className="space-y-1.5">
+                            <Label>Duración (minutos)</Label>
+                            <Input value={duration} disabled />
+                        </div>
                     </div>
                     
                     <Separator />
