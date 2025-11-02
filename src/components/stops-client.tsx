@@ -230,7 +230,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                         ))}
                                         <th colSpan={9} className="p-2 bg-green-100 dark:bg-green-900/50">INGRESO DE PRODUCTO FINAL/GRASSHOPPER</th>
                                         <th colSpan={6} className="p-2 bg-blue-100 dark:bg-blue-900/50">SALIDA DE PRODUCTO TERMINADO</th>
-                                        <th rowSpan={2} className="p-2 w-64">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                        <th rowSpan={2} className="p-2 w-80">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                     </tr>
                                     <tr className="divide-x divide-border">
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => (
