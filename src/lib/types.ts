@@ -42,3 +42,41 @@ export type ProductData = ProductDefinition & {
   actual: DailyProduction;
   isSuggested?: boolean; // To flag if the plan was AI-suggested
 };
+
+
+// --- Production Log (Stops) Types ---
+
+export type TimeSlotLog = {
+    // Machine specific
+    observation?: string;
+    weight?: string;
+    // Quality Input
+    masa?: string;
+    flujo?: string;
+    in_color?: string;
+    in_hum?: string;
+    in_turb?: string;
+    in_cv?: string;
+    // Quality Output
+    out_fam_color?: string;
+    out_fam_hum?: string;
+    out_fam_turb?: string;
+    out_gra_color?: string;
+    out_gra_hum?: string;
+    out_gra_turb?: string;
+    // Packaging
+    empaque_obs?: string;
+};
+
+export type MachineLog = {
+  productId: string;
+};
+
+export type DailyLog = {
+  id: string; // YYYY-MM-DD
+  supervisor: string;
+  lote: string;
+  shift: 'day' | 'night';
+  machines: { [machineId: string]: MachineLog };
+  timeSlots: { [time: string]: TimeSlotLog };
+};
