@@ -72,7 +72,7 @@ function ConfigurationModal({
 }) {
     const [newCauseName, setNewCauseName] = React.useState('');
     const [newCauseColor, setNewCauseColor] = React.useState('#ef4444');
-    const [newCauseType, setNewCauseType] = React.useState<'planned' | 'unplanned'>('unplanned');
+    const [newCauseType, setNewCauseType] = React.useState<'planned' | 'unplanned'>('planned');
     const [newOperatorName, setNewOperatorName] = React.useState('');
     const [newSupervisorName, setNewSupervisorName] = React.useState('');
     const [newMaintTypeName, setNewMaintTypeName] = React.useState('');
@@ -131,12 +131,12 @@ function ConfigurationModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-7xl">
+            <DialogContent className="max-w-4xl">
                 <DialogHeader>
                     <DialogTitle>Configuración de la Bitácora</DialogTitle>
                 </DialogHeader>
                 <div className="py-4 max-h-[70vh] overflow-y-auto">
-                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Stop Causes */}
                         <div className="space-y-4 p-4 border rounded-lg">
                             <h3 className="font-semibold text-lg">Motivos de Parada</h3>
@@ -181,71 +181,73 @@ function ConfigurationModal({
                                 ))}
                             </ul>
                         </div>
-                        {/* Maintenance Types */}
-                         <div className="space-y-4 p-4 border rounded-lg">
-                            <h3 className="font-semibold text-lg">Tipos de Mantenimiento</h3>
-                            <div className="flex items-end gap-2">
-                                <div className="flex-grow space-y-1.5">
-                                    <Label htmlFor="new-maint-name">Nombre</Label>
-                                    <Input id="new-maint-name" value={newMaintTypeName} onChange={e => setNewMaintTypeName(e.target.value)} />
+                        <div className="space-y-6">
+                            {/* Maintenance Types */}
+                            <div className="space-y-4 p-4 border rounded-lg">
+                                <h3 className="font-semibold text-lg">Tipos de Mantenimiento</h3>
+                                <div className="flex items-end gap-2">
+                                    <div className="flex-grow space-y-1.5">
+                                        <Label htmlFor="new-maint-name">Nombre</Label>
+                                        <Input id="new-maint-name" value={newMaintTypeName} onChange={e => setNewMaintTypeName(e.target.value)} />
+                                    </div>
+                                    <Button onClick={() => handleAdd('maintenanceType')}><PlusCircle /></Button>
                                 </div>
-                                <Button onClick={() => handleAdd('maintenanceType')}><PlusCircle /></Button>
+                                <Separator />
+                                <ul className="space-y-2 max-h-40 overflow-y-auto">
+                                    {maintenanceTypes.map(mt => (
+                                        <li key={mt.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                            <span>{mt.name}</span>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('maintenanceType', mt.id)}>
+                                                <X className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
-                            <Separator />
-                            <ul className="space-y-2 max-h-40 overflow-y-auto">
-                                {maintenanceTypes.map(mt => (
-                                    <li key={mt.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
-                                        <span>{mt.name}</span>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('maintenanceType', mt.id)}>
-                                            <X className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                        {/* Operators */}
-                        <div className="space-y-4 p-4 border rounded-lg">
-                            <h3 className="font-semibold text-lg">Operadores</h3>
-                            <div className="flex items-end gap-2">
-                                <div className="flex-grow space-y-1.5">
-                                    <Label htmlFor="new-op-name">Nombre</Label>
-                                    <Input id="new-op-name" value={newOperatorName} onChange={e => setNewOperatorName(e.target.value)} />
+                            {/* Operators */}
+                            <div className="space-y-4 p-4 border rounded-lg">
+                                <h3 className="font-semibold text-lg">Operadores</h3>
+                                <div className="flex items-end gap-2">
+                                    <div className="flex-grow space-y-1.5">
+                                        <Label htmlFor="new-op-name">Nombre</Label>
+                                        <Input id="new-op-name" value={newOperatorName} onChange={e => setNewOperatorName(e.target.value)} />
+                                    </div>
+                                    <Button onClick={() => handleAdd('operator')}><PlusCircle /></Button>
                                 </div>
-                                <Button onClick={() => handleAdd('operator')}><PlusCircle /></Button>
+                                <Separator />
+                                <ul className="space-y-2 max-h-40 overflow-y-auto">
+                                    {operators.map(op => (
+                                        <li key={op.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                            <span>{op.name}</span>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('operator', op.id)}>
+                                                <X className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
-                            <Separator />
-                            <ul className="space-y-2 max-h-40 overflow-y-auto">
-                                {operators.map(op => (
-                                    <li key={op.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
-                                        <span>{op.name}</span>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('operator', op.id)}>
-                                            <X className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                         {/* Supervisors */}
-                        <div className="space-y-4 p-4 border rounded-lg">
-                            <h3 className="font-semibold text-lg">Supervisores</h3>
-                            <div className="flex items-end gap-2">
-                                <div className="flex-grow space-y-1.5">
-                                    <Label htmlFor="new-sup-name">Nombre</Label>
-                                    <Input id="new-sup-name" value={newSupervisorName} onChange={e => setNewSupervisorName(e.target.value)} />
+                             {/* Supervisors */}
+                            <div className="space-y-4 p-4 border rounded-lg">
+                                <h3 className="font-semibold text-lg">Supervisores</h3>
+                                <div className="flex items-end gap-2">
+                                    <div className="flex-grow space-y-1.5">
+                                        <Label htmlFor="new-sup-name">Nombre</Label>
+                                        <Input id="new-sup-name" value={newSupervisorName} onChange={e => setNewSupervisorName(e.target.value)} />
+                                    </div>
+                                    <Button onClick={() => handleAdd('supervisor')}><PlusCircle /></Button>
                                 </div>
-                                <Button onClick={() => handleAdd('supervisor')}><PlusCircle /></Button>
+                                <Separator />
+                                <ul className="space-y-2 max-h-40 overflow-y-auto">
+                                    {supervisors.map(sup => (
+                                        <li key={sup.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                            <span>{sup.name}</span>
+                                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('supervisor', sup.id)}>
+                                                <X className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </li>
+                                    ))}
+                                </ul>
                             </div>
-                            <Separator />
-                            <ul className="space-y-2 max-h-40 overflow-y-auto">
-                                {supervisors.map(sup => (
-                                    <li key={sup.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
-                                        <span>{sup.name}</span>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('supervisor', sup.id)}>
-                                            <X className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                    </li>
-                                ))}
-                            </ul>
                         </div>
                     </div>
                 </div>
@@ -776,7 +778,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         <div className="relative">
                             <div className="w-full overflow-x-auto border rounded-lg bg-card">
                                 <table className="min-w-full text-xs">
-                                    <thead className="text-center">
+                                    <thead className="text-center align-top">
                                         <tr className="divide-x divide-border">
                                             <th rowSpan={3} className="p-1 w-24 sticky left-0 bg-muted/50 z-30 top-0">Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
@@ -786,14 +788,14 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                             <th colSpan={6} className="p-2 bg-blue-100 dark:bg-blue-900/50 sticky top-0 z-10">SALIDA DE PRODUCTO TERMINADO</th>
                                             <th rowSpan={3} className="p-2 w-80 sticky bg-muted/50 top-0 z-10" style={{right: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
-                                        <tr className="divide-x divide-border">
+                                        <tr className="divide-x divide-border sticky top-[45px] z-20">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
 
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 bg-muted/50 sticky top-16 z-10" colSpan={2}>
+                                                    <th key={`product_selector_${i}`} className="p-1 bg-muted/50" colSpan={2}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs">
                                                                 <div className="flex items-center gap-2 truncate">
@@ -815,31 +817,31 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     </th>
                                                 );
                                             })}
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50 sticky top-16 z-10">Masa</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50 sticky top-16 z-10">Flujo</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50 sticky top-16 z-10">NS-FAM</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50 sticky top-16 z-10">NS% 1</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50 sticky top-16 z-10">NS% 2</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50 sticky top-16 z-10">Color</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50 sticky top-16 z-10">Hum</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50 sticky top-16 z-10">Turb</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50 sticky top-16 z-10">CV</th>
-                                            <th colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50 sticky top-16 z-10">Familiar</th>
-                                            <th colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50 sticky top-16 z-10">Granel 50 KG</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">Masa</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">Flujo</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS-FAM</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS% 1</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-green-100 dark:bg-green-900/50">NS% 2</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">Color</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">Hum</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">Turb</th>
+                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground bg-yellow-100 dark:bg-yellow-900/50">CV</th>
+                                            <th colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50">Familiar</th>
+                                            <th colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50">Granel 50 KG</th>
                                         </tr>
-                                        <tr className="divide-x divide-border">
+                                        <tr className="divide-x divide-border sticky top-[90px] z-20">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal text-muted-foreground w-48 bg-muted/50 sticky top-[108px] z-10">Observación</th>
-                                                    <th className="p-1 font-normal text-muted-foreground w-24 bg-muted/50 sticky top-[108px] z-10">Peso/Saco KG</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-48 bg-muted/50">Observación</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-24 bg-muted/50">Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
-                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50 sticky top-[108px] z-10">Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50 sticky top-[108px] z-10">Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50 sticky top-[108px] z-10">Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50 sticky top-[108px] z-10">Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50 sticky top-[108px] z-10">Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50 sticky top-[108px] z-10">Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground bg-blue-100 dark:bg-blue-900/50">Turb</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border">
