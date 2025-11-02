@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
-import { format, getDayOfYear, parse, addDays } from 'date-fns';
+import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
+import { format, getDayOfYear, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -22,12 +22,6 @@ import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, } from '@/components/ui/alert-dialog';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Separator } from './ui/separator';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import KpiCard from './kpi-card';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { DateRange } from 'react-day-picker';
-
 
 const NUM_MACHINES = 3;
 const TIME_SLOTS_PER_HOUR = 2; // 30-minute intervals
@@ -264,228 +258,6 @@ function ConfigurationModal({
     );
 }
 
-// --- Analysis Modal ---
-function AnalysisModal({
-    isOpen,
-    onClose,
-}: {
-    isOpen: boolean;
-    onClose: () => void;
-}) {
-    const [oeeDateRange, setOeeDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -7), to: new Date() });
-    const [oeeLoading, setOeeLoading] = React.useState(false);
-    const [machineStops, setMachineStops] = React.useState<{ [machineId: string]: number }>({});
-    const [stopsByReason, setStopsByReason] = React.useState<AggregatedStopData[]>([]);
-    const [stopCauses, setStopCauses] = React.useState<StopCause[]>([]);
-    const toast = useToast();
-
-    const fetchCatalogs = React.useCallback(async () => {
-        try {
-           const causesSnap = await getDocs(query(collection(db, 'stopCauses'), orderBy('name')));
-           setStopCauses(causesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StopCause)));
-       } catch (error) {
-           toast.toast({ title: 'Error', description: 'No se pudieron cargar los catálogos de configuración.', variant: 'destructive'});
-       }
-   }, [toast]);
-   
-   React.useEffect(() => {
-        if(isOpen) {
-            fetchCatalogs();
-        }
-   }, [isOpen, fetchCatalogs]);
-
-
-    const handleFetchOeeData = React.useCallback(async () => {
-        if (!oeeDateRange?.from || !oeeDateRange?.to) {
-            return;
-        }
-
-        setOeeLoading(true);
-        const start = format(oeeDateRange.from, 'yyyy-MM-dd');
-        const end = format(oeeDateRange.to, 'yyyy-MM-dd');
-
-        const aggregatedMachineStops: { [machineId: string]: number } = {};
-        const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
-
-        try {
-            const logsQuery = query(
-                collection(db, 'dailyLogs'),
-                where('id', '>=', start),
-                where('id', '<=', end)
-            );
-            const querySnapshot = await getDocs(logsQuery);
-
-            querySnapshot.forEach(doc => {
-                const log = doc.data() as DailyLog;
-                Object.values(log.timeSlots).forEach(slot => {
-                    Object.entries(slot).forEach(([key, value]) => {
-                        if (key.startsWith('machine_') && typeof value === 'object' && value && 'stops' in value && Array.isArray(value.stops)) {
-                            const machineId = key;
-                            (value.stops as StopData[]).forEach(stop => {
-                                if (!aggregatedMachineStops[machineId]) {
-                                    aggregatedMachineStops[machineId] = 0;
-                                }
-                                aggregatedMachineStops[machineId] += stop.duration;
-
-                                if (!aggregatedStopsByReason[stop.reason]) {
-                                    const causeConfig = stopCauses.find(c => c.name === stop.reason);
-                                    aggregatedStopsByReason[stop.reason] = {
-                                        totalMinutes: 0,
-                                        color: causeConfig?.color || '#8884d8'
-                                    };
-                                }
-                                aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
-                            });
-                        }
-                    });
-                });
-            });
-
-            setMachineStops(aggregatedMachineStops);
-
-            const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, data]) => ({
-                name: reason,
-                totalMinutes: data.totalMinutes,
-                color: data.color,
-            })).sort((a,b) => b.totalMinutes - a.totalMinutes);
-
-            setStopsByReason(reasonData);
-
-        } catch (error) {
-            console.error("Error fetching OEE data:", error);
-        } finally {
-            setOeeLoading(false);
-        }
-    }, [oeeDateRange, stopCauses]);
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-4xl">
-                <DialogHeader>
-                    <DialogTitle>Análisis de Paradas (Disponibilidad)</DialogTitle>
-                </DialogHeader>
-                <div className="py-4 max-h-[80vh] overflow-y-auto space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Filtros de Análisis</CardTitle>
-                            <CardDescription>Selecciona el rango de fechas para analizar las paradas.</CardDescription>
-                        </CardHeader>
-                        <CardContent className="flex flex-col md:flex-row items-center gap-4">
-                            <div className="grid gap-2">
-                                <Label>Rango de Fechas</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant={"outline"}
-                                            className="w-[300px] justify-start text-left font-normal"
-                                        >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {oeeDateRange?.from ? (
-                                                oeeDateRange.to ? (
-                                                    <>
-                                                        {format(oeeDateRange.from, "LLL dd, y", { locale: es })} -{" "}
-                                                        {format(oeeDateRange.to, "LLL dd, y", { locale: es })}
-                                                    </>
-                                                ) : (
-                                                    format(oeeDateRange.from, "LLL dd, y", { locale: es })
-                                                )
-                                            ) : (
-                                                <span>Elige un rango</span>
-                                            )}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <Calendar
-                                            initialFocus
-                                            mode="range"
-                                            defaultMonth={oeeDateRange?.from}
-                                            selected={oeeDateRange}
-                                            onSelect={setOeeDateRange}
-                                            numberOfMonths={2}
-                                            locale={es}
-                                        />
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <Button onClick={handleFetchOeeData} disabled={oeeLoading} className="mt-auto">
-                                {oeeLoading ? 'Analizando...' : 'Analizar Datos'}
-                            </Button>
-                        </CardContent>
-                    </Card>
-                    {oeeLoading ? <p className="text-center pt-8">Cargando datos de análisis...</p> : (
-                        <div className='space-y-6'>
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Total de Tiempo de Parada por Máquina</CardTitle>
-                                    <CardDescription>Suma de todos los minutos de parada para cada máquina en el período seleccionado.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {Object.keys(machineStops).length > 0 ? (
-                                        Object.entries(machineStops).map(([machineId, minutes]) => (
-                                            <KpiCard
-                                                key={machineId}
-                                                title={`Máquina ${machineId.split('_')[1]}`}
-                                                value={`${Math.floor(minutes / 60)}h ${minutes % 60}m`}
-                                                subValue={`${minutes.toLocaleString()} minutos totales`}
-                                                icon={HardHat}
-                                                description="Tiempo total que esta máquina estuvo detenida."
-                                            />
-                                        ))
-                                    ) : (
-                                        <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
-                                    )}
-                                </CardContent>
-                            </Card>
-
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>Desglose de Paradas por Motivo</CardTitle>
-                                    <CardDescription>Tiempo total de parada (en minutos) agrupado por el motivo registrado.</CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    {stopsByReason.length > 0 ? (
-                                        <ChartContainer config={{}} className="w-full h-[400px]">
-                                            <ResponsiveContainer>
-                                                <BarChart layout="vertical" data={stopsByReason} margin={{ left: 50 }}>
-                                                    <CartesianGrid strokeDasharray="3 3" />
-                                                    <XAxis type="number" />
-                                                    <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0}/>
-                                                    <RechartsTooltip
-                                                        cursor={{ fill: 'rgba(200, 200, 200, 0.1)' }}
-                                                        content={<ChartTooltipContent />}
-                                                    />
-                                                    <Bar dataKey="totalMinutes" name="Minutos" radius={[0, 4, 4, 0]}>
-                                                        {stopsByReason.map((entry) => (
-                                                                <Bar key={entry.name} dataKey="totalMinutes" fill={entry.color} />
-                                                        ))}
-                                                    </Bar>
-                                                </BarChart>
-                                            </ResponsiveContainer>
-                                        </ChartContainer>
-                                    ) : (
-                                            <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
-                </div>
-                <DialogFooter>
-                    <DialogClose asChild>
-                        <Button variant="secondary">Cerrar</Button>
-                    </DialogClose>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-interface AggregatedStopData {
-    name: string;
-    totalMinutes: number;
-    color: string;
-}
-
 export default function StopsClient({ prefetchedProducts }: { prefetchedProducts: ProductDefinition[]}) {
     const [dailyLog, setDailyLog] = React.useState<DailyLog | null>(null);
     const [stopCauses, setStopCauses] = React.useState<StopCause[]>([]);
@@ -496,7 +268,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const [date, setDate] = React.useState<Date>(new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
-    const [analysisModalOpen, setAnalysisModalOpen] = React.useState(false);
     const { toast } = useToast();
     const [isAdminMode, setIsAdminMode] = React.useState(false);
     const isInitialMount = React.useRef(true);
@@ -921,18 +692,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" onClick={() => setAnalysisModalOpen(true)}>
-                                    <Activity className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Análisis de Paradas</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
                                 <Button variant="outline" size="icon" onClick={() => setConfigModalOpen(true)}>
                                     <Settings className="h-4 w-4" />
                                 </Button>
@@ -1008,7 +767,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                         <tr className="divide-x divide-border">
                                             <th rowSpan={3} className="p-1 w-24 sticky left-0 bg-muted/50 z-30 top-0">Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted/50 z-10" style={{top: 0}}>Máquina #{i + 1}</th>
+                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted/50 z-20" style={{top: 0}}>Máquina #{i + 1}</th>
                                             ))}
                                             <th colSpan={9} className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: 0}}>INGRESO DE PRODUCTO FINAL/GRASSHOPPER</th>
                                             <th colSpan={6} className="p-2 sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
@@ -1131,12 +890,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     supervisors={supervisors}
                     maintenanceTypes={maintenanceTypes}
                     onConfigSave={handleConfigSave}
-                />
-            )}
-            {analysisModalOpen && (
-                <AnalysisModal
-                    isOpen={analysisModalOpen}
-                    onClose={() => setAnalysisModalOpen(false)}
                 />
             )}
         </div>
