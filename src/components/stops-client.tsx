@@ -714,7 +714,7 @@ export default function StopsClient({
         const value = dailyLog?.timeSlots[time]?.[field] || '';
 
         const handleValueChange = (newValue: string) => {
-            handleCellChange(time, field, newValue);
+            handleCellChange(time, field, newValue === "_" ? "" : newValue);
         };
 
         return (
@@ -724,7 +724,7 @@ export default function StopsClient({
                         <SelectValue placeholder="-" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">-</SelectItem>
+                        <SelectItem value="_">-</SelectItem>
                         {Array.from({ length: 8 }, (_, i) => i + 1).map(num => (
                             <SelectItem key={num} value={String(num)}>{num}</SelectItem>
                         ))}
