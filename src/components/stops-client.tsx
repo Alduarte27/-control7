@@ -282,7 +282,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         const machineEntries: { [machineId: string]: MachineLog } = {};
         for (let i = 1; i <= NUM_MACHINES; i++) {
             machineEntries[`machine_${i}`] = {
-                productId: prefetchedProducts[0]?.id || '',
+                productId: prefetchedProducts && prefetchedProducts.length > 0 ? prefetchedProducts[0].id : '',
             };
         }
         return {
