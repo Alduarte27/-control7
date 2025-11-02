@@ -369,7 +369,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
     const handleDateChange = (newDate: Date | undefined) => {
         if (newDate) {
-            handleSaveLog(dailyLog!, false);
+            if (dailyLog) {
+                handleSaveLog(dailyLog, false);
+            }
             setDate(newDate);
         }
     };
@@ -762,12 +764,12 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                 <table className="min-w-full text-xs">
                                     <thead className='text-center align-top'>
                                         <tr className="divide-x divide-border">
-                                            <th className="p-1 w-24 sticky left-0 bg-muted/50 z-20" rowSpan={3} style={{top: 0}}>Hora</th>
+                                            <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={3} style={{top: 0}}>Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted/50" style={{top: 0}}>Máquina #{i + 1}</th>
+                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10" style={{top: 0}}>Máquina #{i + 1}</th>
                                             ))}
-                                            <th colSpan={9} className="p-2 sticky bg-green-100 dark:bg-green-900/50" style={{top: 0}}>INGRESO DE PRODUCTO</th>
-                                            <th colSpan={6} className="p-2 sticky bg-blue-100 dark:bg-blue-900/50" style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
+                                            <th colSpan={9} className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: 0}}>INGRESO DE PRODUCTO</th>
+                                            <th colSpan={6} className="p-2 sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
                                             <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20" style={{top: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                          <tr className="divide-x divide-border">
@@ -776,7 +778,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 sticky bg-muted/50" colSpan={2} style={{top: '45px'}}>
+                                                    <th key={`product_selector_${i}`} className="p-1 sticky bg-muted z-10" colSpan={2} style={{top: '45px'}}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <div className="flex items-center gap-2 truncate">
@@ -805,8 +807,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                          <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted/50 z-10" style={{top: '90px'}}>Observación</th>
-                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted/50 z-10" style={{top: '90px'}}>Peso/Saco KG</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted z-10" style={{top: '90px'}}>Observación</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10" style={{top: '90px'}}>Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
                                             <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: '90px'}}>Masa</th>
