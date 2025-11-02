@@ -281,9 +281,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const createEmptyLog = React.useCallback((logDate: Date): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
         for (let i = 1; i <= NUM_MACHINES; i++) {
-            machineEntries[`machine_${i}`] = {
-                productId: prefetchedProducts && prefetchedProducts.length > 0 ? prefetchedProducts[0].id : '',
-            };
+             machineEntries[`machine_${i}`] = {
+                productId: prefetchedProducts?.[0]?.id || '',
+             };
         }
         return {
             id: format(logDate, 'yyyy-MM-dd'),
@@ -331,12 +331,13 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                 }
 
                 // Ensure the log has all necessary structures, regardless of whether it's new or loaded
-                if (!logData.machines) logData.machines = {};
-                for (let i = 1; i <= NUM_MACHINES; i++) {
-                    if (!logData.machines[`machine_${i}`]) {
-                        logData.machines[`machine_${i}`] = { productId: prefetchedProducts?.[0]?.id || '' };
-                    }
-                }
+                 if (!logData.machines) logData.machines = {};
+                 for (let i = 1; i <= NUM_MACHINES; i++) {
+                     const machineId = `machine_${i}`;
+                     if (!logData.machines[machineId]) {
+                         logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
+                     }
+                 }
                 if (!logData.lote) logData.lote = String(getDayOfYear(date));
                 if (!logData.operador) logData.operador = '';
                 if (!logData.supervisor) logData.supervisor = '';
@@ -415,53 +416,55 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
     const handleStopSave = (stopData: StopData) => {
         if (!dailyLog || !modalState) return;
-
+    
         setDailyLog(prev => {
             if (!prev) return null;
-            
+    
             const { machineId } = modalState;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
-
+    
             // --- Robust Deletion of Old Stop if Editing and Time Changed ---
             if (modalState.stopData && modalState.stopData.startTime !== stopData.startTime) {
                 const oldStartTime = parse(modalState.stopData.startTime, 'HH:mm', new Date());
                 const oldRegistrationSlotKey = format(setMinutes(oldStartTime, getMinutes(oldStartTime) < 30 ? 0 : 30), 'HH:mm');
-
+    
                 if (newTimeSlots[oldRegistrationSlotKey]?.[machineId]?.stops) {
-                    const oldMachineSlot = newTimeSlots[oldRegistrationSlotKey][machineId] as { stops?: StopData[] };
-                    oldMachineSlot.stops = oldMachineSlot.stops?.filter(s => s.id !== stopData.id);
-                    if (oldMachineSlot.stops?.length === 0) {
-                        delete oldMachineSlot.stops;
+                    const oldMachineSlot = newTimeSlots[oldRegistrationSlotKey][machineId];
+                    if (oldMachineSlot.stops) {
+                        oldMachineSlot.stops = oldMachineSlot.stops.filter((s: StopData) => s.id !== stopData.id);
+                        if (oldMachineSlot.stops.length === 0) {
+                            delete oldMachineSlot.stops;
+                        }
                     }
                 }
             }
-
+    
             // --- Robust Addition/Update of New Stop ---
             const newStartTime = parse(stopData.startTime, 'HH:mm', new Date());
             const newRegistrationSlotKey = format(setMinutes(newStartTime, getMinutes(newStartTime) < 30 ? 0 : 30), 'HH:mm');
-
+    
             if (!newTimeSlots[newRegistrationSlotKey]) {
                 newTimeSlots[newRegistrationSlotKey] = {};
             }
             if (!newTimeSlots[newRegistrationSlotKey][machineId]) {
                 newTimeSlots[newRegistrationSlotKey][machineId] = {};
             }
-
-            const newMachineSlot = newTimeSlots[newRegistrationSlotKey][machineId] as { stops?: StopData[] };
+    
+            const newMachineSlot = newTimeSlots[newRegistrationSlotKey][machineId];
             if (!newMachineSlot.stops) {
                 newMachineSlot.stops = [];
             }
             
-            const existingStopIndex = newMachineSlot.stops.findIndex(s => s.id === stopData.id);
+            const existingStopIndex = newMachineSlot.stops.findIndex((s: StopData) => s.id === stopData.id);
             if (existingStopIndex > -1) {
                 newMachineSlot.stops[existingStopIndex] = stopData;
             } else {
                 newMachineSlot.stops.push(stopData);
             }
-
+    
             return { ...prev, timeSlots: newTimeSlots };
         });
-
+    
         toast({ title: 'Parada Registrada', description: `Se guardó la parada para la máquina ${modalState.machineId.split('_')[1]} de ${stopData.startTime} a ${stopData.endTime}.` });
         setModalState(null);
     };
@@ -792,19 +795,19 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
                         {/* Log Table */}
                         <div className="relative">
-                            <div className="w-full overflow-x-auto border rounded-lg bg-card">
+                             <div className="w-full overflow-x-auto border rounded-lg bg-card">
                                 <table className="min-w-full text-xs">
-                                    <thead className='text-center align-top'>
-                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: 0, zIndex: 24 }}>
-                                            <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={4}>Hora</th>
+                                    <thead className="text-center align-top">
+                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: 0, zIndex: 20 }}>
+                                            <th className="p-2 w-24 sticky left-0 bg-muted z-20" rowSpan={3}>Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10">Máquina #{i + 1}</th>
                                             ))}
-                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9} rowSpan={2}>INGRESO DE PRODUCTO</th>
-                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50" rowSpan={2}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={4} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9}>INGRESO DE PRODUCTO</th>
+                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50">SALIDA DE PRODUCTO TERMINADO</th>
+                                            <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
-                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: '41px', zIndex: 23 }}>
+                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: '45px', zIndex: 19 }}>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
@@ -836,7 +839,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                             <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Familiar</th>
                                             <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Granel 50 KG</th>
                                         </tr>
-                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: '86px', zIndex: 22 }}>
+                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: '90px', zIndex: 18 }}>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
                                                     <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted z-10">Observación</th>
