@@ -327,26 +327,34 @@ export default function StopsClient({
     React.useEffect(() => {
         const fetchLog = async () => {
             setLoading(true);
-            const currentShift = dailyLog?.shift || initialShift || 'day';
+            const currentShift = initialShift || 'day';
             const logId = `${format(date, 'yyyy-MM-dd')}_${currentShift}`;
             
             try {
                 const logDocSnap = await getDoc(doc(db, 'dailyLogs', logId));
 
+                let logData: DailyLog;
                 if (logDocSnap.exists()) {
-                    const logData = logDocSnap.data() as DailyLog;
-                    if (!logData.machines) logData.machines = {};
-                    for (let i = 1; i <= NUM_MACHINES; i++) {
-                        const machineId = `machine_${i}`;
-                        if (!logData.machines[machineId]) {
-                            logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
-                        }
-                    }
-                    if (!logData.timeSlots) logData.timeSlots = {};
-                    setDailyLog(logData);
+                    logData = logDocSnap.data() as DailyLog;
                 } else {
-                    setDailyLog(createEmptyLog(date, currentShift));
+                    logData = createEmptyLog(date, currentShift);
                 }
+
+                if (!logData.machines) logData.machines = {};
+                for (let i = 1; i <= NUM_MACHINES; i++) {
+                    const machineId = `machine_${i}`;
+                    if (!logData.machines[machineId]) {
+                        logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
+                    }
+                }
+
+                if (!logData.lote) logData.lote = String(getDayOfYear(date));
+                if (!logData.operador) logData.operador = '';
+                if (!logData.supervisor) logData.supervisor = '';
+                if (!logData.timeSlots) logData.timeSlots = {};
+                if (!logData.shift) logData.shift = currentShift;
+
+                setDailyLog(logData);
 
             } catch (error) {
                 console.error("Error fetching daily log:", error);
@@ -357,9 +365,7 @@ export default function StopsClient({
         };
 
         fetchLog();
-        // Disabling exhaustive-deps because we intentionally only want this to run when date changes.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [date]);
+    }, [date, createEmptyLog, toast, prefetchedProducts, initialShift]);
 
 
     const fetchCatalogs = React.useCallback(async () => {
@@ -389,18 +395,18 @@ export default function StopsClient({
         const newLog = { ...dailyLog, [field]: value };
         
         if (field === 'shift') {
-            const newId = `${format(date, 'yyyy-MM-dd')}_${value}`;
-            newLog.id = newId;
-
-            // Immediately fetch the log for the new shift
+            // Don't save here, just prepare to load the new shift's data
+            const newShift = value as 'day' | 'night';
             const fetchNewShiftLog = async () => {
                 setLoading(true);
+                const newId = `${format(date, 'yyyy-MM-dd')}_${newShift}`;
                 try {
                     const logDocSnap = await getDoc(doc(db, 'dailyLogs', newId));
                     if (logDocSnap.exists()) {
                         setDailyLog(logDocSnap.data() as DailyLog);
                     } else {
-                        setDailyLog(createEmptyLog(date, value as 'day' | 'night'));
+                        // Show an empty log, but DON'T create it in DB yet
+                        setDailyLog(createEmptyLog(date, newShift));
                     }
                 } catch (error) {
                     console.error("Error fetching new shift log:", error);
@@ -409,7 +415,7 @@ export default function StopsClient({
                 setLoading(false);
             };
             fetchNewShiftLog();
-            return; // Exit here to prevent setDailyLog from being called twice
+            return;
         }
 
         setDailyLog(newLog);
@@ -688,42 +694,43 @@ export default function StopsClient({
     
     const inputCell = (time: string, field: keyof TimeSlot, machineId?: string) => {
         const isPercentageField = ['ns_fam', 'ns_1', 'ns_2'].includes(field as string);
-
+    
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             const rawValue = e.target.value;
             // For percentage fields, store only the number
             const valueToSet = isPercentageField ? rawValue.replace(/%/g, '') : rawValue;
-
+    
             setDailyLog(prev => {
                 if (!prev) return null;
-                const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
+    
+                const newTimeSlots = { ...prev.timeSlots };
     
                 if (!newTimeSlots[time]) {
                     newTimeSlots[time] = {};
                 }
     
+                const timeSlot = newTimeSlots[time];
+                if (typeof timeSlot !== 'object' || timeSlot === null) return prev;
+    
                 if (machineId) {
-                    if (!newTimeSlots[time][machineId] || typeof newTimeSlots[time][machineId] !== 'object') {
-                        newTimeSlots[time][machineId] = {};
-                    }
-                    (newTimeSlots[time][machineId] as any)[field] = valueToSet;
+                    const machineData = { ...(timeSlot[machineId] as object || {}) };
+                    (machineData as any)[field] = valueToSet;
+                    timeSlot[machineId] = machineData;
                 } else {
-                     if (typeof newTimeSlots[time] === 'object' && newTimeSlots[time] !== null) {
-                        newTimeSlots[time][field] = valueToSet;
-                    }
+                    (timeSlot as any)[field] = valueToSet;
                 }
     
                 return { ...prev, timeSlots: newTimeSlots };
             });
         };
-
-        let value;
+    
+        let value: string;
         const timeSlotData = dailyLog?.timeSlots[time];
         if (machineId) {
             const machineData = timeSlotData?.[machineId];
-            value = (machineData && typeof machineData === 'object' && field in machineData) ? String((machineData as any)[field]) : '';
+            value = (machineData && typeof machineData === 'object' && field in machineData) ? String((machineData as any)[field] ?? '') : '';
         } else {
-            value = (timeSlotData && typeof timeSlotData === 'object' && field in timeSlotData) ? String((timeSlotData as any)[field]) : '';
+            value = (timeSlotData && typeof timeSlotData === 'object' && field in timeSlotData) ? String((timeSlotData as any)[field] ?? '') : '';
         }
         
         const displayValue = isPercentageField && value ? `${value}%` : value;
@@ -764,7 +771,7 @@ export default function StopsClient({
             </td>
         );
     };
-
+    
     const flujoSelectCell = (time: string) => {
         const field = 'flujo';
         const value = dailyLog?.timeSlots[time]?.[field] || '';
@@ -976,21 +983,21 @@ export default function StopsClient({
                                                     <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10" style={{ top: '90px' }}>Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>Masa</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>Flujo</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>NS-FAM</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>NS% 1</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{ top: '90px' }}>NS% 2</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{ top: '90px' }}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{ top: '90px' }}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{ top: '90px' }}>Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{ top: '90px' }}>CV</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{ top: '90px' }}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 w-20" style={{ top: '90px' }}>Masa</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 w-36" style={{ top: '90px' }}>Flujo</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 w-24" style={{ top: '90px' }}>NS-FAM</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 w-24" style={{ top: '90px' }}>NS% 1</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 w-24" style={{ top: '90px' }}>NS% 2</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 w-20" style={{ top: '90px' }}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 w-24" style={{ top: '90px' }}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 w-20" style={{ top: '90px' }}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 w-20" style={{ top: '90px' }}>CV</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 w-20" style={{ top: '90px' }}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 w-24" style={{ top: '90px' }}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 w-20" style={{ top: '90px' }}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 w-20" style={{ top: '90px' }}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 w-24" style={{ top: '90px' }}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 w-20" style={{ top: '90px' }}>Turb</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border">
