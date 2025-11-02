@@ -136,7 +136,7 @@ function ConfigurationModal({
                     <DialogTitle>Configuración de la Bitácora</DialogTitle>
                 </DialogHeader>
                 <div className="py-4 max-h-[70vh] overflow-y-auto">
-                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                         {/* Stop Causes */}
                         <div className="space-y-4 p-4 border rounded-lg">
                             <h3 className="font-semibold text-lg">Motivos de Parada</h3>
@@ -300,7 +300,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             const docRef = doc(db, 'dailyLogs', logToSave.id);
             await setDoc(docRef, logToSave, { merge: true });
             if (showToast) {
-                toast({ title: 'Progreso Guardado Automáticamente', description: `Se guardaron los cambios para el día ${logToSave.id}.` });
+                toast({ title: 'Progreso Guardado', description: `Se guardaron los cambios para el día ${logToSave.id}.` });
             }
         } catch (error) {
             console.error("Error saving daily log:", error);
@@ -775,7 +775,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         {/* Log Table */}
                         <div className="overflow-x-auto border rounded-lg bg-card">
                             <table className="min-w-full text-xs">
-                                <thead className="bg-muted/50 text-center">
+                                <thead className="text-center">
                                     <tr className="divide-x divide-border">
                                         <th rowSpan={3} className="p-1 w-24 sticky left-0 bg-muted/50 z-10 top-0">Hora</th>
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => (
@@ -783,7 +783,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                         ))}
                                         <th colSpan={9} className="p-2 bg-green-100 dark:bg-green-900/50 sticky" style={{top: 0}}>INGRESO DE PRODUCTO FINAL/GRASSHOPPER</th>
                                         <th colSpan={6} className="p-2 bg-blue-100 dark:bg-blue-900/50 sticky" style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
-                                        <th rowSpan={3} className="p-2 w-80 sticky bg-muted/50" style={{top: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                        <th rowSpan={3} className="p-2 w-80 sticky bg-muted/50" style={{top: 0, right: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                     </tr>
                                     <tr className="divide-x divide-border">
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => {
