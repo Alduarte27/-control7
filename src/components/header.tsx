@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, TimerOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -15,7 +15,7 @@ type HeaderProps = {
   setIsInfoDialogOpen: (open: boolean) => void;
 };
 
-const NavButton = ({ href, icon: Icon, label }: { href: string; icon: React.ElementType; label: string; }) => (
+const NavButton = ({ href, icon: Icon, label, tooltipText }: { href: string; icon: React.ElementType; label: string; tooltipText: string; }) => (
     <TooltipProvider>
         <Tooltip>
             <TooltipTrigger asChild>
@@ -27,7 +27,7 @@ const NavButton = ({ href, icon: Icon, label }: { href: string; icon: React.Elem
                 </Link>
             </TooltipTrigger>
             <TooltipContent className="lg:hidden">
-                <p>{label}</p>
+                <p>{tooltipText}</p>
             </TooltipContent>
         </Tooltip>
     </TooltipProvider>
@@ -84,11 +84,11 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
               </Tooltip>
           </TooltipProvider>
           
-          <NavButton href="/ia" icon={Sparkles} label="Operaciones" />
-          <NavButton href="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-          <NavButton href="/stops" icon={HardHat} label="Piso" />
-          <NavButton href="/history" icon={History} label="Historial" />
-          <NavButton href="/admin" icon={Settings} label="Admin" />
+          <NavButton href="/ia" icon={Sparkles} label="Operaciones" tooltipText="Operaciones y Simulación" />
+          <NavButton href="/dashboard" icon={LayoutDashboard} label="Dashboard" tooltipText="Dashboard General" />
+          <NavButton href="/stops" icon={HardHat} label="Bitácora" tooltipText="Bitácora de Producción" />
+          <NavButton href="/history" icon={History} label="Historial" tooltipText="Historial de Planes" />
+          <NavButton href="/admin" icon={Settings} label="Admin" tooltipText="Administración" />
           
           <TooltipProvider>
               <Tooltip>
@@ -135,7 +135,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem asChild><Link href="/ia" className="flex items-center"><Sparkles className="mr-2 h-4 w-4" />Operaciones</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/dashboard" className="flex items-center"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link href="/stops" className="flex items-center"><HardHat className="mr-2 h-4 w-4" />Piso</Link></DropdownMenuItem>
+                    <DropdownMenuItem asChild><Link href="/stops" className="flex items-center"><HardHat className="mr-2 h-4 w-4" />Bitácora</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/admin" className="flex items-center"><Settings className="mr-2 h-4 w-4" />Admin</Link></DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
