@@ -578,7 +578,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                 !isStartingCell && "opacity-60"
                                             )}
                                         >
-                                            {isStartingCell ? `${stopData.reason} (${stopData.duration}m)` : ''}
+                                            {isStartingCell && stopData.reason ? `${stopData.reason} (${stopData.duration}m)` : ''}
                                         </Badge>
                                             {isAdminMode && isStartingCell && (
                                             <AlertDialog>
@@ -608,11 +608,11 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                 </TooltipTrigger>
                                 <TooltipContent>
                                     <div className="space-y-1 text-xs max-w-xs">
-                                        <p><strong className="font-semibold">Tipo:</strong> {stopData.type === 'planned' ? 'Planificada' : 'No Planificada'}</p>
+                                        {stopData.type && <p><strong className="font-semibold">Tipo:</strong> {stopData.type === 'planned' ? 'Planificada' : 'No Planificada'}</p>}
                                         {stopData.maintenanceType && <p><strong className="font-semibold">Tipo Mtto:</strong> {stopData.maintenanceType}</p>}
                                         {stopData.reason && <p><strong className="font-semibold">Motivo:</strong> {stopData.reason}</p>}
                                         {stopData.cause && <p><strong className="font-semibold">Causa:</strong> {stopData.cause}</p>}
-                                        <p><strong className="font-semibold">Duración:</strong> {stopData.duration} min ({stopData.startTime} - {stopData.endTime})</p>
+                                        {stopData.duration && <p><strong className="font-semibold">Duración:</strong> {stopData.duration} min ({stopData.startTime} - {stopData.endTime})</p>}
                                         {stopData.solution && <p><strong className="font-semibold">Solución:</strong> {stopData.solution}</p>}
                                     </div>
                                 </TooltipContent>
@@ -764,25 +764,26 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                             <div className="w-full overflow-x-auto border rounded-lg bg-card">
                                 <table className="min-w-full text-xs">
                                     <thead className="text-center align-top">
-                                        <tr className="divide-x divide-border">
+                                        <tr className="divide-x divide-border bg-muted/50">
                                             <th className="p-1 w-24 sticky left-0 bg-muted/50 z-30 top-0">Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted/50 z-20" style={{top: 0}}>Máquina #{i + 1}</th>
+                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky z-20" style={{top: 0}}>Máquina #{i + 1}</th>
                                             ))}
                                             <th colSpan={9} className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: 0}}>INGRESO DE PRODUCTO FINAL/GRASSHOPPER</th>
                                             <th colSpan={6} className="p-2 sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
                                             <th rowSpan={3} className="p-2 w-80 sticky bg-muted/50 z-10 top-0 right-0">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
-                                        <tr className="divide-x divide-border">
+                                        <tr className="divide-x divide-border bg-muted/50">
+                                            <th className="sticky left-0 bg-muted/50 z-30 p-1" style={{top: '45px'}}></th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
 
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 sticky z-20 bg-muted/50" colSpan={2} style={{top: '45px'}}>
+                                                    <th key={`product_selector_${i}`} className="p-1 sticky z-20" colSpan={2} style={{top: '45px'}}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
-                                                            <SelectTrigger className="h-8 text-xs">
+                                                            <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <div className="flex items-center gap-2 truncate">
                                                                     {selectedProduct && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedProduct.color || '#ccc' }}></span>}
                                                                     <SelectValue placeholder="Producto" />
@@ -814,11 +815,12 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                             <th colSpan={3} className="p-1 font-medium sticky z-20 bg-blue-100 dark:bg-blue-900/50 top-[45px]">Familiar</th>
                                             <th colSpan={3} className="p-1 font-medium sticky z-20 bg-blue-100 dark:bg-blue-900/50 top-[45px]">Granel 50 KG</th>
                                         </tr>
-                                        <tr className="divide-x divide-border">
+                                        <tr className="divide-x divide-border bg-muted/50">
+                                            <th className="sticky left-0 bg-muted/50 z-30 p-1" style={{top: '90px'}}></th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky z-20 bg-muted/50" style={{top: '90px'}}>Observación</th>
-                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky z-20 bg-muted/50" style={{top: '90px'}}>Peso/Saco KG</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky z-20" style={{top: '90px'}}>Observación</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky z-20" style={{top: '90px'}}>Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
                                             <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50 top-[90px]">Color</th>
