@@ -14,16 +14,25 @@ type StopRegistrationModalProps = {
     onClose: () => void;
     onSave: (stopData: StopData) => void;
     machineId: string;
-    startTime: string;
+    startTime: string; // This is the initial time slot clicked
     stopData?: StopData;
     availableTimeSlots: string[];
 };
 
 export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopData, availableTimeSlots }: StopRegistrationModalProps) {
-    const [endTime, setEndTime] = React.useState(stopData?.endTime || startTime);
+    const [actualStartTime, setActualStartTime] = React.useState(stopData?.startTime || startTime);
+    const [endTime, setEndTime] = React.useState(stopData?.endTime || actualStartTime);
     const [cause, setCause] = React.useState(stopData?.cause || '');
     const [type, setType] = React.useState<'planned' | 'unplanned'>(stopData?.type || 'unplanned');
     const [solution, setSolution] = React.useState(stopData?.solution || '');
+
+    React.useEffect(() => {
+        // When the modal opens for a new stop, ensure end time is not before start time
+        if (!stopData) {
+            setActualStartTime(startTime);
+            setEndTime(startTime);
+        }
+    }, [startTime, stopData]);
 
     const calculateDuration = (start: string, end: string): number => {
         try {
@@ -36,23 +45,21 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
             const endDate = new Date();
             endDate.setHours(endHour, endMinute, 0, 0);
 
-            // Handle overnight case
             if (endDate < startDate) {
                 endDate.setDate(endDate.getDate() + 1);
             }
 
             const diffMs = endDate.getTime() - startDate.getTime();
             return Math.round(diffMs / (1000 * 60));
-
         } catch (e) {
             return 0;
         }
     };
     
     const handleSave = () => {
-        const duration = calculateDuration(startTime, endTime);
+        const duration = calculateDuration(actualStartTime, endTime);
         onSave({
-            startTime,
+            startTime: actualStartTime,
             endTime,
             duration,
             cause,
@@ -61,8 +68,14 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
         });
     };
     
-    const startIndex = availableTimeSlots.indexOf(startTime);
-    const validEndTimes = startIndex !== -1 ? availableTimeSlots.slice(startIndex) : availableTimeSlots;
+    const duration = calculateDuration(actualStartTime, endTime);
+    
+    // Filter start times to be up to and including the current end time
+    const startIndexForEnd = availableTimeSlots.indexOf(actualStartTime);
+    const validEndTimes = startIndexForEnd !== -1 ? availableTimeSlots.slice(startIndexForEnd) : availableTimeSlots;
+    
+    const endIndexForStart = availableTimeSlots.indexOf(endTime);
+    const validStartTimes = endIndexForStart !== -1 ? availableTimeSlots.slice(0, endIndexForStart + 1) : availableTimeSlots;
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -73,8 +86,17 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                 <div className="space-y-4 py-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <Label>Hora de Inicio</Label>
-                            <Input value={startTime} disabled />
+                            <Label htmlFor="start-time">Hora de Inicio</Label>
+                             <Select value={actualStartTime} onValueChange={setActualStartTime}>
+                                <SelectTrigger id="start-time">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {validStartTimes.map(time => (
+                                        <SelectItem key={`start-${time}`} value={time}>{time}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="end-time">Hora de Fin</Label>
@@ -84,7 +106,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                 </SelectTrigger>
                                 <SelectContent>
                                     {validEndTimes.map(time => (
-                                        <SelectItem key={time} value={time}>{time}</SelectItem>
+                                        <SelectItem key={`end-${time}`} value={time}>{time}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -92,7 +114,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                     </div>
                      <div className="space-y-1.5">
                         <Label>Duración (minutos)</Label>
-                        <Input value={calculateDuration(startTime, endTime)} disabled />
+                        <Input value={duration} disabled />
                     </div>
                      <div className="space-y-1.5">
                         <Label htmlFor="stop-type">Tipo de Parada</Label>
@@ -129,7 +151,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                     <DialogClose asChild>
                         <Button variant="secondary">Cancelar</Button>
                     </DialogClose>
-                    <Button onClick={handleSave} disabled={!cause}>Guardar Parada</Button>
+                    <Button onClick={handleSave} disabled={!cause || duration < 0}>Guardar Parada</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

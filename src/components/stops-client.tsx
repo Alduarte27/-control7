@@ -27,6 +27,19 @@ const SHIFT_HOURS = 12;
 
 const generateTimeSlots = () => {
     const slots = [];
+    // Generate slots for a 24-hour cycle to cover both day and night shifts
+    for (let i = 0; i < 24 * TIME_SLOTS_PER_HOUR; i++) {
+        const hour = Math.floor(i / TIME_SLOTS_PER_HOUR);
+        const minute = (i % TIME_SLOTS_PER_HOUR) * (60 / TIME_SLOTS_PER_HOUR);
+        const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        slots.push(time);
+    }
+    return slots;
+};
+
+// This function generates the display slots for the table, starting from the shift start
+const generateDisplayTimeSlots = () => {
+    const slots = [];
     for (let i = 0; i < SHIFT_HOURS * TIME_SLOTS_PER_HOUR * 2; i++) { // *2 for 24 hours
         const hour = (SHIFT_START_HOUR + Math.floor(i / TIME_SLOTS_PER_HOUR)) % 24;
         const minute = (i % TIME_SLOTS_PER_HOUR) * (60 / TIME_SLOTS_PER_HOUR);
@@ -36,13 +49,15 @@ const generateTimeSlots = () => {
     return slots;
 };
 
+
 export default function StopsClient({ prefetchedProducts }: { prefetchedProducts: ProductDefinition[]}) {
     const [dailyLog, setDailyLog] = React.useState<DailyLog | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [date, setDate] = React.useState<Date>(new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const { toast } = useToast();
-    const timeSlots = React.useMemo(() => generateTimeSlots(), []);
+    const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(), []);
+    const allTimeSlots = React.useMemo(() => generateTimeSlots(), []);
     
     const createEmptyLog = React.useCallback((logDate: Date): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
@@ -78,6 +93,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     if (!data.lote) {
                         data.lote = String(getDayOfYear(date));
                     }
+                    if(!data.operador) data.operador = '';
                     setDailyLog(data);
                 } else {
                     setDailyLog(createEmptyLog(date));
@@ -101,7 +117,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const handleDateChange = (newDate: Date | undefined) => {
         if (newDate) {
             setDate(newDate);
-            // Auto-update lot number when date changes
             setDailyLog(prev => prev ? { ...prev, lote: String(getDayOfYear(newDate)) } : createEmptyLog(newDate));
         }
     };
@@ -352,7 +367,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
-                                    {timeSlots.map((time) => (
+                                    {timeSlotsForTable.map((time) => (
                                         <tr key={time} className="divide-x divide-border group">
                                             <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
                                             {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
@@ -395,7 +410,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         machineId={modalState.machineId}
                         startTime={modalState.timeSlot}
                         stopData={modalState.stopData}
-                        availableTimeSlots={timeSlots}
+                        availableTimeSlots={allTimeSlots}
                     />
                 )}
             </main>
