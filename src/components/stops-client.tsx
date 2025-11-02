@@ -2,289 +2,264 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, PlusCircle, Trash2, Calendar as CalendarIcon, TimerOff } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Factory, ChevronLeft, HardHat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, CategoryDefinition, StopData } from '@/lib/types';
+import type { ProductDefinition } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
-import { addStopAction, deleteStopAction } from '@/actions/stops-actions';
-import { format, parseISO, differenceInMinutes } from 'date-fns';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
-import { RadioGroup, RadioGroupItem } from './ui/radio-group';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
-const initialMachines = [
-    { id: 'envasadora_1', name: 'Envasadora 1' },
-    { id: 'envasadora_2', name: 'Envasadora 2' },
-    { id: 'envasadora_3', name: 'Envasadora 3' },
-    { id: 'envasadora_4', name: 'Envasadora 4' },
-    { id: 'enfardadora_1', name: 'Enfardadora 1' },
-    { id: 'enfardadora_2', name: 'Enfardadora 2' },
-];
+const NUM_MACHINES = 3;
+const TIME_SLOTS_PER_HOUR = 2; // 30-minute intervals
+const SHIFT_START_HOUR = 7;
+const SHIFT_HOURS = 12;
 
-export default function StopsClient({ prefetchedProducts, prefetchedCategories }: { prefetchedProducts: ProductDefinition[], prefetchedCategories: CategoryDefinition[] }) {
-    const [stops, setStops] = React.useState<StopData[]>([]);
+type MachineLog = {
+  productId: string;
+  observations: { [timeSlot: string]: string };
+  weights: { [timeSlot: string]: string };
+};
+
+type DailyLog = {
+  id: string; // YYYY-MM-DD
+  operator: string;
+  lot: string;
+  shift: 'day' | 'night';
+  machines: { [machineId: string]: MachineLog };
+};
+
+const generateTimeSlots = () => {
+    const slots = [];
+    for (let i = 0; i < SHIFT_HOURS * TIME_SLOTS_PER_HOUR; i++) {
+        const hour = SHIFT_START_HOUR + Math.floor(i / TIME_SLOTS_PER_HOUR);
+        const minute = (i % TIME_SLOTS_PER_HOUR) * (60 / TIME_SLOTS_PER_HOUR);
+        const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        slots.push(time);
+    }
+    return slots;
+};
+
+export default function StopsClient({ prefetchedProducts }: { prefetchedProducts: ProductDefinition[]}) {
+    const [dailyLog, setDailyLog] = React.useState<DailyLog | null>(null);
     const [loading, setLoading] = React.useState(true);
+    const [date, setDate] = React.useState<Date>(new Date());
     const { toast } = useToast();
-
-    // Form state
-    const [machineId, setMachineId] = React.useState<string>('');
-    const [cause, setCause] = React.useState('');
-    const [startTime, setStartTime] = React.useState<Date | undefined>(new Date());
-    const [endTime, setEndTime] = React.useState<Date | undefined>(new Date());
-    const [stopType, setStopType] = React.useState<'planned' | 'unplanned'>('unplanned');
+    const timeSlots = React.useMemo(() => generateTimeSlots(), []);
     
-    // Derived machines list from ia-client logic might be better in the future
-    const [machines] = React.useState(initialMachines);
+    const createEmptyLog = (logDate: Date): DailyLog => {
+        const machineEntries: { [machineId: string]: MachineLog } = {};
+        for (let i = 1; i <= NUM_MACHINES; i++) {
+            machineEntries[`machine_${i}`] = {
+                productId: prefetchedProducts[0]?.id || '',
+                observations: {},
+                weights: {},
+            };
+        }
+        return {
+            id: format(logDate, 'yyyy-MM-dd'),
+            operator: '',
+            lot: '',
+            shift: 'day',
+            machines: machineEntries
+        };
+    };
 
     React.useEffect(() => {
-        const fetchStops = async () => {
+        const fetchLog = async () => {
             setLoading(true);
+            const logId = format(date, 'yyyy-MM-dd');
             try {
-                const stopsSnapshot = await getDocs(query(collection(db, 'stops'), orderBy('startTime', 'desc')));
-                const stopsList = stopsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as StopData));
-                setStops(stopsList);
+                const docRef = doc(db, 'dailyLogs', logId);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    setDailyLog(docSnap.data() as DailyLog);
+                } else {
+                    setDailyLog(createEmptyLog(date));
+                }
             } catch (error) {
-                console.error("Error fetching stops:", error);
-                toast({ title: 'Error', description: 'No se pudieron cargar las paradas.', variant: 'destructive' });
+                console.error("Error fetching daily log:", error);
+                toast({ title: 'Error', description: 'No se pudo cargar la bitácora.', variant: 'destructive' });
+                setDailyLog(createEmptyLog(date));
             }
             setLoading(false);
         };
 
-        fetchStops();
-    }, [toast]);
+        fetchLog();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [date]);
 
-    const handleAddStop = async () => {
-        if (!machineId || !cause || !startTime || !endTime) {
-            toast({ title: 'Error', description: 'Todos los campos son obligatorios.', variant: 'destructive' });
-            return;
-        }
+    const handleHeaderChange = (field: keyof DailyLog, value: string) => {
+        if (!dailyLog) return;
+        setDailyLog(prev => prev ? { ...prev, [field]: value } : null);
+    };
 
-        if (endTime < startTime) {
-            toast({ title: 'Error de Fechas', description: 'La hora de fin no puede ser anterior a la hora de inicio.', variant: 'destructive' });
-            return;
-        }
+    const handleMachineProductChange = (machineId: string, productId: string) => {
+        if (!dailyLog) return;
+        setDailyLog(prev => {
+            if (!prev) return null;
+            const newMachines = { ...prev.machines };
+            newMachines[machineId].productId = productId;
+            return { ...prev, machines: newMachines };
+        });
+    };
 
-        const durationMinutes = differenceInMinutes(endTime, startTime);
+    const handleCellChange = (machineId: string, timeSlot: string, field: 'observations' | 'weights', value: string) => {
+       if (!dailyLog) return;
+        setDailyLog(prev => {
+            if (!prev) return null;
+            const newMachines = { ...prev.machines };
+            const machineLog = { ...newMachines[machineId] };
+            machineLog[field] = { ...machineLog[field], [timeSlot]: value };
+            newMachines[machineId] = machineLog;
+            return { ...prev, machines: newMachines };
+        });
+    };
 
+    const handleSaveLog = async () => {
+        if (!dailyLog) return;
         try {
-            const newStopData = {
-                machineId,
-                cause,
-                startTime: startTime.toISOString(),
-                endTime: endTime.toISOString(),
-                durationMinutes,
-                type: stopType,
-            };
-            const newStop = await addStopAction(newStopData);
-            setStops(prev => [newStop, ...prev]);
-
-            // Reset form
-            setMachineId('');
-            setCause('');
-            setStartTime(new Date());
-            setEndTime(new Date());
-            setStopType('unplanned');
-
-            toast({ title: 'Parada Registrada', description: `Se ha añadido una parada para ${machines.find(m => m.id === machineId)?.name}.` });
+            const docRef = doc(db, 'dailyLogs', dailyLog.id);
+            await setDoc(docRef, dailyLog);
+            toast({ title: 'Bitácora Guardada', description: `Se ha guardado el registro del día ${dailyLog.id}.` });
         } catch (error) {
-            console.error("Error adding stop:", error);
-            toast({ title: 'Error', description: 'No se pudo registrar la parada.', variant: 'destructive' });
+            console.error("Error saving daily log:", error);
+            toast({ title: 'Error', description: 'No se pudo guardar la bitácora.', variant: 'destructive' });
         }
     };
     
-    const handleDeleteStop = async (stopId: string) => {
-        try {
-            await deleteStopAction(stopId);
-            setStops(prev => prev.filter(s => s.id !== stopId));
-            toast({ title: 'Registro Eliminado' });
-        } catch (error) {
-             toast({ title: 'Error', description: 'No se pudo eliminar el registro.', variant: 'destructive' });
-        }
-    };
-    
-    const formatDateTime = (isoString: string) => {
-        try {
-            return format(parseISO(isoString), "dd MMM yyyy, HH:mm", { locale: es });
-        } catch (error) {
-            return "Fecha inválida";
-        }
-    };
-
     return (
         <div className="bg-background min-h-screen text-foreground">
-            <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
+            <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
                 <div className="flex items-center gap-3">
-                    <TimerOff className="h-8 w-8 text-primary" />
-                    <h1 className="text-2xl font-bold text-foreground">Análisis de Paradas y OEE</h1>
+                    <HardHat className="h-8 w-8 text-primary" />
+                    <h1 className="text-2xl font-bold text-foreground">Control de Piso</h1>
                 </div>
-                <Link href="/">
-                    <Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver a Planificación</Button>
-                </Link>
+                <div className="flex items-center gap-2">
+                    <Button onClick={handleSaveLog} disabled={loading}>Guardar Cambios</Button>
+                    <Link href="/">
+                        <Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button>
+                    </Link>
+                </div>
             </header>
-            <main className="p-4 md:p-8 space-y-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Registrar Nueva Parada</CardTitle>
-                        <CardDescription>Añade los detalles de una parada de máquina para el cálculo de OEE.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-end">
+            <main className="p-4 md:p-6">
+                {loading ? <p>Cargando bitácora...</p> : dailyLog && (
+                    <div className="space-y-4">
+                        {/* Header */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-lg bg-card">
                             <div className="space-y-1.5">
-                                <Label htmlFor="machine-select">Máquina</Label>
-                                <Select value={machineId} onValueChange={setMachineId}>
-                                    <SelectTrigger id="machine-select">
-                                        <SelectValue placeholder="Seleccionar máquina" />
-                                    </SelectTrigger>
+                                <Label>Operador</Label>
+                                <Input value={dailyLog.operator} onChange={e => handleHeaderChange('operator', e.target.value)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Lote</Label>
+                                <Input value={dailyLog.lot} onChange={e => handleHeaderChange('lot', e.target.value)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label>Turno</Label>
+                                <Select value={dailyLog.shift} onValueChange={val => handleHeaderChange('shift', val)}>
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        {machines.map(m => (
-                                            <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                                        ))}
+                                        <SelectItem value="day">Día</SelectItem>
+                                        <SelectItem value="night">Noche</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className="space-y-1.5 md:col-span-2 lg:col-span-1">
-                                <Label htmlFor="stop-cause">Causa de la Parada</Label>
-                                <Input id="stop-cause" value={cause} onChange={e => setCause(e.target.value)} placeholder="Ej: Falla en sensor, cambio de bobina..."/>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Tipo de Parada</Label>
-                                <RadioGroup value={stopType} onValueChange={(val: 'planned' | 'unplanned') => setStopType(val)} className="flex items-center space-x-4 pt-2">
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="unplanned" id="r-unplanned" />
-                                        <Label htmlFor="r-unplanned">No Planificada</Label>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <RadioGroupItem value="planned" id="r-planned" />
-                                        <Label htmlFor="r-planned">Planificada</Label>
-                                    </div>
-                                </RadioGroup>
-                            </div>
-                        </div>
-                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                            <div className="space-y-1.5">
-                                <Label>Hora de Inicio</Label>
+                             <div className="space-y-1.5">
+                                <Label>Fecha</Label>
                                 <Popover>
                                     <PopoverTrigger asChild>
                                         <Button variant="outline" className="w-full justify-start font-normal">
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {startTime ? format(startTime, "PPP, HH:mm", { locale: es }) : <span>Seleccionar fecha y hora</span>}
+                                            {format(date, "PPP", { locale: es })}
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0">
-                                        <Calendar mode="single" selected={startTime} onSelect={setStartTime} />
-                                        <div className="p-3 border-t border-border">
-                                            <Input type="time" value={startTime ? format(startTime, "HH:mm") : ''} onChange={e => {
-                                                const [h, m] = e.target.value.split(':');
-                                                const newDate = new Date(startTime || new Date());
-                                                newDate.setHours(Number(h), Number(m));
-                                                setStartTime(newDate);
-                                            }}/>
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Hora de Fin</Label>
-                                 <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" className="w-full justify-start font-normal">
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {endTime ? format(endTime, "PPP, HH:mm", { locale: es }) : <span>Seleccionar fecha y hora</span>}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                        <Calendar mode="single" selected={endTime} onSelect={setEndTime} />
-                                        <div className="p-3 border-t border-border">
-                                             <Input type="time" value={endTime ? format(endTime, "HH:mm") : ''} onChange={e => {
-                                                const [h, m] = e.target.value.split(':');
-                                                const newDate = new Date(endTime || new Date());
-                                                newDate.setHours(Number(h), Number(m));
-                                                setEndTime(newDate);
-                                            }}/>
-                                        </div>
+                                        <Calendar mode="single" selected={date} onSelect={(d) => d && setDate(d)} />
                                     </PopoverContent>
                                 </Popover>
                             </div>
                         </div>
-                        <Button onClick={handleAddStop}>
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Registrar Parada
-                        </Button>
-                    </CardContent>
-                </Card>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Historial de Paradas</CardTitle>
-                        <CardDescription>Lista de todas las paradas registradas.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {loading ? <p>Cargando...</p> : (
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
-                                        <tr>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Máquina</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Causa</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inicio</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fin</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duración (min)</th>
-                                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
-                                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                        {/* Log Table */}
+                        <div className="overflow-x-auto border rounded-lg bg-card">
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-muted/50">
+                                    <tr className="divide-x divide-border">
+                                        <th className="p-2 w-24 sticky left-0 bg-muted/50 z-10">Hora</th>
+                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => {
+                                            const machineId = `machine_${i + 1}`;
+                                            return (
+                                                <th key={machineId} className="p-2" colSpan={2}>
+                                                    <p>Máquina #{i + 1}</p>
+                                                    <Select value={dailyLog.machines[machineId]?.productId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
+                                                        <SelectTrigger className="h-8 mt-1 text-xs">
+                                                            <SelectValue placeholder="Seleccionar producto" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {prefetchedProducts.map(p => (
+                                                                <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </th>
+                                            );
+                                        })}
+                                    </tr>
+                                    <tr className="divide-x divide-border">
+                                        <th className="p-2 w-24 sticky left-0 bg-muted/50 z-10"></th>
+                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => (
+                                            <React.Fragment key={i}>
+                                                <th className="p-2 font-normal text-muted-foreground w-64">Observación</th>
+                                                <th className="p-2 font-normal text-muted-foreground w-32">Peso/Saco KG</th>
+                                            </React.Fragment>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {timeSlots.map((time, timeIndex) => (
+                                        <tr key={time} className="divide-x divide-border">
+                                            <td className="p-2 w-24 text-center font-mono sticky left-0 bg-card z-10">
+                                                {timeIndex % TIME_SLOTS_PER_HOUR === 0 && (
+                                                    <span className="font-bold text-primary">{Math.floor(timeIndex / TIME_SLOTS_PER_HOUR) + 1}</span>
+                                                )}
+                                                <span className="ml-2">{time}</span>
+                                            </td>
+                                            {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
+                                                const machineId = `machine_${machineIndex + 1}`;
+                                                return (
+                                                    <React.Fragment key={machineId}>
+                                                        <td className="p-0">
+                                                            <Input 
+                                                                className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset"
+                                                                value={dailyLog.machines[machineId]?.observations?.[time] || ''}
+                                                                onChange={e => handleCellChange(machineId, time, 'observations', e.target.value)}
+                                                            />
+                                                        </td>
+                                                        <td className="p-0">
+                                                            <Input
+                                                                type="text"
+                                                                className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset"
+                                                                value={dailyLog.machines[machineId]?.weights?.[time] || ''}
+                                                                onChange={e => handleCellChange(machineId, time, 'weights', e.target.value)}
+                                                            />
+                                                        </td>
+                                                    </React.Fragment>
+                                                )
+                                            })}
                                         </tr>
-                                    </thead>
-                                    <tbody className="bg-white divide-y divide-gray-200">
-                                        {stops.length > 0 ? stops.map(stop => (
-                                            <tr key={stop.id}>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{machines.find(m => m.id === stop.machineId)?.name}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{stop.cause}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDateTime(stop.startTime)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDateTime(stop.endTime)}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{stop.durationMinutes}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${stop.type === 'planned' ? 'bg-blue-100 text-blue-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                                                        {stop.type === 'planned' ? 'Planificada' : 'No Planificada'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                             <Button variant="ghost" size="icon" className="text-destructive">
-                                                                <Trash2 className="h-4 w-4" />
-                                                            </Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                                                                <AlertDialogDescription>Esta acción no se puede deshacer. Esto eliminará permanentemente el registro de la parada.</AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                                <AlertDialogAction onClick={() => handleDeleteStop(stop.id)}>Eliminar</AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
-                                                </td>
-                                            </tr>
-                                        )) : (
-                                            <tr>
-                                                <td colSpan={7} className="px-6 py-4 text-center text-sm text-gray-500">No hay paradas registradas.</td>
-                                            </tr>
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </main>
         </div>
     );
