@@ -124,61 +124,85 @@ function ConfigurationModal({
                 <DialogHeader>
                     <DialogTitle>Configuración de la Bitácora</DialogTitle>
                 </DialogHeader>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-4 max-h-[70vh] overflow-y-auto">
-                    {/* Stop Causes */}
-                    <div className="space-y-4 p-4 border rounded-lg">
-                        <h3 className="font-semibold text-lg">Motivos de Parada</h3>
-                        <div className="space-y-2">
-                             <div className="flex-grow space-y-1.5">
-                                <Label htmlFor="new-cause-name">Nombre del Motivo</Label>
-                                <Input id="new-cause-name" value={newCauseName} onChange={e => setNewCauseName(e.target.value)} />
-                             </div>
-                             <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="new-cause-color">Color</Label>
-                                    <Input id="new-cause-color" type="color" value={newCauseColor} onChange={e => setNewCauseColor(e.target.value)} className="p-1 h-10"/>
+                <div className="py-4 max-h-[70vh] overflow-y-auto space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Stop Causes */}
+                        <div className="space-y-4 p-4 border rounded-lg">
+                            <h3 className="font-semibold text-lg">Motivos de Parada</h3>
+                            <div className="space-y-2">
+                                <div className="flex-grow space-y-1.5">
+                                    <Label htmlFor="new-cause-name">Nombre del Motivo</Label>
+                                    <Input id="new-cause-name" value={newCauseName} onChange={e => setNewCauseName(e.target.value)} />
                                 </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="new-cause-type">Tipo</Label>
-                                    <Select value={newCauseType} onValueChange={(v: any) => setNewCauseType(v)}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="unplanned">No Planificada</SelectItem>
-                                            <SelectItem value="planned">Planificada</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="new-cause-color">Color</Label>
+                                        <Input id="new-cause-color" type="color" value={newCauseColor} onChange={e => setNewCauseColor(e.target.value)} className="p-1 h-10"/>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="new-cause-type">Tipo</Label>
+                                        <Select value={newCauseType} onValueChange={(v: any) => setNewCauseType(v)}>
+                                            <SelectTrigger><SelectValue/></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="unplanned">No Planificada</SelectItem>
+                                                <SelectItem value="planned">Planificada</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
-                             </div>
+                            </div>
+                            <Button onClick={() => handleAdd('stopCause')} className="w-full">
+                                <PlusCircle className="mr-2" /> Añadir Motivo
+                            </Button>
+                            <Separator />
+                            <ul className="space-y-2 max-h-60 overflow-y-auto">
+                                {stopCauses.map(cause => (
+                                    <li key={cause.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                        <span className="flex items-center gap-2">
+                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cause.color }} />
+                                            {cause.name}
+                                            <Badge variant={cause.type === 'planned' ? 'secondary' : 'destructive'} className='text-xs'>{cause.type === 'planned' ? 'P' : 'NP'}</Badge>
+                                        </span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('stopCause', cause.id)}>
+                                            <X className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
                         </div>
-                        <Button onClick={() => handleAdd('stopCause')} className="w-full">
-                            <PlusCircle className="mr-2" /> Añadir Motivo
-                        </Button>
-                        <Separator />
-                        <ul className="space-y-2 max-h-60 overflow-y-auto">
-                            {stopCauses.map(cause => (
-                                <li key={cause.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
-                                    <span className="flex items-center gap-2">
-                                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cause.color }} />
-                                        {cause.name}
-                                        <Badge variant={cause.type === 'planned' ? 'secondary' : 'destructive'} className='text-xs'>{cause.type === 'planned' ? 'P' : 'NP'}</Badge>
-                                    </span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('stopCause', cause.id)}>
-                                        <X className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </li>
-                            ))}
-                        </ul>
+                        {/* Maintenance Types */}
+                         <div className="space-y-4 p-4 border rounded-lg">
+                            <h3 className="font-semibold text-lg">Tipos de Mantenimiento</h3>
+                            <div className="flex items-end gap-2">
+                                <div className="flex-grow space-y-1.5">
+                                    <Label htmlFor="new-maint-name">Nombre</Label>
+                                    <Input id="new-maint-name" value={newMaintTypeName} onChange={e => setNewMaintTypeName(e.target.value)} />
+                                </div>
+                                <Button onClick={() => handleAdd('maintenanceType')}><PlusCircle /></Button>
+                            </div>
+                            <Separator />
+                            <ul className="space-y-2 max-h-40 overflow-y-auto">
+                                {maintenanceTypes.map(mt => (
+                                    <li key={mt.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                        <span>{mt.name}</span>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('maintenanceType', mt.id)}>
+                                            <X className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
                     </div>
-                     {/* Operators, Supervisors, Maintenance Types */}
-                     <div className="space-y-6">
+                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Operators */}
                         <div className="space-y-4 p-4 border rounded-lg">
                             <h3 className="font-semibold text-lg">Operadores</h3>
-                             <div className="flex items-end gap-2">
-                                 <div className="flex-grow space-y-1.5">
+                            <div className="flex items-end gap-2">
+                                <div className="flex-grow space-y-1.5">
                                     <Label htmlFor="new-op-name">Nombre</Label>
                                     <Input id="new-op-name" value={newOperatorName} onChange={e => setNewOperatorName(e.target.value)} />
-                                 </div>
-                                 <Button onClick={() => handleAdd('operator')}><PlusCircle /></Button>
+                                </div>
+                                <Button onClick={() => handleAdd('operator')}><PlusCircle /></Button>
                             </div>
                             <Separator />
                             <ul className="space-y-2 max-h-40 overflow-y-auto">
@@ -192,6 +216,7 @@ function ConfigurationModal({
                                 ))}
                             </ul>
                         </div>
+                         {/* Supervisors */}
                         <div className="space-y-4 p-4 border rounded-lg">
                             <h3 className="font-semibold text-lg">Supervisores</h3>
                             <div className="flex items-end gap-2">
@@ -213,28 +238,7 @@ function ConfigurationModal({
                                 ))}
                             </ul>
                         </div>
-                        <div className="space-y-4 p-4 border rounded-lg">
-                            <h3 className="font-semibold text-lg">Tipos de Mtto.</h3>
-                            <div className="flex items-end gap-2">
-                                <div className="flex-grow space-y-1.5">
-                                    <Label htmlFor="new-maint-name">Nombre</Label>
-                                    <Input id="new-maint-name" value={newMaintTypeName} onChange={e => setNewMaintTypeName(e.target.value)} />
-                                </div>
-                                <Button onClick={() => handleAdd('maintenanceType')}><PlusCircle /></Button>
-                            </div>
-                            <Separator />
-                            <ul className="space-y-2 max-h-40 overflow-y-auto">
-                                {maintenanceTypes.map(mt => (
-                                    <li key={mt.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
-                                        <span>{mt.name}</span>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete('maintenanceType', mt.id)}>
-                                            <X className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    </div>
+                     </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
