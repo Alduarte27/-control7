@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/firebase';
 import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
-import { addDoc, collection, deleteDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { revalidateTag } from 'next/cache';
 
 const CACHE_TAG_PRODUCTS = 'products';
@@ -29,17 +29,6 @@ export async function toggleProductStatusAction(product: ProductDefinition) {
     await updateDoc(doc(db, 'products', product.id), { isActive: updatedProduct.isActive });
     revalidateTag(CACHE_TAG_PRODUCTS);
 }
-
-export async function updateProductOrderAction(newOrderedProducts: ProductDefinition[]) {
-    const batch = writeBatch(db);
-    newOrderedProducts.forEach((product, index) => {
-        const productRef = doc(db, 'products', product.id);
-        batch.update(productRef, { order: index });
-    });
-    await batch.commit();
-    revalidateTag(CACHE_TAG_PRODUCTS);
-}
-
 
 // --- Category Actions ---
 

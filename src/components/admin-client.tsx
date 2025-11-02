@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, PlusCircle, GripVertical, Edit, RefreshCw, Info, X } from 'lucide-react';
+import { Factory, ChevronLeft, PlusCircle, Edit, RefreshCw, Info, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,28 +12,11 @@ import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, CategoryDefinition, ProductData } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, writeBatch, doc, query, orderBy, updateDoc } from 'firebase/firestore';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Separator } from './ui/separator';
 import { Switch } from './ui/switch';
 import { cn } from '@/lib/utils';
-import { addCategoryAction, addProductAction, deleteCategoryAction, toggleCategoryIsPlannedAction, toggleProductStatusAction, updateProductAction, updateProductOrderAction } from '@/actions/admin-actions';
+import { addCategoryAction, addProductAction, deleteCategoryAction, toggleCategoryIsPlannedAction, toggleProductStatusAction, updateProductAction } from '@/actions/admin-actions';
 
 function EditProductDialog({
     product,
@@ -134,27 +117,11 @@ function EditProductDialog({
     );
 }
 
-
-function SortableItem({ product, categoryName, onEdit, onToggleStatus }: { product: ProductDefinition, categoryName: string, onEdit: (product: ProductDefinition) => void, onToggleStatus: (product: ProductDefinition) => void }) {
-    const {
-      attributes,
-      listeners,
-      setNodeRef,
-      transform,
-      transition,
-    } = useSortable({ id: product.id });
-  
-    const style = {
-      transform: CSS.Transform.toString(transform),
-      transition,
-    };
+function ProductListItem({ product, categoryName, onEdit, onToggleStatus }: { product: ProductDefinition, categoryName: string, onEdit: (product: ProductDefinition) => void, onToggleStatus: (product: ProductDefinition) => void }) {
   
     return (
-      <li ref={setNodeRef} style={style} className={cn("border p-3 rounded-md bg-muted/50 flex items-center justify-between transition-colors", !product.isActive && "bg-slate-100 text-muted-foreground")}>
-        <div className="flex items-center gap-2">
-            <button {...attributes} {...listeners} className="cursor-grab p-1">
-                <GripVertical className="h-5 w-5 text-muted-foreground" />
-            </button>
+      <li className={cn("border p-3 rounded-md bg-muted/50 flex items-center justify-between transition-colors", !product.isActive && "bg-slate-100 text-muted-foreground")}>
+        <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <span className="h-4 w-4 rounded-full" style={{ backgroundColor: product.color || '#ccc' }}></span>
               {product.productName}
@@ -173,6 +140,7 @@ function SortableItem({ product, categoryName, onEdit, onToggleStatus }: { produ
     );
 }
 
+
 export default function AdminClient() {
   const [products, setProducts] = React.useState<ProductDefinition[]>([]);
   const [categories, setCategories] = React.useState<CategoryDefinition[]>([]);
@@ -184,12 +152,6 @@ export default function AdminClient() {
   const [isSyncing, setIsSyncing] = React.useState(false);
   const [showInfoOnStartup, setShowInfoOnStartup] = React.useState(true);
   const { toast } = useToast();
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
 
   React.useEffect(() => {
     const fetchInitialData = async () => {
@@ -334,21 +296,6 @@ export default function AdminClient() {
       }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (active.id !== over?.id) {
-      setProducts((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over!.id);
-        const newItems = arrayMove(items, oldIndex, newIndex);
-        
-        updateProductOrder(newItems);
-        return newItems;
-      });
-    }
-  };
-
   const handleSaveProduct = async (updatedProduct: ProductDefinition) => {
       try {
           await updateProductAction(updatedProduct);
@@ -384,23 +331,6 @@ export default function AdminClient() {
       }
   };
   
-  const updateProductOrder = async (newOrderedProducts: ProductDefinition[]) => {
-      try {
-          await updateProductOrderAction(newOrderedProducts);
-          toast({
-              title: 'Orden Actualizado',
-              description: 'El orden de los productos ha sido guardado.',
-          });
-      } catch (error) {
-          console.error('Error updating product order: ', error);
-          toast({
-              title: 'Error',
-              description: 'No se pudo guardar el nuevo orden de los productos.',
-              variant: 'destructive',
-          });
-      }
-  };
-
   const getCategoryName = (categoryId: string) => {
     return categories.find(c => c.id === categoryId)?.name || 'Sin categoría';
   };
@@ -608,29 +538,21 @@ export default function AdminClient() {
         <Card>
           <CardHeader>
             <CardTitle>Lista de Productos Actual</CardTitle>
-            <CardDescription>Arrastra para reordenar. Usa el interruptor para archivar o activar un producto.</CardDescription>
+            <CardDescription>Usa el interruptor para archivar o activar un producto.</CardDescription>
           </CardHeader>
           <CardContent>
              {products.length > 0 ? (
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                >
-                    <SortableContext items={products} strategy={verticalListSortingStrategy}>
-                        <ul className="space-y-2">
-                            {products.map((product) => (
-                                <SortableItem 
-                                    key={product.id} 
-                                    product={product} 
-                                    categoryName={getCategoryName(product.categoryId)} 
-                                    onEdit={setEditingProduct}
-                                    onToggleStatus={handleToggleProductStatus}
-                                />
-                            ))}
-                        </ul>
-                    </SortableContext>
-                </DndContext>
+                <ul className="space-y-2">
+                    {products.map((product) => (
+                        <ProductListItem 
+                            key={product.id} 
+                            product={product} 
+                            categoryName={getCategoryName(product.categoryId)} 
+                            onEdit={setEditingProduct}
+                            onToggleStatus={handleToggleProductStatus}
+                        />
+                    ))}
+                </ul>
              ) : (
                 <p className="text-muted-foreground text-center py-4">No hay productos definidos. Comienza añadiendo una categoría y luego un producto.</p>
              )}
