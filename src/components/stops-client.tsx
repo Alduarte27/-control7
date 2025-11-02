@@ -421,12 +421,10 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         if (oldMachineSlot.stops.length === 0) {
                             delete oldMachineSlot.stops;
                         }
-                        // Clean up machine object if it's empty
                         if (Object.keys(oldMachineSlot).length === 0) {
                             delete newTimeSlots[oldRegistrationSlotKey][machineId];
                         }
                     }
-                    // Clean up timeslot object if it's empty
                     if (Object.keys(newTimeSlots[oldRegistrationSlotKey]).length === 0) {
                         delete newTimeSlots[oldRegistrationSlotKey];
                     }
@@ -437,7 +435,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             const newStartTime = parse(stopData.startTime, 'HH:mm', new Date());
             const newRegistrationSlotKey = format(setMinutes(newStartTime, getMinutes(newStartTime) < 30 ? 0 : 30), 'HH:mm');
 
-            // Ensure timeslot and machine objects exist
             if (!newTimeSlots[newRegistrationSlotKey]) {
                 newTimeSlots[newRegistrationSlotKey] = {};
             }
@@ -452,9 +449,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             
             const existingStopIndex = newMachineSlot.stops.findIndex(s => s.id === stopData.id);
             if (existingStopIndex > -1) {
-                newMachineSlot.stops[existingStopIndex] = stopData; // Update existing
+                newMachineSlot.stops[existingStopIndex] = stopData;
             } else {
-                newMachineSlot.stops.push(stopData); // Add new
+                newMachineSlot.stops.push(stopData);
             }
 
             return { ...prev, timeSlots: newTimeSlots };
@@ -536,6 +533,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         if (!dailyLog) return [];
         const stops: (StopData & { machineId: string })[] = [];
         Object.values(dailyLog.timeSlots).forEach(slot => {
+            if (!slot) return;
             Object.entries(slot).forEach(([machineId, machineData]) => {
                 if (machineData && 'stops' in machineData && machineData.stops) {
                      machineData.stops.forEach(stop => {
@@ -794,13 +792,13 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                 <table className="min-w-full text-xs">
                                      <thead className='text-center align-top'>
                                         <tr className="divide-x divide-border">
-                                            <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={3} style={{top: 0}}>Hora</th>
+                                            <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={4} style={{top: 0}}>Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10" style={{top: 0}}>Máquina #{i + 1}</th>
                                             ))}
                                             <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: 0}} colSpan={9}>INGRESO DE PRODUCTO</th>
-                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50" rowSpan={2} style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20" style={{top: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50" style={{top: 0}} rowSpan={2}>SALIDA DE PRODUCTO TERMINADO</th>
+                                            <th rowSpan={4} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20" style={{top: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
@@ -808,7 +806,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 sticky bg-muted z-10" colSpan={2} style={{top: '45px'}}>
+                                                    <th key={`product_selector_${i}`} className="p-1 sticky bg-muted z-10" colSpan={2} style={{top: '41px'}}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <div className="flex items-center gap-2 truncate">
@@ -830,30 +828,36 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     </th>
                                                 );
                                             })}
-                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: '45px'}} colSpan={9}>GRASSHOPPER</th>
+                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: '41px'}} colSpan={9}>GRASSHOPPER</th>
                                         </tr>
                                          <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted z-10" style={{top: '90px'}}>Observación</th>
-                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10" style={{top: '90px'}}>Peso/Saco KG</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted z-10" style={{top: '86px'}}>Observación</th>
+                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10" style={{top: '86px'}}>Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: '90px'}}>Masa</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: '90px'}}>Flujo</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: '90px'}}>NS-FAM</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: '90px'}}>NS% 1</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: '90px'}}>NS% 2</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{top: '90px'}}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{top: '90px'}}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{top: '90px'}}>Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{top: '90px'}}>CV</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '90px'}}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '90px'}}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '90px'}}>Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '90px'}}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '90px'}}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '90px'}}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2} style={{top: '86px'}}>Masa</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2} style={{top: '86px'}}>Flujo</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2} style={{top: '86px'}}>NS-FAM</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2} style={{top: '86px'}}>NS% 1</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10" rowSpan={2} style={{top: '86px'}}>NS% 2</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" colSpan={4} style={{top: '86px'}}>Calidad</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3} style={{top: '86px'}}>Familiar</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3} style={{top: '86px'}}>Granel 50 KG</th>
+                                        </tr>
+                                        <tr className="divide-x divide-border">
+                                            {Array.from({ length: NUM_MACHINES * 2 }).map((_, i) => ( <th key={`empty_header_${i}`} className="p-1 sticky bg-muted z-10" style={{top: '127px'}}></th> ))}
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{top: '127px'}}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{top: '127px'}}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{top: '127px'}}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10" style={{top: '127px'}}>CV</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '127px'}}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '127px'}}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '127px'}}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '127px'}}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '127px'}}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: '127px'}}>Turb</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border">
