@@ -425,7 +425,7 @@ export default function StopsClient({
     const handleCellChange = (timeSlot: string, field: keyof Omit<TimeSlot, 'stops' | 'weight'>, value: string) => {
         setDailyLog(prev => {
             if (!prev) return null;
-            const newTimeSlots = { ...prev.timeSlots };
+            const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             if (!newTimeSlots[timeSlot]) {
                 newTimeSlots[timeSlot] = {};
             }
@@ -672,30 +672,28 @@ export default function StopsClient({
         );
     }
     
-    const inputCell = (time: string, field: keyof Omit<TimeSlot, 'masa' | 'stops'>, machineId?: string) => {
+    const inputCell = (time: string, field: keyof TimeSlot, machineId?: string) => {
+        
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            const valueToSet = e.target.value;
-            setDailyLog(prev => {
-                if (!prev) return null;
-                const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
-    
-                if (!newTimeSlots[time]) {
-                    newTimeSlots[time] = {};
-                }
-    
-                if (machineId) {
-                    if (!newTimeSlots[time][machineId]) {
-                        newTimeSlots[time][machineId] = {};
-                    }
-                    (newTimeSlots[time][machineId] as any)[field] = valueToSet;
-                } else {
-                    (newTimeSlots[time] as any)[field] = valueToSet;
-                }
-    
-                return { ...prev, timeSlots: newTimeSlots };
-            });
+            let valueToSet = e.target.value;
+            if (machineId) {
+                 setDailyLog(prev => {
+                    if (!prev) return null;
+                    const newTimeSlots = { ...prev.timeSlots };
+                    if (!newTimeSlots[time]) newTimeSlots[time] = {};
+                    
+                    const machineObservations = { ...(newTimeSlots[time] as any)[machineId] || {} };
+                    machineObservations[field] = valueToSet;
+
+                    (newTimeSlots[time] as any)[machineId] = machineObservations;
+
+                    return { ...prev, timeSlots: newTimeSlots };
+                });
+            } else {
+                handleCellChange(time, field as keyof Omit<TimeSlot, 'stops' | 'weight'>, valueToSet);
+            }
         };
-    
+
         let value;
         const timeSlotData = dailyLog?.timeSlots[time];
         if (machineId) {
@@ -704,7 +702,7 @@ export default function StopsClient({
         } else {
             value = (timeSlotData && typeof timeSlotData === 'object' && field in timeSlotData) ? (timeSlotData as any)[field] : '';
         }
-    
+
         return (
             <td className="p-0">
                 <Input 
@@ -714,7 +712,7 @@ export default function StopsClient({
                 />
             </td>
         );
-    };
+    }
 
     const masaSelectCell = (time: string) => {
         const field = 'masa';
