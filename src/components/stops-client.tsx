@@ -395,7 +395,6 @@ export default function StopsClient({
         const newLog = { ...dailyLog, [field]: value };
         
         if (field === 'shift') {
-            handleSaveLog(dailyLog, false);
             const newId = `${format(date, 'yyyy-MM-dd')}_${value}`;
             newLog.id = newId;
         }
@@ -405,7 +404,7 @@ export default function StopsClient({
 
     const handleDateChange = (newDate: Date | undefined) => {
         if (newDate) {
-            handleSaveLog(dailyLog, false);
+            // Do not save here. Only load the new date's data.
             setDate(newDate);
         }
     };
