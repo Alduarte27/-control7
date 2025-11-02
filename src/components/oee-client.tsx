@@ -40,8 +40,11 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         }
 
         setLoading(true);
-        const start = format(dateRange.from, 'yyyy-MM-dd');
-        const end = format(dateRange.to, 'yyyy-MM-dd');
+        const startId = format(dateRange.from, 'yyyy-MM-dd');
+        // To include the end date, we need to query up to the next day or use a string that's lexicographically after all possible shift suffixes.
+        // For '2024-07-28', we want to include '2024-07-28_day' and '2024-07-28_night'.
+        // A simple way is to get the day after the end date and use '<'.
+        const endIdBoundary = format(addDays(dateRange.to, 1), 'yyyy-MM-dd');
 
         const aggregatedMachineStops: { [machineId: string]: number } = {};
         const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
@@ -49,16 +52,20 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         try {
             const logsQuery = query(
                 collection(db, 'dailyLogs'),
-                where('id', '>=', start),
-                where('id', '<=', end)
+                where('__name__', '>=', startId),
+                where('__name__', '<', endIdBoundary)
             );
             const querySnapshot = await getDocs(logsQuery);
 
             querySnapshot.forEach(doc => {
                 const log = doc.data() as DailyLog;
+                if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
+
                 Object.values(log.timeSlots).forEach(slot => {
+                    if (!slot || typeof slot !== 'object') return;
+                    
                     Object.entries(slot).forEach(([key, value]) => {
-                        if (key.startsWith('machine_') && typeof value === 'object' && value && 'stops' in value && Array.isArray(value.stops)) {
+                        if (key.startsWith('machine_') && value && typeof value === 'object' && 'stops' in value && Array.isArray(value.stops)) {
                             const machineId = key;
                             (value.stops as StopData[]).forEach(stop => {
                                 if (!aggregatedMachineStops[machineId]) {
@@ -66,14 +73,16 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 }
                                 aggregatedMachineStops[machineId] += stop.duration;
 
-                                if (!aggregatedStopsByReason[stop.reason]) {
-                                    const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
-                                    aggregatedStopsByReason[stop.reason] = {
-                                        totalMinutes: 0,
-                                        color: causeConfig?.color || '#8884d8'
-                                    };
+                                if (stop.reason) {
+                                    if (!aggregatedStopsByReason[stop.reason]) {
+                                        const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
+                                        aggregatedStopsByReason[stop.reason] = {
+                                            totalMinutes: 0,
+                                            color: causeConfig?.color || '#8884d8'
+                                        };
+                                    }
+                                    aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
                                 }
-                                aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
                             });
                         }
                     });
