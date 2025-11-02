@@ -942,22 +942,23 @@ export default function StopsClient({
                              <div className="w-full overflow-x-auto border rounded-lg bg-card">
                                 <table className="min-w-full text-xs">
                                     <thead className="text-center align-top">
-                                        <tr className="divide-x divide-border">
-                                            <th className="p-2 w-24 sticky left-0 bg-muted z-20" rowSpan={3} style={{ top: 0 }}>Hora</th>
+                                        <tr className="divide-x divide-border bg-muted">
+                                            <th className="p-2 sticky left-0 bg-muted z-20 min-w-[6rem]">Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10" style={{ top: 0 }}>Máquina #{i + 1}</th>
+                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-2">Máquina #{i + 1}</th>
                                             ))}
-                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9} style={{ top: 0 }}>INGRESO DE PRODUCTO</th>
-                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50" style={{ top: 0 }}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20" style={{ top: 0 }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th colSpan={9} className="p-2 bg-green-100 dark:bg-green-900/50">INGRESO DE PRODUCTO</th>
+                                            <th colSpan={6} className="p-2 bg-blue-100 dark:bg-blue-900/50">SALIDA DE PRODUCTO TERMINADO</th>
+                                            <th className="p-2 sticky right-0 bg-purple-100 dark:bg-purple-900/50 z-20">NOVEDADES</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
+                                            <td className="p-1 sticky left-0 bg-muted z-10 font-medium">Producto:</td>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 sticky bg-muted z-10" colSpan={2} style={{ top: '45px' }}>
+                                                    <td key={`product_selector_${i}`} colSpan={2} className="p-1">
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <div className="flex items-center gap-2 truncate">
@@ -976,35 +977,38 @@ export default function StopsClient({
                                                                 ))}
                                                             </SelectContent>
                                                         </Select>
-                                                    </th>
+                                                    </td>
                                                 );
                                             })}
-                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9} style={{ top: '45px' }}>GRASSHOPPER</th>
-                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3} style={{ top: '45px' }}>Familiar</th>
-                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3} style={{ top: '45px' }}>Granel 50 KG</th>
+                                            <td colSpan={9} className="p-1 font-medium bg-green-100 dark:bg-green-900/50">GRASSHOPPER</td>
+                                            <td colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50">Familiar</td>
+                                            <td colSpan={3} className="p-1 font-medium bg-blue-100 dark:bg-blue-900/50">Granel 50 KG</td>
+                                            <td className="p-1 sticky right-0 bg-purple-100 dark:bg-purple-900/50 z-10"></td>
                                         </tr>
-                                        <tr className="divide-x divide-border">
+                                         <tr className="divide-x divide-border text-muted-foreground font-normal">
+                                            <th className="p-1 sticky left-0 bg-muted z-10"></th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted z-10" style={{ top: '90px' }}>Observación</th>
-                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10" style={{ top: '90px' }}>Peso/Saco KG</th>
+                                                    <th className="p-1 w-48">Observación</th>
+                                                    <th className="p-1 w-24">Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Masa</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[10rem]" style={{ top: '90px' }}>Flujo</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>NS-FAM</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>NS% 1</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>NS% 2</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>CV</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Turb</th>
+                                            <th className="p-1 bg-green-100 dark:bg-green-900/50 min-w-[5rem]">Masa</th>
+                                            <th className="p-1 bg-green-100 dark:bg-green-900/50 min-w-[10rem]">Flujo</th>
+                                            <th className="p-1 bg-green-100 dark:bg-green-900/50 min-w-[5rem]">NS-FAM</th>
+                                            <th className="p-1 bg-green-100 dark:bg-green-900/50 min-w-[5rem]">NS% 1</th>
+                                            <th className="p-1 bg-green-100 dark:bg-green-900/50 min-w-[5rem]">NS% 2</th>
+                                            <th className="p-1 bg-yellow-100 dark:bg-yellow-900/50 min-w-[4rem]">Color</th>
+                                            <th className="p-1 bg-yellow-100 dark:bg-yellow-900/50 min-w-[5rem]">Hum</th>
+                                            <th className="p-1 bg-yellow-100 dark:bg-yellow-900/50 min-w-[4rem]">Turb</th>
+                                            <th className="p-1 bg-yellow-100 dark:bg-yellow-900/50 min-w-[4rem]">CV</th>
+                                            <th className="p-1 bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Color</th>
+                                            <th className="p-1 bg-blue-100 dark:bg-blue-900/50 min-w-[5rem]">Hum</th>
+                                            <th className="p-1 bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Turb</th>
+                                            <th className="p-1 bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Color</th>
+                                            <th className="p-1 bg-blue-100 dark:bg-blue-900/50 min-w-[5rem]">Hum</th>
+                                            <th className="p-1 bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Turb</th>
+                                            <th className="p-1 w-80 sticky right-0 bg-purple-100 dark:bg-purple-900/50 z-10"></th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border">
