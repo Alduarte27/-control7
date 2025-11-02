@@ -421,11 +421,11 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         if (oldMachineSlot.stops.length === 0) {
                             delete oldMachineSlot.stops;
                         }
-                        if (Object.keys(oldMachineSlot).length === 0) {
-                            delete newTimeSlots[oldRegistrationSlotKey][machineId];
-                        }
                     }
-                    if (Object.keys(newTimeSlots[oldRegistrationSlotKey]).length === 0) {
+                    if (Object.keys(oldMachineSlot).length === 0) {
+                        delete newTimeSlots[oldRegistrationSlotKey][machineId];
+                    }
+                    if(newTimeSlots[oldRegistrationSlotKey] && Object.keys(newTimeSlots[oldRegistrationSlotKey]).length === 0) {
                         delete newTimeSlots[oldRegistrationSlotKey];
                     }
                 }
