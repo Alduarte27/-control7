@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,8 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
-import { format, getDayOfYear, parse } from 'date-fns';
+import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
+import { format, getDayOfYear, parse, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -22,6 +22,12 @@ import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, } from '@/components/ui/alert-dialog';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Separator } from './ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
+import KpiCard from './kpi-card';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { DateRange } from 'react-day-picker';
 
 
 const NUM_MACHINES = 3;
@@ -259,6 +265,11 @@ function ConfigurationModal({
     );
 }
 
+interface AggregatedStopData {
+    name: string;
+    totalMinutes: number;
+    color: string;
+}
 
 export default function StopsClient({ prefetchedProducts }: { prefetchedProducts: ProductDefinition[]}) {
     const [dailyLog, setDailyLog] = React.useState<DailyLog | null>(null);
@@ -274,7 +285,17 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const [isAdminMode, setIsAdminMode] = React.useState(false);
     const isInitialMount = React.useRef(true);
     
+    // OEE State
+    const [oeeDateRange, setOeeDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -7), to: new Date() });
+    const [oeeLoading, setOeeLoading] = React.useState(false);
+    const [machineStops, setMachineStops] = React.useState<{ [machineId: string]: number }>({});
+    const [stopsByReason, setStopsByReason] = React.useState<AggregatedStopData[]>([]);
+    
     const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(dailyLog?.shift || 'day'), [dailyLog?.shift]);
+
+    const stopCausesMap = React.useMemo(() => {
+        return new Map(stopCauses.map(cause => [cause.name, cause]));
+    }, [stopCauses]);
 
     const createEmptyLog = React.useCallback((logDate: Date): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
@@ -310,7 +331,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         }
     }, [toast]);
     
-    // Debounced auto-save effect
     React.useEffect(() => {
         if (isInitialMount.current) {
             isInitialMount.current = false;
@@ -321,9 +341,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         
         const handler = setTimeout(() => {
             handleSaveLog(dailyLog, true);
-        }, 2000); // Save 2 seconds after the user stops typing
+        }, 2000);
 
-        // Cleanup function to cancel the timeout if the user types again
         return () => {
             clearTimeout(handler);
         };
@@ -350,14 +369,13 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     React.useEffect(() => {
         const fetchLog = async () => {
             setLoading(true);
-            isInitialMount.current = true; // Prevent auto-save on initial fetch
+            isInitialMount.current = true; 
             const logId = format(date, 'yyyy-MM-dd');
             try {
                 const logDocSnap = await getDoc(doc(db, 'dailyLogs', logId));
 
                 if (logDocSnap.exists()) {
                     const data = logDocSnap.data() as DailyLog;
-                    // Ensure structure is valid
                     if (!data.machines) data.machines = createEmptyLog(date).machines;
                     if (!data.lote) data.lote = String(getDayOfYear(date));
                     if(!data.operador) data.operador = '';
@@ -380,6 +398,65 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     React.useEffect(() => {
         fetchCatalogs();
     }, [fetchCatalogs]);
+
+    const handleFetchOeeData = React.useCallback(async () => {
+        if (!oeeDateRange?.from || !oeeDateRange?.to) {
+            return;
+        }
+
+        setOeeLoading(true);
+        const start = format(oeeDateRange.from, 'yyyy-MM-dd');
+        const end = format(oeeDateRange.to, 'yyyy-MM-dd');
+
+        const aggregatedMachineStops: { [machineId: string]: number } = {};
+        const aggregatedStopsByReason: { [reason: string]: number } = {};
+
+        try {
+            const logsQuery = query(
+                collection(db, 'dailyLogs'),
+                where('id', '>=', start),
+                where('id', '<=', end)
+            );
+            const querySnapshot = await getDocs(logsQuery);
+
+            querySnapshot.forEach(doc => {
+                const log = doc.data() as DailyLog;
+                Object.values(log.timeSlots).forEach(slot => {
+                    Object.entries(slot).forEach(([key, value]) => {
+                        if (key.startsWith('machine_') && typeof value === 'object' && value && 'stops' in value && Array.isArray(value.stops)) {
+                            const machineId = key;
+                            (value.stops as StopData[]).forEach(stop => {
+                                if (!aggregatedMachineStops[machineId]) {
+                                    aggregatedMachineStops[machineId] = 0;
+                                }
+                                aggregatedMachineStops[machineId] += stop.duration;
+
+                                if (!aggregatedStopsByReason[stop.reason]) {
+                                    aggregatedStopsByReason[stop.reason] = 0;
+                                }
+                                aggregatedStopsByReason[stop.reason] += stop.duration;
+                            });
+                        }
+                    });
+                });
+            });
+
+            setMachineStops(aggregatedMachineStops);
+
+            const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, minutes]) => ({
+                name: reason,
+                totalMinutes: minutes,
+                color: stopCausesMap.get(reason)?.color || '#8884d8'
+            })).sort((a,b) => b.totalMinutes - a.totalMinutes);
+
+            setStopsByReason(reasonData);
+
+        } catch (error) {
+            console.error("Error fetching OEE data:", error);
+        } finally {
+            setOeeLoading(false);
+        }
+    }, [oeeDateRange, stopCausesMap]);
 
 
     const handleHeaderChange = (field: keyof Omit<DailyLog, 'id' | 'machines' | 'timeSlots'>, value: string) => {
@@ -425,7 +502,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             const { machineId } = modalState;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
-            // The stop is always keyed to its *start* time slot for simplicity of lookup
             const registrationSlot = stopData.startTime.substring(0, 5);
             
             if (!newTimeSlots[registrationSlot]) newTimeSlots[registrationSlot] = {};
@@ -437,10 +513,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             
             const existingStopIndex = machineSlot.stops.findIndex(s => s.id === stopData.id);
             if (existingStopIndex > -1) {
-                // Update existing stop
                 machineSlot.stops[existingStopIndex] = stopData;
             } else {
-                // Add new stop
                 machineSlot.stops.push(stopData);
             }
 
@@ -469,7 +543,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             
             if (machineSlot.stops) {
                 machineSlot.stops = machineSlot.stops.filter(stop => stop.id !== stopId);
-                 // If no stops are left, we can clean up the stops array
                 if (machineSlot.stops.length === 0) {
                     delete machineSlot.stops;
                 }
@@ -489,7 +562,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             if (password === "ADMIN") {
                 setIsAdminMode(true);
                 toast({ title: "Modo Admin Activado", description: "Ahora puedes eliminar registros de paradas." });
-            } else if (password !== null) { // User didn't click cancel
+            } else if (password !== null) { 
                 toast({ title: "Clave Incorrecta", variant: "destructive" });
             }
         }
@@ -516,15 +589,12 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                 await deleteDoc(doc(db, collectionName, data.id));
                 toast({ title: `${type} eliminado`});
             }
-            fetchCatalogs(); // Refresh the lists
+            fetchCatalogs(); 
         } catch(e) {
             toast({ title: 'Error', description: `No se pudo actualizar el catálogo de ${type}.`, variant: 'destructive'});
         }
     };
 
-    // --- Rendering Logic ---
-
-    // Memoize the calculation of all stops for performance
     const allStops = React.useMemo(() => {
         if (!dailyLog) return [];
         const stops: (StopData & { machineId: string })[] = [];
@@ -551,12 +621,10 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
              if (stop.machineId !== machineId) return false;
             const stopStartTime = parseTime(stop.startTime);
             const stopEndTime = parseTime(stop.endTime);
-            // Check for overlap
             return stopStartTime < cellEndTime && stopEndTime > cellStartTime;
         });
 
         const handleCellClick = () => {
-            // Always open for new registration when clicking the cell background
             setModalState({ isOpen: true, machineId, timeSlot: time });
         };
         
@@ -720,165 +788,281 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                 </div>
             </header>
             <main className="p-4 md:p-6">
-                {loading ? <p>Cargando bitácora...</p> : dailyLog && (
-                    <div className="space-y-4">
-                        {/* Header */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
-                            <div className="space-y-1.5">
-                                <Label>Operador</Label>
-                                <Select value={dailyLog.operador} onValueChange={val => handleHeaderChange('operador', val)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {operators.map(o => <SelectItem key={o.id} value={o.name}>{o.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Supervisor</Label>
-                                 <Select value={dailyLog.supervisor} onValueChange={val => handleHeaderChange('supervisor', val)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        {supervisors.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Lote</Label>
-                                <Input value={dailyLog.lote} onChange={e => handleHeaderChange('lote', e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Turno</Label>
-                                <Select value={dailyLog.shift} onValueChange={val => handleHeaderChange('shift', val)}>
-                                    <SelectTrigger><SelectValue /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="day">Día</SelectItem>
-                                        <SelectItem value="night">Noche</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                             <div className="space-y-1.5">
-                                <Label>Fecha</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" className="w-full justify-start font-normal">
-                                            {format(date, "PPP", { locale: es })}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                        <Calendar mode="single" selected={date} onSelect={handleDateChange} />
-                                    </PopoverContent>
-                                </Popover>
-                            </div>
-                        </div>
+                 <Tabs defaultValue="log">
+                    <TabsList>
+                        <TabsTrigger value="log">Registro de Bitácora</TabsTrigger>
+                        <TabsTrigger value="oee">Análisis de Paradas (Disponibilidad)</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="log">
+                        {loading ? <p>Cargando bitácora...</p> : dailyLog && (
+                            <div className="space-y-4 pt-4">
+                                {/* Header */}
+                                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
+                                    <div className="space-y-1.5">
+                                        <Label>Operador</Label>
+                                        <Select value={dailyLog.operador} onValueChange={val => handleHeaderChange('operador', val)}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {operators.map(o => <SelectItem key={o.id} value={o.name}>{o.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Supervisor</Label>
+                                         <Select value={dailyLog.supervisor} onValueChange={val => handleHeaderChange('supervisor', val)}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {supervisors.map(s => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Lote</Label>
+                                        <Input value={dailyLog.lote} onChange={e => handleHeaderChange('lote', e.target.value)} />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label>Turno</Label>
+                                        <Select value={dailyLog.shift} onValueChange={val => handleHeaderChange('shift', val)}>
+                                            <SelectTrigger><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="day">Día</SelectItem>
+                                                <SelectItem value="night">Noche</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                     <div className="space-y-1.5">
+                                        <Label>Fecha</Label>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className="w-full justify-start font-normal">
+                                                    {format(date, "PPP", { locale: es })}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <Calendar mode="single" selected={date} onSelect={handleDateChange} />
+                                            </PopoverContent>
+                                        </Popover>
+                                    </div>
+                                </div>
 
-                        {/* Log Table */}
-                        <div className="relative">
-                            <div className="w-full overflow-x-auto border rounded-lg bg-card">
-                                <table className="min-w-full text-xs">
-                                    <thead className="text-center align-top">
-                                        <tr className="divide-x divide-border">
-                                            <th rowSpan={3} className="p-1 w-24 sticky left-0 bg-muted/50 z-30 top-0">Hora</th>
-                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky top-0 z-10 bg-muted/50">Máquina #{i + 1}</th>
-                                            ))}
-                                            <th colSpan={9} className="p-2 sticky top-0 z-10 bg-green-100 dark:bg-green-900/50">INGRESO DE PRODUCTO FINAL/GRASSHOPPER</th>
-                                            <th colSpan={6} className="p-2 sticky top-0 z-10 bg-blue-100 dark:bg-blue-900/50">SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-2 w-80 sticky top-0 z-10 bg-muted/50" style={{right: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
-                                        </tr>
-                                        <tr className="divide-x divide-border">
-                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => {
-                                                const machineId = `machine_${i + 1}`;
-                                                const selectedProductId = dailyLog.machines[machineId]?.productId || '';
-                                                const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
+                                {/* Log Table */}
+                                <div className="relative">
+                                    <div className="w-full overflow-x-auto border rounded-lg bg-card">
+                                        <table className="min-w-full text-xs">
+                                            <thead className="text-center align-top">
+                                                <tr className="divide-x divide-border">
+                                                    <th rowSpan={3} className="p-1 w-24 sticky left-0 bg-muted/50 z-30 top-0">Hora</th>
+                                                    {Array.from({ length: NUM_MACHINES }).map((_, i) => (
+                                                        <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted/50 z-10" style={{top: 0}}>Máquina #{i + 1}</th>
+                                                    ))}
+                                                    <th colSpan={9} className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: 0}}>INGRESO DE PRODUCTO FINAL/GRASSHOPPER</th>
+                                                    <th colSpan={6} className="p-2 sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
+                                                    <th rowSpan={3} className="p-2 w-80 sticky bg-muted/50 z-10" style={{top: 0, right: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                                </tr>
+                                                <tr className="divide-x divide-border">
+                                                    {Array.from({ length: NUM_MACHINES }).map((_, i) => {
+                                                        const machineId = `machine_${i + 1}`;
+                                                        const selectedProductId = dailyLog.machines[machineId]?.productId || '';
+                                                        const selectedProduct = prefetchedProducts.find(p => p.id === selectedProductId);
 
-                                                return (
-                                                    <th key={`product_selector_${i}`} className="p-1 sticky top-[45px] z-20 bg-muted/50" colSpan={2}>
-                                                        <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
-                                                            <SelectTrigger className="h-8 text-xs">
-                                                                <div className="flex items-center gap-2 truncate">
-                                                                    {selectedProduct && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedProduct.color || '#ccc' }}></span>}
-                                                                    <SelectValue placeholder="Producto" />
-                                                                </div>
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {prefetchedProducts.map(p => (
-                                                                    <SelectItem key={p.id} value={p.id}>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
-                                                                            <span>{p.productName}</span>
+                                                        return (
+                                                            <th key={`product_selector_${i}`} className="p-1 sticky z-20 bg-muted/50" colSpan={2} style={{top: '45px'}}>
+                                                                <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
+                                                                    <SelectTrigger className="h-8 text-xs">
+                                                                        <div className="flex items-center gap-2 truncate">
+                                                                            {selectedProduct && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: selectedProduct.color || '#ccc' }}></span>}
+                                                                            <SelectValue placeholder="Producto" />
                                                                         </div>
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </th>
-                                                );
-                                            })}
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky top-[45px] z-20 bg-green-100 dark:bg-green-900/50">Masa</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky top-[45px] z-20 bg-green-100 dark:bg-green-900/50">Flujo</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky top-[45px] z-20 bg-green-100 dark:bg-green-900/50">NS-FAM</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky top-[45px] z-20 bg-green-100 dark:bg-green-900/50">NS% 1</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky top-[45px] z-20 bg-green-100 dark:bg-green-900/50">NS% 2</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky top-[45px] z-20 bg-yellow-100 dark:bg-yellow-900/50">Color</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky top-[45px] z-20 bg-yellow-100 dark:bg-yellow-900/50">Hum</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky top-[45px] z-20 bg-yellow-100 dark:bg-yellow-900/50">Turb</th>
-                                            <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky top-[45px] z-20 bg-yellow-100 dark:bg-yellow-900/50">CV</th>
-                                            <th colSpan={3} className="p-1 font-medium sticky top-[45px] z-20 bg-blue-100 dark:bg-blue-900/50">Familiar</th>
-                                            <th colSpan={3} className="p-1 font-medium sticky top-[45px] z-20 bg-blue-100 dark:bg-blue-900/50">Granel 50 KG</th>
-                                        </tr>
-                                        <tr className="divide-x divide-border">
-                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal text-muted-foreground w-48 sticky top-[90px] z-20 bg-muted/50">Observación</th>
-                                                    <th className="p-1 font-normal text-muted-foreground w-24 sticky top-[90px] z-20 bg-muted/50">Peso/Saco KG</th>
-                                                </React.Fragment>
-                                            ))}
-                                            <th className="p-1 font-normal text-muted-foreground sticky top-[90px] z-20 bg-blue-100 dark:bg-blue-900/50">Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky top-[90px] z-20 bg-blue-100 dark:bg-blue-900/50">Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky top-[90px] z-20 bg-blue-100 dark:bg-blue-900/50">Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky top-[90px] z-20 bg-blue-100 dark:bg-blue-900/50">Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky top-[90px] z-20 bg-blue-100 dark:bg-blue-900/50">Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky top-[90px] z-20 bg-blue-100 dark:bg-blue-900/50">Turb</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-border">
-                                        {timeSlotsForTable.map((time) => (
-                                            <tr key={time} className="divide-x divide-border">
-                                                <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
-                                                {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
-                                                    const machineId = `machine_${machineIndex + 1}`;
-                                                    return (
-                                                        <React.Fragment key={machineId}>
-                                                            {observationCell(time, machineId)}
-                                                            {inputCell(time, 'weight', machineId)}
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {prefetchedProducts.map(p => (
+                                                                            <SelectItem key={p.id} value={p.id}>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
+                                                                                    <span>{p.productName}</span>
+                                                                                </div>
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </th>
+                                                        );
+                                                    })}
+                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>Masa</th>
+                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>Flujo</th>
+                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>NS-FAM</th>
+                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>NS% 1</th>
+                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>NS% 2</th>
+                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>Color</th>
+                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>Hum</th>
+                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>Turb</th>
+                                                    <th rowSpan={2} className="p-1 font-normal text-muted-foreground sticky z-20 bg-yellow-100 dark:bg-yellow-900/50" style={{top: '45px'}}>CV</th>
+                                                    <th colSpan={3} className="p-1 font-medium sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '45px'}}>Familiar</th>
+                                                    <th colSpan={3} className="p-1 font-medium sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '45px'}}>Granel 50 KG</th>
+                                                </tr>
+                                                <tr className="divide-x divide-border">
+                                                    {Array.from({ length: NUM_MACHINES }).map((_, i) => (
+                                                        <React.Fragment key={`sub_header_${i}`}>
+                                                            <th className="p-1 font-normal text-muted-foreground w-48 sticky z-20 bg-muted/50" style={{top: '90px'}}>Observación</th>
+                                                            <th className="p-1 font-normal text-muted-foreground w-24 sticky z-20 bg-muted/50" style={{top: '90px'}}>Peso/Saco KG</th>
                                                         </React.Fragment>
-                                                    )
-                                                })}
-                                                {inputCell(time, 'masa')}
-                                                {inputCell(time, 'flujo')}
-                                                {inputCell(time, 'ns_fam')}
-                                                {inputCell(time, 'ns_1')}
-                                                {inputCell(time, 'ns_2')}
-                                                {inputCell(time, 'in_color')}
-                                                {inputCell(time, 'in_hum')}
-                                                {inputCell(time, 'in_turb')}
-                                                {inputCell(time, 'in_cv')}
-                                                {inputCell(time, 'out_fam_color')}
-                                                {inputCell(time, 'out_fam_hum')}
-                                                {inputCell(time, 'out_fam_turb')}
-                                                {inputCell(time, 'out_gra_color')}
-                                                {inputCell(time, 'out_gra_hum')}
-                                                {inputCell(time, 'out_gra_turb')}
-                                                {inputCell(time, 'empaque_obs')}
-                                            </tr>
-                                        ))}
+                                                    ))}
+                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Color</th>
+                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Hum</th>
+                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Turb</th>
+                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Color</th>
+                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Hum</th>
+                                                    <th className="p-1 font-normal text-muted-foreground sticky z-20 bg-blue-100 dark:bg-blue-900/50" style={{top: '90px'}}>Turb</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-border">
+                                                {timeSlotsForTable.map((time) => (
+                                                    <tr key={time} className="divide-x divide-border">
+                                                        <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
+                                                        {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
+                                                            const machineId = `machine_${machineIndex + 1}`;
+                                                            return (
+                                                                <React.Fragment key={machineId}>
+                                                                    {observationCell(time, machineId)}
+                                                                    {inputCell(time, 'weight', machineId)}
+                                                                </React.Fragment>
+                                                            )
+                                                        })}
+                                                        {inputCell(time, 'masa')}
+                                                        {inputCell(time, 'flujo')}
+                                                        {inputCell(time, 'ns_fam')}
+                                                        {inputCell(time, 'ns_1')}
+                                                        {inputCell(time, 'ns_2')}
+                                                        {inputCell(time, 'in_color')}
+                                                        {inputCell(time, 'in_hum')}
+                                                        {inputCell(time, 'in_turb')}
+                                                        {inputCell(time, 'in_cv')}
+                                                        {inputCell(time, 'out_fam_color')}
+                                                        {inputCell(time, 'out_fam_hum')}
+                                                        {inputCell(time, 'out_fam_turb')}
+                                                        {inputCell(time, 'out_gra_color')}
+                                                        {inputCell(time, 'out_gra_hum')}
+                                                        {inputCell(time, 'out_gra_turb')}
+                                                        {inputCell(time, 'empaque_obs')}
+                                                    </tr>
+                                                ))}
 
-                                    </tbody>
-                                </table>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                    </div>
-                )}
+                        )}
+                    </TabsContent>
+                    <TabsContent value="oee">
+                         <Card>
+                            <CardHeader>
+                                <CardTitle>Filtros de Análisis</CardTitle>
+                                <CardDescription>Selecciona el rango de fechas para analizar las paradas.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="flex flex-col md:flex-row items-center gap-4">
+                                <div className="grid gap-2">
+                                    <Label>Rango de Fechas</Label>
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant={"outline"}
+                                                className="w-[300px] justify-start text-left font-normal"
+                                            >
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {oeeDateRange?.from ? (
+                                                    oeeDateRange.to ? (
+                                                        <>
+                                                            {format(oeeDateRange.from, "LLL dd, y", { locale: es })} -{" "}
+                                                            {format(oeeDateRange.to, "LLL dd, y", { locale: es })}
+                                                        </>
+                                                    ) : (
+                                                        format(oeeDateRange.from, "LLL dd, y", { locale: es })
+                                                    )
+                                                ) : (
+                                                    <span>Elige un rango</span>
+                                                )}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0" align="start">
+                                            <Calendar
+                                                initialFocus
+                                                mode="range"
+                                                defaultMonth={oeeDateRange?.from}
+                                                selected={oeeDateRange}
+                                                onSelect={setOeeDateRange}
+                                                numberOfMonths={2}
+                                                locale={es}
+                                            />
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+                                <Button onClick={handleFetchOeeData} disabled={oeeLoading} className="mt-auto">
+                                    {oeeLoading ? 'Analizando...' : 'Analizar Datos'}
+                                </Button>
+                            </CardContent>
+                        </Card>
+                        {oeeLoading ? <p className="text-center pt-8">Cargando datos de análisis...</p> : (
+                            <div className='space-y-6 pt-6'>
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Total de Tiempo de Parada por Máquina</CardTitle>
+                                        <CardDescription>Suma de todos los minutos de parada para cada máquina en el período seleccionado.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {Object.keys(machineStops).length > 0 ? (
+                                            Object.entries(machineStops).map(([machineId, minutes]) => (
+                                                <KpiCard 
+                                                    key={machineId}
+                                                    title={`Máquina ${machineId.split('_')[1]}`}
+                                                    value={`${Math.floor(minutes / 60)}h ${minutes % 60}m`}
+                                                    subValue={`${minutes.toLocaleString()} minutos totales`}
+                                                    icon={HardHat}
+                                                    description="Tiempo total que esta máquina estuvo detenida."
+                                                />
+                                            ))
+                                        ) : (
+                                            <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Desglose de Paradas por Motivo</CardTitle>
+                                        <CardDescription>Tiempo total de parada (en minutos) agrupado por el motivo registrado.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {stopsByReason.length > 0 ? (
+                                            <ChartContainer config={{}} className="w-full h-[400px]">
+                                                <ResponsiveContainer>
+                                                    <BarChart layout="vertical" data={stopsByReason}>
+                                                        <CartesianGrid strokeDasharray="3 3" />
+                                                        <XAxis type="number" />
+                                                        <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} />
+                                                        <RechartsTooltip 
+                                                            cursor={{ fill: 'rgba(200, 200, 200, 0.1)' }}
+                                                            content={<ChartTooltipContent />}
+                                                        />
+                                                        <Bar dataKey="totalMinutes" name="Minutos" radius={[0, 4, 4, 0]}>
+                                                            {stopsByReason.map((entry) => (
+                                                                 <Bar key={entry.name} dataKey="totalMinutes" fill={entry.color} />
+                                                            ))}
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </ChartContainer>
+                                        ) : (
+                                             <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </div>
+                        )}
+                    </TabsContent>
+                </Tabs>
+
+
                 {modalState?.isOpen && (
                     <StopRegistrationModal 
                         isOpen={modalState.isOpen}
