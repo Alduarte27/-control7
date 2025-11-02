@@ -299,10 +299,14 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const handleSaveLog = React.useCallback(async (logToSave: DailyLog, showToast = false) => {
         if (!logToSave) return;
         try {
-            const docRef = doc(db, 'dailyLogs', logToSave.id);
-            await setDoc(docRef, logToSave, { merge: true });
+            // Create a deep copy to avoid mutating state directly, and to clean up undefined values
+            const cleanLog = JSON.parse(JSON.stringify(logToSave));
+            
+            const docRef = doc(db, 'dailyLogs', cleanLog.id);
+            await setDoc(docRef, cleanLog, { merge: true });
+
             if (showToast) {
-                toast({ title: 'Progreso Guardado', description: `Se guardaron los cambios para el día ${logToSave.id}.` });
+                toast({ title: 'Progreso Guardado', description: `Se guardaron los cambios para el día ${cleanLog.id}.` });
             }
         } catch (error) {
             console.error("Error saving daily log:", error);
@@ -321,7 +325,13 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
                 if (logDocSnap.exists()) {
                     const data = logDocSnap.data() as DailyLog;
-                    if (!data.machines) data.machines = createEmptyLog(date).machines;
+                    // Ensure the log has all necessary structures
+                    if (!data.machines) data.machines = {};
+                    for (let i = 1; i <= NUM_MACHINES; i++) {
+                        if (!data.machines[`machine_${i}`]) {
+                            data.machines[`machine_${i}`] = { productId: prefetchedProducts?.[0]?.id || '' };
+                        }
+                    }
                     if (!data.lote) data.lote = String(getDayOfYear(date));
                     if(!data.operador) data.operador = '';
                     if(!data.supervisor) data.supervisor = '';
@@ -338,7 +348,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         };
 
         fetchLog();
-    }, [date, createEmptyLog, toast]);
+    }, [date, createEmptyLog, toast, prefetchedProducts]);
 
 
     const fetchCatalogs = React.useCallback(async () => {
@@ -414,19 +424,11 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                 const oldStartTime = parse(modalState.stopData.startTime, 'HH:mm', new Date());
                 const oldRegistrationSlotKey = format(setMinutes(oldStartTime, getMinutes(oldStartTime) < 30 ? 0 : 30), 'HH:mm');
 
-                if (newTimeSlots[oldRegistrationSlotKey] && newTimeSlots[oldRegistrationSlotKey][machineId]) {
+                if (newTimeSlots[oldRegistrationSlotKey]?.[machineId]?.stops) {
                     const oldMachineSlot = newTimeSlots[oldRegistrationSlotKey][machineId] as { stops?: StopData[] };
-                    if (oldMachineSlot.stops) {
-                        oldMachineSlot.stops = oldMachineSlot.stops.filter(s => s.id !== stopData.id);
-                        if (oldMachineSlot.stops.length === 0) {
-                            delete oldMachineSlot.stops;
-                        }
-                    }
-                    if (Object.keys(oldMachineSlot).length === 0) {
-                        delete newTimeSlots[oldRegistrationSlotKey][machineId];
-                    }
-                    if(newTimeSlots[oldRegistrationSlotKey] && Object.keys(newTimeSlots[oldRegistrationSlotKey]).length === 0) {
-                        delete newTimeSlots[oldRegistrationSlotKey];
+                    oldMachineSlot.stops = oldMachineSlot.stops?.filter(s => s.id !== stopData.id);
+                    if (oldMachineSlot.stops?.length === 0) {
+                        delete oldMachineSlot.stops;
                     }
                 }
             }
@@ -469,9 +471,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
-            const registrationSlot = timeSlot.substring(0,5);
+            const registrationSlot = format(setMinutes(parse(timeSlot, 'HH:mm', new Date()), getMinutes(parse(timeSlot, 'HH:mm', new Date())) < 30 ? 0 : 30), 'HH:mm');
 
-            if (!newTimeSlots[registrationSlot] || !newTimeSlots[registrationSlot][machineId]) return prev;
+            if (!newTimeSlots[registrationSlot]?.[machineId]?.stops) return prev;
 
             const machineSlot = newTimeSlots[registrationSlot][machineId] as { stops?: StopData[] };
             
@@ -642,7 +644,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     }
     
     const inputCell = (time: string, field: keyof TimeSlot, machineId?: string) => {
-        const fieldName = machineId ? `${machineId}_${field}`: field;
         
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             let valueToSet = e.target.value;
@@ -790,15 +791,15 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         <div className="relative">
                             <div className="w-full overflow-x-auto border rounded-lg bg-card">
                                 <table className="min-w-full text-xs">
-                                     <thead className='text-center align-top'>
+                                    <thead className='text-center align-top'>
                                         <tr className="divide-x divide-border" style={{ position: 'sticky', top: 0, zIndex: 24 }}>
-                                            <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={3}>Hora</th>
+                                            <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={4}>Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10">Máquina #{i + 1}</th>
                                             ))}
-                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9}>INGRESO DE PRODUCTO</th>
-                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50">SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9} rowSpan={2}>INGRESO DE PRODUCTO</th>
+                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50" rowSpan={2}>SALIDA DE PRODUCTO TERMINADO</th>
+                                            <th rowSpan={4} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border" style={{ position: 'sticky', top: '41px', zIndex: 23 }}>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
@@ -828,9 +829,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     </th>
                                                 );
                                             })}
-                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9}>GRASSHOPPER</th>
-                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Familiar</th>
-                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Granel 50 KG</th>
                                         </tr>
                                         <tr className="divide-x divide-border" style={{ position: 'sticky', top: '86px', zIndex: 22 }}>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
@@ -838,6 +836,14 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted z-10">Observación</th>
                                                     <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10">Peso/Saco KG</th>
                                                 </React.Fragment>
+                                            ))}
+                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9}>GRASSHOPPER</th>
+                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Familiar</th>
+                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Granel 50 KG</th>
+                                        </tr>
+                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: '123px', zIndex: 21 }}>
+                                             {Array.from({ length: NUM_MACHINES * 2 }).map((_, i) => (
+                                                <th key={`empty_header_${i}`} className="p-1 sticky bg-muted z-10"></th>
                                             ))}
                                             <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">Masa</th>
                                             <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">Flujo</th>
