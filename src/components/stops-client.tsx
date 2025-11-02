@@ -421,8 +421,7 @@ export default function StopsClient({
         });
     };
 
-    const handleCellChange = (timeSlot: string, field: keyof TimeSlot, value: string) => {
-       if (!dailyLog) return;
+    const handleCellChange = (timeSlot: string, field: keyof Omit<TimeSlot, 'stops' | 'weight'>, value: string) => {
         setDailyLog(prev => {
             if (!prev) return null;
             const newTimeSlots = { ...prev.timeSlots };
@@ -561,10 +560,10 @@ export default function StopsClient({
         if (!dailyLog) return [];
         const stops: (StopData & { machineId: string })[] = [];
         Object.values(dailyLog.timeSlots).forEach(slot => {
-            if (!slot) return;
+            if (!slot || typeof slot !== 'object') return; // Defensive check
             Object.entries(slot).forEach(([machineId, machineData]) => {
-                if (machineData && 'stops' in machineData && machineData.stops) {
-                     machineData.stops.forEach(stop => {
+                if (machineData && typeof machineData === 'object' && 'stops' in machineData && Array.isArray(machineData.stops)) {
+                    machineData.stops.forEach(stop => {
                         stops.push({ ...stop, machineId });
                     });
                 }
@@ -669,45 +668,51 @@ export default function StopsClient({
         );
     }
     
-    const inputCell = (time: string, field: keyof TimeSlot, machineId?: string) => {
-        
+    const inputCell = (time: string, field: keyof Omit<TimeSlot, 'masa' | 'stops' | 'weight'>, machineId?: string) => {
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            let valueToSet = e.target.value;
-            if (machineId) {
-                 setDailyLog(prev => {
-                    if (!prev) return null;
-                    const newTimeSlots = { ...prev.timeSlots };
-                    if (!newTimeSlots[time]) newTimeSlots[time] = {};
-                    
-                    const machineObservations = { ...(newTimeSlots[time] as any)[machineId] || {} };
-                    machineObservations[field] = valueToSet;
-
-                    (newTimeSlots[time] as any)[machineId] = machineObservations;
-
-                    return { ...prev, timeSlots: newTimeSlots };
-                });
-            } else {
-                handleCellChange(time, field, valueToSet);
-            }
+            const valueToSet = e.target.value;
+            setDailyLog(prev => {
+                if (!prev) return null;
+                const newTimeSlots = { ...prev.timeSlots };
+                
+                // Ensure the timeslot object exists
+                if (!newTimeSlots[time]) {
+                    newTimeSlots[time] = {};
+                }
+    
+                if (machineId) {
+                    // It's a machine-specific field like 'weight'
+                    const machineObservations = { ...(newTimeSlots[time][machineId] as object || {}) };
+                    (machineObservations as any)[field] = valueToSet;
+                    newTimeSlots[time][machineId] = machineObservations;
+                } else {
+                    // It's a general field like 'flujo'
+                    (newTimeSlots[time] as any)[field] = valueToSet;
+                }
+    
+                return { ...prev, timeSlots: newTimeSlots };
+            });
         };
-
+    
         let value;
         if (machineId) {
-            value = (dailyLog?.timeSlots[time] as any)?.[machineId]?.[field] || '';
+            const machineData = dailyLog?.timeSlots[time]?.[machineId];
+            value = (machineData && typeof machineData === 'object' && field in machineData) ? (machineData as any)[field] : '';
         } else {
-            value = dailyLog?.timeSlots[time]?.[field] || '';
+            const slotData = dailyLog?.timeSlots[time];
+            value = (slotData && field in slotData) ? slotData[field as keyof typeof slotData] : '';
         }
-
+    
         return (
             <td className="p-0">
                 <Input 
                     className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs"
-                    value={value}
+                    value={value || ''}
                     onChange={handleChange}
                 />
             </td>
         );
-    }
+    };
 
     const masaSelectCell = (time: string) => {
         const field = 'masa';
