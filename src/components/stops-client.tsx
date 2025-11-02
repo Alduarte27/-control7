@@ -676,22 +676,28 @@ export default function StopsClient({
         
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             let valueToSet = e.target.value;
-            if (machineId) {
-                 setDailyLog(prev => {
-                    if (!prev) return null;
-                    const newTimeSlots = { ...prev.timeSlots };
-                    if (!newTimeSlots[time]) newTimeSlots[time] = {};
-                    
-                    const machineObservations = { ...(newTimeSlots[time] as any)[machineId] || {} };
-                    machineObservations[field] = valueToSet;
-
-                    (newTimeSlots[time] as any)[machineId] = machineObservations;
-
-                    return { ...prev, timeSlots: newTimeSlots };
-                });
-            } else {
-                handleCellChange(time, field as keyof Omit<TimeSlot, 'stops' | 'weight'>, valueToSet);
-            }
+            setDailyLog(prev => {
+                if (!prev) return null;
+    
+                const newTimeSlots = { ...prev.timeSlots };
+    
+                // Ensure the timeslot object exists
+                if (!newTimeSlots[time]) {
+                    newTimeSlots[time] = {};
+                }
+    
+                if (machineId) {
+                    // Handle machine-specific fields
+                    const machineData = { ...(newTimeSlots[time] as any)[machineId] || {} };
+                    machineData[field] = valueToSet;
+                    (newTimeSlots[time] as any)[machineId] = machineData;
+                } else {
+                    // Handle general timeslot fields
+                    (newTimeSlots[time] as any)[field] = valueToSet;
+                }
+    
+                return { ...prev, timeSlots: newTimeSlots };
+            });
         };
 
         let value;
@@ -732,6 +738,57 @@ export default function StopsClient({
                         <SelectItem value="_">-</SelectItem>
                         {Array.from({ length: 8 }, (_, i) => i + 1).map(num => (
                             <SelectItem key={num} value={String(num)}>{num}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </td>
+        );
+    };
+
+    const flujoSelectCell = (time: string) => {
+        const field = 'flujo';
+        const value = dailyLog?.timeSlots[time]?.[field] || '';
+        const options = ["Familiar", "Familiar/Granel 2", "Granel 2", "Granel 1"];
+
+        const handleValueChange = (newValue: string) => {
+            handleCellChange(time, field, newValue === "_" ? "" : newValue);
+        };
+
+        return (
+            <td className="p-0">
+                <Select value={value} onValueChange={handleValueChange}>
+                    <SelectTrigger className="border-none rounded-none focus:ring-1 focus:ring-inset h-8 text-xs w-full">
+                        <SelectValue placeholder="-" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="_">-</SelectItem>
+                        {options.map(opt => (
+                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </td>
+        );
+    };
+
+    const humSelectCell = (time: string, field: 'in_hum' | 'out_fam_hum' | 'out_gra_hum') => {
+        const value = dailyLog?.timeSlots[time]?.[field] || '';
+        const options = ["0.01", "0.02", "0.03", "0.04", "0.05", "0.06", "0.07", "0.08"];
+        
+        const handleValueChange = (newValue: string) => {
+            handleCellChange(time, field, newValue === "_" ? "" : newValue);
+        };
+
+        return (
+            <td className="p-0">
+                <Select value={value} onValueChange={handleValueChange}>
+                    <SelectTrigger className="border-none rounded-none focus:ring-1 focus:ring-inset h-8 text-xs w-full">
+                        <SelectValue placeholder="-" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="_">-</SelectItem>
+                        {options.map(opt => (
+                            <SelectItem key={opt} value={opt}>{opt}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
@@ -930,19 +987,19 @@ export default function StopsClient({
                                                     )
                                                 })}
                                                 {masaSelectCell(time)}
-                                                {inputCell(time, 'flujo')}
+                                                {flujoSelectCell(time)}
                                                 {inputCell(time, 'ns_fam')}
                                                 {inputCell(time, 'ns_1')}
                                                 {inputCell(time, 'ns_2')}
                                                 {inputCell(time, 'in_color')}
-                                                {inputCell(time, 'in_hum')}
+                                                {humSelectCell(time, 'in_hum')}
                                                 {inputCell(time, 'in_turb')}
                                                 {inputCell(time, 'in_cv')}
                                                 {inputCell(time, 'out_fam_color')}
-                                                {inputCell(time, 'out_fam_hum')}
+                                                {humSelectCell(time, 'out_fam_hum')}
                                                 {inputCell(time, 'out_fam_turb')}
                                                 {inputCell(time, 'out_gra_color')}
-                                                {inputCell(time, 'out_gra_hum')}
+                                                {humSelectCell(time, 'out_gra_hum')}
                                                 {inputCell(time, 'out_gra_turb')}
                                                 {inputCell(time, 'empaque_obs')}
                                             </tr>
