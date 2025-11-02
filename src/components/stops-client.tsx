@@ -120,7 +120,7 @@ function ConfigurationModal({
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent className="max-w-5xl">
+            <DialogContent className="max-w-7xl">
                 <DialogHeader>
                     <DialogTitle>Configuración de la Bitácora</DialogTitle>
                 </DialogHeader>
