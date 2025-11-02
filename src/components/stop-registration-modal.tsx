@@ -25,7 +25,7 @@ type StopRegistrationModalProps = {
 export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopCauses, maintenanceTypes, stopData }: StopRegistrationModalProps) {
     const [actualStartTime, setActualStartTime] = React.useState(stopData?.startTime || startTime);
     const [endTime, setEndTime] = React.useState(stopData?.endTime || actualStartTime);
-    const [type, setType] = React.useState<'planned' | 'unplanned'>(stopData?.type || 'unplanned');
+    const [type, setType] = React.useState<'planned' | 'unplanned'>(stopData?.type || 'planned');
     const [maintenanceType, setMaintenanceType] = React.useState<string | undefined>(stopData?.maintenanceType);
     const [reason, setReason] = React.useState(stopData?.reason || '');
     const [cause, setCause] = React.useState(stopData?.cause || '');
@@ -45,7 +45,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                 // Reset for new entry
                 setActualStartTime(startTime);
                 setEndTime(startTime);
-                setType('unplanned');
+                setType('planned');
                 setMaintenanceType(undefined);
                 setReason('');
                 setCause('');
@@ -99,7 +99,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
             endTime,
             duration,
             type,
-            maintenanceType: type === 'planned' ? maintenanceType : undefined,
+            maintenanceType: maintenanceType,
             reason,
             cause,
             solution,
@@ -148,12 +148,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="stop-type">Tipo de Parada</Label>
-                                <Select value={type} onValueChange={(val: 'planned' | 'unplanned') => {
-                                    setType(val);
-                                    if (val === 'unplanned') {
-                                        setMaintenanceType(undefined);
-                                    }
-                                }}>
+                                <Select value={type} onValueChange={(val: 'planned' | 'unplanned') => setType(val)}>
                                     <SelectTrigger id="stop-type">
                                         <SelectValue />
                                     </SelectTrigger>
@@ -163,9 +158,9 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                     </SelectContent>
                                 </Select>
                             </div>
-                            <div className={cn("space-y-1.5 transition-opacity", type === 'planned' ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                            <div className="space-y-1.5">
                                 <Label htmlFor="maint-type">Tipo de Mantenimiento</Label>
-                                <Select value={maintenanceType} onValueChange={(val: any) => setMaintenanceType(val)} disabled={type !== 'planned'}>
+                                <Select value={maintenanceType} onValueChange={(val: any) => setMaintenanceType(val)}>
                                     <SelectTrigger id="maint-type">
                                         <SelectValue placeholder="Seleccionar tipo"/>
                                     </SelectTrigger>
