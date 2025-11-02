@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from './ui/separator';
+import { cn } from '@/lib/utils';
 
 type StopRegistrationModalProps = {
     isOpen: boolean;
@@ -132,29 +133,29 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                     <Separator />
                     
                     <div className="space-y-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="stop-type">Tipo de Parada</Label>
-                            <Select value={type} onValueChange={(val: 'planned' | 'unplanned') => {
-                                setType(val);
-                                if (val === 'unplanned') {
-                                    setMaintenanceType(undefined);
-                                }
-                            }}>
-                                <SelectTrigger id="stop-type">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="unplanned">No Planificada</SelectItem>
-                                    <SelectItem value="planned">Planificada</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        {type === 'planned' && (
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
+                                <Label htmlFor="stop-type">Tipo de Parada</Label>
+                                <Select value={type} onValueChange={(val: 'planned' | 'unplanned') => {
+                                    setType(val);
+                                    if (val === 'unplanned') {
+                                        setMaintenanceType(undefined);
+                                    }
+                                }}>
+                                    <SelectTrigger id="stop-type">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="unplanned">No Planificada</SelectItem>
+                                        <SelectItem value="planned">Planificada</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className={cn("space-y-1.5 transition-opacity", type === 'planned' ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
                                 <Label htmlFor="maint-type">Tipo de Mantenimiento</Label>
-                                <Select value={maintenanceType} onValueChange={(val: any) => setMaintenanceType(val)}>
+                                <Select value={maintenanceType} onValueChange={(val: any) => setMaintenanceType(val)} disabled={type !== 'planned'}>
                                     <SelectTrigger id="maint-type">
-                                        <SelectValue placeholder="Seleccionar tipo de mtto."/>
+                                        <SelectValue placeholder="Seleccionar tipo"/>
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="preventive">Preventivo</SelectItem>
@@ -163,7 +164,8 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                     </SelectContent>
                                 </Select>
                             </div>
-                        )}
+                        </div>
+
                         <div className="space-y-1.5">
                             <Label htmlFor="stop-reason">Motivo</Label>
                              <Select value={reason} onValueChange={setReason}>
