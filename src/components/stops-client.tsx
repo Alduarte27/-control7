@@ -366,7 +366,7 @@ export default function StopsClient({
 
         fetchLog();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [date, createEmptyLog, toast, prefetchedProducts]);
+    }, [date, createEmptyLog, prefetchedProducts]);
 
 
     const fetchCatalogs = React.useCallback(async () => {
@@ -702,7 +702,6 @@ export default function StopsClient({
     
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             const rawValue = e.target.value;
-            // For percentage fields, store only the number
             const valueToSet = isPercentageField ? rawValue.replace(/%/g, '') : rawValue;
     
             setDailyLog(prev => {
@@ -988,21 +987,21 @@ export default function StopsClient({
                                                     <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10" style={{ top: '90px' }}>Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[5rem]" style={{ top: '90px' }}>Masa</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[9rem]" style={{ top: '90px' }}>Flujo</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[5rem]" style={{ top: '90px' }}>NS-FAM</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[5rem]" style={{ top: '90px' }}>NS% 1</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[5rem]" style={{ top: '90px' }}>NS% 2</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[5rem]" style={{ top: '90px' }}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>CV</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[5rem]" style={{ top: '90px' }}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Turb</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Color</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[5rem]" style={{ top: '90px' }}>Hum</th>
-                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '90px' }}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Masa</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[7rem]" style={{ top: '90px' }}>Flujo</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>NS-FAM</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>NS% 1</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>NS% 2</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[2rem]" style={{ top: '90px' }}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[2rem]" style={{ top: '90px' }}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[2rem]" style={{ top: '90px' }}>CV</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[2rem]" style={{ top: '90px' }}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[2rem]" style={{ top: '90px' }}>Turb</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[2rem]" style={{ top: '90px' }}>Color</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[3rem]" style={{ top: '90px' }}>Hum</th>
+                                            <th className="p-1 font-normal text-muted-foreground sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[2rem]" style={{ top: '90px' }}>Turb</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border">
