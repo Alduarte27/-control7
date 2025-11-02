@@ -408,7 +408,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             const { machineId } = modalState;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
-            // This is the key fix: determine the correct 30-minute slot for the start time.
             const startTimeDate = parse(stopData.startTime, 'HH:mm', new Date());
             const startMinutes = getMinutes(startTimeDate);
             const registrationMinutes = startMinutes < 30 ? 0 : 30;
@@ -432,8 +431,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     const oldRegistrationTime = setMinutes(oldStartTimeDate, oldRegistrationMinutes);
                     const oldRegistrationSlotKey = format(oldRegistrationTime, 'HH:mm');
 
-                    if (newTimeSlots[oldRegistrationSlotKey] && newTimeSlots[oldRegistrationSlotKey][machineId]) {
-                        const oldMachineSlot = newTimeSlots[oldRegistrationSlotKey][machineId] as { stops?: StopData[] };
+                    if (newTimeSlots[oldRegistrationSlotKey] && (newTimeSlots[oldRegistrationSlotKey] as any)[machineId]) {
+                        const oldMachineSlot = (newTimeSlots[oldRegistrationSlotKey] as any)[machineId] as { stops?: StopData[] };
                         if (oldMachineSlot.stops) {
                             oldMachineSlot.stops = oldMachineSlot.stops.filter(s => s.id !== stopData.id);
                              if (oldMachineSlot.stops.length === 0) {
@@ -786,17 +785,17 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                         <div className="relative">
                             <div className="w-full overflow-x-auto border rounded-lg bg-card">
                                 <table className="min-w-full text-xs">
-                                    <thead className='text-center align-top'>
-                                         <tr className="divide-x divide-border">
+                                     <thead className='text-center align-top'>
+                                        <tr className="divide-x divide-border">
                                             <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={3} style={{top: 0}}>Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10" style={{top: 0}}>Máquina #{i + 1}</th>
                                             ))}
-                                            <th colSpan={9} className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" style={{top: 0}}>INGRESO DE PRODUCTO</th>
-                                            <th colSpan={6} className="p-2 sticky bg-blue-100 dark:bg-blue-900/50 z-10" style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
+                                            <th colSpan={9} className="p-2 sticky z-10 bg-green-100 dark:bg-green-900/50" rowSpan={2} style={{top: 0}}>INGRESO DE PRODUCTO <br/> GRASSHOPPER</th>
+                                            <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50" rowSpan={2} style={{top: 0}}>SALIDA DE PRODUCTO TERMINADO</th>
                                             <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20" style={{top: 0}}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
-                                         <tr className="divide-x divide-border">
+                                        <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
@@ -824,9 +823,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     </th>
                                                 );
                                             })}
-                                            <th colSpan={9} className="p-1 font-medium sticky z-10 bg-green-100 dark:bg-green-900/50" style={{top: '45px'}}>GRASSHOPPER</th>
-                                            <th colSpan={3} className="p-1 font-medium sticky z-10 bg-blue-100 dark:bg-blue-900/50" style={{top: '45px'}}>Familiar</th>
-                                            <th colSpan={3} className="p-1 font-medium sticky z-10 bg-blue-100 dark:bg-blue-900/50" style={{top: '45px'}}>Granel 50 KG</th>
                                         </tr>
                                          <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
