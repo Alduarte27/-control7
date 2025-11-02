@@ -296,7 +296,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         };
     }, [prefetchedProducts]);
 
-    const handleSaveLog = React.useCallback(async (logToSave: DailyLog, showToast = false) => {
+    const handleSaveLog = React.useCallback(async (logToSave: DailyLog | null, showToast = false) => {
         if (!logToSave) return;
         try {
             // Create a deep copy to avoid mutating state directly, and to clean up undefined values
@@ -323,22 +323,27 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             try {
                 const logDocSnap = await getDoc(doc(db, 'dailyLogs', logId));
 
+                let logData: DailyLog;
                 if (logDocSnap.exists()) {
-                    const data = logDocSnap.data() as DailyLog;
-                    // Ensure the log has all necessary structures
-                    if (!data.machines) data.machines = {};
-                    for (let i = 1; i <= NUM_MACHINES; i++) {
-                        if (!data.machines[`machine_${i}`]) {
-                            data.machines[`machine_${i}`] = { productId: prefetchedProducts?.[0]?.id || '' };
-                        }
-                    }
-                    if (!data.lote) data.lote = String(getDayOfYear(date));
-                    if(!data.operador) data.operador = '';
-                    if(!data.supervisor) data.supervisor = '';
-                    setDailyLog(data);
+                    logData = logDocSnap.data() as DailyLog;
                 } else {
-                    setDailyLog(createEmptyLog(date));
+                    logData = createEmptyLog(date);
                 }
+
+                // Ensure the log has all necessary structures, regardless of whether it's new or loaded
+                if (!logData.machines) logData.machines = {};
+                for (let i = 1; i <= NUM_MACHINES; i++) {
+                    if (!logData.machines[`machine_${i}`]) {
+                        logData.machines[`machine_${i}`] = { productId: prefetchedProducts?.[0]?.id || '' };
+                    }
+                }
+                if (!logData.lote) logData.lote = String(getDayOfYear(date));
+                if (!logData.operador) logData.operador = '';
+                if (!logData.supervisor) logData.supervisor = '';
+                if (!logData.timeSlots) logData.timeSlots = {};
+
+                setDailyLog(logData);
+
             } catch (error) {
                 console.error("Error fetching daily log:", error);
                 toast({ title: 'Error', description: 'No se pudo cargar la bitácora.', variant: 'destructive' });
@@ -379,9 +384,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
 
     const handleDateChange = (newDate: Date | undefined) => {
         if (newDate) {
-            if (dailyLog) {
-                handleSaveLog(dailyLog, false);
-            }
+            handleSaveLog(dailyLog, false);
             setDate(newDate);
         }
     };
@@ -729,7 +732,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
-                    <Button onClick={() => dailyLog && handleSaveLog(dailyLog, true)} disabled={loading}>Guardar Cambios</Button>
+                    <Button onClick={() => handleSaveLog(dailyLog, true)} disabled={loading}>Guardar Cambios</Button>
                     <Link href="/">
                         <Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button>
                     </Link>
@@ -829,6 +832,9 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     </th>
                                                 );
                                             })}
+                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9}>GRASSHOPPER</th>
+                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Familiar</th>
+                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Granel 50 KG</th>
                                         </tr>
                                         <tr className="divide-x divide-border" style={{ position: 'sticky', top: '86px', zIndex: 22 }}>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
@@ -836,14 +842,6 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                     <th className="p-1 font-normal text-muted-foreground w-48 sticky bg-muted z-10">Observación</th>
                                                     <th className="p-1 font-normal text-muted-foreground w-24 sticky bg-muted z-10">Peso/Saco KG</th>
                                                 </React.Fragment>
-                                            ))}
-                                            <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9}>GRASSHOPPER</th>
-                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Familiar</th>
-                                            <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3}>Granel 50 KG</th>
-                                        </tr>
-                                        <tr className="divide-x divide-border" style={{ position: 'sticky', top: '123px', zIndex: 21 }}>
-                                             {Array.from({ length: NUM_MACHINES * 2 }).map((_, i) => (
-                                                <th key={`empty_header_${i}`} className="p-1 sticky bg-muted z-10"></th>
                                             ))}
                                             <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">Masa</th>
                                             <th className="p-1 font-normal text-muted-foreground sticky bg-green-100 dark:bg-green-900/50 z-10">Flujo</th>
