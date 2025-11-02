@@ -368,7 +368,7 @@ export default function StopsClient({
         // Disabling exhaustive-deps because we intentionally don't want to re-run this when dailyLog changes,
         // only when the external dependencies (date, initialShift) change.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [date, createEmptyLog, toast, prefetchedProducts, initialShift]);
+    }, [date, initialShift]);
 
 
     const fetchCatalogs = React.useCallback(async () => {
@@ -400,6 +400,25 @@ export default function StopsClient({
         if (field === 'shift') {
             const newId = `${format(date, 'yyyy-MM-dd')}_${value}`;
             newLog.id = newId;
+
+            // Immediately fetch the log for the new shift
+            const fetchNewShiftLog = async () => {
+                setLoading(true);
+                try {
+                    const logDocSnap = await getDoc(doc(db, 'dailyLogs', newId));
+                    if (logDocSnap.exists()) {
+                        setDailyLog(logDocSnap.data() as DailyLog);
+                    } else {
+                        setDailyLog(createEmptyLog(date, value as 'day' | 'night'));
+                    }
+                } catch (error) {
+                    console.error("Error fetching new shift log:", error);
+                    toast({ title: 'Error', description: 'No se pudo cargar la bitácora para el nuevo turno.', variant: 'destructive' });
+                }
+                setLoading(false);
+            };
+            fetchNewShiftLog();
+            return; // Exit here to prevent setDailyLog from being called twice
         }
 
         setDailyLog(newLog);
@@ -567,7 +586,7 @@ export default function StopsClient({
             if (!slot || typeof slot !== 'object') return;
             Object.entries(slot).forEach(([machineId, machineData]) => {
                 if (machineData && typeof machineData === 'object' && 'stops' in machineData && Array.isArray(machineData.stops)) {
-                    machineData.stops.forEach(stop => {
+                    (machineData.stops as StopData[]).forEach(stop => {
                         stops.push({ ...stop, machineId });
                     });
                 }
@@ -708,14 +727,24 @@ export default function StopsClient({
         } else {
             value = (timeSlotData && typeof timeSlotData === 'object' && field in timeSlotData) ? (timeSlotData as any)[field] : '';
         }
+        
+        const isPercentageField = ['ns_fam', 'ns_1', 'ns_2'].includes(field as string);
 
         return (
             <td className="p-0">
-                <Input 
-                    className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs"
-                    value={value || ''}
-                    onChange={handleChange}
-                />
+                <div className="relative">
+                    <Input 
+                        type="text" // Use text to allow for formatting
+                        className={cn("border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs", isPercentageField && "pr-6")}
+                        value={value || ''}
+                        onChange={handleChange}
+                    />
+                    {isPercentageField && (
+                        <span className="absolute inset-y-0 right-2 flex items-center text-muted-foreground text-xs pointer-events-none">
+                            %
+                        </span>
+                    )}
+                </div>
             </td>
         );
     }
