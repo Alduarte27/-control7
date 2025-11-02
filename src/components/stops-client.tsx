@@ -11,7 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
-import { format, getDayOfYear, parse } from 'date-fns';
+import { format, getDayOfYear, parse, setMinutes, getMinutes, getHours } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -408,7 +408,12 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             const { machineId } = modalState;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
-            const registrationSlot = stopData.startTime.substring(0, 5);
+            // This is the key fix: determine the correct 30-minute slot for the start time.
+            const startTimeDate = parse(stopData.startTime, 'HH:mm', new Date());
+            const startMinutes = getMinutes(startTimeDate);
+            const registrationMinutes = startMinutes < 30 ? 0 : 30;
+            const registrationTime = setMinutes(startTimeDate, registrationMinutes);
+            const registrationSlot = format(registrationTime, 'HH:mm');
             
             if (!newTimeSlots[registrationSlot]) newTimeSlots[registrationSlot] = {};
             
@@ -419,7 +424,25 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             
             const existingStopIndex = machineSlot.stops.findIndex(s => s.id === stopData.id);
             if (existingStopIndex > -1) {
-                machineSlot.stops[existingStopIndex] = stopData;
+                // If editing, first remove the old stop from its original slot if the time changed
+                if (modalState.stopData && modalState.stopData.startTime !== stopData.startTime) {
+                    const oldStartTimeDate = parse(modalState.stopData.startTime, 'HH:mm', new Date());
+                    const oldStartMinutes = getMinutes(oldStartTimeDate);
+                    const oldRegistrationMinutes = oldStartMinutes < 30 ? 0 : 30;
+                    const oldRegistrationTime = setMinutes(oldStartTimeDate, oldRegistrationMinutes);
+                    const oldRegistrationSlotKey = format(oldRegistrationTime, 'HH:mm');
+
+                    if (newTimeSlots[oldRegistrationSlotKey] && newTimeSlots[oldRegistrationSlotKey][machineId]) {
+                        const oldMachineSlot = newTimeSlots[oldRegistrationSlotKey][machineId] as { stops?: StopData[] };
+                        if (oldMachineSlot.stops) {
+                            oldMachineSlot.stops = oldMachineSlot.stops.filter(s => s.id !== stopData.id);
+                             if (oldMachineSlot.stops.length === 0) {
+                                delete oldMachineSlot.stops;
+                            }
+                        }
+                    }
+                }
+                 machineSlot.stops[existingStopIndex] = stopData;
             } else {
                 machineSlot.stops.push(stopData);
             }
@@ -543,7 +566,8 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             <td className="p-0.5" onClick={handleCellClick}>
                 <div className="w-full h-8 flex flex-col items-center justify-start gap-0.5 cursor-pointer hover:bg-accent/50 rounded-sm p-0.5 overflow-hidden relative group/cell">
                     {stopsInCell.map(stopData => {
-                        const isStartingCell = time === stopData.startTime.substring(0,5);
+                        const stopStartTime = parse(stopData.startTime, 'HH:mm', new Date());
+                        const isStartingCell = getHours(stopStartTime) === getHours(cellStartTime) && Math.floor(getMinutes(stopStartTime) / 30) === Math.floor(getMinutes(cellStartTime) / 30);
                         const stopCauseConfig = stopCausesMap.get(stopData.reason);
                         const badgeColor = stopCauseConfig ? stopCauseConfig.color : (stopData.type === 'planned' ? '#3b82f6' : '#ef4444');
 
@@ -563,7 +587,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                                 !isStartingCell && "opacity-60"
                                             )}
                                         >
-                                            {isStartingCell && stopData.reason ? `${stopData.reason} (${stopData.duration}m)` : ''}
+                                            {isStartingCell && stopData.reason ? `${stopData.reason} (${stopData.duration}m)` : '\u00A0'}
                                         </Badge>
                                             {isAdminMode && isStartingCell && (
                                             <AlertDialog>
@@ -763,7 +787,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                             <div className="w-full overflow-x-auto border rounded-lg bg-card">
                                 <table className="min-w-full text-xs">
                                     <thead className='text-center align-top'>
-                                        <tr className="divide-x divide-border">
+                                         <tr className="divide-x divide-border">
                                             <th className="p-1 w-24 sticky left-0 bg-muted z-20" rowSpan={3} style={{top: 0}}>Hora</th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-2 sticky bg-muted z-10" style={{top: 0}}>Máquina #{i + 1}</th>
