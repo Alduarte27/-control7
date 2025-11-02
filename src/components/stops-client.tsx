@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -19,6 +19,8 @@ import StopRegistrationModal from './stop-registration-modal';
 import { Badge } from './ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { cn } from '@/lib/utils';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, } from '@/components/ui/alert-dialog';
+
 
 const NUM_MACHINES = 3;
 const TIME_SLOTS_PER_HOUR = 2; // 30-minute intervals
@@ -45,6 +47,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const { toast } = useToast();
     const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(), []);
+    const [isAdminMode, setIsAdminMode] = React.useState(false);
     
     const createEmptyLog = React.useCallback((logDate: Date): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
@@ -167,6 +170,31 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
         toast({ title: 'Parada Registrada', description: `Se guardó la parada para la máquina ${modalState.machineId.split('_')[1]} de ${stopData.startTime} a ${stopData.endTime}.` });
         setModalState(null);
     };
+
+     const handleDeleteStop = (timeSlot: string, machineId: string, stopId: string) => {
+        if (!dailyLog) return;
+
+        setDailyLog(prev => {
+            if (!prev) return null;
+
+            const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
+
+            if (!newTimeSlots[timeSlot] || !newTimeSlots[timeSlot][machineId]) return prev;
+
+            const machineSlot = newTimeSlots[timeSlot][machineId] as { stops?: StopData[] };
+            
+            if (machineSlot.stops) {
+                machineSlot.stops = machineSlot.stops.filter(stop => stop.id !== stopId);
+                 // If no stops are left, we can clean up the stops array
+                if (machineSlot.stops.length === 0) {
+                    delete machineSlot.stops;
+                }
+            }
+
+            return { ...prev, timeSlots: newTimeSlots };
+        });
+        toast({ title: "Parada Eliminada", description: "La parada ha sido eliminada. Guarda los cambios para confirmar.", variant: "destructive" });
+    };
     
     const handleSaveLog = async () => {
         if (!dailyLog) return;
@@ -179,36 +207,75 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
             toast({ title: 'Error', description: 'No se pudo guardar la bitácora.', variant: 'destructive' });
         }
     };
+
+    const handleToggleAdminMode = () => {
+        if (isAdminMode) {
+            setIsAdminMode(false);
+            toast({ title: "Modo Admin Desactivado" });
+        } else {
+            const password = prompt("Ingresa la clave de administrador:");
+            if (password === "ADMIN") {
+                setIsAdminMode(true);
+                toast({ title: "Modo Admin Activado", description: "Ahora puedes eliminar registros de paradas." });
+            } else if (password !== null) { // User didn't click cancel
+                toast({ title: "Clave Incorrecta", variant: "destructive" });
+            }
+        }
+    };
     
     const observationCell = (time: string, machineId: string) => {
         const stops = (dailyLog?.timeSlots[time]?.[machineId] as { stops?: StopData[] })?.stops || [];
         
         const handleCellClick = () => {
-            // Open modal to create a new stop
             setModalState({ isOpen: true, machineId, timeSlot: time });
         };
         
         const handleStopClick = (e: React.MouseEvent, stop: StopData) => {
-            e.stopPropagation(); // Prevent cell click from firing
-            // Open modal to edit existing stop
+            e.stopPropagation(); 
             setModalState({ isOpen: true, machineId, timeSlot: time, stopData: stop });
         };
 
         return (
             <td className="p-0.5" onClick={handleCellClick}>
-                <div className="w-full h-8 flex items-center justify-start gap-1 cursor-pointer hover:bg-accent/50 rounded-sm px-1 overflow-hidden">
+                <div className="w-full h-8 flex items-center justify-start gap-1 cursor-pointer hover:bg-accent/50 rounded-sm px-1 overflow-hidden relative group/cell">
                     {stops.length > 0 ? (
                         stops.map(stopData => (
                            <TooltipProvider key={stopData.id}>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
-                                        <Badge
-                                            variant={stopData.type === 'planned' ? 'secondary' : 'destructive'}
-                                            className="truncate cursor-pointer flex-shrink-0"
-                                            onClick={(e) => handleStopClick(e, stopData)}
-                                        >
-                                            {stopData.cause} ({stopData.duration}m)
-                                        </Badge>
+                                        <div className="relative group/pill">
+                                            <Badge
+                                                variant={stopData.type === 'planned' ? 'secondary' : 'destructive'}
+                                                className="truncate cursor-pointer flex-shrink-0"
+                                                onClick={(e) => handleStopClick(e, stopData)}
+                                            >
+                                                {stopData.cause} ({stopData.duration}m)
+                                            </Badge>
+                                             {isAdminMode && (
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                         <button 
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="absolute -top-1.5 -right-1.5 h-3.5 w-3.5 rounded-full bg-black text-white flex items-center justify-center text-xs opacity-0 group-hover/pill:opacity-100"
+                                                         >
+                                                             &times;
+                                                         </button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Esta acción eliminará permanentemente la parada "{stopData.cause}". No se puede deshacer.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDeleteStop(time, machineId, stopData.id)}>Eliminar</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            )}
+                                        </div>
                                     </TooltipTrigger>
                                     <TooltipContent>
                                         <div className="space-y-1 text-xs">
@@ -222,7 +289,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                             </TooltipProvider>
                         ))
                     ) : (
-                        <span className="text-muted-foreground text-xs opacity-0 group-hover:opacity-100">Registrar...</span>
+                        <span className="text-muted-foreground text-xs opacity-0 group-hover/cell:opacity-100">Registrar...</span>
                     )}
                 </div>
             </td>
@@ -278,6 +345,18 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                     <h1 className="text-2xl font-bold text-foreground">Bitácora de Producción</h1>
                 </div>
                 <div className="flex items-center gap-2">
+                     <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant={isAdminMode ? 'destructive' : 'outline'} size="icon" onClick={handleToggleAdminMode}>
+                                    {isAdminMode ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{isAdminMode ? 'Desactivar Modo Admin' : 'Activar Modo Admin'}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
                     <Button onClick={handleSaveLog} disabled={loading}>Guardar Cambios</Button>
                     <Link href="/">
                         <Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button>
@@ -383,7 +462,7 @@ export default function StopsClient({ prefetchedProducts }: { prefetchedProducts
                                 </thead>
                                 <tbody className="divide-y divide-border">
                                     {timeSlotsForTable.map((time) => (
-                                        <tr key={time} className="divide-x divide-border group">
+                                        <tr key={time} className="divide-x divide-border">
                                             <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
                                             {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
                                                 const machineId = `machine_${machineIndex + 1}`;
