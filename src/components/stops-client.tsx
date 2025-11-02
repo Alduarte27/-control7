@@ -327,34 +327,26 @@ export default function StopsClient({
     React.useEffect(() => {
         const fetchLog = async () => {
             setLoading(true);
-            const currentShift = initialShift || (dailyLog?.shift || 'day');
+            const currentShift = dailyLog?.shift || initialShift || 'day';
             const logId = `${format(date, 'yyyy-MM-dd')}_${currentShift}`;
             
             try {
                 const logDocSnap = await getDoc(doc(db, 'dailyLogs', logId));
 
-                let logData: DailyLog;
                 if (logDocSnap.exists()) {
-                    logData = logDocSnap.data() as DailyLog;
-                } else {
-                    logData = createEmptyLog(date, currentShift);
-                }
-
-                if (!logData.machines) logData.machines = {};
-                for (let i = 1; i <= NUM_MACHINES; i++) {
-                    const machineId = `machine_${i}`;
-                    if (!logData.machines[machineId]) {
-                        logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
+                    const logData = logDocSnap.data() as DailyLog;
+                    if (!logData.machines) logData.machines = {};
+                    for (let i = 1; i <= NUM_MACHINES; i++) {
+                        const machineId = `machine_${i}`;
+                        if (!logData.machines[machineId]) {
+                            logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
+                        }
                     }
+                    if (!logData.timeSlots) logData.timeSlots = {};
+                    setDailyLog(logData);
+                } else {
+                    setDailyLog(createEmptyLog(date, currentShift));
                 }
-
-                if (!logData.lote) logData.lote = String(getDayOfYear(date));
-                if (!logData.operador) logData.operador = '';
-                if (!logData.supervisor) logData.supervisor = '';
-                if (!logData.timeSlots) logData.timeSlots = {};
-                if (!logData.shift) logData.shift = currentShift;
-
-                setDailyLog(logData);
 
             } catch (error) {
                 console.error("Error fetching daily log:", error);
@@ -365,10 +357,9 @@ export default function StopsClient({
         };
 
         fetchLog();
-        // Disabling exhaustive-deps because we intentionally don't want to re-run this when dailyLog changes,
-        // only when the external dependencies (date, initialShift) change.
+        // Disabling exhaustive-deps because we intentionally only want this to run when date changes.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [date, initialShift]);
+    }, [date]);
 
 
     const fetchCatalogs = React.useCallback(async () => {
@@ -394,7 +385,7 @@ export default function StopsClient({
 
     const handleHeaderChange = (field: keyof Omit<DailyLog, 'id' | 'machines' | 'timeSlots'>, value: string) => {
         if (!dailyLog) return;
-
+        
         const newLog = { ...dailyLog, [field]: value };
         
         if (field === 'shift') {
@@ -441,16 +432,20 @@ export default function StopsClient({
         });
     };
 
-    const handleCellChange = (timeSlot: string, field: keyof Omit<TimeSlot, 'stops' | 'weight'>, value: string) => {
+    const handleCellChange = (timeSlot: string, field: keyof TimeSlot, value: string) => {
         setDailyLog(prev => {
             if (!prev) return null;
+            
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
+            
             if (!newTimeSlots[timeSlot]) {
                 newTimeSlots[timeSlot] = {};
             }
-            // Create a new object for the specific time slot to ensure we don't mutate state
-            const updatedTimeSlot = { ...newTimeSlots[timeSlot], [field]: value };
-            newTimeSlots[timeSlot] = updatedTimeSlot;
+            
+            // This is a general field, not nested under a machine
+            if (typeof newTimeSlots[timeSlot] === 'object' && newTimeSlots[timeSlot] !== null) {
+                newTimeSlots[timeSlot][field] = value;
+            }
 
             return { ...prev, timeSlots: newTimeSlots };
         });
@@ -692,27 +687,30 @@ export default function StopsClient({
     }
     
     const inputCell = (time: string, field: keyof TimeSlot, machineId?: string) => {
-        
+        const isPercentageField = ['ns_fam', 'ns_1', 'ns_2'].includes(field as string);
+
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-            let valueToSet = e.target.value;
+            const rawValue = e.target.value;
+            // For percentage fields, store only the number
+            const valueToSet = isPercentageField ? rawValue.replace(/%/g, '') : rawValue;
+
             setDailyLog(prev => {
                 if (!prev) return null;
+                const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
     
-                const newTimeSlots = { ...prev.timeSlots };
-    
-                // Ensure the timeslot object exists
                 if (!newTimeSlots[time]) {
                     newTimeSlots[time] = {};
                 }
     
                 if (machineId) {
-                    // Handle machine-specific fields
-                    const machineData = { ...(newTimeSlots[time] as any)[machineId] || {} };
-                    machineData[field] = valueToSet;
-                    (newTimeSlots[time] as any)[machineId] = machineData;
+                    if (!newTimeSlots[time][machineId] || typeof newTimeSlots[time][machineId] !== 'object') {
+                        newTimeSlots[time][machineId] = {};
+                    }
+                    (newTimeSlots[time][machineId] as any)[field] = valueToSet;
                 } else {
-                    // Handle general timeslot fields
-                    (newTimeSlots[time] as any)[field] = valueToSet;
+                     if (typeof newTimeSlots[time] === 'object' && newTimeSlots[time] !== null) {
+                        newTimeSlots[time][field] = valueToSet;
+                    }
                 }
     
                 return { ...prev, timeSlots: newTimeSlots };
@@ -723,28 +721,21 @@ export default function StopsClient({
         const timeSlotData = dailyLog?.timeSlots[time];
         if (machineId) {
             const machineData = timeSlotData?.[machineId];
-            value = (machineData && typeof machineData === 'object' && field in machineData) ? (machineData as any)[field] : '';
+            value = (machineData && typeof machineData === 'object' && field in machineData) ? String((machineData as any)[field]) : '';
         } else {
-            value = (timeSlotData && typeof timeSlotData === 'object' && field in timeSlotData) ? (timeSlotData as any)[field] : '';
+            value = (timeSlotData && typeof timeSlotData === 'object' && field in timeSlotData) ? String((timeSlotData as any)[field]) : '';
         }
         
-        const isPercentageField = ['ns_fam', 'ns_1', 'ns_2'].includes(field as string);
+        const displayValue = isPercentageField && value ? `${value}%` : value;
 
         return (
             <td className="p-0">
-                <div className="relative">
-                    <Input 
-                        type="text" // Use text to allow for formatting
-                        className={cn("border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs", isPercentageField && "pr-6")}
-                        value={value || ''}
-                        onChange={handleChange}
-                    />
-                    {isPercentageField && (
-                        <span className="absolute inset-y-0 right-2 flex items-center text-muted-foreground text-xs pointer-events-none">
-                            %
-                        </span>
-                    )}
-                </div>
+                <Input 
+                    type="text"
+                    className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs"
+                    value={displayValue}
+                    onChange={handleChange}
+                />
             </td>
         );
     }
