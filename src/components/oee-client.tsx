@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X, BarChart, Percent, LineChart, Package, CheckCircle, ShieldCheck, Target } from 'lucide-react';
+import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X, BarChart, Percent, LineChart, Package, CheckCircle, ShieldCheck, Target, PieChartIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import KpiCard from './kpi-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
+import { Bar, BarChart as RechartsBarChart, Pie, PieChart as RechartsPieChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { DateRange } from 'react-day-picker';
 import { HardHat } from 'lucide-react';
@@ -34,11 +34,18 @@ type DetailedStopData = StopData & {
   shift: 'day' | 'night';
 }
 
+type StopTypeDistribution = {
+    name: 'Planificadas' | 'No Planificadas';
+    value: number;
+    fill: string;
+}
+
 export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: { prefetchedProducts: ProductDefinition[], prefetchedStopCauses: StopCause[]}) {
     const [dateRange, setDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -7), to: new Date() });
     const [loading, setLoading] = React.useState(false);
     const [machineStops, setMachineStops] = React.useState<{ [machineId: string]: number }>({});
     const [stopsByReason, setStopsByReason] = React.useState<AggregatedStopData[]>([]);
+    const [stopTypeDistribution, setStopTypeDistribution] = React.useState<StopTypeDistribution[]>([]);
     
     const [allStopsInRange, setAllStopsInRange] = React.useState<DetailedStopData[]>([]);
     const [selectedReason, setSelectedReason] = React.useState<string | null>(null);
@@ -59,6 +66,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
         setLoading(true);
         setSelectedReason(null);
+        // Reset all states
         setOee(0);
         setAvailability(0);
         setPerformance(0);
@@ -66,6 +74,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         setMachineStops({});
         setStopsByReason([]);
         setAllStopsInRange([]);
+        setStopTypeDistribution([]);
 
 
         const startId = format(dateRange.from, 'yyyy-MM-dd');
@@ -88,21 +97,24 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             const aggregatedMachineStops: { [machineId: string]: number } = {};
             const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
             const detailedStops: DetailedStopData[] = [];
+            const stopTypes = { planned: 0, unplanned: 0 };
+
 
             let totalPlannedTime = 0;
             let totalStopTime = 0;
             let totalActualProduction = 0; // In bags
             let totalTheoreticalProduction = 0; // In bags
+            let lastKnownSpeed: { [machineId: string]: number } = {};
 
             querySnapshot.forEach(doc => {
                 const log = doc.data() as DailyLog;
                 const [logDate, logShift] = doc.id.split('_');
 
-                if (!logDate || !logShift) return; // Skip documents with incorrect ID format
+                if (!logDate || !logShift || !log.id.includes('_')) return; // Skip documents with incorrect ID format
                 
                 totalPlannedTime += 12 * 60; // Each log represents a 12-hour shift
-
-                let lastKnownSpeed: { [machineId: string]: number } = {};
+                
+                if (!log.timeSlots) return;
 
                 Object.entries(log.timeSlots).forEach(([time, slot]) => {
                     const timeSlotDuration = 30; // minutes
@@ -113,8 +125,10 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                         if (key.startsWith('machine_') && machineData && typeof machineData === 'object') {
                             const machineId = key;
                             
-                            // Update last known speed
-                            if (typeof (machineData as TimeSlot['machine_1'])?.speed === 'number') {
+                            // Update last known speed for this machine
+                            if (typeof (machineData as MachineLog).theoreticalSpeed === 'number') {
+                                lastKnownSpeed[machineId] = (machineData as MachineLog).theoreticalSpeed!;
+                            } else if (typeof (machineData as TimeSlot['machine_1'])?.speed === 'number') {
                                 lastKnownSpeed[machineId] = (machineData as TimeSlot['machine_1'])!.speed!;
                             }
                             
@@ -124,6 +138,12 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                     const duration = stop.duration || 0;
                                     totalStopTime += duration;
                                     timeSlotStopTime += duration;
+                                    
+                                    if(stop.type === 'planned') {
+                                        stopTypes.planned += duration;
+                                    } else {
+                                        stopTypes.unplanned += duration;
+                                    }
 
                                     if (!aggregatedMachineStops[machineId]) {
                                         aggregatedMachineStops[machineId] = 0;
@@ -150,14 +170,18 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 });
                             }
 
-                             // Process Production for Performance calculation
-                            if ('weight' in machineData && machineData.weight) {
-                                totalActualProduction += 1; // Assuming 1 bag per entry
+                             // Process Production for Performance calculation from weight
+                            if ('weight' in machineData && typeof machineData.weight === 'string' && machineData.weight.trim() !== '') {
+                                const weightValue = parseFloat(machineData.weight);
+                                if (!isNaN(weightValue)) {
+                                    totalActualProduction += 1; // Assuming 1 bag per entry, regardless of weight
+                                }
                             }
 
                             const runTimeInSlot = timeSlotDuration - timeSlotStopTime;
-                            if (runTimeInSlot > 0 && lastKnownSpeed[machineId] > 0) {
-                                const theoreticalBagsInSlot = (lastKnownSpeed[machineId] / 60) * runTimeInSlot;
+                            const speedForSlot = (machineData as TimeSlot['machine_1'])?.speed ?? lastKnownSpeed[machineId] ?? 0;
+                            if (runTimeInSlot > 0 && speedForSlot > 0) {
+                                const theoreticalBagsInSlot = (speedForSlot) * (runTimeInSlot / 60);
                                 totalTheoreticalProduction += theoreticalBagsInSlot;
                             }
                         }
@@ -178,9 +202,13 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             setQuality(finalQuality);
             setOee(finalOee);
 
-
             setMachineStops(aggregatedMachineStops);
             setAllStopsInRange(detailedStops);
+            setStopTypeDistribution([
+                { name: 'Planificadas', value: stopTypes.planned, fill: 'hsl(var(--chart-2))' },
+                { name: 'No Planificadas', value: stopTypes.unplanned, fill: 'hsl(var(--chart-5))' },
+            ]);
+
 
             const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, data]) => ({
                 name: reason,
@@ -292,28 +320,64 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                              </CardContent>
                          </Card>
 
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Total de Tiempo de Parada por Máquina</CardTitle>
-                                <CardDescription>Suma de todos los minutos de parada para cada máquina en el período seleccionado.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                {Object.keys(machineStops).length > 0 ? (
-                                    Object.entries(machineStops).map(([machineId, minutes]) => (
-                                        <KpiCard
-                                            key={machineId}
-                                            title={`Máquina ${machineId.split('_')[1]}`}
-                                            value={`${Math.floor(minutes / 60)}h ${minutes % 60}m`}
-                                            subValue={`${minutes.toLocaleString()} minutos totales`}
-                                            icon={HardHat}
-                                            description="Tiempo total que esta máquina estuvo detenida."
-                                        />
-                                    ))
-                                ) : (
-                                    <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
-                                )}
-                            </CardContent>
-                        </Card>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Total de Tiempo de Parada por Máquina</CardTitle>
+                                    <CardDescription>Suma de todos los minutos de parada para cada máquina en el período seleccionado.</CardDescription>
+                                </CardHeader>
+                                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {Object.keys(machineStops).length > 0 ? (
+                                        Object.entries(machineStops).map(([machineId, minutes]) => (
+                                            <KpiCard
+                                                key={machineId}
+                                                title={`Máquina ${machineId.split('_')[1]}`}
+                                                value={`${Math.floor(minutes / 60)}h ${minutes % 60}m`}
+                                                subValue={`${minutes.toLocaleString()} minutos totales`}
+                                                icon={HardHat}
+                                                description="Tiempo total que esta máquina estuvo detenida."
+                                            />
+                                        ))
+                                    ) : (
+                                        <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                             <Card>
+                                <CardHeader>
+                                    <CardTitle>Distribución de Paradas</CardTitle>
+                                    <CardDescription>Proporción del tiempo de parada total clasificado como planificado vs. no planificado.</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {stopTypeDistribution.some(d => d.value > 0) ? (
+                                        <ChartContainer config={{}} className="w-full h-[250px]">
+                                            <RechartsPieChart>
+                                                <RechartsTooltip 
+                                                  formatter={(value, name) => [`${value} min`, name]}
+                                                />
+                                                <Legend />
+                                                <Pie
+                                                    data={stopTypeDistribution}
+                                                    dataKey="value"
+                                                    nameKey="name"
+                                                    cx="50%"
+                                                    cy="50%"
+                                                    outerRadius={80}
+                                                    label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
+                                                >
+                                                    {stopTypeDistribution.map((entry) => (
+                                                        <Cell key={`cell-${entry.name}`} fill={entry.fill} />
+                                                    ))}
+                                                </Pie>
+                                            </RechartsPieChart>
+                                        </ChartContainer>
+                                    ) : (
+                                        <p className="text-center text-muted-foreground py-8">No hay datos de paradas para mostrar.</p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </div>
+
 
                         <Card>
                             <CardHeader>
