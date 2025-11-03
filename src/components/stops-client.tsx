@@ -963,7 +963,7 @@ export default function StopsClient({
                          <div className="border rounded-lg bg-card max-h-[75vh] overflow-y-auto">
                              <div className="overflow-x-auto">
                                 <table className="table-fixed min-w-full text-xs border-collapse">
-                                    <thead className="text-center align-middle sticky top-0 z-20 bg-card">
+                                    <thead className="text-center align-middle">
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 align-bottom sticky left-0 z-30 bg-muted">
                                                 <div className="w-24">Hora</div>
