@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from './ui/separator';
-import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 type StopRegistrationModalProps = {
     isOpen: boolean;
@@ -30,6 +30,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     const [reason, setReason] = React.useState(stopData?.reason || '');
     const [cause, setCause] = React.useState(stopData?.cause || '');
     const [solution, setSolution] = React.useState(stopData?.solution || '');
+    const { toast } = useToast();
 
     React.useEffect(() => {
         if (isOpen) {
@@ -88,8 +89,11 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     const handleSave = () => {
         const duration = calculateDuration(actualStartTime, endTime);
         if (duration < 0) {
-            // Optional: Add a toast or validation message
-            console.error("End time cannot be before start time.");
+            toast({
+                title: 'Error de Tiempo',
+                description: 'La hora de fin no puede ser anterior a la hora de inicio.',
+                variant: 'destructive',
+            });
             return;
         }
 
