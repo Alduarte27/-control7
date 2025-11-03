@@ -53,12 +53,9 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
         setLoading(true);
         setSelectedReason(null); // Reset selection on new fetch
+
         const startId = format(dateRange.from, 'yyyy-MM-dd');
         const endIdBoundary = format(addDays(dateRange.to, 1), 'yyyy-MM-dd');
-
-        const aggregatedMachineStops: { [machineId: string]: number } = {};
-        const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
-        const detailedStops: DetailedStopData[] = [];
 
         try {
             const logsQuery = query(
@@ -67,44 +64,54 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                 where('__name__', '<', endIdBoundary)
             );
             const querySnapshot = await getDocs(logsQuery);
+            
+            const aggregatedMachineStops: { [machineId: string]: number } = {};
+            const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
+            const detailedStops: DetailedStopData[] = [];
 
             querySnapshot.forEach(doc => {
                 const log = doc.data() as DailyLog;
                 const logDate = doc.id.split('_')[0];
                 if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
+                // Iterate over each time slot in the log
                 Object.values(log.timeSlots).forEach(slot => {
                     if (!slot || typeof slot !== 'object') return;
                     
-                    Object.entries(slot).forEach(([key, value]) => {
-                        if (key.startsWith('machine_') && value && typeof value === 'object' && 'stops' in value && Array.isArray(value.stops)) {
+                    // Iterate over each machine within the time slot
+                    Object.keys(slot).forEach((key) => {
+                        if (key.startsWith('machine_')) {
                             const machineId = key;
-                            (value.stops as StopData[]).forEach(stop => {
-                                // Aggregate for machine stops card
-                                if (!aggregatedMachineStops[machineId]) {
-                                    aggregatedMachineStops[machineId] = 0;
-                                }
-                                aggregatedMachineStops[machineId] += stop.duration;
+                            const machineData = (slot as any)[machineId];
 
-                                // Aggregate for reason chart
-                                if (stop.reason) {
-                                    if (!aggregatedStopsByReason[stop.reason]) {
-                                        const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
-                                        aggregatedStopsByReason[stop.reason] = {
-                                            totalMinutes: 0,
-                                            color: causeConfig?.color || '#8884d8'
-                                        };
+                            if (machineData && Array.isArray(machineData.stops)) {
+                                (machineData.stops as StopData[]).forEach(stop => {
+                                    // Aggregate for machine stops card
+                                    if (!aggregatedMachineStops[machineId]) {
+                                        aggregatedMachineStops[machineId] = 0;
                                     }
-                                    aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
-                                }
-                                
-                                // Collect detailed data
-                                detailedStops.push({
-                                    ...stop,
-                                    machineId: machineId.replace('machine_', 'Máquina '),
-                                    logDate: logDate
+                                    aggregatedMachineStops[machineId] += stop.duration;
+
+                                    // Aggregate for reason chart
+                                    if (stop.reason) {
+                                        if (!aggregatedStopsByReason[stop.reason]) {
+                                            const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
+                                            aggregatedStopsByReason[stop.reason] = {
+                                                totalMinutes: 0,
+                                                color: causeConfig?.color || '#8884d8'
+                                            };
+                                        }
+                                        aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
+                                    }
+                                    
+                                    // Collect detailed data
+                                    detailedStops.push({
+                                        ...stop,
+                                        machineId: machineId.replace('machine_', 'Máquina '),
+                                        logDate: logDate
+                                    });
                                 });
-                            });
+                            }
                         }
                     });
                 });
