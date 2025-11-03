@@ -951,7 +951,7 @@ export default function StopsClient({
                         {/* Log Table */}
                          <div className="border rounded-lg bg-card max-h-[75vh] overflow-y-auto">
                              <div className="overflow-x-auto">
-                                <table className="min-w-full text-xs border-collapse">
+                                <table className="min-w-full text-xs border-collapse table-fixed">
                                     <thead className="text-center align-middle sticky top-0 z-20 bg-card">
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 align-bottom sticky left-0 z-30 bg-muted" rowSpan={3}>
@@ -1000,7 +1000,7 @@ export default function StopsClient({
                                                 </React.Fragment>
                                             ))}
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
-                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[8.8rem]">Flujo</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[8rem]">Flujo</th>
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS-FA</th>
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 1</th>
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 2</th>
@@ -1084,6 +1084,7 @@ export default function StopsClient({
 }
 
     
+
 
 
 
