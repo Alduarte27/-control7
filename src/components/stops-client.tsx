@@ -938,7 +938,7 @@ export default function StopsClient({
                         </div>
 
                         {/* Log Table */}
-                        <div className="w-full overflow-x-auto border rounded-lg bg-card">
+                        <div className="w-full overflow-x-auto max-h-[75vh] overflow-y-auto border rounded-lg bg-card">
                             <table className="min-w-full text-xs">
                                 <thead className="text-center align-top sticky top-0 z-10 bg-card">
                                     <tr className="divide-x divide-border bg-muted/60">
@@ -950,7 +950,7 @@ export default function StopsClient({
                                     </tr>
                                     <tr className="divide-x divide-border text-muted-foreground font-normal">
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                            <th key={`machine_header_${i}`} colSpan={2} className="p-1 font-semibold">
+                                            <th key={`machine_header_${i}`} colSpan={2} className="p-1 font-semibold min-w-[20rem]">
                                                 <div className="mb-1">Máquina #{i + 1}</div>
                                                 <Select value={dailyLog.machines[`machine_${i + 1}`]?.productId || ''} onValueChange={(val) => handleMachineProductChange(`machine_${i + 1}`, val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card"><SelectValue /></SelectTrigger>
@@ -982,14 +982,6 @@ export default function StopsClient({
                                         <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Color</th>
                                         <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[5rem]">Hum</th>
                                         <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Turb</th>
-                                    </tr>
-                                     <tr className="divide-x divide-border text-muted-foreground font-normal">
-                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                            <React.Fragment key={`sub_header_${i}`}>
-                                                <th className="p-1 font-normal bg-muted/60 min-w-[12rem]">Observación</th>
-                                                <th className="p-1 font-normal bg-muted/60 min-w-[6rem]">Peso/Saco KG</th>
-                                            </React.Fragment>
-                                        ))}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
@@ -1057,4 +1049,3 @@ export default function StopsClient({
         </div>
     );
 }
-
