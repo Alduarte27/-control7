@@ -890,7 +890,7 @@ export default function StopsClient({
                 {loading ? <p>Cargando bitácora...</p> : dailyLog && (
                     <div className="space-y-4 pt-4">
                         {/* Header */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
                             <div className="space-y-1.5">
                                 <Label>Operador</Label>
                                 <Select value={dailyLog.operador} onValueChange={val => handleHeaderChange('operador', val)}>
@@ -952,7 +952,7 @@ export default function StopsClient({
                                             ))}
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-1 w-[320px] bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={4} className="p-1 w-[320px] bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
@@ -990,18 +990,18 @@ export default function StopsClient({
                                                 </React.Fragment>
                                             ))}
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
-                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[8rem]">Flujo</th>
-                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[4rem]">NS-FA</th>
-                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[4rem]">NS% 1</th>
-                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[4rem]">NS% 2</th>
-                                            <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3rem]">Color</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[8.8rem]">Flujo</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS-FA</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 1</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 2</th>
+                                            <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3.5rem]">Color</th>
                                             <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3rem]">Hum</th>
                                             <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3rem]">Turb</th>
-                                            <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3rem]">CV</th>
-                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Color</th>
+                                            <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[4rem]">CV</th>
+                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3.5rem]">Color</th>
                                             <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Hum</th>
                                             <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Turb</th>
-                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Color</th>
+                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3.5rem]">Color</th>
                                             <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Hum</th>
                                             <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Turb</th>
                                         </tr>
@@ -1034,7 +1034,13 @@ export default function StopsClient({
                                                 {inputCell(time, 'out_gra_color')}
                                                 {humSelectCell(time, 'out_gra_hum')}
                                                 {inputCell(time, 'out_gra_turb')}
-                                                {inputCell(time, 'empaque_obs')}
+                                                <td className="p-0">
+                                                    <Input
+                                                        className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs"
+                                                        value={dailyLog?.timeSlots[time]?.empaque_obs || ''}
+                                                        onChange={(e) => handleCellChange(time, 'empaque_obs', e.target.value)}
+                                                    />
+                                                </td>
                                             </tr>
                                         ))}
 
@@ -1074,6 +1080,7 @@ export default function StopsClient({
 }
 
     
+
 
 
 
