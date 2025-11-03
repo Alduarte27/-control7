@@ -963,7 +963,7 @@ export default function StopsClient({
                          <div className="border rounded-lg bg-card max-h-[75vh] overflow-y-auto">
                              <div className="overflow-x-auto">
                                 <table className="table-fixed min-w-full text-xs border-collapse">
-                                    <thead className="text-center align-middle">
+                                    <thead>
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 align-bottom sticky left-0 z-30 bg-muted">
                                                 <div className="w-24">Hora</div>
@@ -981,7 +981,7 @@ export default function StopsClient({
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-muted min-w-[260px]" colSpan={2}>
+                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-muted" style={{minWidth: '260px'}} colSpan={2}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <SelectValue placeholder="Producto" />
