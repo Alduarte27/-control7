@@ -262,24 +262,42 @@ function ConfigurationModal({
     );
 }
 
-const SaveStatusIndicator = ({ status }: { status: 'dirty' | 'saving' | 'saved' | 'idle' }) => {
+const SaveStatusIndicator = ({ status, onSave }: { status: 'dirty' | 'saving' | 'saved' | 'idle', onSave: () => void }) => {
     if (status === 'idle') {
-        return null;
+        return (
+            <Button onClick={onSave}>
+                <Save className="mr-2 h-4 w-4" /> Guardar Cambios
+            </Button>
+        );
     }
 
     const config = {
-        dirty: { text: 'Cambios sin guardar', icon: <Save className="h-4 w-4" />, color: 'text-yellow-600' },
-        saving: { text: 'Guardando...', icon: <RefreshCw className="h-4 w-4 animate-spin" />, color: 'text-blue-600' },
-        saved: { text: 'Sincronizado', icon: <CheckCircle2 className="h-4 w-4" />, color: 'text-green-600' }
+        dirty: { text: 'Guardar Cambios', icon: <Save className="h-4 w-4" />, color: 'text-white', buttonVariant: 'default' as 'default' },
+        saving: { text: 'Guardando...', icon: <RefreshCw className="h-4 w-4 animate-spin" />, color: 'text-blue-600', buttonVariant: 'outline' as 'outline' },
+        saved: { text: 'Sincronizado', icon: <CheckCircle2 className="h-4 w-4" />, color: 'text-green-600', buttonVariant: 'outline' as 'outline' }
     };
 
     const current = config[status as keyof typeof config] || config.saved;
 
     return (
-        <div className={cn("flex items-center gap-2 text-sm font-medium", current.color)}>
-            {current.icon}
-            <span>{current.text}</span>
-        </div>
+        <TooltipProvider>
+            <Tooltip>
+                <TooltipTrigger asChild>
+                    <Button variant={current.buttonVariant} onClick={status === 'dirty' ? onSave : undefined} disabled={status === 'saving' || status === 'saved'}>
+                        <div className={cn("flex items-center gap-2", current.color)}>
+                            {current.icon}
+                            <span>{current.text}</span>
+                        </div>
+                         {status === 'dirty' && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-500"></span>}
+                    </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                    {status === 'dirty' && <p>Tienes cambios sin guardar.</p>}
+                    {status === 'saving' && <p>Guardando tus cambios en la nube.</p>}
+                    {status === 'saved' && <p>Todos los cambios están guardados.</p>}
+                </TooltipContent>
+            </Tooltip>
+        </TooltipProvider>
     );
 };
 
@@ -305,7 +323,6 @@ export default function StopsClient({
     const { toast } = useToast();
     const [isAdminMode, setIsAdminMode] = React.useState(false);
 
-    // --- Auto-save state ---
     const [saveStatus, setSaveStatus] = React.useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle');
     const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
@@ -344,7 +361,7 @@ export default function StopsClient({
         };
     }, [familiarProducts]);
 
-    const handleSaveLog = React.useCallback(async (logToSave: DailyLog | null, showToast = false) => {
+    const handleSaveLog = React.useCallback(async (logToSave: DailyLog | null, showToast = true) => {
         if (!logToSave || !logToSave.id) return;
         
         setSaveStatus('saving');
@@ -360,7 +377,7 @@ export default function StopsClient({
             }
         } catch (error) {
             console.error("Error saving daily log:", error);
-            setSaveStatus('dirty'); // Revert to dirty if save fails
+            setSaveStatus('dirty'); 
             if (showToast) {
                 toast({ title: 'Error', description: 'No se pudo guardar la bitácora.', variant: 'destructive' });
             }
@@ -399,7 +416,7 @@ export default function StopsClient({
                 if (!logData.shift) logData.shift = currentShift;
 
                 setDailyLog(logData);
-                setSaveStatus(isToday(date) ? 'saved' : 'idle');
+                setSaveStatus('saved');
 
             } catch (error) {
                 console.error("Error fetching daily log:", error);
@@ -461,6 +478,8 @@ export default function StopsClient({
             if (!prev) return null;
             if (isCurrentDay) {
                 setSaveStatus('dirty');
+            } else {
+                setSaveStatus('idle'); // When not current day, button should be primary "Guardar"
             }
             return updater(prev);
         });
@@ -477,8 +496,10 @@ export default function StopsClient({
         };
 
         if (field === 'shift') {
-             // Save current state before switching
-            handleSaveLog(dailyLog, false).then(() => {
+            const currentSaveStatus = saveStatus;
+            const logToSave = dailyLog;
+
+            const performShiftChange = () => {
                  setDailyLog(prev => {
                     if(!prev) return null;
                     const newLog = updater(prev);
@@ -487,7 +508,16 @@ export default function StopsClient({
                     setDailyLog(newLog); // Optimistically set the shift
                     return newLog;
                  });
-            });
+            }
+            
+            if (currentSaveStatus === 'dirty') {
+                 handleSaveLog(logToSave, true).then(() => {
+                    performShiftChange();
+                 });
+            } else {
+                performShiftChange();
+            }
+
         } else {
             triggerChange(updater);
         }
@@ -496,7 +526,9 @@ export default function StopsClient({
     const handleDateChange = (newDate: Date | undefined) => {
         if (newDate) {
             if (saveStatus === 'dirty') {
-                 handleSaveLog(dailyLog, false);
+                 if (!confirm("Tienes cambios sin guardar. ¿Estás seguro de que quieres cambiar de fecha? Se perderán los cambios.")) {
+                     return;
+                 }
             }
             setDate(newDate);
         }
@@ -893,9 +925,22 @@ export default function StopsClient({
                 <div className="flex items-center gap-2 flex-wrap justify-center">
                     {/* Desktop Buttons */}
                     <div className="hidden md:flex items-center gap-2">
-                        <Link href="/log-history">
-                            <Button variant="outline"><History className="mr-2 h-4 w-4" />Historial</Button>
-                        </Link>
+                        
+                         <SaveStatusIndicator status={saveStatus} onSave={() => handleSaveLog(dailyLog, true)} />
+                        
+                         <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button asChild variant="outline" size="icon">
+                                        <Link href="/log-history">
+                                            <History className="h-4 w-4" />
+                                        </Link>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Historial</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -930,14 +975,6 @@ export default function StopsClient({
                         </TooltipProvider>
                     </div>
 
-                    {isCurrentDay ? (
-                        <SaveStatusIndicator status={saveStatus} />
-                    ) : (
-                        <Button onClick={() => handleSaveLog(dailyLog, true)} disabled={loading}>
-                            <Save className="mr-2 h-4 w-4" /> Guardar Cambios
-                        </Button>
-                    )}
-
                     <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
                     {/* Mobile Dropdown */}
                     <div className="md:hidden">
@@ -946,6 +983,7 @@ export default function StopsClient({
                                 <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => handleSaveLog(dailyLog, true)}><Save className="mr-2 h-4 w-4"/>Guardar</DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/log-history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/oee" className="flex items-center"><Activity className="mr-2 h-4 w-4" />Análisis</Link></DropdownMenuItem>
                                 <DropdownMenuItem onClick={handleToggleAdminMode}><Lock className="mr-2 h-4 w-4" />Modo Admin</DropdownMenuItem>
