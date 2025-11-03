@@ -950,7 +950,7 @@ export default function StopsClient({
                         {/* Log Table */}
                          <div className="border rounded-lg bg-card max-h-[75vh] overflow-y-auto">
                              <div className="overflow-x-auto">
-                                <table className="min-w-full text-xs border-collapse table-fixed">
+                                <table className="table-fixed min-w-full text-xs border-collapse">
                                     <thead className="text-center align-middle sticky top-0 z-20 bg-card">
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 align-bottom sticky left-0 z-30 bg-muted" rowSpan={3}>
@@ -968,7 +968,7 @@ export default function StopsClient({
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-muted" colSpan={2}>
+                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-muted min-w-[250px]" colSpan={2}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <SelectValue placeholder="Producto" />
@@ -994,7 +994,7 @@ export default function StopsClient({
                                         <tr className="divide-x divide-border text-muted-foreground font-normal">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal w-[75px] bg-muted">Observación</th>
+                                                    <th className="p-1 font-normal w-48 bg-muted">Observación</th>
                                                     <th className="p-1 font-normal w-24 bg-muted">Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
@@ -1081,5 +1081,7 @@ export default function StopsClient({
         </div>
     );
 }
+
+    
 
     
