@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -938,19 +939,19 @@ export default function StopsClient({
                         </div>
 
                         {/* Log Table */}
-                        <div className="w-full overflow-x-auto border rounded-lg bg-card max-h-[75vh] relative">
+                         <div className="border rounded-lg bg-card max-h-[75vh] overflow-auto">
                             <table className="min-w-full text-xs border-collapse">
                                 <thead className="text-center align-middle sticky top-0 z-20 bg-card">
                                     <tr className="divide-x divide-border">
-                                        <th className="p-0 align-bottom sticky left-0 z-30 bg-muted" rowSpan={3}>
-                                            <div className="p-2 w-24">Hora</div>
+                                        <th className="p-1 align-bottom sticky left-0 z-30 bg-muted" rowSpan={3}>
+                                            <div className="w-24">Hora</div>
                                         </th>
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                            <th key={`machine_header_${i}`} colSpan={2} className="p-2 bg-muted">Máquina #{i + 1}</th>
+                                            <th key={`machine_header_${i}`} colSpan={2} className="p-1 bg-muted">Máquina #{i + 1}</th>
                                         ))}
-                                        <th className="p-2 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
-                                        <th colSpan={6} className="p-2 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                        <th rowSpan={3} className="p-2 w-[40rem] sticky right-0 z-30 bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                        <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
+                                        <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
+                                        <th rowSpan={3} className="p-1 w-[40rem] sticky right-0 z-30 bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                     </tr>
                                     <tr className="divide-x divide-border">
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => {
@@ -976,7 +977,7 @@ export default function StopsClient({
                                                 </th>
                                             );
                                         })}
-                                        <th className="p-2 bg-green-100 dark:bg-green-900/50" colSpan={9}>GRASSHOPPER</th>
+                                        <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9}>GRASSHOPPER</th>
                                         <th className="p-1 bg-blue-100 dark:bg-blue-900/50" colSpan={3}>Familiar</th>
                                         <th className="p-1 bg-blue-100 dark:bg-blue-900/50" colSpan={3}>Granel 50 KG</th>
                                     </tr>
@@ -1032,7 +1033,7 @@ export default function StopsClient({
                                             {inputCell(time, 'out_gra_color')}
                                             {humSelectCell(time, 'out_gra_hum')}
                                             {inputCell(time, 'out_gra_turb')}
-                                            {inputCell(time, 'empaque_obs')}
+                                            {inputCell(time, 'empaque_obs', 'sticky right-0 bg-card z-10')}
                                         </tr>
                                     ))}
 
