@@ -40,7 +40,6 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
     const [machineStops, setMachineStops] = React.useState<{ [machineId: string]: number }>({});
     const [stopsByReason, setStopsByReason] = React.useState<AggregatedStopData[]>([]);
     
-    // New state for interactivity
     const [allStopsInRange, setAllStopsInRange] = React.useState<DetailedStopData[]>([]);
     const [selectedReason, setSelectedReason] = React.useState<string | null>(null);
 
@@ -53,51 +52,50 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         }
 
         setLoading(true);
-        setSelectedReason(null); // Reset selection on new fetch
+        setSelectedReason(null);
 
         const startId = format(dateRange.from, 'yyyy-MM-dd');
-        const endIdBoundary = format(addDays(dateRange.to, 1), 'yyyy-MM-dd');
-
+        // The endId for a '>=' query needs to include the selected day.
+        const endId = format(dateRange.to, 'yyyy-MM-dd');
+        
         try {
             const logsQuery = query(
                 collection(db, 'dailyLogs'),
-                where('__name__', '>=', startId),
-                where('__name__', '<', endIdBoundary)
+                where('__name__', '>=', `${startId}_`),
+                where('__name__', '<=', `${endId}\uf8ff`) // '\uf8ff' is a high-codepoint character for string range queries
             );
+
             const querySnapshot = await getDocs(logsQuery);
             
-            // --- CRITICAL FIX: Reset aggregation variables before processing ---
             const aggregatedMachineStops: { [machineId: string]: number } = {};
             const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
             const detailedStops: DetailedStopData[] = [];
 
             querySnapshot.forEach(doc => {
+                const docId = doc.id;
+                // Extra validation to skip old-format documents that might slip through the query
+                if (!docId.includes('_')) return;
+
                 const log = doc.data() as DailyLog;
-                const [logDate, logShift] = doc.id.split('_');
+                const [logDate, logShift] = docId.split('_');
 
                 if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
-                // Iterate through each time slot in the log (e.g., "07:00", "07:30")
                 Object.values(log.timeSlots).forEach(slot => {
                     if (!slot || typeof slot !== 'object') return;
                     
-                    // Iterate through each machine ID in the time slot (e.g., "machine_1", "machine_2")
                     Object.keys(slot).forEach((key) => {
                         if (key.startsWith('machine_')) {
                             const machineId = key;
                             const machineData = (slot as any)[machineId];
 
-                            // Check if there is a 'stops' array for this machine in this time slot
                             if (machineData && Array.isArray(machineData.stops)) {
-                                // Iterate through each stop event in the array
                                 (machineData.stops as StopData[]).forEach(stop => {
-                                    // Aggregate total stop time per machine
                                     if (!aggregatedMachineStops[machineId]) {
                                         aggregatedMachineStops[machineId] = 0;
                                     }
                                     aggregatedMachineStops[machineId] += stop.duration;
 
-                                    // Aggregate total stop time per reason
                                     if (stop.reason) {
                                         if (!aggregatedStopsByReason[stop.reason]) {
                                             const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
@@ -109,7 +107,6 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                         aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
                                     }
                                     
-                                    // Collect detailed stop data for the table
                                     detailedStops.push({
                                         ...stop,
                                         machineId: machineId.replace('machine_', 'Máquina '),
@@ -146,7 +143,6 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         }
     }, [dateRange, prefetchedStopCauses, toast]);
     
-    // Auto-fetch data when the component mounts
     React.useEffect(() => {
         handleFetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
