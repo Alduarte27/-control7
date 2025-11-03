@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity } from 'lucide-react';
+import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
@@ -15,10 +15,12 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import KpiCard from './kpi-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { DateRange } from 'react-day-picker';
 import { HardHat } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
+import { cn } from '@/lib/utils';
 
 interface AggregatedStopData {
     name: string;
@@ -26,11 +28,21 @@ interface AggregatedStopData {
     color: string;
 }
 
+type DetailedStopData = StopData & {
+  machineId: string;
+  logDate: string;
+}
+
 export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: { prefetchedProducts: ProductDefinition[], prefetchedStopCauses: StopCause[]}) {
     const [dateRange, setDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -7), to: new Date() });
     const [loading, setLoading] = React.useState(false);
     const [machineStops, setMachineStops] = React.useState<{ [machineId: string]: number }>({});
     const [stopsByReason, setStopsByReason] = React.useState<AggregatedStopData[]>([]);
+    
+    // New state for interactivity
+    const [allStopsInRange, setAllStopsInRange] = React.useState<DetailedStopData[]>([]);
+    const [selectedReason, setSelectedReason] = React.useState<string | null>(null);
+
     const { toast } = useToast();
 
     const handleFetchData = React.useCallback(async () => {
@@ -40,14 +52,13 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         }
 
         setLoading(true);
+        setSelectedReason(null); // Reset selection on new fetch
         const startId = format(dateRange.from, 'yyyy-MM-dd');
-        // To include the end date, we need to query up to the next day or use a string that's lexicographically after all possible shift suffixes.
-        // For '2024-07-28', we want to include '2024-07-28_day' and '2024-07-28_night'.
-        // A simple way is to get the day after the end date and use '<'.
         const endIdBoundary = format(addDays(dateRange.to, 1), 'yyyy-MM-dd');
 
         const aggregatedMachineStops: { [machineId: string]: number } = {};
         const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
+        const detailedStops: DetailedStopData[] = [];
 
         try {
             const logsQuery = query(
@@ -59,6 +70,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
             querySnapshot.forEach(doc => {
                 const log = doc.data() as DailyLog;
+                const logDate = doc.id.split('_')[0];
                 if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
                 Object.values(log.timeSlots).forEach(slot => {
@@ -68,11 +80,13 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                         if (key.startsWith('machine_') && value && typeof value === 'object' && 'stops' in value && Array.isArray(value.stops)) {
                             const machineId = key;
                             (value.stops as StopData[]).forEach(stop => {
+                                // Aggregate for machine stops card
                                 if (!aggregatedMachineStops[machineId]) {
                                     aggregatedMachineStops[machineId] = 0;
                                 }
                                 aggregatedMachineStops[machineId] += stop.duration;
 
+                                // Aggregate for reason chart
                                 if (stop.reason) {
                                     if (!aggregatedStopsByReason[stop.reason]) {
                                         const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
@@ -83,6 +97,13 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                     }
                                     aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
                                 }
+                                
+                                // Collect detailed data
+                                detailedStops.push({
+                                    ...stop,
+                                    machineId: machineId.replace('machine_', 'Máquina '),
+                                    logDate: logDate
+                                });
                             });
                         }
                     });
@@ -90,6 +111,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             });
 
             setMachineStops(aggregatedMachineStops);
+            setAllStopsInRange(detailedStops);
 
             const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, data]) => ({
                 name: reason,
@@ -117,6 +139,17 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const handleBarClick = (data: any) => {
+        if (data && data.activePayload && data.activePayload.length > 0) {
+            const reason = data.activePayload[0].payload.name;
+            setSelectedReason(prev => prev === reason ? null : reason);
+        }
+    };
+
+    const filteredStopsForTable = React.useMemo(() => {
+        if (!selectedReason) return [];
+        return allStopsInRange.filter(stop => stop.reason === selectedReason).sort((a,b) => b.duration - a.duration);
+    }, [selectedReason, allStopsInRange]);
 
     return (
         <div className="bg-background min-h-screen text-foreground">
@@ -208,23 +241,26 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                         <Card>
                             <CardHeader>
                                 <CardTitle>Desglose de Paradas por Motivo</CardTitle>
-                                <CardDescription>Tiempo total de parada (en minutos) agrupado por el motivo registrado.</CardDescription>
+                                <CardDescription>Tiempo total de parada (en minutos) agrupado por el motivo registrado. Haz clic en una barra para ver detalles.</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 {stopsByReason.length > 0 ? (
                                     <ChartContainer config={{}} className="w-full h-[400px]">
                                         <ResponsiveContainer>
-                                            <BarChart layout="vertical" data={stopsByReason} margin={{ left: 100 }}>
+                                            <BarChart layout="vertical" data={stopsByReason} margin={{ left: 100 }} onClick={handleBarClick}>
                                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                                 <XAxis type="number" />
                                                 <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0}/>
                                                 <RechartsTooltip
-                                                    cursor={{ fill: 'rgba(200, 200, 200, 0.1)' }}
+                                                    cursor={{ fill: 'rgba(200, 200, 200, 0.2)' }}
                                                     content={<ChartTooltipContent />}
                                                 />
-                                                <Bar dataKey="totalMinutes" name="Minutos" radius={[0, 4, 4, 0]}>
-                                                    {stopsByReason.map((entry, index) => (
-                                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                                <Legend />
+                                                <Bar dataKey="totalMinutes" name="Minutos" radius={[0, 4, 4, 0]} cursor="pointer">
+                                                    {stopsByReason.map((entry) => (
+                                                        <Cell key={`cell-${entry.name}`} fill={entry.color}
+                                                          className={cn(selectedReason && selectedReason !== entry.name && "opacity-30", "transition-opacity")}
+                                                        />
                                                     ))}
                                                 </Bar>
                                             </BarChart>
@@ -235,6 +271,56 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 )}
                             </CardContent>
                         </Card>
+
+                         {selectedReason && (
+                            <Card>
+                                <CardHeader>
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <CardTitle>Detalle de Paradas por: "{selectedReason}"</CardTitle>
+                                            <CardDescription>Mostrando {filteredStopsForTable.length} eventos de parada.</CardDescription>
+                                        </div>
+                                        <Button variant="ghost" size="icon" onClick={() => setSelectedReason(null)}>
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="max-h-[500px] overflow-y-auto">
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Fecha</TableHead>
+                                                    <TableHead>Máquina</TableHead>
+                                                    <TableHead>Hora Inicio</TableHead>
+                                                    <TableHead>Hora Fin</TableHead>
+                                                    <TableHead className="text-right">Duración (min)</TableHead>
+                                                    <TableHead>Causa Específica</TableHead>
+                                                    <TableHead>Solución</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {filteredStopsForTable.length > 0 ? filteredStopsForTable.map(stop => (
+                                                    <TableRow key={stop.id}>
+                                                        <TableCell>{stop.logDate}</TableCell>
+                                                        <TableCell>{stop.machineId}</TableCell>
+                                                        <TableCell>{stop.startTime}</TableCell>
+                                                        <TableCell>{stop.endTime}</TableCell>
+                                                        <TableCell className="text-right font-medium">{stop.duration}</TableCell>
+                                                        <TableCell>{stop.cause || '-'}</TableCell>
+                                                        <TableCell>{stop.solution || '-'}</TableCell>
+                                                    </TableRow>
+                                                )) : (
+                                                    <TableRow>
+                                                        <TableCell colSpan={7} className="text-center">No hay paradas para mostrar.</TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
                  )}
             </main>
