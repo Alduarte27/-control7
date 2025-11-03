@@ -6,7 +6,7 @@ import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X, BarChart, 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { DailyLog, StopData, StopCause, ProductDefinition, MachineLog } from '@/lib/types';
+import type { DailyLog, StopData, StopCause, ProductDefinition, MachineLog, TimeSlot } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { format, addDays } from 'date-fns';
@@ -63,6 +63,9 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         setAvailability(0);
         setPerformance(0);
         setQuality(0);
+        setMachineStops({});
+        setStopsByReason([]);
+        setAllStopsInRange([]);
 
 
         const startId = format(dateRange.from, 'yyyy-MM-dd');
@@ -78,9 +81,6 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             const querySnapshot = await getDocs(logsQuery);
             if (querySnapshot.empty) {
                 toast({ title: "Sin Datos", description: "No se encontraron registros de bitácora en el rango de fechas seleccionado." });
-                setMachineStops({});
-                setStopsByReason([]);
-                setAllStopsInRange([]);
                 setLoading(false);
                 return;
             }
@@ -91,33 +91,39 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
             let totalPlannedTime = 0;
             let totalStopTime = 0;
-            let totalProduction = 0; // In bags
-            let theoreticalTotalProduction = 0; // In bags
-
+            let totalActualProduction = 0; // In bags
+            let totalTheoreticalProduction = 0; // In bags
 
             querySnapshot.forEach(doc => {
-                // Ensure document ID has the correct format
-                if (!doc.id.includes('_')) return;
-
                 const log = doc.data() as DailyLog;
                 const [logDate, logShift] = doc.id.split('_');
 
+                if (!logDate || !logShift) return; // Skip documents with incorrect ID format
+                
                 totalPlannedTime += 12 * 60; // Each log represents a 12-hour shift
 
-                if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
+                let lastKnownSpeed: { [machineId: string]: number } = {};
 
-                Object.values(log.timeSlots).forEach(slot => {
+                Object.entries(log.timeSlots).forEach(([time, slot]) => {
+                    const timeSlotDuration = 30; // minutes
+                    
                     if (!slot || typeof slot !== 'object') return;
                     
                     Object.entries(slot).forEach(([key, machineData]) => {
                         if (key.startsWith('machine_') && machineData && typeof machineData === 'object') {
                             const machineId = key;
                             
-                            // Process Stops
+                            // Update last known speed
+                            if (typeof (machineData as TimeSlot['machine_1'])?.speed === 'number') {
+                                lastKnownSpeed[machineId] = (machineData as TimeSlot['machine_1'])!.speed!;
+                            }
+                            
+                            let timeSlotStopTime = 0;
                             if ('stops' in machineData && Array.isArray(machineData.stops)) {
                                 (machineData.stops as StopData[]).forEach(stop => {
                                     const duration = stop.duration || 0;
                                     totalStopTime += duration;
+                                    timeSlotStopTime += duration;
 
                                     if (!aggregatedMachineStops[machineId]) {
                                         aggregatedMachineStops[machineId] = 0;
@@ -144,16 +150,15 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 });
                             }
 
-                            // Process Production for Performance calculation
+                             // Process Production for Performance calculation
                             if ('weight' in machineData && machineData.weight) {
-                                 const machineInfo: MachineLog | undefined = log.machines[machineId];
-                                 const bagsProduced = 1; // Assuming weight is per bag
-                                 totalProduction += bagsProduced;
+                                totalActualProduction += 1; // Assuming 1 bag per entry
+                            }
 
-                                 if (machineInfo && machineInfo.theoreticalPerformance) {
-                                     const idealTimePerBag = 60 / machineInfo.theoreticalPerformance; // in minutes
-                                     theoreticalTotalProduction += idealTimePerBag;
-                                 }
+                            const runTimeInSlot = timeSlotDuration - timeSlotStopTime;
+                            if (runTimeInSlot > 0 && lastKnownSpeed[machineId] > 0) {
+                                const theoreticalBagsInSlot = (lastKnownSpeed[machineId] / 60) * runTimeInSlot;
+                                totalTheoreticalProduction += theoreticalBagsInSlot;
                             }
                         }
                     });
@@ -164,7 +169,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             const runTime = totalPlannedTime > totalStopTime ? totalPlannedTime - totalStopTime : 0;
             
             const finalAvailability = totalPlannedTime > 0 ? (runTime / totalPlannedTime) * 100 : 0;
-            const finalPerformance = runTime > 0 && theoreticalTotalProduction > 0 ? (theoreticalTotalProduction / runTime) * 100 : 0;
+            const finalPerformance = totalTheoreticalProduction > 0 ? (totalActualProduction / totalTheoreticalProduction) * 100 : 0;
             const finalQuality = 100; // Assuming 100% quality for now
             const finalOee = (finalAvailability / 100) * (finalPerformance / 100) * (finalQuality / 100) * 100;
 

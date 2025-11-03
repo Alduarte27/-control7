@@ -348,7 +348,6 @@ export default function StopsClient({
         for (let i = 1; i <= NUM_MACHINES; i++) {
              machineEntries[`machine_${i}`] = {
                 productId: familiarProducts?.[0]?.id || '',
-                theoreticalPerformance: 0,
              };
         }
         return {
@@ -406,7 +405,7 @@ export default function StopsClient({
                 for (let i = 1; i <= NUM_MACHINES; i++) {
                     const machineId = `machine_${i}`;
                     if (!logData.machines[machineId]) {
-                        logData.machines[machineId] = { productId: familiarProducts?.[0]?.id || '', theoreticalPerformance: 0 };
+                        logData.machines[machineId] = { productId: familiarProducts?.[0]?.id || '' };
                     }
                 }
 
@@ -535,18 +534,18 @@ export default function StopsClient({
         }
     };
 
-    const handleMachineProductChange = (machineId: string, field: 'productId' | 'theoreticalPerformance', value: string | number) => {
+    const handleMachineProductChange = (machineId: string, value: string) => {
         triggerChange(prev => {
             const newMachines = { ...prev.machines };
             if (!newMachines[machineId]) {
-                newMachines[machineId] = { productId: '', theoreticalPerformance: 0 };
+                newMachines[machineId] = { productId: '' };
             }
-            (newMachines[machineId] as any)[field] = value;
+            newMachines[machineId].productId = value;
             return { ...prev, machines: newMachines };
         });
     };
 
-    const handleCellChange = (timeSlot: string, field: keyof TimeSlot, value: string) => {
+    const handleCellChange = (timeSlot: string, field: keyof TimeSlot, value: string | number, machineId?: string) => {
         triggerChange(prev => {
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
@@ -554,14 +553,22 @@ export default function StopsClient({
                 newTimeSlots[timeSlot] = {};
             }
             
-            const timeSlotData = newTimeSlots[timeSlot];
-            if (typeof timeSlotData === 'object' && timeSlotData !== null) {
+            const timeSlotData = newTimeSlots[timeSlot] as TimeSlot;
+
+            if (machineId) {
+                if (!timeSlotData[machineId] || typeof timeSlotData[machineId] !== 'object') {
+                    timeSlotData[machineId] = {};
+                }
+                const machineData = timeSlotData[machineId] as { [key: string]: any };
+                machineData[field as string] = value;
+            } else {
                 (timeSlotData as any)[field] = value;
             }
 
             return { ...prev, timeSlots: newTimeSlots };
         });
     };
+
 
     const handleStopSave = (stopData: StopData) => {
         if (!modalState) return;
@@ -796,27 +803,7 @@ export default function StopsClient({
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             const rawValue = e.target.value;
             const valueToSet = isPercentageField ? rawValue.replace(/%/g, '') : rawValue;
-    
-            triggerChange(prev => {
-                const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
-    
-                if (!newTimeSlots[time]) {
-                    newTimeSlots[time] = {};
-                }
-    
-                const timeSlot = newTimeSlots[time];
-                if (typeof timeSlot !== 'object' || timeSlot === null) return prev;
-    
-                if (machineId) {
-                    const machineData = { ...(timeSlot[machineId] as object || {}) };
-                    (machineData as any)[field] = valueToSet;
-                    timeSlot[machineId] = machineData;
-                } else {
-                    (timeSlot as any)[field] = valueToSet;
-                }
-    
-                return { ...prev, timeSlots: newTimeSlots };
-            });
+            handleCellChange(time, field, valueToSet, machineId);
         };
     
         let value: string;
@@ -1074,7 +1061,7 @@ export default function StopsClient({
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 return (
                                                     <th key={`product_selector_${i}`} className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" style={{minWidth: '260px'}} colSpan={3}>
-                                                        <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, 'productId', val)}>
+                                                        <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <SelectValue placeholder="Producto" />
                                                             </SelectTrigger>
@@ -1102,7 +1089,7 @@ export default function StopsClient({
                                                 <React.Fragment key={`sub_header_${i}`}>
                                                     <th className="p-1 font-normal w-60 bg-purple-100 dark:bg-purple-900/50">Observación</th>
                                                     <th className="p-1 font-normal w-15 bg-purple-100 dark:bg-purple-900/50">Peso/Saco KG</th>
-                                                    <th className="p-1 font-normal w-24 bg-purple-100 dark:bg-purple-900/50">Rendimiento Teórico (fundas/hr)</th>
+                                                    <th className="p-1 font-normal w-24 bg-purple-100 dark:bg-purple-900/50">Velocidad (f/min)</th>
                                                 </React.Fragment>
                                             ))}
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
@@ -1132,15 +1119,7 @@ export default function StopsClient({
                                                         <React.Fragment key={machineId}>
                                                             {observationCell(time, machineId)}
                                                             {inputCell(time, 'weight', machineId)}
-                                                             <td className="p-0">
-                                                                <Input 
-                                                                    type="number"
-                                                                    className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs"
-                                                                    value={dailyLog.machines[machineId]?.theoreticalPerformance || ''}
-                                                                    onChange={(e) => handleMachineProductChange(machineId, 'theoreticalPerformance', Number(e.target.value))}
-                                                                    placeholder="Ej: 600"
-                                                                />
-                                                            </td>
+                                                            {inputCell(time, 'speed', machineId)}
                                                         </React.Fragment>
                                                     )
                                                 })}

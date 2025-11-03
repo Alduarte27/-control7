@@ -85,6 +85,7 @@ export type TimeSlot = {
     [machineId: string]: {
       stops?: StopData[]; // Now holds an array of structured stop data
       weight?: string;
+      speed?: number; // Theoretical speed in bags/min for this specific timeslot
     };
     // Quality Input
     masa?: string;
@@ -110,7 +111,7 @@ export type TimeSlot = {
 
 export type MachineLog = {
   productId: string;
-  theoreticalPerformance?: number; // Theoretical performance in bags/hour
+  theoreticalSpeed?: number; // Theoretical speed in bags/min for the whole shift (legacy/fallback)
 };
 
 export type DailyLog = {
