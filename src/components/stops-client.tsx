@@ -839,7 +839,7 @@ export default function StopsClient({
                     <HardHat className="h-8 w-8 text-primary" />
                     <h1 className="text-xl md:text-2xl font-bold text-foreground">Bitácora de Producción</h1>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap justify-end">
+                <div className="flex items-center gap-2 flex-wrap justify-center">
                     {/* Desktop Buttons */}
                     <div className="hidden md:flex items-center gap-2">
                         <Link href="/log-history">
@@ -962,7 +962,7 @@ export default function StopsClient({
                                             ))}
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-1 w-[320px] bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={3} className="p-1 w-[20rem] bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
@@ -1000,7 +1000,7 @@ export default function StopsClient({
                                                 </React.Fragment>
                                             ))}
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
-                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[8rem]">Flujo</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[8.8rem]">Flujo</th>
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS-FA</th>
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 1</th>
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 2</th>
@@ -1084,6 +1084,7 @@ export default function StopsClient({
 }
 
     
+
 
 
 
