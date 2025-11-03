@@ -4,7 +4,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database, PlayCircle, Edit, Upload } from 'lucide-react';
+import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database, PlayCircle, Edit, Upload, Activity } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -77,6 +77,32 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                         icon={Copy}
                         title="Copiar Plan de la Semana Anterior"
                         description="Ahorra tiempo utilizando el botón 'Copiar Plan Anterior'. Esto cargará automáticamente los valores planificados de la semana previa."
+                    />
+                </div>
+            </div>
+            
+            <div>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Bitácora de Producción y Paradas</h3>
+                <div className="space-y-4">
+                     <FeatureItem 
+                        icon={HardHat}
+                        title="Registro Detallado por Turno"
+                        description="En 'Bitácora', documenta eventos en intervalos de 30 minutos. Haz clic en una celda para registrar paradas de máquinas, especificando motivo, duración, causa y solución."
+                    />
+                     <FeatureItem 
+                        icon={Settings}
+                        title="Gestión de Catálogos"
+                        description="Desde el botón de 'Configuración' en la bitácora, puedes añadir y administrar motivos de parada, tipos de mantenimiento, operadores y supervisores para estandarizar tus registros."
+                    />
+                    <FeatureItem 
+                        icon={Activity}
+                        title="Análisis de Paradas (OEE)"
+                        description="Accede al análisis OEE desde la bitácora para ver gráficos del tiempo total de parada por máquina y un desglose por motivo, ayudándote a identificar áreas de mejora."
+                    />
+                    <FeatureItem 
+                        icon={History}
+                        title="Historial de Bitácoras"
+                        description="Consulta y edita registros de bitácoras de días anteriores desde la sección 'Historial', asegurando que tu base de datos de producción esté siempre completa y actualizada."
                     />
                 </div>
             </div>
