@@ -938,50 +938,66 @@ export default function StopsClient({
                         </div>
 
                         {/* Log Table */}
-                        <div className="w-full overflow-x-auto max-h-[75vh] overflow-y-auto border rounded-lg bg-card">
+                        <div className="w-full overflow-x-auto max-h-[75vh] border rounded-lg bg-card">
                             <table className="min-w-full text-xs">
                                 <thead className="text-center align-top sticky top-0 z-10 bg-card">
-                                    <tr className="divide-x divide-border bg-muted/60">
-                                        <th className="p-2 sticky left-0 bg-muted/60 z-20 min-w-[6rem] align-bottom" rowSpan={2}>Hora</th>
-                                        <th colSpan={NUM_MACHINES * 2} className="p-2">Máquinas</th>
-                                        <th colSpan={9} className="p-2 bg-green-100 dark:bg-green-900/50">Ingreso de Producto (GRASSHOPPER)</th>
-                                        <th colSpan={6} className="p-2 bg-blue-100 dark:bg-blue-900/50">Salida de Producto Terminado</th>
-                                        <th className="p-2 sticky right-0 bg-purple-100 dark:bg-purple-900/50 z-20 min-w-[20rem] align-bottom" rowSpan={2}>Novedades de Empaque de Azúcar</th>
+                                    <tr className="divide-x divide-border">
+                                        <th className="p-2 w-24 sticky left-0 bg-muted z-20 align-bottom" rowSpan={3} style={{ top: 0 }}>Hora</th>
+                                        <th colSpan={NUM_MACHINES * 2} className="p-2 sticky bg-muted z-10" style={{ top: 0 }}>Máquinas</th>
+                                        <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9} style={{ top: 0 }}>INGRESO DE PRODUCTO</th>
+                                        <th colSpan={6} className="p-2 sticky z-10 bg-blue-100 dark:bg-blue-900/50" style={{ top: 0 }}>SALIDA DE PRODUCTO TERMINADO</th>
+                                        <th rowSpan={3} className="p-2 w-80 sticky bg-purple-100 dark:bg-purple-900/50 right-0 z-20" style={{ top: 0 }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                    </tr>
+                                    <tr className="divide-x divide-border">
+                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => {
+                                            const machineId = `machine_${i + 1}`;
+                                            const selectedProductId = dailyLog.machines[machineId]?.productId || '';
+                                            return (
+                                                <th key={`product_selector_${i}`} className="p-1 sticky bg-muted z-10" colSpan={2} style={{ top: '41px' }}>
+                                                    <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
+                                                        <SelectTrigger className="h-8 text-xs bg-card">
+                                                            <SelectValue placeholder="Producto" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {prefetchedProducts.map(p => (
+                                                                <SelectItem key={p.id} value={p.id}>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
+                                                                        <span>{p.productName}</span>
+                                                                    </div>
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </th>
+                                            );
+                                        })}
+                                        <th className="p-2 sticky bg-green-100 dark:bg-green-900/50 z-10" colSpan={9} style={{ top: '41px' }}>GRASSHOPPER</th>
+                                        <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3} style={{ top: '41px' }}>Familiar</th>
+                                        <th className="p-1 sticky bg-blue-100 dark:bg-blue-900/50 z-10" colSpan={3} style={{ top: '41px' }}>Granel 50 KG</th>
                                     </tr>
                                     <tr className="divide-x divide-border text-muted-foreground font-normal">
                                         {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                            <th key={`machine_header_${i}`} colSpan={2} className="p-1 font-semibold min-w-[20rem]">
-                                                <div className="mb-1">Máquina #{i + 1}</div>
-                                                <Select value={dailyLog.machines[`machine_${i + 1}`]?.productId || ''} onValueChange={(val) => handleMachineProductChange(`machine_${i + 1}`, val)}>
-                                                    <SelectTrigger className="h-8 text-xs bg-card"><SelectValue /></SelectTrigger>
-                                                    <SelectContent>
-                                                        {prefetchedProducts.map(p => (
-                                                            <SelectItem key={p.id} value={p.id}>
-                                                                <div className="flex items-center gap-2">
-                                                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
-                                                                    <span>{p.productName}</span>
-                                                                </div>
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
-                                            </th>
+                                            <React.Fragment key={`sub_header_${i}`}>
+                                                <th className="p-1 font-normal w-48 sticky bg-muted z-10" style={{ top: '86px' }}>Observación</th>
+                                                <th className="p-1 font-normal w-24 sticky bg-muted z-10" style={{ top: '86px' }}>Peso/Saco KG</th>
+                                            </React.Fragment>
                                         ))}
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[4rem]">Masa</th>
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[9rem]">Flujo</th>
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[4rem]">NS-FAM</th>
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[4rem]">NS% 1</th>
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[4rem]">NS% 2</th>
-                                        <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[4rem]">Color</th>
-                                        <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[5rem]">Hum</th>
-                                        <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[4rem]">Turb</th>
-                                        <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[4rem]">CV</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Color</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[5rem]">Hum</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Turb</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Color</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[5rem]">Hum</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[4rem]">Turb</th>
+                                        <th className="p-1 font-normal sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[5rem]" style={{ top: '86px' }}>Masa</th>
+                                        <th className="p-1 font-normal sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[9rem]" style={{ top: '86px' }}>Flujo</th>
+                                        <th className="p-1 font-normal sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[5rem]" style={{ top: '86px' }}>NS-FAM</th>
+                                        <th className="p-1 font-normal sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[5rem]" style={{ top: '86px' }}>NS% 1</th>
+                                        <th className="p-1 font-normal sticky bg-green-100 dark:bg-green-900/50 z-10 min-w-[5rem]" style={{ top: '86px' }}>NS% 2</th>
+                                        <th className="p-1 font-normal sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[4rem]" style={{ top: '86px' }}>Color</th>
+                                        <th className="p-1 font-normal sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[5rem]" style={{ top: '86px' }}>Hum</th>
+                                        <th className="p-1 font-normal sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[4rem]" style={{ top: '86px' }}>Turb</th>
+                                        <th className="p-1 font-normal sticky bg-yellow-100 dark:bg-yellow-900/50 z-10 min-w-[4rem]" style={{ top: '86px' }}>CV</th>
+                                        <th className="p-1 font-normal sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '86px' }}>Color</th>
+                                        <th className="p-1 font-normal sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[5rem]" style={{ top: '86px' }}>Hum</th>
+                                        <th className="p-1 font-normal sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '86px' }}>Turb</th>
+                                        <th className="p-1 font-normal sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '86px' }}>Color</th>
+                                        <th className="p-1 font-normal sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[5rem]" style={{ top: '86px' }}>Hum</th>
+                                        <th className="p-1 font-normal sticky bg-blue-100 dark:bg-blue-900/50 z-10 min-w-[4rem]" style={{ top: '86px' }}>Turb</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
