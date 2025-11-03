@@ -939,106 +939,108 @@ export default function StopsClient({
                         </div>
 
                         {/* Log Table */}
-                         <div className="border rounded-lg bg-card max-h-[75vh] overflow-auto">
-                            <table className="min-w-full text-xs border-collapse">
-                                <thead className="text-center align-middle sticky top-0 z-20 bg-card">
-                                    <tr className="divide-x divide-border">
-                                        <th className="p-1 align-bottom sticky left-0 z-30 bg-muted" rowSpan={3}>
-                                            <div className="w-24">Hora</div>
-                                        </th>
-                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                            <th key={`machine_header_${i}`} colSpan={2} className="p-1 bg-muted">Máquina #{i + 1}</th>
-                                        ))}
-                                        <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
-                                        <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                        <th rowSpan={3} className="p-1 w-[40rem] bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
-                                    </tr>
-                                    <tr className="divide-x divide-border">
-                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => {
-                                            const machineId = `machine_${i + 1}`;
-                                            const selectedProductId = dailyLog.machines[machineId]?.productId || '';
-                                            return (
-                                                <th key={`product_selector_${i}`} className="p-1 align-middle bg-muted" colSpan={2}>
-                                                    <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
-                                                        <SelectTrigger className="h-8 text-xs bg-card">
-                                                            <SelectValue placeholder="Producto" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {prefetchedProducts.map(p => (
-                                                                <SelectItem key={p.id} value={p.id}>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
-                                                                        <span>{p.productName}</span>
-                                                                    </div>
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </th>
-                                            );
-                                        })}
-                                        <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9}>GRASSHOPPER</th>
-                                        <th className="p-1 bg-blue-100 dark:bg-blue-900/50" colSpan={3}>Familiar</th>
-                                        <th className="p-1 bg-blue-100 dark:bg-blue-900/50" colSpan={3}>Granel 50 KG</th>
-                                    </tr>
-                                    <tr className="divide-x divide-border text-muted-foreground font-normal">
-                                        {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                            <React.Fragment key={`sub_header_${i}`}>
-                                                <th className="p-1 font-normal w-75 bg-muted">Observación</th>
-                                                <th className="p-1 font-normal w-24 bg-muted">Peso/Saco KG</th>
-                                            </React.Fragment>
-                                        ))}
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[8.8rem]">Flujo</th>
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS-FA</th>
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 1</th>
-                                        <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 2</th>
-                                        <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3.5rem]">Color</th>
-                                        <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3rem]">Hum</th>
-                                        <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3rem]">Turb</th>
-                                        <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[4rem]">CV</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3.5rem]">Color</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Hum</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Turb</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3.5rem]">Color</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Hum</th>
-                                        <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Turb</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-border">
-                                    {timeSlotsForTable.map((time) => (
-                                        <tr key={time} className="divide-x divide-border">
-                                            <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
-                                            {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
-                                                const machineId = `machine_${machineIndex + 1}`;
-                                                return (
-                                                    <React.Fragment key={machineId}>
-                                                        {observationCell(time, machineId)}
-                                                        {inputCell(time, 'weight', machineId)}
-                                                    </React.Fragment>
-                                                )
-                                            })}
-                                            {masaSelectCell(time)}
-                                            {flujoSelectCell(time)}
-                                            {inputCell(time, 'ns_fam')}
-                                            {inputCell(time, 'ns_1')}
-                                            {inputCell(time, 'ns_2')}
-                                            {inputCell(time, 'in_color')}
-                                            {humSelectCell(time, 'in_hum')}
-                                            {inputCell(time, 'in_turb')}
-                                            {inputCell(time, 'in_cv')}
-                                            {inputCell(time, 'out_fam_color')}
-                                            {humSelectCell(time, 'out_fam_hum')}
-                                            {inputCell(time, 'out_fam_turb')}
-                                            {inputCell(time, 'out_gra_color')}
-                                            {humSelectCell(time, 'out_gra_hum')}
-                                            {inputCell(time, 'out_gra_turb')}
-                                            {inputCell(time, 'empaque_obs')}
+                         <div className="border rounded-lg bg-card max-h-[75vh] overflow-y-auto">
+                             <div className="overflow-x-auto">
+                                <table className="min-w-full text-xs border-collapse">
+                                    <thead className="text-center align-middle sticky top-0 z-20 bg-card">
+                                        <tr className="divide-x divide-border">
+                                            <th className="p-1 align-bottom sticky left-0 z-30 bg-muted" rowSpan={3}>
+                                                <div className="w-24">Hora</div>
+                                            </th>
+                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => (
+                                                <th key={`machine_header_${i}`} colSpan={2} className="p-1 bg-muted">Máquina #{i + 1}</th>
+                                            ))}
+                                            <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
+                                            <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
+                                            <th rowSpan={3} className="p-1 w-[170px] bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
-                                    ))}
+                                        <tr className="divide-x divide-border">
+                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => {
+                                                const machineId = `machine_${i + 1}`;
+                                                const selectedProductId = dailyLog.machines[machineId]?.productId || '';
+                                                return (
+                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-muted" colSpan={2}>
+                                                        <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
+                                                            <SelectTrigger className="h-8 text-xs bg-card">
+                                                                <SelectValue placeholder="Producto" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {prefetchedProducts.map(p => (
+                                                                    <SelectItem key={p.id} value={p.id}>
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
+                                                                            <span>{p.productName}</span>
+                                                                        </div>
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </th>
+                                                );
+                                            })}
+                                            <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9}>GRASSHOPPER</th>
+                                            <th className="p-1 bg-blue-100 dark:bg-blue-900/50" colSpan={3}>Familiar</th>
+                                            <th className="p-1 bg-blue-100 dark:bg-blue-900/50" colSpan={3}>Granel 50 KG</th>
+                                        </tr>
+                                        <tr className="divide-x divide-border text-muted-foreground font-normal">
+                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => (
+                                                <React.Fragment key={`sub_header_${i}`}>
+                                                    <th className="p-1 font-normal w-[75px] bg-muted">Observación</th>
+                                                    <th className="p-1 font-normal w-24 bg-muted">Peso/Saco KG</th>
+                                                </React.Fragment>
+                                            ))}
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[8.8rem]">Flujo</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS-FA</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 1</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 2</th>
+                                            <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3.5rem]">Color</th>
+                                            <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3rem]">Hum</th>
+                                            <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[3rem]">Turb</th>
+                                            <th className="p-1 font-normal bg-yellow-100 dark:bg-yellow-900/50 min-w-[4rem]">CV</th>
+                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3.5rem]">Color</th>
+                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Hum</th>
+                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Turb</th>
+                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3.5rem]">Color</th>
+                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Hum</th>
+                                            <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Turb</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border">
+                                        {timeSlotsForTable.map((time) => (
+                                            <tr key={time} className="divide-x divide-border">
+                                                <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
+                                                {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
+                                                    const machineId = `machine_${machineIndex + 1}`;
+                                                    return (
+                                                        <React.Fragment key={machineId}>
+                                                            {observationCell(time, machineId)}
+                                                            {inputCell(time, 'weight', machineId)}
+                                                        </React.Fragment>
+                                                    )
+                                                })}
+                                                {masaSelectCell(time)}
+                                                {flujoSelectCell(time)}
+                                                {inputCell(time, 'ns_fam')}
+                                                {inputCell(time, 'ns_1')}
+                                                {inputCell(time, 'ns_2')}
+                                                {inputCell(time, 'in_color')}
+                                                {humSelectCell(time, 'in_hum')}
+                                                {inputCell(time, 'in_turb')}
+                                                {inputCell(time, 'in_cv')}
+                                                {inputCell(time, 'out_fam_color')}
+                                                {humSelectCell(time, 'out_fam_hum')}
+                                                {inputCell(time, 'out_fam_turb')}
+                                                {inputCell(time, 'out_gra_color')}
+                                                {humSelectCell(time, 'out_gra_hum')}
+                                                {inputCell(time, 'out_gra_turb')}
+                                                {inputCell(time, 'empaque_obs')}
+                                            </tr>
+                                        ))}
 
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 )}
@@ -1072,4 +1074,5 @@ export default function StopsClient({
 }
 
     
+
 
