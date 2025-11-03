@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger, } from '@/components/ui/alert-dialog';
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Separator } from './ui/separator';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 
 
 const NUM_MACHINES = 3;
@@ -833,64 +834,73 @@ export default function StopsClient({
     
     return (
         <div className="bg-background min-h-screen text-foreground">
-            <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-30">
+            <header className="flex flex-col md:flex-row items-center justify-between gap-4 p-4 border-b bg-card sticky top-0 z-30">
                 <div className="flex items-center gap-3">
                     <HardHat className="h-8 w-8 text-primary" />
-                    <h1 className="text-2xl font-bold text-foreground">Bitácora de Producción</h1>
+                    <h1 className="text-xl md:text-2xl font-bold text-foreground">Bitácora de Producción</h1>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Link href="/log-history">
-                        <Button variant="outline"><History className="mr-2 h-4 w-4" />Historial</Button>
-                    </Link>
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Link href="/oee">
-                                    <Button variant="outline" size="icon">
-                                        <Activity className="h-4 w-4" />
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {/* Desktop Buttons */}
+                    <div className="hidden md:flex items-center gap-2">
+                        <Link href="/log-history">
+                            <Button variant="outline"><History className="mr-2 h-4 w-4" />Historial</Button>
+                        </Link>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Link href="/oee">
+                                        <Button variant="outline" size="icon">
+                                            <Activity className="h-4 w-4" />
+                                        </Button>
+                                    </Link>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Análisis de Paradas (OEE)</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant={isAdminMode ? 'destructive' : 'outline'} size="icon" onClick={handleToggleAdminMode}>
+                                        {isAdminMode ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                                     </Button>
-                                </Link>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Análisis de Paradas (OEE)</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                     <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant={isAdminMode ? 'destructive' : 'outline'} size="icon" onClick={handleToggleAdminMode}>
-                                    {isAdminMode ? <Unlock className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{isAdminMode ? 'Desactivar Modo Admin' : 'Activar Modo Admin'}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant="outline" size="icon" onClick={() => setConfigModalOpen(true)}>
-                                    <Settings className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Configuración de Bitácora</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
+                                </TooltipTrigger>
+                                <TooltipContent><p>{isAdminMode ? 'Desactivar Modo Admin' : 'Activar Modo Admin'}</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="outline" size="icon" onClick={() => setConfigModalOpen(true)}>
+                                        <Settings className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Configuración de Bitácora</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    </div>
                     <Button onClick={() => handleSaveLog(dailyLog, true)} disabled={loading}>Guardar Cambios</Button>
-                    <Link href="/">
-                        <Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button>
-                    </Link>
+                    <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
+                    {/* Mobile Dropdown */}
+                    <div className="md:hidden">
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon"><MoreVertical className="h-4 w-4" /></Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem asChild><Link href="/log-history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial</Link></DropdownMenuItem>
+                                <DropdownMenuItem asChild><Link href="/oee" className="flex items-center"><Activity className="mr-2 h-4 w-4" />Análisis</Link></DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleToggleAdminMode}><Lock className="mr-2 h-4 w-4" />Modo Admin</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setConfigModalOpen(true)}><Settings className="mr-2 h-4 w-4" />Configuración</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
             </header>
-            <main className="p-4 md:p-6">
+            <main className="p-2 md:p-6">
                 {loading ? <p>Cargando bitácora...</p> : dailyLog && (
                     <div className="space-y-4 pt-4">
                         {/* Header */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
                             <div className="space-y-1.5">
                                 <Label>Operador</Label>
                                 <Select value={dailyLog.operador} onValueChange={val => handleHeaderChange('operador', val)}>
@@ -952,7 +962,7 @@ export default function StopsClient({
                                             ))}
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={4} className="p-1 w-[320px] bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={3} className="p-1 w-[320px] bg-purple-100 dark:bg-purple-900/50">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
@@ -1034,13 +1044,7 @@ export default function StopsClient({
                                                 {inputCell(time, 'out_gra_color')}
                                                 {humSelectCell(time, 'out_gra_hum')}
                                                 {inputCell(time, 'out_gra_turb')}
-                                                <td className="p-0">
-                                                    <Input
-                                                        className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs"
-                                                        value={dailyLog?.timeSlots[time]?.empaque_obs || ''}
-                                                        onChange={(e) => handleCellChange(time, 'empaque_obs', e.target.value)}
-                                                    />
-                                                </td>
+                                                {inputCell(time, 'empaque_obs')}
                                             </tr>
                                         ))}
 
@@ -1080,6 +1084,7 @@ export default function StopsClient({
 }
 
     
+
 
 
 
