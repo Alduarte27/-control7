@@ -966,14 +966,14 @@ export default function StopsClient({
                                     <thead className="text-center align-middle sticky top-0 z-20 bg-card">
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 align-bottom sticky left-0 z-30 bg-muted">
-                                                <div className="w-20">Hora</div>
+                                                <div className="w-24">Hora</div>
                                             </th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-1 bg-muted">Máquina #{i + 1}</th>
                                             ))}
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ width: '30rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ minWidth: '30rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
