@@ -75,21 +75,27 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                 const logDate = doc.id.split('_')[0];
                 if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
+                // Iterate through each time slot in the log (e.g., "07:00", "07:30")
                 Object.values(log.timeSlots).forEach(slot => {
                     if (!slot || typeof slot !== 'object') return;
                     
+                    // Iterate through each machine ID in the time slot (e.g., "machine_1", "machine_2")
                     Object.keys(slot).forEach((key) => {
                         if (key.startsWith('machine_')) {
                             const machineId = key;
                             const machineData = (slot as any)[machineId];
 
+                            // Check if there is a 'stops' array for this machine in this time slot
                             if (machineData && Array.isArray(machineData.stops)) {
+                                // Iterate through each stop event in the array
                                 (machineData.stops as StopData[]).forEach(stop => {
+                                    // Aggregate total stop time per machine
                                     if (!aggregatedMachineStops[machineId]) {
                                         aggregatedMachineStops[machineId] = 0;
                                     }
                                     aggregatedMachineStops[machineId] += stop.duration;
 
+                                    // Aggregate total stop time per reason
                                     if (stop.reason) {
                                         if (!aggregatedStopsByReason[stop.reason]) {
                                             const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
@@ -101,6 +107,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                         aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
                                     }
                                     
+                                    // Collect detailed stop data for the table
                                     detailedStops.push({
                                         ...stop,
                                         machineId: machineId.replace('machine_', 'Máquina '),
