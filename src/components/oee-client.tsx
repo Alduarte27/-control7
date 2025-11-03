@@ -2,11 +2,11 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X } from 'lucide-react';
+import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X, BarChart, Percent, LineChart, Package, CheckCircle, ShieldCheck, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { DailyLog, StopData, StopCause, ProductDefinition } from '@/lib/types';
+import type { DailyLog, StopData, StopCause, ProductDefinition, MachineLog } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { format, addDays } from 'date-fns';
@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import KpiCard from './kpi-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
+import { Bar, BarChart as RechartsBarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { DateRange } from 'react-day-picker';
 import { HardHat } from 'lucide-react';
@@ -42,6 +42,12 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
     
     const [allStopsInRange, setAllStopsInRange] = React.useState<DetailedStopData[]>([]);
     const [selectedReason, setSelectedReason] = React.useState<string | null>(null);
+    
+    // OEE States
+    const [availability, setAvailability] = React.useState(0);
+    const [performance, setPerformance] = React.useState(0);
+    const [quality, setQuality] = React.useState(0);
+    const [oee, setOee] = React.useState(0);
 
     const { toast } = useToast();
 
@@ -53,48 +59,70 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
         setLoading(true);
         setSelectedReason(null);
+        setOee(0);
+        setAvailability(0);
+        setPerformance(0);
+        setQuality(0);
+
 
         const startId = format(dateRange.from, 'yyyy-MM-dd');
-        // The endId for a '>=' query needs to include the selected day.
         const endId = format(dateRange.to, 'yyyy-MM-dd');
         
         try {
             const logsQuery = query(
                 collection(db, 'dailyLogs'),
                 where('__name__', '>=', `${startId}_`),
-                where('__name__', '<=', `${endId}\uf8ff`) // '\uf8ff' is a high-codepoint character for string range queries
+                where('__name__', '<=', `${endId}\uf8ff`)
             );
 
             const querySnapshot = await getDocs(logsQuery);
+            if (querySnapshot.empty) {
+                toast({ title: "Sin Datos", description: "No se encontraron registros de bitácora en el rango de fechas seleccionado." });
+                setMachineStops({});
+                setStopsByReason([]);
+                setAllStopsInRange([]);
+                setLoading(false);
+                return;
+            }
             
             const aggregatedMachineStops: { [machineId: string]: number } = {};
             const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
             const detailedStops: DetailedStopData[] = [];
 
+            let totalPlannedTime = 0;
+            let totalStopTime = 0;
+            let totalProduction = 0; // In bags
+            let theoreticalTotalProduction = 0; // In bags
+
+
             querySnapshot.forEach(doc => {
-                const docId = doc.id;
-                // Extra validation to skip old-format documents that might slip through the query
-                if (!docId.includes('_')) return;
+                // Ensure document ID has the correct format
+                if (!doc.id.includes('_')) return;
 
                 const log = doc.data() as DailyLog;
-                const [logDate, logShift] = docId.split('_');
+                const [logDate, logShift] = doc.id.split('_');
+
+                totalPlannedTime += 12 * 60; // Each log represents a 12-hour shift
 
                 if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
                 Object.values(log.timeSlots).forEach(slot => {
                     if (!slot || typeof slot !== 'object') return;
                     
-                    Object.keys(slot).forEach((key) => {
-                        if (key.startsWith('machine_')) {
+                    Object.entries(slot).forEach(([key, machineData]) => {
+                        if (key.startsWith('machine_') && machineData && typeof machineData === 'object') {
                             const machineId = key;
-                            const machineData = (slot as any)[machineId];
-
-                            if (machineData && Array.isArray(machineData.stops)) {
+                            
+                            // Process Stops
+                            if ('stops' in machineData && Array.isArray(machineData.stops)) {
                                 (machineData.stops as StopData[]).forEach(stop => {
+                                    const duration = stop.duration || 0;
+                                    totalStopTime += duration;
+
                                     if (!aggregatedMachineStops[machineId]) {
                                         aggregatedMachineStops[machineId] = 0;
                                     }
-                                    aggregatedMachineStops[machineId] += stop.duration;
+                                    aggregatedMachineStops[machineId] += duration;
 
                                     if (stop.reason) {
                                         if (!aggregatedStopsByReason[stop.reason]) {
@@ -104,7 +132,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                 color: causeConfig?.color || '#8884d8'
                                             };
                                         }
-                                        aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
+                                        aggregatedStopsByReason[stop.reason].totalMinutes += duration;
                                     }
                                     
                                     detailedStops.push({
@@ -115,10 +143,36 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                     });
                                 });
                             }
+
+                            // Process Production for Performance calculation
+                            if ('weight' in machineData && machineData.weight) {
+                                 const machineInfo: MachineLog | undefined = log.machines[machineId];
+                                 const bagsProduced = 1; // Assuming weight is per bag
+                                 totalProduction += bagsProduced;
+
+                                 if (machineInfo && machineInfo.theoreticalPerformance) {
+                                     const idealTimePerBag = 60 / machineInfo.theoreticalPerformance; // in minutes
+                                     theoreticalTotalProduction += idealTimePerBag;
+                                 }
+                            }
                         }
                     });
                 });
             });
+
+            // OEE Calculations
+            const runTime = totalPlannedTime > totalStopTime ? totalPlannedTime - totalStopTime : 0;
+            
+            const finalAvailability = totalPlannedTime > 0 ? (runTime / totalPlannedTime) * 100 : 0;
+            const finalPerformance = runTime > 0 && theoreticalTotalProduction > 0 ? (theoreticalTotalProduction / runTime) * 100 : 0;
+            const finalQuality = 100; // Assuming 100% quality for now
+            const finalOee = (finalAvailability / 100) * (finalPerformance / 100) * (finalQuality / 100) * 100;
+
+            setAvailability(finalAvailability);
+            setPerformance(finalPerformance);
+            setQuality(finalQuality);
+            setOee(finalOee);
+
 
             setMachineStops(aggregatedMachineStops);
             setAllStopsInRange(detailedStops);
@@ -130,10 +184,6 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             })).sort((a,b) => b.totalMinutes - a.totalMinutes);
 
             setStopsByReason(reasonData);
-            
-            if (querySnapshot.empty) {
-              toast({ title: "Sin Datos", description: "No se encontraron registros de bitácora en el rango de fechas seleccionado."})
-            }
 
         } catch (error) {
             console.error("Error fetching OEE data:", error);
@@ -165,7 +215,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
                 <div className="flex items-center gap-3">
                     <Activity className="h-8 w-8 text-primary" />
-                    <h1 className="text-2xl font-bold text-foreground">Análisis de Paradas (OEE)</h1>
+                    <h1 className="text-2xl font-bold text-foreground">Análisis de Paradas y OEE</h1>
                 </div>
                 <div className="flex items-center gap-2">
                     <Link href="/stops">
@@ -177,7 +227,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                 <Card>
                     <CardHeader>
                         <CardTitle>Filtros de Análisis</CardTitle>
-                        <CardDescription>Selecciona el rango de fechas para analizar las paradas registradas.</CardDescription>
+                        <CardDescription>Selecciona el rango de fechas para analizar las paradas registradas y calcular el OEE.</CardDescription>
                     </CardHeader>
                     <CardContent className="flex flex-col md:flex-row items-center gap-4">
                         <div className="grid gap-2">
@@ -224,6 +274,19 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
                  {loading ? <p className="text-center pt-8">Cargando datos de análisis...</p> : (
                     <div className='space-y-6'>
+                         <Card>
+                             <CardHeader>
+                                <CardTitle>Indicadores OEE (Overall Equipment Effectiveness)</CardTitle>
+                                <CardDescription>Eficiencia general del equipo en el período seleccionado.</CardDescription>
+                            </CardHeader>
+                             <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                <KpiCard title="Disponibilidad" value={`${availability.toFixed(1)}%`} icon={CheckCircle} description="Porcentaje del tiempo planificado que el equipo estuvo realmente en producción." />
+                                <KpiCard title="Rendimiento" value={`${performance.toFixed(1)}%`} icon={Target} description="Velocidad de producción como un porcentaje de su capacidad máxima teórica." />
+                                <KpiCard title="Calidad" value={`${quality.toFixed(1)}%`} icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (actualmente 100% asumido)." />
+                                <KpiCard title="OEE General" value={`${oee.toFixed(1)}%`} icon={BarChart} description="Métrica global que combina Disponibilidad, Rendimiento y Calidad." valueColor={oee > 85 ? 'text-green-600' : oee > 60 ? 'text-yellow-600' : 'text-destructive'}/>
+                             </CardContent>
+                         </Card>
+
                         <Card>
                             <CardHeader>
                                 <CardTitle>Total de Tiempo de Parada por Máquina</CardTitle>
@@ -256,7 +319,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 {stopsByReason.length > 0 ? (
                                     <ChartContainer config={{}} className="w-full h-[400px]">
                                         <ResponsiveContainer>
-                                            <BarChart layout="vertical" data={stopsByReason} margin={{ left: 100 }} onClick={handleBarClick}>
+                                            <RechartsBarChart layout="vertical" data={stopsByReason} margin={{ left: 100 }} onClick={handleBarClick}>
                                                 <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                                                 <XAxis type="number" />
                                                 <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0}/>
@@ -272,7 +335,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                         />
                                                     ))}
                                                 </Bar>
-                                            </BarChart>
+                                            </RechartsBarChart>
                                         </ResponsiveContainer>
                                     </ChartContainer>
                                 ) : (

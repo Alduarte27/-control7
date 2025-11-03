@@ -348,6 +348,7 @@ export default function StopsClient({
         for (let i = 1; i <= NUM_MACHINES; i++) {
              machineEntries[`machine_${i}`] = {
                 productId: familiarProducts?.[0]?.id || '',
+                theoreticalPerformance: 0,
              };
         }
         return {
@@ -405,7 +406,7 @@ export default function StopsClient({
                 for (let i = 1; i <= NUM_MACHINES; i++) {
                     const machineId = `machine_${i}`;
                     if (!logData.machines[machineId]) {
-                        logData.machines[machineId] = { productId: familiarProducts?.[0]?.id || '' };
+                        logData.machines[machineId] = { productId: familiarProducts?.[0]?.id || '', theoreticalPerformance: 0 };
                     }
                 }
 
@@ -534,11 +535,13 @@ export default function StopsClient({
         }
     };
 
-    const handleMachineProductChange = (machineId: string, productId: string) => {
+    const handleMachineProductChange = (machineId: string, field: 'productId' | 'theoreticalPerformance', value: string | number) => {
         triggerChange(prev => {
             const newMachines = { ...prev.machines };
-            if (!newMachines[machineId]) newMachines[machineId] = { productId: '' };
-            newMachines[machineId].productId = productId;
+            if (!newMachines[machineId]) {
+                newMachines[machineId] = { productId: '', theoreticalPerformance: 0 };
+            }
+            (newMachines[machineId] as any)[field] = value;
             return { ...prev, machines: newMachines };
         });
     };
@@ -926,7 +929,10 @@ export default function StopsClient({
                     {/* Desktop Buttons */}
                     <div className="hidden md:flex items-center gap-2">
                         
-                         <SaveStatusIndicator status={saveStatus} onSave={() => handleSaveLog(dailyLog, true)} />
+                         {isCurrentDay ? 
+                            <SaveStatusIndicator status={saveStatus} onSave={() => handleSaveLog(dailyLog, true)} /> :
+                            <Button onClick={() => handleSaveLog(dailyLog, true)}><Save className="mr-2 h-4 w-4" /> Guardar Cambios</Button>
+                         }
                         
                          <TooltipProvider>
                             <Tooltip>
@@ -1055,7 +1061,7 @@ export default function StopsClient({
                                                 <div className="w-20">Hora</div>
                                             </th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <th key={`machine_header_${i}`} colSpan={2} className="p-1 bg-purple-100 dark:bg-purple-900/50">Máquina #{i + 1}</th>
+                                                <th key={`machine_header_${i}`} colSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50">Máquina #{i + 1}</th>
                                             ))}
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
@@ -1067,8 +1073,8 @@ export default function StopsClient({
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" style={{minWidth: '260px'}} colSpan={2}>
-                                                        <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
+                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" style={{minWidth: '260px'}} colSpan={3}>
+                                                        <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, 'productId', val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <SelectValue placeholder="Producto" />
                                                             </SelectTrigger>
@@ -1096,6 +1102,7 @@ export default function StopsClient({
                                                 <React.Fragment key={`sub_header_${i}`}>
                                                     <th className="p-1 font-normal w-60 bg-purple-100 dark:bg-purple-900/50">Observación</th>
                                                     <th className="p-1 font-normal w-15 bg-purple-100 dark:bg-purple-900/50">Peso/Saco KG</th>
+                                                    <th className="p-1 font-normal w-24 bg-purple-100 dark:bg-purple-900/50">Rendimiento Teórico (fundas/hr)</th>
                                                 </React.Fragment>
                                             ))}
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
@@ -1125,6 +1132,15 @@ export default function StopsClient({
                                                         <React.Fragment key={machineId}>
                                                             {observationCell(time, machineId)}
                                                             {inputCell(time, 'weight', machineId)}
+                                                             <td className="p-0">
+                                                                <Input 
+                                                                    type="number"
+                                                                    className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs"
+                                                                    value={dailyLog.machines[machineId]?.theoreticalPerformance || ''}
+                                                                    onChange={(e) => handleMachineProductChange(machineId, 'theoreticalPerformance', Number(e.target.value))}
+                                                                    placeholder="Ej: 600"
+                                                                />
+                                                            </td>
                                                         </React.Fragment>
                                                     )
                                                 })}

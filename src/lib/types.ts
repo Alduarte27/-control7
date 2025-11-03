@@ -110,6 +110,7 @@ export type TimeSlot = {
 
 export type MachineLog = {
   productId: string;
+  theoreticalPerformance?: number; // Theoretical performance in bags/hour
 };
 
 export type DailyLog = {
