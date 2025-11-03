@@ -21,6 +21,7 @@ import { DateRange } from 'react-day-picker';
 import { HardHat } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { cn } from '@/lib/utils';
+import OeeExplanation from './oee-explanation';
 
 interface AggregatedStopData {
     name: string;
@@ -76,7 +77,6 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         setAllStopsInRange([]);
         setStopTypeDistribution([]);
 
-
         const startId = format(dateRange.from, 'yyyy-MM-dd');
         const endId = format(dateRange.to, 'yyyy-MM-dd');
         
@@ -86,8 +86,8 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                 where('__name__', '>=', `${startId}_`),
                 where('__name__', '<=', `${endId}\uf8ff`)
             );
-
             const querySnapshot = await getDocs(logsQuery);
+
             if (querySnapshot.empty) {
                 toast({ title: "Sin Datos", description: "No se encontraron registros de bitácora en el rango de fechas seleccionado." });
                 setLoading(false);
@@ -99,42 +99,45 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             const detailedStops: DetailedStopData[] = [];
             const stopTypes = { planned: 0, unplanned: 0 };
 
-
             let totalPlannedTime = 0;
             let totalStopTime = 0;
             let totalActualProduction = 0; // In bags
             let totalTheoreticalProduction = 0; // In bags
-            let lastKnownSpeed: { [machineId: string]: number } = {};
+            let lastKnownSpeed: { [key: string]: number } = {};
 
             querySnapshot.forEach(doc => {
+                if (!doc.id.includes('_')) return; // Ignore old format documents
+
                 const log = doc.data() as DailyLog;
                 const [logDate, logShift] = doc.id.split('_');
 
-                if (!logDate || !logShift || !log.id.includes('_')) return; // Skip documents with incorrect ID format
-                
                 totalPlannedTime += 12 * 60; // Each log represents a 12-hour shift
                 
-                if (!log.timeSlots) return;
+                if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
-                Object.entries(log.timeSlots).forEach(([time, slot]) => {
-                    const timeSlotDuration = 30; // minutes
-                    
-                    if (!slot || typeof slot !== 'object') return;
-                    
-                    Object.entries(slot).forEach(([key, machineData]) => {
-                        if (key.startsWith('machine_') && machineData && typeof machineData === 'object') {
+                Object.values(log.machines).forEach((machineLog, index) => {
+                    const machineId = `machine_${index + 1}`;
+                    if (machineLog.theoreticalSpeed) {
+                        lastKnownSpeed[machineId] = machineLog.theoreticalSpeed;
+                    }
+                });
+
+                Object.entries(log.timeSlots).forEach(([time, slotData]) => {
+                    if (!slotData || typeof slotData !== 'object') return;
+
+                    Object.entries(slotData).forEach(([key, value]) => {
+                        if (key.startsWith('machine_') && value && typeof value === 'object') {
                             const machineId = key;
+                            const machineData = value as TimeSlot['machine_1'];
                             
-                            // Update last known speed for this machine
-                            if (typeof (machineData as MachineLog).theoreticalSpeed === 'number') {
-                                lastKnownSpeed[machineId] = (machineData as MachineLog).theoreticalSpeed!;
-                            } else if (typeof (machineData as TimeSlot['machine_1'])?.speed === 'number') {
-                                lastKnownSpeed[machineId] = (machineData as TimeSlot['machine_1'])!.speed!;
+                            // Update speed from the time slot if available
+                            if (typeof machineData.speed === 'number' && machineData.speed > 0) {
+                                lastKnownSpeed[machineId] = machineData.speed;
                             }
                             
                             let timeSlotStopTime = 0;
                             if ('stops' in machineData && Array.isArray(machineData.stops)) {
-                                (machineData.stops as StopData[]).forEach(stop => {
+                                machineData.stops.forEach(stop => {
                                     const duration = stop.duration || 0;
                                     totalStopTime += duration;
                                     timeSlotStopTime += duration;
@@ -145,14 +148,12 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                         stopTypes.unplanned += duration;
                                     }
 
-                                    if (!aggregatedMachineStops[machineId]) {
-                                        aggregatedMachineStops[machineId] = 0;
-                                    }
+                                    if (!aggregatedMachineStops[machineId]) aggregatedMachineStops[machineId] = 0;
                                     aggregatedMachineStops[machineId] += duration;
 
                                     if (stop.reason) {
+                                        const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
                                         if (!aggregatedStopsByReason[stop.reason]) {
-                                            const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
                                             aggregatedStopsByReason[stop.reason] = {
                                                 totalMinutes: 0,
                                                 color: causeConfig?.color || '#8884d8'
@@ -169,19 +170,19 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                     });
                                 });
                             }
-
-                             // Process Production for Performance calculation from weight
-                            if ('weight' in machineData && typeof machineData.weight === 'string' && machineData.weight.trim() !== '') {
+                            
+                            const runTimeInSlot = (30 - timeSlotStopTime) / 60; // in hours
+                            
+                            // Performance Calculation
+                            if (typeof machineData.weight === 'string' && machineData.weight.trim() !== '') {
                                 const weightValue = parseFloat(machineData.weight);
-                                if (!isNaN(weightValue)) {
-                                    totalActualProduction += 1; // Assuming 1 bag per entry, regardless of weight
+                                if (!isNaN(weightValue) && weightValue > 0) {
+                                    totalActualProduction += 1;
                                 }
                             }
-
-                            const runTimeInSlot = timeSlotDuration - timeSlotStopTime;
-                            const speedForSlot = (machineData as TimeSlot['machine_1'])?.speed ?? lastKnownSpeed[machineId] ?? 0;
-                            if (runTimeInSlot > 0 && speedForSlot > 0) {
-                                const theoreticalBagsInSlot = (speedForSlot) * (runTimeInSlot / 60);
+                            
+                            if (runTimeInSlot > 0 && lastKnownSpeed[machineId] > 0) {
+                                const theoreticalBagsInSlot = lastKnownSpeed[machineId] * runTimeInSlot;
                                 totalTheoreticalProduction += theoreticalBagsInSlot;
                             }
                         }
@@ -189,26 +190,23 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                 });
             });
 
-            // OEE Calculations
             const runTime = totalPlannedTime > totalStopTime ? totalPlannedTime - totalStopTime : 0;
-            
             const finalAvailability = totalPlannedTime > 0 ? (runTime / totalPlannedTime) * 100 : 0;
             const finalPerformance = totalTheoreticalProduction > 0 ? (totalActualProduction / totalTheoreticalProduction) * 100 : 0;
-            const finalQuality = 100; // Assuming 100% quality for now
+            const finalQuality = 100;
             const finalOee = (finalAvailability / 100) * (finalPerformance / 100) * (finalQuality / 100) * 100;
-
+            
             setAvailability(finalAvailability);
             setPerformance(finalPerformance);
             setQuality(finalQuality);
             setOee(finalOee);
-
+            
             setMachineStops(aggregatedMachineStops);
             setAllStopsInRange(detailedStops);
             setStopTypeDistribution([
                 { name: 'Planificadas', value: stopTypes.planned, fill: 'hsl(var(--chart-2))' },
                 { name: 'No Planificadas', value: stopTypes.unplanned, fill: 'hsl(var(--chart-5))' },
             ]);
-
 
             const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, data]) => ({
                 name: reason,
@@ -307,6 +305,8 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
                  {loading ? <p className="text-center pt-8">Cargando datos de análisis...</p> : (
                     <div className='space-y-6'>
+                        <OeeExplanation />
+
                          <Card>
                              <CardHeader>
                                 <CardTitle>Indicadores OEE (Overall Equipment Effectiveness)</CardTitle>
