@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType } from '@/lib/types';
+import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType, CategoryDefinition } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
 import { format, getDayOfYear, parse, setMinutes, getMinutes, getHours } from 'date-fns';
@@ -275,6 +275,7 @@ export default function StopsClient({
     const [operators, setOperators] = React.useState<Operator[]>([]);
     const [supervisors, setSupervisors] = React.useState<Supervisor[]>([]);
     const [maintenanceTypes, setMaintenanceTypes] = React.useState<MaintenanceType[]>([]);
+    const [allCategories, setAllCategories] = React.useState<CategoryDefinition[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [date, setDate] = React.useState<Date>(initialDate ? parse(initialDate, 'yyyy-MM-dd', new Date()) : new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
@@ -288,11 +289,20 @@ export default function StopsClient({
         return new Map(stopCauses.map(cause => [cause.name, cause]));
     }, [stopCauses]);
 
+    const familiarCategoryId = React.useMemo(() => {
+        return allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id;
+    }, [allCategories]);
+
+    const familiarProducts = React.useMemo(() => {
+        if (!familiarCategoryId) return prefetchedProducts;
+        return prefetchedProducts.filter(p => p.categoryId === familiarCategoryId);
+    }, [prefetchedProducts, familiarCategoryId]);
+
     const createEmptyLog = React.useCallback((logDate: Date, shift: 'day' | 'night'): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
         for (let i = 1; i <= NUM_MACHINES; i++) {
              machineEntries[`machine_${i}`] = {
-                productId: prefetchedProducts?.[0]?.id || '',
+                productId: familiarProducts?.[0]?.id || '',
              };
         }
         return {
@@ -304,7 +314,7 @@ export default function StopsClient({
             machines: machineEntries,
             timeSlots: {}
         };
-    }, [prefetchedProducts]);
+    }, [familiarProducts]);
 
     const handleSaveLog = React.useCallback(async (logToSave: DailyLog | null, showToast = false) => {
         if (!logToSave || !logToSave.id) return;
@@ -346,7 +356,7 @@ export default function StopsClient({
                 for (let i = 1; i <= NUM_MACHINES; i++) {
                     const machineId = `machine_${i}`;
                     if (!logData.machines[machineId]) {
-                        logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
+                        logData.machines[machineId] = { productId: familiarProducts?.[0]?.id || '' };
                     }
                 }
 
@@ -368,21 +378,23 @@ export default function StopsClient({
 
         fetchLog();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [date, createEmptyLog, prefetchedProducts]);
+    }, [date, createEmptyLog, familiarProducts]);
 
 
     const fetchCatalogs = React.useCallback(async () => {
          try {
-            const [causesSnap, operatorsSnap, supervisorsSnap, maintTypesSnap] = await Promise.all([
+            const [causesSnap, operatorsSnap, supervisorsSnap, maintTypesSnap, categoriesSnap] = await Promise.all([
                 getDocs(query(collection(db, 'stopCauses'), orderBy('name'))),
                 getDocs(query(collection(db, 'operators'), orderBy('name'))),
                 getDocs(query(collection(db, 'supervisors'), orderBy('name'))),
                 getDocs(query(collection(db, 'maintenanceTypes'), orderBy('name'))),
+                getDocs(query(collection(db, 'categories'), orderBy('name'))),
             ]);
             setStopCauses(causesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StopCause)));
             setOperators(operatorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Operator)));
             setSupervisors(supervisorsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supervisor)));
             setMaintenanceTypes(maintTypesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as MaintenanceType)));
+            setAllCategories(categoriesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as CategoryDefinition)));
         } catch (error) {
             toast({ title: 'Error', description: 'No se pudieron cargar los catálogos de configuración.', variant: 'destructive'});
         }
@@ -954,14 +966,14 @@ export default function StopsClient({
                                     <thead className="text-center align-middle sticky top-0 z-20 bg-card">
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 align-bottom sticky left-0 z-30 bg-muted">
-                                                <div className="w-24">Hora</div>
+                                                <div className="w-20">Hora</div>
                                             </th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <th key={`machine_header_${i}`} colSpan={2} className="p-1 bg-muted">Máquina #{i + 1}</th>
                                             ))}
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ minWidth: '30rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ width: '30rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
@@ -975,7 +987,7 @@ export default function StopsClient({
                                                                 <SelectValue placeholder="Producto" />
                                                             </SelectTrigger>
                                                             <SelectContent>
-                                                                {prefetchedProducts.map(p => (
+                                                                {familiarProducts.map(p => (
                                                                     <SelectItem key={p.id} value={p.id}>
                                                                         <div className="flex items-center gap-2">
                                                                             <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
@@ -1083,7 +1095,3 @@ export default function StopsClient({
         </div>
     );
 }
-
-    
-
-    
