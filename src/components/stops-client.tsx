@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -802,7 +803,15 @@ export default function StopsClient({
     
         const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
             const rawValue = e.target.value;
-            const valueToSet = isPercentageField ? rawValue.replace(/%/g, '') : rawValue;
+            let valueToSet: string | number = isPercentageField ? rawValue.replace(/%/g, '') : rawValue;
+            
+            if (field === 'speed' || field === 'weight') {
+                const num = Number(valueToSet);
+                if (!isNaN(num)) {
+                    valueToSet = num;
+                }
+            }
+            
             handleCellChange(time, field, valueToSet, machineId);
         };
     
@@ -820,7 +829,8 @@ export default function StopsClient({
         return (
             <td className="p-0">
                 <Input 
-                    type="text"
+                    type={field === 'speed' ? 'number' : 'text'}
+                    min={field === 'speed' ? '0' : undefined}
                     className="border-none rounded-none focus-visible:ring-1 focus-visible:ring-inset h-8 text-xs"
                     value={displayValue}
                     onChange={handleChange}
@@ -1176,4 +1186,5 @@ export default function StopsClient({
         </div>
     );
 }
+
 
