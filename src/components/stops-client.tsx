@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType, CategoryDefinition } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
-import { format, getDayOfYear, parse, setMinutes, getMinutes, getHours } from 'date-fns';
+import { format, getDayOfYear, parse, setMinutes, getMinutes, getHours, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -28,6 +28,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 
 const NUM_MACHINES = 3;
 const TIME_SLOTS_PER_HOUR = 2; // 30-minute intervals
+const AUTOSAVE_DELAY = 2000; // 2 seconds
 
 // This function generates the display slots for the table based on the selected shift
 const generateDisplayTimeSlots = (shift: 'day' | 'night') => {
@@ -261,6 +262,27 @@ function ConfigurationModal({
     );
 }
 
+const SaveStatusIndicator = ({ status }: { status: 'dirty' | 'saving' | 'saved' | 'idle' }) => {
+    if (status === 'idle') {
+        return null;
+    }
+
+    const config = {
+        dirty: { text: 'Cambios sin guardar', icon: <Save className="h-4 w-4" />, color: 'text-yellow-600' },
+        saving: { text: 'Guardando...', icon: <RefreshCw className="h-4 w-4 animate-spin" />, color: 'text-blue-600' },
+        saved: { text: 'Sincronizado', icon: <CheckCircle2 className="h-4 w-4" />, color: 'text-green-600' }
+    };
+
+    const current = config[status as keyof typeof config] || config.saved;
+
+    return (
+        <div className={cn("flex items-center gap-2 text-sm font-medium", current.color)}>
+            {current.icon}
+            <span>{current.text}</span>
+        </div>
+    );
+};
+
 export default function StopsClient({ 
     prefetchedProducts, 
     initialDate, 
@@ -282,6 +304,12 @@ export default function StopsClient({
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const { toast } = useToast();
     const [isAdminMode, setIsAdminMode] = React.useState(false);
+
+    // --- Auto-save state ---
+    const [saveStatus, setSaveStatus] = React.useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle');
+    const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    const isCurrentDay = React.useMemo(() => isToday(date), [date]);
     
     const timeSlotsForTable = React.useMemo(() => generateDisplayTimeSlots(dailyLog?.shift || 'day'), [dailyLog?.shift]);
 
@@ -318,18 +346,21 @@ export default function StopsClient({
 
     const handleSaveLog = React.useCallback(async (logToSave: DailyLog | null, showToast = false) => {
         if (!logToSave || !logToSave.id) return;
+        
+        setSaveStatus('saving');
         try {
-            // Create a deep copy to avoid mutating state directly, and to clean up undefined values
             const cleanLog = JSON.parse(JSON.stringify(logToSave));
             
             const docRef = doc(db, 'dailyLogs', cleanLog.id);
             await setDoc(docRef, cleanLog, { merge: true });
 
+            setSaveStatus('saved');
             if (showToast) {
                 toast({ title: 'Progreso Guardado', description: `Se guardaron los cambios para el día ${cleanLog.id}.` });
             }
         } catch (error) {
             console.error("Error saving daily log:", error);
+            setSaveStatus('dirty'); // Revert to dirty if save fails
             if (showToast) {
                 toast({ title: 'Error', description: 'No se pudo guardar la bitácora.', variant: 'destructive' });
             }
@@ -339,7 +370,8 @@ export default function StopsClient({
     React.useEffect(() => {
         const fetchLog = async () => {
             setLoading(true);
-            const currentShift = dailyLog?.shift || initialShift || 'day';
+            setSaveStatus('idle');
+            const currentShift = dailyLog?.shift || initialShift || (new Date().getHours() < 19 && new Date().getHours() >= 7 ? 'day' : 'night');
             const logId = `${format(date, 'yyyy-MM-dd')}_${currentShift}`;
             
             try {
@@ -367,6 +399,7 @@ export default function StopsClient({
                 if (!logData.shift) logData.shift = currentShift;
 
                 setDailyLog(logData);
+                setSaveStatus(isToday(date) ? 'saved' : 'idle');
 
             } catch (error) {
                 console.error("Error fetching daily log:", error);
@@ -403,55 +436,74 @@ export default function StopsClient({
     React.useEffect(() => {
         fetchCatalogs();
     }, [fetchCatalogs]);
+    
+    // Auto-save effect
+    React.useEffect(() => {
+        if (saveStatus === 'dirty' && isCurrentDay) {
+            if (autoSaveTimerRef.current) {
+                clearTimeout(autoSaveTimerRef.current);
+            }
+            autoSaveTimerRef.current = setTimeout(() => {
+                handleSaveLog(dailyLog, false);
+            }, AUTOSAVE_DELAY);
+        }
+
+        return () => {
+            if (autoSaveTimerRef.current) {
+                clearTimeout(autoSaveTimerRef.current);
+            }
+        };
+    }, [dailyLog, saveStatus, isCurrentDay, handleSaveLog]);
+
+
+    const triggerChange = (updater: (prev: DailyLog) => DailyLog) => {
+        setDailyLog(prev => {
+            if (!prev) return null;
+            if (isCurrentDay) {
+                setSaveStatus('dirty');
+            }
+            return updater(prev);
+        });
+    };
 
     const handleHeaderChange = (field: keyof Omit<DailyLog, 'id' | 'machines' | 'timeSlots'>, value: string) => {
-        setDailyLog(prevLog => {
-            if (!prevLog) return null;
-    
+        const updater = (prevLog: DailyLog) => {
             const newLog = { ...prevLog, [field]: value };
-    
             if (field === 'shift') {
                 const newShift = value as 'day' | 'night';
-                const newId = `${format(date, 'yyyy-MM-dd')}_${newShift}`;
-                newLog.id = newId;
-
-                // Immediately load the data for the new shift
-                const fetchNewShiftLog = async () => {
-                    setLoading(true);
-                    try {
-                        const logDocSnap = await getDoc(doc(db, 'dailyLogs', newId));
-                        let newLogData;
-                        if (logDocSnap.exists()) {
-                            newLogData = logDocSnap.data() as DailyLog;
-                        } else {
-                            newLogData = createEmptyLog(date, newShift);
-                        }
-                        setDailyLog(newLogData);
-                    } catch (error) {
-                        console.error("Error fetching new shift log:", error);
-                        toast({ title: 'Error', description: 'No se pudo cargar la bitácora para el nuevo turno.', variant: 'destructive' });
-                    }
-                    setLoading(false);
-                };
-                
-                fetchNewShiftLog();
-                return newLog; // Return the new log structure to update state, but it will be overwritten
+                newLog.id = `${format(date, 'yyyy-MM-dd')}_${newShift}`;
             }
-    
             return newLog;
-        });
+        };
+
+        if (field === 'shift') {
+             // Save current state before switching
+            handleSaveLog(dailyLog, false).then(() => {
+                 setDailyLog(prev => {
+                    if(!prev) return null;
+                    const newLog = updater(prev);
+                    // This will trigger the main useEffect to fetch the new log data
+                    setDate(d => new Date(d));
+                    setDailyLog(newLog); // Optimistically set the shift
+                    return newLog;
+                 });
+            });
+        } else {
+            triggerChange(updater);
+        }
     };
 
     const handleDateChange = (newDate: Date | undefined) => {
         if (newDate) {
+            if (saveStatus === 'dirty') {
+                 handleSaveLog(dailyLog, false);
+            }
             setDate(newDate);
         }
     };
 
     const handleMachineProductChange = (machineId: string, productId: string) => {
-        if (!dailyLog) return;
-        setDailyLog(prev => {
-            if (!prev) return null;
+        triggerChange(prev => {
             const newMachines = { ...prev.machines };
             if (!newMachines[machineId]) newMachines[machineId] = { productId: '' };
             newMachines[machineId].productId = productId;
@@ -460,9 +512,7 @@ export default function StopsClient({
     };
 
     const handleCellChange = (timeSlot: string, field: keyof TimeSlot, value: string) => {
-        setDailyLog(prev => {
-            if (!prev) return null;
-            
+        triggerChange(prev => {
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
             if (!newTimeSlots[timeSlot]) {
@@ -479,15 +529,12 @@ export default function StopsClient({
     };
 
     const handleStopSave = (stopData: StopData) => {
-        if (!dailyLog || !modalState) return;
+        if (!modalState) return;
     
-        setDailyLog(prev => {
-            if (!prev) return null;
-    
+        triggerChange(prev => {
             const { machineId } = modalState;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
     
-            // --- Robust Deletion of Old Stop if Editing and Time Changed ---
             if (modalState.stopData && modalState.stopData.startTime !== stopData.startTime) {
                 const oldStartTime = parse(modalState.stopData.startTime, 'HH:mm', new Date());
                 const oldRegistrationSlotKey = format(setMinutes(oldStartTime, getMinutes(oldStartTime) < 30 ? 0 : 30), 'HH:mm');
@@ -503,7 +550,6 @@ export default function StopsClient({
                 }
             }
     
-            // --- Robust Addition/Update of New Stop ---
             const newStartTime = parse(stopData.startTime, 'HH:mm', new Date());
             const newRegistrationSlotKey = format(setMinutes(newStartTime, getMinutes(newStartTime) < 30 ? 0 : 30), 'HH:mm');
     
@@ -534,11 +580,7 @@ export default function StopsClient({
     };
 
      const handleDeleteStop = (timeSlot: string, machineId: string, stopId: string) => {
-        if (!dailyLog) return;
-
-        setDailyLog(prev => {
-            if (!prev) return null;
-
+        triggerChange(prev => {
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
             const registrationSlot = format(setMinutes(parse(timeSlot, 'HH:mm', new Date()), getMinutes(parse(timeSlot, 'HH:mm', new Date())) < 30 ? 0 : 30), 'HH:mm');
@@ -556,7 +598,7 @@ export default function StopsClient({
 
             return { ...prev, timeSlots: newTimeSlots };
         });
-        toast({ title: "Parada Eliminada", description: "La parada ha sido eliminada. Guarda los cambios para confirmar.", variant: "destructive" });
+        toast({ title: "Parada Eliminada", description: "La parada ha sido eliminada.", variant: "destructive" });
     };
     
     const handleToggleAdminMode = () => {
@@ -720,10 +762,8 @@ export default function StopsClient({
             const rawValue = e.target.value;
             const valueToSet = isPercentageField ? rawValue.replace(/%/g, '') : rawValue;
     
-            setDailyLog(prev => {
-                if (!prev) return null;
-    
-                const newTimeSlots = { ...prev.timeSlots };
+            triggerChange(prev => {
+                const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
     
                 if (!newTimeSlots[time]) {
                     newTimeSlots[time] = {};
@@ -889,7 +929,15 @@ export default function StopsClient({
                             </Tooltip>
                         </TooltipProvider>
                     </div>
-                    <Button onClick={() => handleSaveLog(dailyLog, true)} disabled={loading}>Guardar Cambios</Button>
+
+                    {isCurrentDay ? (
+                        <SaveStatusIndicator status={saveStatus} />
+                    ) : (
+                        <Button onClick={() => handleSaveLog(dailyLog, true)} disabled={loading}>
+                            <Save className="mr-2 h-4 w-4" /> Guardar Cambios
+                        </Button>
+                    )}
+
                     <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
                     {/* Mobile Dropdown */}
                     <div className="md:hidden">
@@ -936,7 +984,7 @@ export default function StopsClient({
                             </div>
                             <div className="space-y-1.5">
                                 <Label>Turno</Label>
-                                <Select value={dailyLog.shift} onValueChange={val => handleHeaderChange('shift', val)}>
+                                <Select value={dailyLog.shift} onValueChange={val => handleHeaderChange('shift', val as 'day' | 'night')}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="day">Día</SelectItem>
@@ -965,15 +1013,15 @@ export default function StopsClient({
                                 <table className="table-fixed min-w-full text-xs border-collapse">
                                     <thead>
                                         <tr className="divide-x divide-border">
-                                            <th className="p-1 align-bottom sticky left-0 z-30 bg-muted">
-                                                <div className="w-24">Hora</div>
+                                            <th className="p-1 align-bottom sticky left-0 z-25 bg-muted">
+                                                <div className="w-20">Hora</div>
                                             </th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <th key={`machine_header_${i}`} colSpan={2} className="p-1 bg-muted">Máquina #{i + 1}</th>
+                                                <th key={`machine_header_${i}`} colSpan={2} className="p-1 bg-purple-100 dark:bg-purple-900/50">Máquina #{i + 1}</th>
                                             ))}
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ minWidth: '30rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ minWidth: '40.4rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
@@ -981,7 +1029,7 @@ export default function StopsClient({
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-muted" style={{minWidth: '260px'}} colSpan={2}>
+                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" style={{minWidth: '260px'}} colSpan={2}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <SelectValue placeholder="Producto" />
@@ -1008,8 +1056,8 @@ export default function StopsClient({
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal w-48 bg-muted">Observación</th>
-                                                    <th className="p-1 font-normal w-24 bg-muted">Peso/Saco KG</th>
+                                                    <th className="p-1 font-normal w-60 bg-purple-100 dark:bg-purple-900/50">Observación</th>
+                                                    <th className="p-1 font-normal w-15 bg-purple-100 dark:bg-purple-900/50">Peso/Saco KG</th>
                                                 </React.Fragment>
                                             ))}
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
@@ -1095,3 +1143,4 @@ export default function StopsClient({
         </div>
     );
 }
+
