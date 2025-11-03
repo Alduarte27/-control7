@@ -961,7 +961,7 @@ export default function StopsClient({
                                             ))}
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ minWidth: '20rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ minWidth: '40rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
