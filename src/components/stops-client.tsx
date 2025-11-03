@@ -961,14 +961,15 @@ export default function StopsClient({
                                             ))}
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ width: '30rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ minWidth: '30rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
+                                            <th className="p-1 sticky left-0 z-30 bg-muted"></th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => {
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-muted min-w-[280px]" colSpan={2}>
+                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-muted min-w-[260px]" colSpan={2}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
                                                             <SelectTrigger className="h-8 text-xs bg-card">
                                                                 <SelectValue placeholder="Producto" />
@@ -992,6 +993,7 @@ export default function StopsClient({
                                             <th className="p-1 bg-blue-100 dark:bg-blue-900/50" colSpan={3}>Granel 50 KG</th>
                                         </tr>
                                         <tr className="divide-x divide-border text-muted-foreground font-normal">
+                                            <th className="p-1 sticky left-0 z-30 bg-muted"></th>
                                             {Array.from({ length: NUM_MACHINES }).map((_, i) => (
                                                 <React.Fragment key={`sub_header_${i}`}>
                                                     <th className="p-1 font-normal w-48 bg-muted">Observación</th>
