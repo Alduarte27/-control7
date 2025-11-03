@@ -75,14 +75,15 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
             const endDate = new Date();
             endDate.setHours(endHour, endMinute, 0, 0);
 
+            // Handle overnight duration
             if (endDate < startDate) {
-                endDate.setDate(endDate.getDate() + 1); // Handle overnight duration
+                endDate.setDate(endDate.getDate() + 1);
             }
 
             const diffMs = endDate.getTime() - startDate.getTime();
             return Math.round(diffMs / (1000 * 60));
         } catch (e) {
-            return 0;
+            return -1; // Return -1 on parsing error
         }
     };
     
@@ -128,6 +129,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                 type="time"
                                 value={actualStartTime}
                                 onChange={(e) => setActualStartTime(e.target.value)}
+                                min={startTime} // Prevents setting a time before the clicked slot
                              />
                         </div>
                         <div className="space-y-1.5">
@@ -137,12 +139,11 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                                 type="time"
                                 value={endTime}
                                 onChange={(e) => setEndTime(e.target.value)}
-                                min={actualStartTime} // Prevents selecting an end time before the start time on the same day
                              />
                         </div>
                         <div className="space-y-1.5">
                             <Label>Duración (minutos)</Label>
-                            <Input value={duration} disabled />
+                            <Input value={duration >= 0 ? duration : "Error"} disabled />
                         </div>
                     </div>
                     
