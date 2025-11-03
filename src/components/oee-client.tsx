@@ -31,6 +31,7 @@ interface AggregatedStopData {
 type DetailedStopData = StopData & {
   machineId: string;
   logDate: string;
+  shift: 'day' | 'night';
 }
 
 export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: { prefetchedProducts: ProductDefinition[], prefetchedStopCauses: StopCause[]}) {
@@ -72,7 +73,8 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
             querySnapshot.forEach(doc => {
                 const log = doc.data() as DailyLog;
-                const logDate = doc.id.split('_')[0];
+                const [logDate, logShift] = doc.id.split('_');
+
                 if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
                 // Iterate through each time slot in the log (e.g., "07:00", "07:30")
@@ -111,7 +113,8 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                     detailedStops.push({
                                         ...stop,
                                         machineId: machineId.replace('machine_', 'Máquina '),
-                                        logDate: logDate
+                                        logDate: logDate,
+                                        shift: logShift as 'day' | 'night',
                                     });
                                 });
                             }
@@ -301,6 +304,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                             <TableHeader>
                                                 <TableRow>
                                                     <TableHead>Fecha</TableHead>
+                                                    <TableHead>Turno</TableHead>
                                                     <TableHead>Máquina</TableHead>
                                                     <TableHead>Hora Inicio</TableHead>
                                                     <TableHead>Hora Fin</TableHead>
@@ -313,6 +317,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                 {filteredStopsForTable.length > 0 ? filteredStopsForTable.map(stop => (
                                                     <TableRow key={stop.id}>
                                                         <TableCell>{stop.logDate}</TableCell>
+                                                        <TableCell className="capitalize">{stop.shift === 'day' ? 'Día' : 'Noche'}</TableCell>
                                                         <TableCell>{stop.machineId}</TableCell>
                                                         <TableCell>{stop.startTime}</TableCell>
                                                         <TableCell>{stop.endTime}</TableCell>
@@ -322,7 +327,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                     </TableRow>
                                                 )) : (
                                                     <TableRow>
-                                                        <TableCell colSpan={7} className="text-center">No hay paradas para mostrar.</TableCell>
+                                                        <TableCell colSpan={8} className="text-center">No hay paradas para mostrar.</TableCell>
                                                     </TableRow>
                                                 )}
                                             </TableBody>
