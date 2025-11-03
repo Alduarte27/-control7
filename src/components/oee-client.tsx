@@ -65,6 +65,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             );
             const querySnapshot = await getDocs(logsQuery);
             
+            // --- CRITICAL FIX: Reset aggregation variables before processing ---
             const aggregatedMachineStops: { [machineId: string]: number } = {};
             const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
             const detailedStops: DetailedStopData[] = [];
@@ -74,11 +75,9 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                 const logDate = doc.id.split('_')[0];
                 if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
-                // Iterate over each time slot in the log
                 Object.values(log.timeSlots).forEach(slot => {
                     if (!slot || typeof slot !== 'object') return;
                     
-                    // Iterate over each machine within the time slot
                     Object.keys(slot).forEach((key) => {
                         if (key.startsWith('machine_')) {
                             const machineId = key;
@@ -86,13 +85,11 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
                             if (machineData && Array.isArray(machineData.stops)) {
                                 (machineData.stops as StopData[]).forEach(stop => {
-                                    // Aggregate for machine stops card
                                     if (!aggregatedMachineStops[machineId]) {
                                         aggregatedMachineStops[machineId] = 0;
                                     }
                                     aggregatedMachineStops[machineId] += stop.duration;
 
-                                    // Aggregate for reason chart
                                     if (stop.reason) {
                                         if (!aggregatedStopsByReason[stop.reason]) {
                                             const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
@@ -104,7 +101,6 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                         aggregatedStopsByReason[stop.reason].totalMinutes += stop.duration;
                                     }
                                     
-                                    // Collect detailed data
                                     detailedStops.push({
                                         ...stop,
                                         machineId: machineId.replace('machine_', 'Máquina '),
