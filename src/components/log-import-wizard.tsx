@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -11,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import type { DailyLog, Operator, StopCause, Supervisor, TimeSlot } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface LogImportWizardProps {
     isOpen: boolean;
@@ -128,7 +131,15 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
     };
 
     const handleMappingChange = (targetField: string, sourceHeader: string) => {
-        setMapping(prev => ({ ...prev, [targetField]: sourceHeader }));
+        setMapping(prev => {
+            const newMapping = { ...prev };
+            if (sourceHeader === '_ignore_') {
+                delete newMapping[targetField];
+            } else {
+                newMapping[targetField] = sourceHeader;
+            }
+            return newMapping;
+        });
     };
     
     const isMappingValid = () => {
@@ -299,7 +310,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                                                     <SelectValue placeholder="Selecciona una columna de tu archivo..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    <SelectItem value="">-- Ignorar --</SelectItem>
+                                                    <SelectItem value="_ignore_">-- Ignorar --</SelectItem>
                                                     {fileHeaders.map(header => (
                                                         <SelectItem key={header} value={header}>{header}</SelectItem>
                                                     ))}
