@@ -2,26 +2,25 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X, BarChart, Percent, LineChart, Package, CheckCircle, ShieldCheck, Target, PieChartIcon } from 'lucide-react';
+import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X, BarChart, Percent, LineChart, TrendingUp, TrendingDown, Target, CheckCircle, ShieldCheck, PieChartIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { DailyLog, StopData, StopCause, ProductDefinition, MachineLog, TimeSlot, ProductData } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { format, addDays, eachDayOfInterval, differenceInDays } from 'date-fns';
+import { format, addDays, eachDayOfInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
-import KpiCard from './kpi-card';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
-import { Bar, BarChart as RechartsBarChart, Pie, PieChart as RechartsPieChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, Legend } from 'recharts';
+import { Bar, BarChart as RechartsBarChart, Pie, PieChart as RechartsPieChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, Legend, Line, LineChart as RechartsLineChart } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from '@/components/ui/chart';
 import { DateRange } from 'react-day-picker';
-import { HardHat } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { cn } from '@/lib/utils';
 import OeeExplanation from './oee-explanation';
+import OeeGauge from './oee-gauge';
 
 interface AggregatedStopData {
     name: string;
@@ -41,8 +40,17 @@ type StopTypeDistribution = {
     fill: string;
 }
 
+type WeeklyKpiData = {
+    week: string;
+    oee: number;
+    availability: number;
+    performance: number;
+    quality: number;
+}
+
+
 export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: { prefetchedProducts: ProductDefinition[], prefetchedStopCauses: StopCause[]}) {
-    const [dateRange, setDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -7), to: new Date() });
+    const [dateRange, setDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -28), to: new Date() });
     const [loading, setLoading] = React.useState(false);
     const [machineStops, setMachineStops] = React.useState<{ name: string, minutes: number }[]>([]);
     const [stopsByReason, setStopsByReason] = React.useState<AggregatedStopData[]>([]);
@@ -56,6 +64,8 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
     const [performance, setPerformance] = React.useState(0);
     const [quality, setQuality] = React.useState(0);
     const [oee, setOee] = React.useState(0);
+    const [weeklyKpis, setWeeklyKpis] = React.useState<WeeklyKpiData[]>([]);
+
 
     const { toast } = useToast();
 
@@ -76,19 +86,18 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         setStopsByReason([]);
         setAllStopsInRange([]);
         setStopTypeDistribution([]);
+        setWeeklyKpis([]);
 
         const startId = format(dateRange.from, 'yyyy-MM-dd');
         const endId = format(dateRange.to, 'yyyy-MM-dd');
         
         try {
-            // 1. Fetch Daily Logs (for stops and availability)
             const logsQuery = query(
                 collection(db, 'dailyLogs'),
                 where('__name__', '>=', `${startId}_`),
                 where('__name__', '<=', `${endId}\uf8ff`)
             );
             
-            // 2. Fetch Production Plans (for actual production and performance)
             const daysInInterval = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
             const planIdsToFetch = Array.from(new Set(daysInInterval.map(d => `${format(d, 'yyyy')}-W${format(d, 'w', { locale: es })}`)));
 
@@ -104,6 +113,17 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             }
             
             const plansMap = new Map(plansSnapshot.docs.map(doc => [doc.id, doc.data().products as ProductData[]]));
+            const weeklyData: { [weekId: string]: { logs: DailyLog[], planProducts: ProductData[] } } = {};
+
+            logsSnapshot.forEach(doc => {
+                const log = doc.data() as DailyLog;
+                const logDate = new Date(doc.id.split('_')[0].replace(/-/g, '/'));
+                const weekId = `${format(logDate, 'yyyy')}-W${format(logDate, 'w', { locale: es })}`;
+                if (!weeklyData[weekId]) {
+                    weeklyData[weekId] = { logs: [], planProducts: plansMap.get(weekId) || [] };
+                }
+                weeklyData[weekId].logs.push(log);
+            });
 
             // --- Aggregation Variables ---
             const aggregatedMachineStops: { [machineId: string]: number } = {};
@@ -111,117 +131,122 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             const detailedStops: DetailedStopData[] = [];
             const stopTypes = { planned: 0, unplanned: 0 };
             
-            let totalPlannedTime = 0;
-            let totalStopTime = 0;
-            let totalActualProductionSacks = 0;
-            let totalGoodProductionSacks = 0;
-            let totalTheoreticalProductionSacks = 0;
-            let lastKnownSpeed: { [key: string]: number } = {};
+            let grandTotalPlannedTime = 0;
+            let grandTotalStopTime = 0;
+            let grandTotalActualProductionSacks = 0;
+            let grandTotalGoodProductionSacks = 0;
+            let grandTotalTheoreticalProductionSacks = 0;
+            
+            const weeklyKpiResults: WeeklyKpiData[] = [];
 
-            // --- Process each log within the date range ---
-            logsSnapshot.forEach(doc => {
-                if (!doc.id.includes('_')) return; 
+            for (const weekId of Object.keys(weeklyData).sort()) {
+                const { logs, planProducts } = weeklyData[weekId];
+                let weeklyTotalPlannedTime = 0;
+                let weeklyTotalStopTime = 0;
+                let weeklyTotalActualProductionSacks = 0;
+                let weeklyTotalGoodProductionSacks = 0;
+                let weeklyTotalTheoreticalProductionSacks = 0;
 
-                const log = doc.data() as DailyLog;
-                const [logDate, logShift] = doc.id.split('_');
-                const currentDate = new Date(logDate.replace(/-/g, '/')); // Safer date parsing
-                
-                const planIdForDate = `${format(currentDate, 'yyyy')}-W${format(currentDate, 'w', { locale: es })}`;
-                const relevantPlanProducts = plansMap.get(planIdForDate);
-
-                totalPlannedTime += 12 * 60; // Each log represents a 12-hour shift
-                
-                if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
-
-                // Prime lastKnownSpeed with speeds from the machine definitions for the shift
-                Object.entries(log.machines).forEach(([machineId, machineLog]) => {
-                    const productDef = prefetchedProducts.find(p => p.id === machineLog.productId);
-                    // Let's assume a default speed if not defined anywhere.
-                    const theoreticalSpeed = 40; // Example: 40 bags/min
-                    lastKnownSpeed[machineId] = theoreticalSpeed;
-                });
-
-                Object.entries(log.timeSlots).forEach(([time, slotData]) => {
-                    if (!slotData || typeof slotData !== 'object') return;
-
-                    Object.entries(slotData).forEach(([key, value]) => {
-                        if (key.startsWith('machine_') && value && typeof value === 'object') {
-                            const machineId = key;
-                            const machineData = value as TimeSlot['machine_1'];
-                            
-                            // Update speed from the time slot if available
-                            if (typeof machineData.speed === 'number' && machineData.speed > 0) {
-                                lastKnownSpeed[machineId] = machineData.speed;
-                            }
-                            
-                            let timeSlotStopTime = 0;
-                            if ('stops' in machineData && Array.isArray(machineData.stops)) {
-                                machineData.stops.forEach(stop => {
-                                    const duration = stop.duration || 0;
-                                    totalStopTime += duration;
-                                    timeSlotStopTime += duration;
-                                    
-                                    if(stop.type === 'planned') {
-                                        stopTypes.planned += duration;
-                                    } else {
-                                        stopTypes.unplanned += duration;
-                                    }
-
-                                    if (!aggregatedMachineStops[machineId]) aggregatedMachineStops[machineId] = 0;
-                                    aggregatedMachineStops[machineId] += duration;
-
-                                    if (stop.reason) {
-                                        const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
-                                        if (!aggregatedStopsByReason[stop.reason]) {
-                                            aggregatedStopsByReason[stop.reason] = {
-                                                totalMinutes: 0,
-                                                color: causeConfig?.color || '#8884d8'
-                                            };
-                                        }
-                                        aggregatedStopsByReason[stop.reason].totalMinutes += duration;
-                                    }
-                                    
-                                    detailedStops.push({
-                                        ...stop,
-                                        machineId: machineId.replace('machine_', 'Máquina '),
-                                        logDate: logDate,
-                                        shift: logShift as 'day' | 'night',
-                                    });
-                                });
-                            }
-                            
-                            // Performance Calculation
-                            const runTimeInMinutes = 30 - timeSlotStopTime;
-                            if (runTimeInMinutes > 0 && lastKnownSpeed[machineId] > 0) {
-                                const theoreticalSacksInSlot = (lastKnownSpeed[machineId]) * runTimeInMinutes;
-                                totalTheoreticalProductionSacks += theoreticalSacksInSlot;
-                            }
-                        }
-                    });
-                });
-
-                // Get actual production from the production plan for the corresponding day and shift
-                if (relevantPlanProducts) {
-                    const dayOfWeek = (currentDate.getDay() + 6) % 7; // 0=Mon, 1=Tue, ...
-                    const dayKey = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][dayOfWeek];
+                logs.forEach(log => {
+                    const [logDate, logShift] = log.id.split('_');
+                    const currentDate = new Date(logDate.replace(/-/g, '/'));
                     
-                    relevantPlanProducts.forEach(product => {
-                        const shiftProduction = product.actual[dayKey as keyof typeof product.actual]?.[logShift as 'day' | 'night'] || 0;
-                        totalActualProductionSacks += shiftProduction;
-                        
-                        // Quality Calculation: Add to "good" production if name doesn't include "PB"
-                        if (!product.productName.includes('PB')) {
-                            totalGoodProductionSacks += shiftProduction;
-                        }
-                    });
-                }
-            });
+                    weeklyTotalPlannedTime += 12 * 60;
+                    
+                    if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
-            // --- Final OEE Calculations ---
-            const runTime = totalPlannedTime > totalStopTime ? totalPlannedTime - totalStopTime : 0;
-            const finalAvailability = totalPlannedTime > 0 ? (runTime / totalPlannedTime) * 100 : 0;
-            const finalPerformance = totalTheoreticalProductionSacks > 0 ? (totalActualProductionSacks / totalTheoreticalProductionSacks) * 100 : 0;
-            const finalQuality = totalActualProductionSacks > 0 ? (totalGoodProductionSacks / totalActualProductionSacks) * 100 : 0;
+                    let lastKnownSpeed: { [key: string]: number } = {};
+                    Object.entries(log.machines).forEach(([machineId, machineLog]) => {
+                        const productDef = prefetchedProducts.find(p => p.id === machineLog.productId);
+                        lastKnownSpeed[machineId] = productDef?.presentationWeight === 0.5 ? 60 : 40;
+                    });
+
+                    Object.entries(log.timeSlots).forEach(([time, slotData]) => {
+                        if (!slotData || typeof slotData !== 'object') return;
+
+                        Object.entries(slotData).forEach(([key, value]) => {
+                            if (key.startsWith('machine_') && value && typeof value === 'object') {
+                                const machineId = key;
+                                const machineData = value as TimeSlot['machine_1'];
+                                
+                                if (typeof machineData.speed === 'number' && machineData.speed > 0) {
+                                    lastKnownSpeed[machineId] = machineData.speed;
+                                }
+                                
+                                let timeSlotStopTime = 0;
+                                if ('stops' in machineData && Array.isArray(machineData.stops)) {
+                                    machineData.stops.forEach(stop => {
+                                        const duration = stop.duration || 0;
+                                        weeklyTotalStopTime += duration;
+                                        timeSlotStopTime += duration;
+                                        
+                                        if(stop.type === 'planned') stopTypes.planned += duration;
+                                        else stopTypes.unplanned += duration;
+
+                                        if (!aggregatedMachineStops[machineId]) aggregatedMachineStops[machineId] = 0;
+                                        aggregatedMachineStops[machineId] += duration;
+
+                                        if (stop.reason) {
+                                            const causeConfig = prefetchedStopCauses.find(c => c.name === stop.reason);
+                                            if (!aggregatedStopsByReason[stop.reason]) {
+                                                aggregatedStopsByReason[stop.reason] = { totalMinutes: 0, color: causeConfig?.color || '#8884d8' };
+                                            }
+                                            aggregatedStopsByReason[stop.reason].totalMinutes += duration;
+                                        }
+                                        
+                                        detailedStops.push({ ...stop, machineId: machineId.replace('machine_', 'Máquina '), logDate, shift: logShift as 'day' | 'night' });
+                                    });
+                                }
+                                
+                                const runTimeInMinutes = 30 - timeSlotStopTime;
+                                if (runTimeInMinutes > 0 && lastKnownSpeed[machineId] > 0) {
+                                    weeklyTotalTheoreticalProductionSacks += lastKnownSpeed[machineId] * runTimeInMinutes;
+                                }
+                            }
+                        });
+                    });
+
+                    if (planProducts) {
+                        const dayOfWeek = (currentDate.getDay() + 6) % 7;
+                        const dayKey = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][dayOfWeek];
+                        
+                        planProducts.forEach(product => {
+                            const shiftProduction = product.actual[dayKey as keyof typeof product.actual]?.[logShift as 'day' | 'night'] || 0;
+                            weeklyTotalActualProductionSacks += shiftProduction;
+                            if (!product.productName.toLowerCase().includes('pb')) {
+                                weeklyTotalGoodProductionSacks += shiftProduction;
+                            }
+                        });
+                    }
+                });
+
+                grandTotalPlannedTime += weeklyTotalPlannedTime;
+                grandTotalStopTime += weeklyTotalStopTime;
+                grandTotalActualProductionSacks += weeklyTotalActualProductionSacks;
+                grandTotalGoodProductionSacks += weeklyTotalGoodProductionSacks;
+                grandTotalTheoreticalProductionSacks += weeklyTotalTheoreticalProductionSacks;
+                
+                const weeklyRunTime = weeklyTotalPlannedTime > weeklyTotalStopTime ? weeklyTotalPlannedTime - weeklyTotalStopTime : 0;
+                const weeklyAvailability = weeklyTotalPlannedTime > 0 ? (weeklyRunTime / weeklyTotalPlannedTime) * 100 : 0;
+                const weeklyPerformance = weeklyTotalTheoreticalProductionSacks > 0 ? (weeklyTotalActualProductionSacks / weeklyTotalTheoreticalProductionSacks) * 100 : 0;
+                const weeklyQuality = weeklyTotalActualProductionSacks > 0 ? (weeklyTotalGoodProductionSacks / weeklyTotalActualProductionSacks) * 100 : 0;
+                const weeklyOee = (weeklyAvailability / 100) * (weeklyPerformance / 100) * (weeklyQuality / 100) * 100;
+                
+                weeklyKpiResults.push({
+                    week: weekId.split('-W')[1],
+                    oee: weeklyOee,
+                    availability: weeklyAvailability,
+                    performance: weeklyPerformance,
+                    quality: weeklyQuality,
+                });
+            }
+
+
+            // --- Final Grand Total OEE Calculations ---
+            const grandTotalRunTime = grandTotalPlannedTime > grandTotalStopTime ? grandTotalPlannedTime - grandTotalStopTime : 0;
+            const finalAvailability = grandTotalPlannedTime > 0 ? (grandTotalRunTime / grandTotalPlannedTime) * 100 : 0;
+            const finalPerformance = grandTotalTheoreticalProductionSacks > 0 ? (grandTotalActualProductionSacks / grandTotalTheoreticalProductionSacks) * 100 : 0;
+            const finalQuality = grandTotalActualProductionSacks > 0 ? (grandTotalGoodProductionSacks / grandTotalActualProductionSacks) * 100 : 0;
             const finalOee = (finalAvailability / 100) * (finalPerformance / 100) * (finalQuality / 100) * 100;
             
             setAvailability(finalAvailability);
@@ -236,21 +261,12 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                 { name: 'No Planificadas', value: stopTypes.unplanned, fill: 'hsl(var(--chart-5))' },
             ]);
 
-            const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, data]) => ({
-                name: reason,
-                totalMinutes: data.totalMinutes,
-                color: data.color,
-            })).sort((a,b) => b.totalMinutes - a.totalMinutes);
-
+            const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, data]) => ({ name: reason, totalMinutes: data.totalMinutes, color: data.color })).sort((a,b) => b.totalMinutes - a.totalMinutes);
             setStopsByReason(reasonData);
             
-            const machineStopsDataForChart = Object.entries(aggregatedMachineStops).map(([machineId, minutes]) => ({
-                name: `Máquina ${machineId.split('_')[1]}`,
-                minutes: minutes,
-            })).sort((a, b) => b.minutes - a.minutes);
-
+            const machineStopsDataForChart = Object.entries(aggregatedMachineStops).map(([machineId, minutes]) => ({ name: `Máquina ${machineId.split('_')[1]}`, minutes })).sort((a, b) => b.minutes - a.minutes);
             setMachineStops(machineStopsDataForChart);
-
+            setWeeklyKpis(weeklyKpiResults);
 
         } catch (error) {
             console.error("Error fetching OEE data:", error);
@@ -343,21 +359,15 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                     <div className='space-y-6'>
                         <OeeExplanation />
 
-                         <Card>
-                             <CardHeader>
-                                <CardTitle>Indicadores OEE (Overall Equipment Effectiveness)</CardTitle>
-                                <CardDescription>Eficiencia general del equipo en el período seleccionado.</CardDescription>
-                            </CardHeader>
-                             <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                <KpiCard title="Disponibilidad" value={`${availability.toFixed(1)}%`} icon={CheckCircle} description="Porcentaje del tiempo planificado que el equipo estuvo realmente en producción." />
-                                <KpiCard title="Rendimiento" value={`${performance.toFixed(1)}%`} icon={Target} description="Velocidad de producción como un porcentaje de su capacidad máxima teórica." />
-                                <KpiCard title="Calidad" value={`${quality.toFixed(1)}%`} icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (productos 'PB' se consideran no conformes)." />
-                                <KpiCard title="OEE General" value={`${oee.toFixed(1)}%`} icon={BarChart} description="Métrica global que combina Disponibilidad, Rendimiento y Calidad." valueColor={oee > 85 ? 'text-green-600' : oee > 60 ? 'text-yellow-600' : 'text-destructive'}/>
-                             </CardContent>
-                         </Card>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <OeeGauge label="Disponibilidad" value={availability} color="hsl(var(--chart-1))" icon={CheckCircle} description="Porcentaje del tiempo planificado que el equipo estuvo realmente en producción." />
+                            <OeeGauge label="Rendimiento" value={performance} color="hsl(var(--chart-2))" icon={Target} description="Velocidad de producción como un porcentaje de su capacidad máxima teórica." />
+                            <OeeGauge label="Calidad" value={quality} color="hsl(var(--chart-3))" icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (productos 'PB' se consideran no conformes)." />
+                            <OeeGauge label="OEE General" value={oee} color="hsl(var(--chart-4))" icon={BarChart} description="Métrica global que combina Disponibilidad, Rendimiento y Calidad." isPrimary />
+                        </div>
 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                            <Card>
+                           <Card>
                                 <CardHeader>
                                     <CardTitle>Total de Tiempo de Parada por Máquina</CardTitle>
                                     <CardDescription>Suma de todos los minutos de parada para cada máquina en el período seleccionado.</CardDescription>
@@ -415,6 +425,32 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 </CardContent>
                             </Card>
                         </div>
+                        
+                         <Card>
+                            <CardHeader>
+                                <CardTitle>Tendencia de KPIs de OEE por Semana</CardTitle>
+                                <CardDescription>Evolución de los indicadores de OEE a lo largo de las semanas en el período seleccionado.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {weeklyKpis.length > 1 ? (
+                                    <ChartContainer config={{}} className="w-full h-[300px]">
+                                        <RechartsLineChart data={weeklyKpis}>
+                                            <CartesianGrid vertical={false} />
+                                            <XAxis dataKey="week" name="Semana" tickFormatter={(val) => `S${val}`} />
+                                            <YAxis unit="%" />
+                                            <RechartsTooltip formatter={(value: number) => `${value.toFixed(1)}%`} />
+                                            <Legend />
+                                            <Line type="monotone" dataKey="oee" name="OEE" stroke="hsl(var(--chart-4))" strokeWidth={2} />
+                                            <Line type="monotone" dataKey="availability" name="Disponibilidad" stroke="hsl(var(--chart-1))" />
+                                            <Line type="monotone" dataKey="performance" name="Rendimiento" stroke="hsl(var(--chart-2))" />
+                                            <Line type="monotone" dataKey="quality" name="Calidad" stroke="hsl(var(--chart-3))" />
+                                        </RechartsLineChart>
+                                    </ChartContainer>
+                                ) : (
+                                    <p className="text-center text-muted-foreground py-8">Se necesitan datos de al menos dos semanas para mostrar una tendencia.</p>
+                                )}
+                            </CardContent>
+                        </Card>
 
 
                         <Card>
