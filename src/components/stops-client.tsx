@@ -1057,9 +1057,9 @@ export default function StopsClient({
                                             <th className="p-1 align-bottom sticky left-0 z-25 bg-muted">
                                                 <div className="w-20">Hora</div>
                                             </th>
-                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <th key={`machine_header_${i}`} colSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50">Máquina #{i + 1}</th>
-                                            ))}
+                                            <th className="p-1 bg-purple-100 dark:bg-purple-900/50" colSpan={3}>Máquina #1</th>
+                                            <th className="p-1 bg-purple-100 dark:bg-purple-900/50" colSpan={3}>Máquina #2</th>
+                                            <th className="p-1 bg-purple-100 dark:bg-purple-900/50" colSpan={3}>Máquina #3</th>
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
                                             <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ minWidth: '40.4rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
@@ -1070,10 +1070,13 @@ export default function StopsClient({
                                                 const machineId = `machine_${i + 1}`;
                                                 const selectedProductId = dailyLog.machines[machineId]?.productId || '';
                                                 return (
-                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" style={{minWidth: '260px'}} colSpan={3}>
+                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50 w-[372px]" colSpan={3}>
                                                         <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
-                                                            <SelectTrigger className="h-8 text-xs bg-card">
-                                                                <SelectValue placeholder="Producto" />
+                                                            <SelectTrigger className="h-8 text-xs bg-card justify-center">
+                                                                <div className="flex items-center gap-2 truncate">
+                                                                    {familiarProducts.find(p => p.id === selectedProductId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === selectedProductId)?.color || '#ccc' }}></span>}
+                                                                    <SelectValue placeholder="Producto" />
+                                                                </div>
                                                             </SelectTrigger>
                                                             <SelectContent>
                                                                 {familiarProducts.map(p => (
@@ -1095,15 +1098,21 @@ export default function StopsClient({
                                         </tr>
                                         <tr className="divide-x divide-border text-muted-foreground font-normal">
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
-                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => (
-                                                <React.Fragment key={`sub_header_${i}`}>
-                                                    <th className="p-1 font-normal w-60 bg-purple-100 dark:bg-purple-900/50">Observación</th>
-                                                    <th className="p-1 font-normal w-15 bg-purple-100 dark:bg-purple-900/50">Peso/Saco KG</th>
-                                                    <th className="p-1 font-normal w-24 bg-purple-100 dark:bg-purple-900/50">Velocidad (f/min)</th>
-                                                </React.Fragment>
-                                            ))}
+                                            
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">P/sacos/fardo</th>
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
+                                            
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">P/sacos/fardo</th>
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
+                                            
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">P/sacos/fardo</th>
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
+
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
-                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[8.8rem]">Flujo</th>
+                                            <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[9rem]">Flujo</th>
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS-FA</th>
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 1</th>
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3.5rem]">NS% 2</th>
@@ -1186,5 +1195,6 @@ export default function StopsClient({
         </div>
     );
 }
+
 
 
