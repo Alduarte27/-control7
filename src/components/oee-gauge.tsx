@@ -41,8 +41,8 @@ const OeeGauge = ({ label, value, color, icon: Icon, description, isPrimary = fa
             </CardHeader>
             <CardContent className="flex-1 flex flex-col items-center justify-center pt-2">
               {isClient ? (
-                <div className="relative w-[160px] h-[100px]">
-                  <PieChart width={160} height={120}>
+                <div className="relative w-[160px] h-[80px]">
+                  <PieChart width={160} height={100}>
                     <Pie
                       data={data}
                       cx="50%"
@@ -59,7 +59,7 @@ const OeeGauge = ({ label, value, color, icon: Icon, description, isPrimary = fa
                       <Cell fill="hsl(var(--muted))" />
                     </Pie>
                   </PieChart>
-                  <div className="absolute inset-0 flex items-center justify-center bottom-4">
+                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-center">
                       <span className="text-3xl font-bold" style={{ color }}>
                         {value.toFixed(1)}%
                       </span>
