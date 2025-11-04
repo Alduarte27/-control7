@@ -12,6 +12,8 @@ import { db } from '@/lib/firebase';
 import type { DailyLog, StopData } from '@/lib/types';
 import { Download, Upload, FileJson, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, } from '@/components/ui/alert-dialog';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { generateDisplayTimeSlots } from './stops-client';
 
 type LogExportDialogProps = {
   open: boolean;
@@ -32,6 +34,7 @@ export default function LogExportDialog({ open, onOpenChange, currentLog, onImpo
   const [endLog, setEndLog] = React.useState<string>('');
   const [isProcessing, setIsProcessing] = React.useState(false);
   const [importConfirmation, setImportConfirmation] = React.useState<DailyLog | null>(null);
+  const [exportType, setExportType] = React.useState<'stops' | 'full'>('stops');
 
   const { toast } = useToast();
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -101,17 +104,8 @@ export default function LogExportDialog({ open, onOpenChange, currentLog, onImpo
     allLogsData.sort((a, b) => a.id.localeCompare(b.id));
     return { allLogsData, selectedLogIds };
   }
-
-  const handleExportCSV = async () => {
-    if (!startLog || !endLog) {
-        toast({ title: 'Error', description: 'Por favor, selecciona un rango.', variant: 'destructive' });
-        return;
-    }
-    setIsProcessing(true);
-
-    try {
-        const { allLogsData } = await fetchRangeData();
-        
+  
+  const generateStopsCSV = (allLogsData: DailyLog[]): string => {
         const headers = [
             'Fecha', 'Turno', 'Lote', 'Operador', 'Supervisor',
             'Maquina', 'Producto',
@@ -122,24 +116,21 @@ export default function LogExportDialog({ open, onOpenChange, currentLog, onImpo
         const rows: string[] = [];
         allLogsData.forEach(log => {
             const [date, shift] = log.id.split('_');
-
-            if (!log.timeSlots || Object.keys(log.timeSlots).length === 0) {
-                const baseRow = [date, shift, log.lote, log.operador, log.supervisor].join(',');
-                rows.push(baseRow);
-                return;
-            }
-
-            const allStops: (StopData & { machineId: string })[] = [];
-            Object.values(log.timeSlots).forEach(slot => {
-                if (!slot || typeof slot !== 'object') return;
-                Object.entries(slot).forEach(([machineId, machineData]) => {
-                    if (machineId.startsWith('machine_') && machineData && typeof machineData === 'object' && 'stops' in machineData && Array.isArray(machineData.stops)) {
-                        (machineData.stops as StopData[]).forEach(stop => {
-                            allStops.push({ ...stop, machineId });
-                        });
-                    }
+            const allStops: (StopData & { machineId: string, productId: string })[] = [];
+            
+            if (log.timeSlots && typeof log.timeSlots === 'object') {
+                Object.values(log.timeSlots).forEach(slot => {
+                    if (!slot || typeof slot !== 'object') return;
+                    Object.entries(slot).forEach(([machineId, machineData]) => {
+                        if (machineId.startsWith('machine_') && machineData && typeof machineData === 'object' && 'stops' in machineData && Array.isArray(machineData.stops)) {
+                            const productId = log.machines[machineId]?.productId || 'N/A';
+                            (machineData.stops as StopData[]).forEach(stop => {
+                                allStops.push({ ...stop, machineId, productId });
+                            });
+                        }
+                    });
                 });
-            });
+            }
 
             if (allStops.length === 0) {
                  const baseRow = [date, shift, log.lote, log.operador, log.supervisor].join(',');
@@ -150,10 +141,10 @@ export default function LogExportDialog({ open, onOpenChange, currentLog, onImpo
                         date,
                         shift,
                         log.lote,
-                        log.operador,
-                        log.supervisor,
+                        `"${log.operador || ''}"`,
+                        `"${log.supervisor || ''}"`,
                         stop.machineId.replace('machine_', 'Maquina '),
-                        log.machines[stop.machineId]?.productId || 'N/A', // You might want to map this to product name
+                        stop.productId,
                         stop.startTime,
                         stop.endTime,
                         stop.duration,
@@ -166,13 +157,77 @@ export default function LogExportDialog({ open, onOpenChange, currentLog, onImpo
                 });
             }
         });
+
+        return [headers.join(','), ...rows].join('\n');
+  }
+
+  const generateFullCSV = (allLogsData: DailyLog[]): string => {
+        const headers = [
+            'Fecha', 'Turno', 'Lote', 'Operador', 'Supervisor', 'Hora',
+            'M1_Producto', 'M1_P/Saco', 'M1_P/Fardo', 'M1_Velocidad',
+            'M2_Producto', 'M2_P/Saco', 'M2_P/Fardo', 'M2_Velocidad',
+            'M3_Producto', 'M3_P/Saco', 'M3_P/Fardo', 'M3_Velocidad',
+            'Masa', 'Flujo', 'NS-FAM', 'NS% 1', 'NS% 2',
+            'Color_In', 'Hum_In', 'Turb_In', 'CV_In',
+            'Color_Out_Fam', 'Hum_Out_Fam', 'Turb_Out_Fam',
+            'Color_Out_Gra', 'Hum_Out_Gra', 'Turb_Out_Gra',
+            'Novedades_Empaque'
+        ];
+
+        const rows: string[] = [];
+        allLogsData.forEach(log => {
+            const [date, shift] = log.id.split('_');
+            const timeSlots = generateDisplayTimeSlots(log.shift as 'day' | 'night');
+            
+            timeSlots.forEach(time => {
+                const slot = log.timeSlots?.[time] || {};
+                const machine1 = (slot['machine_1'] as any) || {};
+                const machine2 = (slot['machine_2'] as any) || {};
+                const machine3 = (slot['machine_3'] as any) || {};
+                
+                const row = [
+                    date,
+                    shift,
+                    log.lote,
+                    `"${log.operador || ''}"`,
+                    `"${log.supervisor || ''}"`,
+                    time,
+                    log.machines['machine_1']?.productId || '', machine1.weight || '', machine1.bundle_weight || '', machine1.speed || '',
+                    log.machines['machine_2']?.productId || '', machine2.weight || '', machine2.bundle_weight || '', machine2.speed || '',
+                    log.machines['machine_3']?.productId || '', machine3.weight || '', machine3.bundle_weight || '', machine3.speed || '',
+                    (slot as any).masa || '', (slot as any).flujo || '', (slot as any).ns_fam || '', (slot as any).ns_1 || '', (slot as any).ns_2 || '',
+                    (slot as any).in_color || '', (slot as any).in_hum || '', (slot as any).in_turb || '', (slot as any).in_cv || '',
+                    (slot as any).out_fam_color || '', (slot as any).out_fam_hum || '', (slot as any).out_fam_turb || '',
+                    (slot as any).out_gra_color || '', (slot as any).out_gra_hum || '', (slot as any).out_gra_turb || '',
+                    `"${((slot as any).empaque_obs || '').replace(/"/g, '""')}"`
+                ];
+                rows.push(row.join(','));
+            })
+        });
+
+        return [headers.join(','), ...rows].join('\n');
+  }
+
+  const handleExportCSV = async () => {
+    if (!startLog || !endLog) {
+        toast({ title: 'Error', description: 'Por favor, selecciona un rango.', variant: 'destructive' });
+        return;
+    }
+    setIsProcessing(true);
+
+    try {
+        const { allLogsData } = await fetchRangeData();
         
-        const csvContent = [headers.join(','), ...rows].join('\n');
+        const csvContent = exportType === 'stops'
+            ? generateStopsCSV(allLogsData)
+            : generateFullCSV(allLogsData);
+        
         const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.href = url;
-        link.setAttribute('download', `reporte-bitacora_${startLog}_a_${endLog}.csv`);
+        const fileName = `reporte-bitacora_${exportType}_${startLog}_a_${endLog}.csv`;
+        link.setAttribute('download', fileName);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -256,7 +311,7 @@ export default function LogExportDialog({ open, onOpenChange, currentLog, onImpo
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Importar y Exportar Bitácoras</DialogTitle>
           <DialogDescription>
@@ -296,14 +351,27 @@ export default function LogExportDialog({ open, onOpenChange, currentLog, onImpo
                         </Select>
                     </div>
                 </div>
+                <div className="space-y-2">
+                    <Label>Formato de Exportación CSV</Label>
+                    <RadioGroup defaultValue="stops" value={exportType} onValueChange={(val: 'stops' | 'full') => setExportType(val)}>
+                        <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="stops" id="r-stops" />
+                            <Label htmlFor="r-stops">Resumen de Paradas</Label>
+                        </div>
+                         <div className="flex items-center space-x-2">
+                            <RadioGroupItem value="full" id="r-full" />
+                            <Label htmlFor="r-full">Bitácora Completa por Intervalo</Label>
+                        </div>
+                    </RadioGroup>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <Button onClick={handleExportCSV} disabled={isProcessing}>
                         <FileText className="mr-2 h-4 w-4" />
-                        {isProcessing ? 'Exportando...' : 'Exportar Rango a CSV'}
+                        {isProcessing ? 'Exportando CSV...' : 'Exportar a CSV'}
                     </Button>
                     <Button onClick={handleExportJSON} disabled={isProcessing} variant="secondary">
                         <FileJson className="mr-2 h-4 w-4" />
-                        {isProcessing ? 'Exportando...' : 'Exportar a JSON (Backup)'}
+                        {isProcessing ? 'Exportando JSON...' : 'Exportar a JSON (Backup)'}
                     </Button>
                 </div>
             </div>
@@ -347,4 +415,3 @@ export default function LogExportDialog({ open, onOpenChange, currentLog, onImpo
     </>
   );
 }
-

@@ -1,10 +1,9 @@
 
-
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Import, Upload, Download } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,7 +32,7 @@ const TIME_SLOTS_PER_HOUR = 2; // 30-minute intervals
 const AUTOSAVE_DELAY = 2000; // 2 seconds
 
 // This function generates the display slots for the table based on the selected shift
-const generateDisplayTimeSlots = (shift: 'day' | 'night') => {
+export const generateDisplayTimeSlots = (shift: 'day' | 'night') => {
     const slots = [];
     if (shift === 'day') {
         const startHour = 7;
@@ -969,7 +968,7 @@ export default function StopsClient({
                                 <TooltipContent><p>Análisis de Paradas (OEE)</p></TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
-                        <TooltipProvider>
+                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Button variant="outline" size="icon" onClick={() => setExportModalOpen(true)}>
