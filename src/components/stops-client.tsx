@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Import, Upload } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Import, Upload, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType, CategoryDefinition } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc, where } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { format, getDayOfYear, parse, setMinutes, getMinutes, getHours, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -25,6 +25,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Separator } from './ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import LogExportDialog from './log-export-dialog';
 
 
 const NUM_MACHINES = 3;
@@ -321,6 +322,7 @@ export default function StopsClient({
     const [date, setDate] = React.useState<Date>(initialDate ? parse(initialDate, 'yyyy-MM-dd', new Date()) : new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
+    const [exportModalOpen, setExportModalOpen] = React.useState(false);
     const { toast } = useToast();
     const [isAdminMode, setIsAdminMode] = React.useState(false);
     const [weightHeaderType, setWeightHeaderType] = React.useState<{ [key: string]: string }>({
@@ -331,8 +333,6 @@ export default function StopsClient({
 
     const [saveStatus, setSaveStatus] = React.useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle');
     const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const [importConfirmation, setImportConfirmation] = React.useState<DailyLog | null>(null);
 
     const isCurrentDay = React.useMemo(() => isToday(date), [date]);
     
@@ -693,61 +693,10 @@ export default function StopsClient({
         }
     };
 
-    const handleExportLog = () => {
-        if (!dailyLog) {
-            toast({ title: "Error", description: "No hay datos para exportar.", variant: "destructive" });
-            return;
-        }
-        const jsonString = JSON.stringify(dailyLog, null, 2);
-        const blob = new Blob([jsonString], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `bitacora_${dailyLog.id}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        toast({ title: "Exportación Exitosa", description: "La bitácora se ha descargado como un archivo JSON." });
-    };
-
-    const handleImportClick = () => {
-        fileInputRef.current?.click();
-    };
-
-    const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const text = e.target?.result;
-                if (typeof text !== 'string') throw new Error("File is not readable.");
-                const importedData = JSON.parse(text) as DailyLog;
-
-                // Basic validation
-                if (!importedData.id || !importedData.shift || !importedData.machines) {
-                    throw new Error("El archivo no tiene el formato de bitácora correcto.");
-                }
-
-                setImportConfirmation(importedData);
-            } catch (error: any) {
-                toast({ title: "Error de Importación", description: error.message || "No se pudo leer o procesar el archivo.", variant: "destructive" });
-            } finally {
-                // Reset file input to allow re-importing the same file
-                if(fileInputRef.current) fileInputRef.current.value = "";
-            }
-        };
-        reader.readAsText(file);
-    };
-    
-    const confirmImport = async () => {
-        if (!importConfirmation) return;
-        setDailyLog(importConfirmation);
-        await handleSaveLog(importConfirmation, true);
-        setImportConfirmation(null);
-        toast({ title: "Importación Exitosa", description: "Los datos de la bitácora han sido cargados y guardados."});
+    const handleImportedLog = async (log: DailyLog) => {
+        setDailyLog(log);
+        await handleSaveLog(log, true);
+        toast({ title: "Importación Exitosa", description: "Los datos de la bitácora han sido cargados y guardados." });
     };
 
     const allStops = React.useMemo(() => {
@@ -998,11 +947,11 @@ export default function StopsClient({
                          <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button asChild variant="outline" size="icon">
-                                        <Link href="/log-history">
+                                    <Link href="/log-history">
+                                        <Button asChild variant="outline" size="icon">
                                             <History className="h-4 w-4" />
-                                        </Link>
-                                    </Button>
+                                        </Button>
+                                    </Link>
                                 </TooltipTrigger>
                                 <TooltipContent><p>Historial</p></TooltipContent>
                             </Tooltip>
@@ -1040,6 +989,17 @@ export default function StopsClient({
                                 <TooltipContent><p>Configuración de Bitácora</p></TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
+                        <TooltipProvider>
+                             <Tooltip>
+                                <TooltipTrigger asChild>
+                                     <Button variant="outline" onClick={() => setExportModalOpen(true)}>
+                                         <Download className="mr-2 h-4 w-4" />
+                                         Importar / Exportar
+                                     </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Importar o exportar datos de bitácoras.</p></TooltipContent>
+                             </Tooltip>
+                         </TooltipProvider>
                     </div>
 
                     <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
@@ -1051,8 +1011,7 @@ export default function StopsClient({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => handleSaveLog(dailyLog, true)}><Save className="mr-2 h-4 w-4"/>Guardar</DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleImportClick}><Import className="mr-2 h-4 w-4" />Importar</DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleExportLog}><Upload className="mr-2 h-4 w-4" />Exportar</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setExportModalOpen(true)}><Download className="mr-2 h-4 w-4" />Importar / Exportar</DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/log-history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/oee" className="flex items-center"><Activity className="mr-2 h-4 w-4" />Análisis</Link></DropdownMenuItem>
                                 <DropdownMenuItem onClick={handleToggleAdminMode}><Lock className="mr-2 h-4 w-4" />Modo Admin</DropdownMenuItem>
@@ -1063,7 +1022,6 @@ export default function StopsClient({
                 </div>
             </header>
             <main className="p-2 md:p-6">
-                <input type="file" ref={fileInputRef} onChange={handleFileImport} accept=".json" className="hidden" />
                 {loading ? <p>Cargando bitácora...</p> : dailyLog && (
                     <div className="space-y-4 pt-4">
                         {/* Header */}
@@ -1321,22 +1279,15 @@ export default function StopsClient({
                     onConfigSave={handleConfigSave}
                 />
             )}
-            {importConfirmation && (
-                <AlertDialog open={!!importConfirmation} onOpenChange={() => setImportConfirmation(null)}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Confirmar Importación</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Estás a punto de reemplazar los datos de la bitácora actual con los del archivo <strong>{`bitacora_${importConfirmation.id}.json`}</strong>. Esta acción no se puede deshacer. ¿Deseas continuar?
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel onClick={() => setImportConfirmation(null)}>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction onClick={confirmImport}>Sí, Importar</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
+             {exportModalOpen && dailyLog && (
+                <LogExportDialog
+                    open={exportModalOpen}
+                    onOpenChange={setExportModalOpen}
+                    currentLog={dailyLog}
+                    onImport={handleImportedLog}
+                />
             )}
         </div>
     );
 }
+
