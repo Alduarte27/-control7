@@ -947,11 +947,11 @@ export default function StopsClient({
                          <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Link href="/log-history">
-                                        <Button asChild variant="outline" size="icon">
-                                            <History className="h-4 w-4" />
-                                        </Button>
-                                    </Link>
+                                    <Button asChild variant="outline" size="icon">
+                                      <Link href="/log-history">
+                                        <History className="h-4 w-4" />
+                                      </Link>
+                                    </Button>
                                 </TooltipTrigger>
                                 <TooltipContent><p>Historial</p></TooltipContent>
                             </Tooltip>
@@ -960,13 +960,23 @@ export default function StopsClient({
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Link href="/oee">
-                                        <Button variant="outline" size="icon">
-                                            <Activity className="h-4 w-4" />
-                                        </Button>
-                                    </Link>
+                                    <Button asChild variant="outline" size="icon">
+                                      <Link href="/oee">
+                                        <Activity className="h-4 w-4" />
+                                      </Link>
+                                    </Button>
                                 </TooltipTrigger>
                                 <TooltipContent><p>Análisis de Paradas (OEE)</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="outline" size="icon" onClick={() => setExportModalOpen(true)}>
+                                        <Download className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Importar / Exportar</p></TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                         <TooltipProvider>
@@ -989,17 +999,6 @@ export default function StopsClient({
                                 <TooltipContent><p>Configuración de Bitácora</p></TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
-                        <TooltipProvider>
-                             <Tooltip>
-                                <TooltipTrigger asChild>
-                                     <Button variant="outline" onClick={() => setExportModalOpen(true)}>
-                                         <Download className="mr-2 h-4 w-4" />
-                                         Importar / Exportar
-                                     </Button>
-                                </TooltipTrigger>
-                                <TooltipContent><p>Importar o exportar datos de bitácoras.</p></TooltipContent>
-                             </Tooltip>
-                         </TooltipProvider>
                     </div>
 
                     <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
@@ -1290,4 +1289,3 @@ export default function StopsClient({
         </div>
     );
 }
-
