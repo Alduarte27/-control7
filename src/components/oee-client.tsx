@@ -6,10 +6,10 @@ import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X, BarChart, 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import type { DailyLog, StopData, StopCause, ProductDefinition, MachineLog, TimeSlot } from '@/lib/types';
+import type { DailyLog, StopData, StopCause, ProductDefinition, MachineLog, TimeSlot, ProductData } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { format, addDays } from 'date-fns';
+import { format, addDays, eachDayOfInterval, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -81,35 +81,52 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         const endId = format(dateRange.to, 'yyyy-MM-dd');
         
         try {
+            // 1. Fetch Daily Logs (for stops and availability)
             const logsQuery = query(
                 collection(db, 'dailyLogs'),
                 where('__name__', '>=', `${startId}_`),
                 where('__name__', '<=', `${endId}\uf8ff`)
             );
-            const querySnapshot = await getDocs(logsQuery);
+            
+            // 2. Fetch Production Plans (for actual production and performance)
+            const daysInInterval = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
+            const planIdsToFetch = Array.from(new Set(daysInInterval.map(d => `${format(d, 'yyyy')}-W${format(d, 'w', { locale: es })}`)));
 
-            if (querySnapshot.empty) {
+            const [logsSnapshot, plansSnapshot] = await Promise.all([
+                getDocs(logsQuery),
+                planIdsToFetch.length > 0 ? getDocs(query(collection(db, 'productionPlans'), where('__name__', 'in', planIdsToFetch))) : Promise.resolve({ docs: [] })
+            ]);
+
+            if (logsSnapshot.empty) {
                 toast({ title: "Sin Datos", description: "No se encontraron registros de bitácora en el rango de fechas seleccionado." });
                 setLoading(false);
                 return;
             }
             
+            const plansMap = new Map(plansSnapshot.docs.map(doc => [doc.id, doc.data().products as ProductData[]]));
+
+            // --- Aggregation Variables ---
             const aggregatedMachineStops: { [machineId: string]: number } = {};
             const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
             const detailedStops: DetailedStopData[] = [];
             const stopTypes = { planned: 0, unplanned: 0 };
-
+            
             let totalPlannedTime = 0;
             let totalStopTime = 0;
-            let totalActualProduction = 0; // In bags
-            let totalTheoreticalProduction = 0; // In bags
+            let totalActualProductionSacks = 0;
+            let totalTheoreticalProductionSacks = 0;
             let lastKnownSpeed: { [key: string]: number } = {};
 
-            querySnapshot.forEach(doc => {
-                if (!doc.id.includes('_')) return; // Ignore old format documents
+            // --- Process each log within the date range ---
+            logsSnapshot.forEach(doc => {
+                if (!doc.id.includes('_')) return; 
 
                 const log = doc.data() as DailyLog;
                 const [logDate, logShift] = doc.id.split('_');
+                const currentDate = new Date(logDate);
+                
+                const planIdForDate = `${format(currentDate, 'yyyy')}-W${format(currentDate, 'w', { locale: es })}`;
+                const relevantPlanProducts = plansMap.get(planIdForDate);
 
                 totalPlannedTime += 12 * 60; // Each log represents a 12-hour shift
                 
@@ -171,29 +188,33 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 });
                             }
                             
-                            const runTimeInMinutes = 30 - timeSlotStopTime;
-                            
                             // Performance Calculation
-                            if (typeof machineData.weight === 'string' && machineData.weight.trim() !== '') {
-                                const weightValue = parseFloat(machineData.weight);
-                                if (!isNaN(weightValue) && weightValue > 0) {
-                                    totalActualProduction += 1;
-                                }
-                            }
-                            
+                            const runTimeInMinutes = 30 - timeSlotStopTime;
                             if (runTimeInMinutes > 0 && lastKnownSpeed[machineId] > 0) {
-                                const theoreticalBagsInSlot = lastKnownSpeed[machineId] * runTimeInMinutes;
-                                totalTheoreticalProduction += theoreticalBagsInSlot;
+                                const theoreticalSacksInSlot = (lastKnownSpeed[machineId] / 60) * runTimeInMinutes; // speed is in f/min
+                                totalTheoreticalProductionSacks += theoreticalSacksInSlot;
                             }
                         }
                     });
                 });
+
+                // Get actual production from the production plan for the corresponding day and shift
+                if (relevantPlanProducts) {
+                    const dayOfWeek = (currentDate.getDay() + 6) % 7; // 0=Mon, 1=Tue, ...
+                    const dayKey = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][dayOfWeek];
+                    
+                    relevantPlanProducts.forEach(product => {
+                        const shiftProduction = product.actual[dayKey as keyof typeof product.actual]?.[logShift as 'day' | 'night'] || 0;
+                        totalActualProductionSacks += shiftProduction;
+                    });
+                }
             });
 
+            // --- Final OEE Calculations ---
             const runTime = totalPlannedTime > totalStopTime ? totalPlannedTime - totalStopTime : 0;
             const finalAvailability = totalPlannedTime > 0 ? (runTime / totalPlannedTime) * 100 : 0;
-            const finalPerformance = totalTheoreticalProduction > 0 ? (totalActualProduction / totalTheoreticalProduction) * 100 : 0;
-            const finalQuality = 100;
+            const finalPerformance = totalTheoreticalProductionSacks > 0 ? (totalActualProductionSacks / totalTheoreticalProductionSacks) * 100 : 0;
+            const finalQuality = 100; // Assuming 100% quality for now
             const finalOee = (finalAvailability / 100) * (finalPerformance / 100) * (finalQuality / 100) * 100;
             
             setAvailability(finalAvailability);
@@ -201,6 +222,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             setQuality(finalQuality);
             setOee(finalOee);
             
+            // --- Set State for Charts and Tables ---
             setMachineStops(aggregatedMachineStops);
             setAllStopsInRange(detailedStops);
             setStopTypeDistribution([
