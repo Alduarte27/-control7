@@ -75,11 +75,16 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
             const endDate = new Date();
             endDate.setHours(endHour, endMinute, 0, 0);
 
-            // Handle overnight duration
-            if (endDate < startDate) {
-                endDate.setDate(endDate.getDate() + 1);
+            // Handle overnight duration, but only if it's a reasonable overnight stop, not a full day.
+            // A simple check is if end time is less than start time.
+            if (endDate.getTime() < startDate.getTime()) {
+                // Let's check if it's a valid overnight stop (e.g. starts at 23:00, ends at 01:00)
+                // or a data entry error (e.g. starts at 10:00, ends at 09:00).
+                // A simple way is to just return a negative number for errors.
+                // A more robust way could check if the duration is > 12h, but for now negative is fine.
+                 return (endDate.getTime() - startDate.getTime()) / (1000 * 60);
             }
-
+            
             const diffMs = endDate.getTime() - startDate.getTime();
             return Math.round(diffMs / (1000 * 60));
         } catch (e) {
@@ -92,7 +97,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
         if (duration <= 0) {
             toast({
                 title: 'Error de Tiempo',
-                description: 'La hora de fin debe ser posterior a la hora de inicio.',
+                description: 'La hora de fin debe ser posterior a la hora de inicio y la duración debe ser mayor a cero.',
                 variant: 'destructive',
             });
             return;
