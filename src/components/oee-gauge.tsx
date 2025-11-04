@@ -17,6 +17,12 @@ type OeeGaugeProps = {
 };
 
 const OeeGauge = ({ label, value, color, icon: Icon, description, isPrimary = false }: OeeGaugeProps) => {
+  const [isClient, setIsClient] = React.useState(false);
+
+  React.useEffect(() => {
+    setIsClient(true);
+  }, []);
+
   const data = [
     { name: 'value', value: value },
     { name: 'remainder', value: 100 - value },
@@ -34,30 +40,36 @@ const OeeGauge = ({ label, value, color, icon: Icon, description, isPrimary = fa
               </CardTitle>
             </CardHeader>
             <CardContent className="flex-1 flex flex-col items-center justify-center">
-              <div style={{ width: '100%', height: '120px' }}>
-                <PieChart width={160} height={120} >
-                  <Pie
-                    data={data}
-                    cx="50%"
-                    cy="100%"
-                    startAngle={180}
-                    endAngle={0}
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={0}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    <Cell fill={color} />
-                    <Cell fill="hsl(var(--muted))" />
-                  </Pie>
-                </PieChart>
-                 <div className="absolute bottom-6 text-center">
-                    <span className="text-3xl font-bold" style={{ color }}>
-                      {value.toFixed(1)}%
-                    </span>
-                 </div>
-              </div>
+              {isClient ? (
+                <div style={{ width: '100%', height: '120px' }}>
+                  <PieChart width={160} height={120} >
+                    <Pie
+                      data={data}
+                      cx="50%"
+                      cy="100%"
+                      startAngle={180}
+                      endAngle={0}
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={0}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      <Cell fill={color} />
+                      <Cell fill="hsl(var(--muted))" />
+                    </Pie>
+                  </PieChart>
+                  <div className="absolute bottom-6 text-center">
+                      <span className="text-3xl font-bold" style={{ color }}>
+                        {value.toFixed(1)}%
+                      </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-[120px] flex items-end justify-center">
+                   <span className="text-3xl font-bold">-</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TooltipTrigger>
