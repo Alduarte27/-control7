@@ -2,14 +2,14 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X, BarChart, Percent, LineChart, TrendingUp, TrendingDown, Target, CheckCircle, ShieldCheck, PieChartIcon } from 'lucide-react';
+import { Factory, ChevronLeft, Calendar as CalendarIcon, Activity, X, BarChart, Percent, LineChart, TrendingUp, TrendingDown, Target, CheckCircle, ShieldCheck, PieChartIcon, AlertTriangle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import type { DailyLog, StopData, StopCause, ProductDefinition, MachineLog, TimeSlot, ProductData } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { format, addDays, eachDayOfInterval } from 'date-fns';
+import { format, addDays, eachDayOfInterval, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -48,6 +48,17 @@ type WeeklyKpiData = {
     quality: number;
 }
 
+type MachineReliabilityKpis = {
+    stopFrequency: number;
+    mtbf: number; // Mean Time Between Failures in hours
+    mttr: number; // Mean Time To Repair in minutes
+}
+
+type StopsByHour = {
+    hour: string;
+    minutes: number;
+}
+
 
 export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: { prefetchedProducts: ProductDefinition[], prefetchedStopCauses: StopCause[]}) {
     const [dateRange, setDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -28), to: new Date() });
@@ -65,6 +76,10 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
     const [quality, setQuality] = React.useState(0);
     const [oee, setOee] = React.useState(0);
     const [weeklyKpis, setWeeklyKpis] = React.useState<WeeklyKpiData[]>([]);
+    
+    // New Reliability KPIs
+    const [machineReliability, setMachineReliability] = React.useState<{[machineId: string]: MachineReliabilityKpis}>({});
+    const [stopsByHour, setStopsByHour] = React.useState<StopsByHour[]>([]);
 
 
     const { toast } = useToast();
@@ -87,6 +102,8 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         setAllStopsInRange([]);
         setStopTypeDistribution([]);
         setWeeklyKpis([]);
+        setMachineReliability({});
+        setStopsByHour([]);
 
         const startId = format(dateRange.from, 'yyyy-MM-dd');
         const endId = format(dateRange.to, 'yyyy-MM-dd');
@@ -130,7 +147,10 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             const aggregatedStopsByReason: { [reason: string]: { totalMinutes: number, color: string } } = {};
             const detailedStops: DetailedStopData[] = [];
             const stopTypes = { planned: 0, unplanned: 0 };
-            
+            const stopsByHourOfDay: {[hour: string]: number} = {};
+
+            const machineReliabilityData: { [machineId: string]: { totalOpTime: number, unplannedStops: number, repairTime: number, stopCount: number }} = {};
+
             let grandTotalPlannedTime = 0;
             let grandTotalStopTime = 0;
             let grandTotalActualProductionSacks = 0;
@@ -151,14 +171,23 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                     const [logDate, logShift] = log.id.split('_');
                     const currentDate = new Date(logDate.replace(/-/g, '/'));
                     
-                    weeklyTotalPlannedTime += 12 * 60;
-                    
+                    const shiftTotalTime = 12 * 60; // 12 hours per shift in minutes
+                    weeklyTotalPlannedTime += shiftTotalTime * 3; // For 3 machines
+
                     if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
+                    Object.keys(log.machines).forEach(machineId => {
+                         if (!machineReliabilityData[machineId]) {
+                            machineReliabilityData[machineId] = { totalOpTime: 0, unplannedStops: 0, repairTime: 0, stopCount: 0 };
+                        }
+                        machineReliabilityData[machineId].totalOpTime += shiftTotalTime;
+                    });
+                    
                     let lastKnownSpeed: { [key: string]: number } = {};
                     Object.entries(log.machines).forEach(([machineId, machineLog]) => {
                         const productDef = prefetchedProducts.find(p => p.id === machineLog.productId);
-                        lastKnownSpeed[machineId] = productDef?.presentationWeight === 0.5 ? 60 : 40;
+                        // Default speed if not defined
+                        lastKnownSpeed[machineId] = 40; 
                     });
 
                     Object.entries(log.timeSlots).forEach(([time, slotData]) => {
@@ -179,9 +208,20 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                         const duration = stop.duration || 0;
                                         weeklyTotalStopTime += duration;
                                         timeSlotStopTime += duration;
+                                        machineReliabilityData[machineId].totalOpTime -= duration;
+                                        machineReliabilityData[machineId].stopCount += 1;
+
+                                        const stopHour = stop.startTime.split(':')[0];
+                                        if(!stopsByHourOfDay[stopHour]) stopsByHourOfDay[stopHour] = 0;
+                                        stopsByHourOfDay[stopHour] += duration;
                                         
-                                        if(stop.type === 'planned') stopTypes.planned += duration;
-                                        else stopTypes.unplanned += duration;
+                                        if(stop.type === 'planned') {
+                                            stopTypes.planned += duration;
+                                        } else {
+                                            stopTypes.unplanned += duration;
+                                            machineReliabilityData[machineId].unplannedStops += 1;
+                                            machineReliabilityData[machineId].repairTime += duration;
+                                        }
 
                                         if (!aggregatedMachineStops[machineId]) aggregatedMachineStops[machineId] = 0;
                                         aggregatedMachineStops[machineId] += duration;
@@ -253,6 +293,17 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             setPerformance(finalPerformance);
             setQuality(finalQuality);
             setOee(finalOee);
+
+            // --- Final Reliability KPIs Calculations ---
+            const finalReliability: {[machineId: string]: MachineReliabilityKpis} = {};
+            Object.entries(machineReliabilityData).forEach(([machineId, data]) => {
+                finalReliability[machineId] = {
+                    stopFrequency: data.stopCount,
+                    mtbf: data.unplannedStops > 0 ? (data.totalOpTime / 60) / data.unplannedStops : data.totalOpTime / 60,
+                    mttr: data.unplannedStops > 0 ? data.repairTime / data.unplannedStops : 0,
+                };
+            });
+            setMachineReliability(finalReliability);
             
             // --- Set State for Charts and Tables ---
             setAllStopsInRange(detailedStops);
@@ -267,6 +318,9 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             const machineStopsDataForChart = Object.entries(aggregatedMachineStops).map(([machineId, minutes]) => ({ name: `Máquina ${machineId.split('_')[1]}`, minutes })).sort((a, b) => b.minutes - a.minutes);
             setMachineStops(machineStopsDataForChart);
             setWeeklyKpis(weeklyKpiResults);
+
+            const hourlyData = Object.entries(stopsByHourOfDay).map(([hour, minutes]) => ({hour: `${hour}:00`, minutes})).sort((a, b) => parseInt(a.hour) - parseInt(b.hour));
+            setStopsByHour(hourlyData);
 
         } catch (error) {
             console.error("Error fetching OEE data:", error);
@@ -379,7 +433,36 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                             <OeeGauge label="Calidad" value={quality} color={getOeeColor("Calidad", quality)} icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (productos 'PB' se consideran no conformes)." />
                             <OeeGauge label="OEE General" value={oee} color={getOeeColor("OEE General", oee)} icon={BarChart} description="Métrica global que combina Disponibilidad, Rendimiento y Calidad." isPrimary />
                         </div>
-
+                        
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>KPIs de Fiabilidad y Mantenimiento por Máquina</CardTitle>
+                                <CardDescription>Indicadores clave para evaluar la confiabilidad de las máquinas y la eficiencia del mantenimiento.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {Object.keys(machineReliability).map(machineId => (
+                                    <Card key={machineId} className="p-4">
+                                        <h4 className="font-bold text-center mb-4">Máquina {machineId.split('_')[1]}</h4>
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center border-b pb-2">
+                                                <Label className="text-sm">Frecuencia de Paradas</Label>
+                                                <span className="font-bold text-lg">{machineReliability[machineId].stopFrequency.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center border-b pb-2">
+                                                <Label className="text-sm">MTBF (horas)</Label>
+                                                <span className="font-bold text-lg text-green-600">{machineReliability[machineId].mtbf.toFixed(1)}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <Label className="text-sm">MTTR (minutos)</Label>
+                                                <span className="font-bold text-lg text-red-600">{machineReliability[machineId].mttr.toFixed(1)}</span>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                ))}
+                                {Object.keys(machineReliability).length === 0 && <p className="text-center text-muted-foreground col-span-full">No hay datos para mostrar.</p>}
+                            </CardContent>
+                        </Card>
+                        
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                            <Card>
                                 <CardHeader>
@@ -497,6 +580,28 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                     </ChartContainer>
                                 ) : (
                                         <p className="col-span-full text-center text-muted-foreground py-8">No se encontraron datos de paradas para este rango.</p>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Análisis de Paradas por Hora del Turno</CardTitle>
+                                <CardDescription>Minutos totales de parada agrupados por la hora en que ocurrieron.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {stopsByHour.length > 0 ? (
+                                    <ChartContainer config={{}} className="w-full h-[300px]">
+                                        <RechartsBarChart data={stopsByHour}>
+                                            <CartesianGrid vertical={false} />
+                                            <XAxis dataKey="hour" tickLine={false} axisLine={false} tickMargin={8} />
+                                            <YAxis />
+                                            <RechartsTooltip formatter={(value: number) => [`${value} min`, 'Minutos de Parada']} />
+                                            <Bar dataKey="minutes" fill="hsl(var(--chart-5))" radius={4} />
+                                        </RechartsBarChart>
+                                    </ChartContainer>
+                                ) : (
+                                    <p className="text-center text-muted-foreground py-8">No hay datos de paradas para analizar por hora.</p>
                                 )}
                             </CardContent>
                         </Card>
