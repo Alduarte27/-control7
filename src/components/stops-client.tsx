@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Download } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Download, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,6 +25,7 @@ import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogT
 import { Separator } from './ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import LogExportDialog from './log-export-dialog';
+import LogHelpDialog from './log-help-dialog';
 
 
 const NUM_MACHINES = 3;
@@ -322,6 +323,7 @@ export default function StopsClient({
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const [exportModalOpen, setExportModalOpen] = React.useState(false);
+    const [helpModalOpen, setHelpModalOpen] = React.useState(false);
     const { toast } = useToast();
     const [isAdminMode, setIsAdminMode] = React.useState(false);
     const [weightHeaderType, setWeightHeaderType] = React.useState<{ [key: string]: string }>({
@@ -998,6 +1000,16 @@ export default function StopsClient({
                                 <TooltipContent><p>Configuración de Bitácora</p></TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button variant="outline" size="icon" onClick={() => setHelpModalOpen(true)}>
+                                        <HelpCircle className="h-4 w-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Ayuda</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     </div>
 
                     <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
@@ -1014,6 +1026,7 @@ export default function StopsClient({
                                 <DropdownMenuItem asChild><Link href="/oee" className="flex items-center"><Activity className="mr-2 h-4 w-4" />Análisis</Link></DropdownMenuItem>
                                 <DropdownMenuItem onClick={handleToggleAdminMode}><Lock className="mr-2 h-4 w-4" />Modo Admin</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => setConfigModalOpen(true)}><Settings className="mr-2 h-4 w-4" />Configuración</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setHelpModalOpen(true)}><HelpCircle className="mr-2 h-4 w-4" />Ayuda</DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
@@ -1283,6 +1296,12 @@ export default function StopsClient({
                     onOpenChange={setExportModalOpen}
                     currentLog={dailyLog}
                     onImport={handleImportedLog}
+                />
+            )}
+             {helpModalOpen && (
+                <LogHelpDialog
+                    isOpen={helpModalOpen}
+                    onClose={() => setHelpModalOpen(false)}
                 />
             )}
         </div>
