@@ -34,10 +34,12 @@ type DetailedStopData = StopData & {
   shift: 'day' | 'night';
 }
 
-type StopTypeDistribution = {
-    name: 'Planificadas' | 'No Planificadas';
+type TimeDistributionData = {
+    name: 'Tiempo Productivo' | 'Tiempo Total de Parada';
     value: number;
     fill: string;
+    plannedMinutes?: number;
+    unplannedMinutes?: number;
 }
 
 type WeeklyKpiData = {
@@ -59,13 +61,20 @@ type StopsByHour = {
     minutes: number;
 }
 
+const formatMinutesToHours = (minutes: number) => {
+    if (minutes === 0) return '0m';
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h > 0 ? `${h}h ` : ''}${m}m`;
+};
+
 
 export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: { prefetchedProducts: ProductDefinition[], prefetchedStopCauses: StopCause[]}) {
     const [dateRange, setDateRange] = React.useState<DateRange | undefined>({ from: addDays(new Date(), -28), to: new Date() });
     const [loading, setLoading] = React.useState(false);
     const [machineStops, setMachineStops] = React.useState<{ name: string, minutes: number }[]>([]);
     const [stopsByReason, setStopsByReason] = React.useState<AggregatedStopData[]>([]);
-    const [stopTypeDistribution, setStopTypeDistribution] = React.useState<StopTypeDistribution[]>([]);
+    const [timeDistribution, setTimeDistribution] = React.useState<TimeDistributionData[]>([]);
     
     const [allStopsInRange, setAllStopsInRange] = React.useState<DetailedStopData[]>([]);
     const [selectedReason, setSelectedReason] = React.useState<string | null>(null);
@@ -100,7 +109,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         setMachineStops([]);
         setStopsByReason([]);
         setAllStopsInRange([]);
-        setStopTypeDistribution([]);
+        setTimeDistribution([]);
         setWeeklyKpis([]);
         setMachineReliability({});
         setStopsByHour([]);
@@ -311,9 +320,9 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             
             // --- Set State for Charts and Tables ---
             setAllStopsInRange(detailedStops);
-            setStopTypeDistribution([
-                { name: 'Planificadas', value: stopTypes.planned, fill: 'hsl(var(--chart-2))' },
-                { name: 'No Planificadas', value: stopTypes.unplanned, fill: 'hsl(var(--chart-5))' },
+            setTimeDistribution([
+                { name: 'Tiempo Productivo', value: grandTotalRunTime, fill: 'hsl(var(--chart-2))' },
+                { name: 'Tiempo Total de Parada', value: grandTotalStopTime, fill: 'hsl(var(--chart-5))', plannedMinutes: stopTypes.planned, unplannedMinutes: stopTypes.unplanned },
             ]);
 
             const reasonData = Object.entries(aggregatedStopsByReason).map(([reason, data]) => ({ name: reason, totalMinutes: data.totalMinutes, color: data.color })).sort((a,b) => b.totalMinutes - a.totalMinutes);
@@ -483,7 +492,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                 <XAxis type="number" dataKey="minutes" />
                                                 <RechartsTooltip 
                                                     cursor={{ fill: 'rgba(200, 200, 200, 0.1)'}}
-                                                    formatter={(value: number) => [`${Math.floor(value / 60)}h ${value % 60}m`, "Tiempo de Parada"]}
+                                                    formatter={(value: number) => [`${formatMinutesToHours(value)} (${value} min)`, "Tiempo de Parada"]}
                                                 />
                                                 <Bar dataKey="minutes" name="Minutos" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
                                             </RechartsBarChart>
@@ -495,19 +504,28 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                             </Card>
                              <Card>
                                 <CardHeader>
-                                    <CardTitle>Distribución de Paradas</CardTitle>
-                                    <CardDescription>Proporción del tiempo de parada total clasificado como planificado vs. no planificado.</CardDescription>
+                                    <CardTitle>Distribución del Tiempo Total</CardTitle>
+                                    <CardDescription>Comparación del tiempo total productivo vs. el tiempo total de parada en el período.</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    {stopTypeDistribution.some(d => d.value > 0) ? (
+                                    {timeDistribution.some(d => d.value > 0) ? (
                                         <ChartContainer config={{}} className="w-full h-[250px]">
                                             <RechartsPieChart>
                                                 <RechartsTooltip 
-                                                  formatter={(value, name) => [`${value} min`, name]}
+                                                  formatter={(value, name, props) => {
+                                                      const { payload } = props;
+                                                      if (name === 'Tiempo Total de Parada') {
+                                                          return [
+                                                              `${formatMinutesToHours(value as number)} (${value} min)`,
+                                                              `${name} (Planificadas: ${payload.plannedMinutes} min, No Planificadas: ${payload.unplannedMinutes} min)`
+                                                          ];
+                                                      }
+                                                      return [`${formatMinutesToHours(value as number)} (${value} min)`, name];
+                                                  }}
                                                 />
                                                 <Legend />
                                                 <Pie
-                                                    data={stopTypeDistribution}
+                                                    data={timeDistribution}
                                                     dataKey="value"
                                                     nameKey="name"
                                                     cx="50%"
@@ -515,14 +533,14 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                     outerRadius={80}
                                                     label={({ percent }) => `${(percent * 100).toFixed(1)}%`}
                                                 >
-                                                    {stopTypeDistribution.map((entry) => (
+                                                    {timeDistribution.map((entry) => (
                                                         <Cell key={`cell-${entry.name}`} fill={entry.fill} />
                                                     ))}
                                                 </Pie>
                                             </RechartsPieChart>
                                         </ChartContainer>
                                     ) : (
-                                        <p className="text-center text-muted-foreground py-8">No hay datos de paradas para mostrar.</p>
+                                        <p className="text-center text-muted-foreground py-8">No hay datos de producción o paradas.</p>
                                     )}
                                 </CardContent>
                             </Card>
@@ -570,9 +588,8 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                 <YAxis dataKey="name" type="category" width={150} tick={{ fontSize: 12 }} interval={0}/>
                                                 <RechartsTooltip
                                                     cursor={{ fill: 'rgba(200, 200, 200, 0.2)' }}
-                                                    content={<ChartTooltipContent />}
+                                                    formatter={(value: number) => [`${formatMinutesToHours(value)} (${value} min)`, "Duración Total"]}
                                                 />
-                                                <Legend />
                                                 <Bar dataKey="totalMinutes" name="Minutos" radius={[0, 4, 4, 0]} cursor="pointer">
                                                     {stopsByReason.map((entry) => (
                                                         <Cell key={`cell-${entry.name}`} fill={entry.color}
@@ -601,7 +618,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                             <CartesianGrid vertical={false} />
                                             <XAxis dataKey="hour" tickLine={false} axisLine={false} tickMargin={8} />
                                             <YAxis />
-                                            <RechartsTooltip formatter={(value: number) => [`${value} min`, 'Minutos de Parada']} />
+                                            <RechartsTooltip formatter={(value: number) => [`${formatMinutesToHours(value)} (${value} min)`, 'Minutos de Parada']} />
                                             <Bar dataKey="minutes" fill="hsl(var(--chart-5))" radius={4} />
                                         </RechartsBarChart>
                                     </ChartContainer>
@@ -634,7 +651,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                     <TableHead>Máquina</TableHead>
                                                     <TableHead>Hora Inicio</TableHead>
                                                     <TableHead>Hora Fin</TableHead>
-                                                    <TableHead className="text-right">Duración (min)</TableHead>
+                                                    <TableHead className="text-right">Duración</TableHead>
                                                     <TableHead>Causa Específica</TableHead>
                                                     <TableHead>Solución</TableHead>
                                                 </TableRow>
@@ -647,7 +664,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                         <TableCell>{stop.machineId}</TableCell>
                                                         <TableCell>{stop.startTime}</TableCell>
                                                         <TableCell>{stop.endTime}</TableCell>
-                                                        <TableCell className="text-right font-medium">{stop.duration}</TableCell>
+                                                        <TableCell className="text-right font-medium">{formatMinutesToHours(stop.duration)} ({stop.duration} min)</TableCell>
                                                         <TableCell>{stop.cause || '-'}</TableCell>
                                                         <TableCell>{stop.solution || '-'}</TableCell>
                                                     </TableRow>
