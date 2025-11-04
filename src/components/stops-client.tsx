@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Download, HelpCircle } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Upload, HelpCircle, FileUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,7 +25,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
 import { Separator } from './ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
-import LogExportDialog from './log-export-dialog';
+import LogImportWizard from './log-import-wizard';
 import LogHelpDialog from './log-help-dialog';
 
 
@@ -323,7 +323,7 @@ export default function StopsClient({
     const [date, setDate] = React.useState<Date>(initialDate ? parse(initialDate, 'yyyy-MM-dd', new Date()) : new Date());
     const [modalState, setModalState] = React.useState<{isOpen: boolean; machineId: string; timeSlot: string; stopData?: StopData} | null>(null);
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
-    const [exportModalOpen, setExportModalOpen] = React.useState(false);
+    const [importWizardOpen, setImportWizardOpen] = React.useState(false);
     const [helpModalOpen, setHelpModalOpen] = React.useState(false);
     const { toast } = useToast();
     const [isAdminMode, setIsAdminMode] = React.useState(false);
@@ -357,7 +357,7 @@ export default function StopsClient({
         const machineEntries: { [machineId: string]: MachineLog } = {};
         for (let i = 1; i <= NUM_MACHINES; i++) {
              machineEntries[`machine_${i}`] = {
-                productId: prefetchedProducts?.[0]?.id || '',
+                productId: '',
              };
         }
         return {
@@ -369,7 +369,7 @@ export default function StopsClient({
             machines: machineEntries,
             timeSlots: {}
         };
-    }, [prefetchedProducts]);
+    }, []);
 
     const handleSaveLog = React.useCallback(async (logToSave: DailyLog | null, showToast = true) => {
         if (!logToSave || !logToSave.id) return;
@@ -415,7 +415,7 @@ export default function StopsClient({
                 for (let i = 1; i <= NUM_MACHINES; i++) {
                     const machineId = `machine_${i}`;
                     if (!logData.machines[machineId]) {
-                        logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
+                        logData.machines[machineId] = { productId: '' };
                     }
                 }
 
@@ -694,11 +694,20 @@ export default function StopsClient({
         }
     };
 
-    const handleImportedLog = async (log: DailyLog) => {
-        setDailyLog(log);
-        await handleSaveLog(log, true);
-        toast({ title: "Importación Exitosa", description: "Los datos de la bitácora han sido cargados y guardados." });
-    };
+    const handleImportComplete = () => {
+      setImportWizardOpen(false);
+      // Reload current log to reflect imported data
+      const currentShift = dailyLog?.shift || initialShift || 'day';
+      const logId = `${format(date, 'yyyy-MM-dd')}_${currentShift}`;
+      const logDocRef = doc(db, 'dailyLogs', logId);
+      
+      getDoc(logDocRef).then((logDocSnap) => {
+        if (logDocSnap.exists()) {
+          setDailyLog(logDocSnap.data() as DailyLog);
+        }
+      });
+      toast({title: "Importación Finalizada", description: "Los datos han sido cargados."});
+    }
 
     const allStops = React.useMemo(() => {
         if (!dailyLog) return [];
@@ -973,11 +982,11 @@ export default function StopsClient({
                          <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    <Button variant="outline" size="icon" onClick={() => setExportModalOpen(true)}>
-                                        <Download className="h-4 w-4" />
+                                    <Button variant="outline" size="icon" onClick={() => setImportWizardOpen(true)}>
+                                        <FileUp className="h-4 w-4" />
                                     </Button>
                                 </TooltipTrigger>
-                                <TooltipContent><p>Importar / Exportar</p></TooltipContent>
+                                <TooltipContent><p>Importar desde CSV</p></TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
                         <TooltipProvider>
@@ -1021,7 +1030,7 @@ export default function StopsClient({
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => handleSaveLog(dailyLog, true)}><Save className="mr-2 h-4 w-4"/>Guardar</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setExportModalOpen(true)}><Download className="mr-2 h-4 w-4" />Importar / Exportar</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setImportWizardOpen(true)}><FileUp className="mr-2 h-4 w-4" />Importar desde CSV</DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/log-history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial</Link></DropdownMenuItem>
                                 <DropdownMenuItem asChild><Link href="/oee" className="flex items-center"><Activity className="mr-2 h-4 w-4" />Análisis</Link></DropdownMenuItem>
                                 <DropdownMenuItem onClick={handleToggleAdminMode}><Lock className="mr-2 h-4 w-4" />Modo Admin</DropdownMenuItem>
@@ -1107,10 +1116,11 @@ export default function StopsClient({
                                                     <SelectTrigger className="h-8 text-xs bg-card justify-center">
                                                         <div className="flex items-center gap-2 truncate">
                                                             {familiarProducts.find(p => p.id === dailyLog.machines['machine_1']?.productId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === dailyLog.machines['machine_1']?.productId)?.color || '#ccc' }}></span>}
-                                                            <SelectValue placeholder="Producto" />
+                                                            <SelectValue placeholder="-- Sin Producción --" />
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
+                                                         <SelectItem value="">-- Sin Producción --</SelectItem>
                                                         {familiarProducts.map(p => (
                                                             <SelectItem key={p.id} value={p.id}>
                                                                 <div className="flex items-center gap-2">
@@ -1127,10 +1137,11 @@ export default function StopsClient({
                                                     <SelectTrigger className="h-8 text-xs bg-card justify-center">
                                                         <div className="flex items-center gap-2 truncate">
                                                             {familiarProducts.find(p => p.id === dailyLog.machines['machine_2']?.productId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === dailyLog.machines['machine_2']?.productId)?.color || '#ccc' }}></span>}
-                                                            <SelectValue placeholder="Producto" />
+                                                            <SelectValue placeholder="-- Sin Producción --" />
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
+                                                         <SelectItem value="">-- Sin Producción --</SelectItem>
                                                         {familiarProducts.map(p => (
                                                             <SelectItem key={p.id} value={p.id}>
                                                                 <div className="flex items-center gap-2">
@@ -1147,10 +1158,11 @@ export default function StopsClient({
                                                     <SelectTrigger className="h-8 text-xs bg-card justify-center">
                                                         <div className="flex items-center gap-2 truncate">
                                                             {familiarProducts.find(p => p.id === dailyLog.machines['machine_3']?.productId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === dailyLog.machines['machine_3']?.productId)?.color || '#ccc' }}></span>}
-                                                            <SelectValue placeholder="Producto" />
+                                                            <SelectValue placeholder="-- Sin Producción --" />
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
+                                                         <SelectItem value="">-- Sin Producción --</SelectItem>
                                                         {familiarProducts.map(p => (
                                                             <SelectItem key={p.id} value={p.id}>
                                                                 <div className="flex items-center gap-2">
@@ -1290,12 +1302,14 @@ export default function StopsClient({
                     onConfigSave={handleConfigSave}
                 />
             )}
-             {exportModalOpen && dailyLog && (
-                <LogExportDialog
-                    open={exportModalOpen}
-                    onOpenChange={setExportModalOpen}
-                    currentLog={dailyLog}
-                    onImport={handleImportedLog}
+             {importWizardOpen && (
+                <LogImportWizard
+                    isOpen={importWizardOpen}
+                    onClose={() => setImportWizardOpen(false)}
+                    onImportComplete={handleImportComplete}
+                    stopCauses={stopCauses}
+                    operators={operators}
+                    supervisors={supervisors}
                 />
             )}
              {helpModalOpen && (
