@@ -59,7 +59,7 @@ const OeeGauge = ({ label, value, color, icon: Icon, description, isPrimary = fa
                       <Cell fill="hsl(var(--muted))" />
                     </Pie>
                   </PieChart>
-                  <div className="absolute inset-x-0 bottom-0 flex items-center justify-center">
+                  <div className="absolute inset-0 flex items-center justify-center bottom-2">
                       <span className="text-2xl font-bold" style={{ color }}>
                         {value.toFixed(1)}%
                       </span>
