@@ -1137,44 +1137,41 @@ export default function StopsClient({
                                         </tr>
                                         <tr className="divide-x divide-border text-muted-foreground font-normal">
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
-                                            
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
-                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50">
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">
                                                 <Select value={weightHeaderType['machine_1']} onValueChange={(val) => setWeightHeaderType(p => ({...p, machine_1: val}))}>
                                                     <SelectTrigger className="h-8 text-xs bg-card border-none focus:ring-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="weight">Peso/Saco KG</SelectItem>
-                                                        <SelectItem value="bundle_weight">Peso/Fardo KG</SelectItem>
+                                                        <SelectItem value="weight">P/Saco</SelectItem>
+                                                        <SelectItem value="bundle_weight">P/Fardo</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
-                                            
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
-                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50">
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">
                                                  <Select value={weightHeaderType['machine_2']} onValueChange={(val) => setWeightHeaderType(p => ({...p, machine_2: val}))}>
                                                     <SelectTrigger className="h-8 text-xs bg-card border-none focus:ring-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="weight">Peso/Saco KG</SelectItem>
-                                                        <SelectItem value="bundle_weight">Peso/Fardo KG</SelectItem>
+                                                        <SelectItem value="weight">P/Saco</SelectItem>
+                                                        <SelectItem value="bundle_weight">P/Fardo</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
-                                            
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
-                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50">
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">
                                                  <Select value={weightHeaderType['machine_3']} onValueChange={(val) => setWeightHeaderType(p => ({...p, machine_3: val}))}>
                                                     <SelectTrigger className="h-8 text-xs bg-card border-none focus:ring-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="weight">Peso/Saco KG</SelectItem>
-                                                        <SelectItem value="bundle_weight">Peso/Fardo KG</SelectItem>
+                                                        <SelectItem value="weight">P/Saco</SelectItem>
+                                                        <SelectItem value="bundle_weight">P/Fardo</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </th>
@@ -1206,7 +1203,7 @@ export default function StopsClient({
                                                     return (
                                                         <React.Fragment key={machineId}>
                                                             {observationCell(time, machineId)}
-                                                            {inputCell(time, 'weight', machineId)}
+                                                            {inputCell(time, weightHeaderType[machineId] as keyof TimeSlot, machineId)}
                                                             {inputCell(time, 'speed', machineId)}
                                                         </React.Fragment>
                                                     )
