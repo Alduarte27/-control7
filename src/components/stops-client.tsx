@@ -323,6 +323,11 @@ export default function StopsClient({
     const [configModalOpen, setConfigModalOpen] = React.useState(false);
     const { toast } = useToast();
     const [isAdminMode, setIsAdminMode] = React.useState(false);
+    const [weightHeaderType, setWeightHeaderType] = React.useState<{ [key: string]: string }>({
+        machine_1: 'weight',
+        machine_2: 'weight',
+        machine_3: 'weight',
+    });
 
     const [saveStatus, setSaveStatus] = React.useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle');
     const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -1066,32 +1071,66 @@ export default function StopsClient({
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
-                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => {
-                                                const machineId = `machine_${i + 1}`;
-                                                const selectedProductId = dailyLog.machines[machineId]?.productId || '';
-                                                return (
-                                                    <th key={`product_selector_${i}`} className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50 w-[372px]" colSpan={3}>
-                                                        <Select value={selectedProductId} onValueChange={(val) => handleMachineProductChange(machineId, val)}>
-                                                            <SelectTrigger className="h-8 text-xs bg-card justify-center">
-                                                                <div className="flex items-center gap-2 truncate">
-                                                                    {familiarProducts.find(p => p.id === selectedProductId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === selectedProductId)?.color || '#ccc' }}></span>}
-                                                                    <SelectValue placeholder="Producto" />
+                                            <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50 w-[372px]" colSpan={3}>
+                                                 <Select value={dailyLog.machines['machine_1']?.productId || ''} onValueChange={(val) => handleMachineProductChange('machine_1', val)}>
+                                                    <SelectTrigger className="h-8 text-xs bg-card justify-center">
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            {familiarProducts.find(p => p.id === dailyLog.machines['machine_1']?.productId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === dailyLog.machines['machine_1']?.productId)?.color || '#ccc' }}></span>}
+                                                            <SelectValue placeholder="Producto" />
+                                                        </div>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {familiarProducts.map(p => (
+                                                            <SelectItem key={p.id} value={p.id}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
+                                                                    <span>{p.productName}</span>
                                                                 </div>
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                {familiarProducts.map(p => (
-                                                                    <SelectItem key={p.id} value={p.id}>
-                                                                        <div className="flex items-center gap-2">
-                                                                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
-                                                                            <span>{p.productName}</span>
-                                                                        </div>
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </th>
-                                                );
-                                            })}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </th>
+                                            <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50 w-[372px]" colSpan={3}>
+                                                 <Select value={dailyLog.machines['machine_2']?.productId || ''} onValueChange={(val) => handleMachineProductChange('machine_2', val)}>
+                                                    <SelectTrigger className="h-8 text-xs bg-card justify-center">
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            {familiarProducts.find(p => p.id === dailyLog.machines['machine_2']?.productId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === dailyLog.machines['machine_2']?.productId)?.color || '#ccc' }}></span>}
+                                                            <SelectValue placeholder="Producto" />
+                                                        </div>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {familiarProducts.map(p => (
+                                                            <SelectItem key={p.id} value={p.id}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
+                                                                    <span>{p.productName}</span>
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </th>
+                                            <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50 w-[372px]" colSpan={3}>
+                                                 <Select value={dailyLog.machines['machine_3']?.productId || ''} onValueChange={(val) => handleMachineProductChange('machine_3', val)}>
+                                                    <SelectTrigger className="h-8 text-xs bg-card justify-center">
+                                                        <div className="flex items-center gap-2 truncate">
+                                                            {familiarProducts.find(p => p.id === dailyLog.machines['machine_3']?.productId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === dailyLog.machines['machine_3']?.productId)?.color || '#ccc' }}></span>}
+                                                            <SelectValue placeholder="Producto" />
+                                                        </div>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {familiarProducts.map(p => (
+                                                            <SelectItem key={p.id} value={p.id}>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: p.color || '#ccc' }}></span>
+                                                                    <span>{p.productName}</span>
+                                                                </div>
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </th>
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9}>GRASSHOPPER</th>
                                             <th className="p-1 bg-blue-100 dark:bg-blue-900/50" colSpan={3}>Familiar</th>
                                             <th className="p-1 bg-blue-100 dark:bg-blue-900/50" colSpan={3}>Granel 50 KG</th>
@@ -1100,15 +1139,45 @@ export default function StopsClient({
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
                                             
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
-                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">P/sacos/fardo</th>
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50">
+                                                <Select value={weightHeaderType['machine_1']} onValueChange={(val) => setWeightHeaderType(p => ({...p, machine_1: val}))}>
+                                                    <SelectTrigger className="h-8 text-xs bg-card border-none focus:ring-0">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="weight">Peso/Saco KG</SelectItem>
+                                                        <SelectItem value="bundle_weight">Peso/Fardo KG</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
                                             
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
-                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">P/sacos/fardo</th>
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50">
+                                                 <Select value={weightHeaderType['machine_2']} onValueChange={(val) => setWeightHeaderType(p => ({...p, machine_2: val}))}>
+                                                    <SelectTrigger className="h-8 text-xs bg-card border-none focus:ring-0">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="weight">Peso/Saco KG</SelectItem>
+                                                        <SelectItem value="bundle_weight">Peso/Fardo KG</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
                                             
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
-                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">P/sacos/fardo</th>
+                                            <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50">
+                                                 <Select value={weightHeaderType['machine_3']} onValueChange={(val) => setWeightHeaderType(p => ({...p, machine_3: val}))}>
+                                                    <SelectTrigger className="h-8 text-xs bg-card border-none focus:ring-0">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="weight">Peso/Saco KG</SelectItem>
+                                                        <SelectItem value="bundle_weight">Peso/Fardo KG</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
 
                                             <th className="p-1 font-normal bg-green-100 dark:bg-green-900/50 min-w-[3rem]">Masa</th>
@@ -1195,6 +1264,4 @@ export default function StopsClient({
         </div>
     );
 }
-
-
 
