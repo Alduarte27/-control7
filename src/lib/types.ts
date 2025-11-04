@@ -116,7 +116,7 @@ export type MachineLog = {
 };
 
 export type DailyLog = {
-  id: string; // YYYY-MM-DD
+  id: string; // YYYY-MM-DD_shift
   operador: string;
   supervisor: string;
   lote: string;
