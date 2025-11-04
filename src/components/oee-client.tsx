@@ -174,8 +174,9 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                     const shiftTotalTime = 12 * 60; // 12 hours per shift in minutes
                     weeklyTotalPlannedTime += shiftTotalTime * 3; // For 3 machines
 
-                    if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
-
+                    if (!log.machines || typeof log.machines !== 'object') {
+                        log.machines = {};
+                    }
                     Object.keys(log.machines).forEach(machineId => {
                          if (!machineReliabilityData[machineId]) {
                             machineReliabilityData[machineId] = { totalOpTime: 0, unplannedStops: 0, repairTime: 0, stopCount: 0 };
@@ -190,6 +191,9 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                         lastKnownSpeed[machineId] = 40; 
                     });
 
+                    if (!log.timeSlots || typeof log.timeSlots !== 'object') {
+                        log.timeSlots = {};
+                    }
                     Object.entries(log.timeSlots).forEach(([time, slotData]) => {
                         if (!slotData || typeof slotData !== 'object') return;
 
@@ -425,13 +429,14 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
                  {loading ? <p className="text-center pt-8">Cargando datos de análisis...</p> : (
                     <div className='space-y-6'>
-                        <OeeExplanation />
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <OeeGauge label="Disponibilidad" value={availability} color={getOeeColor("Disponibilidad", availability)} icon={CheckCircle} description="Porcentaje del tiempo planificado que el equipo estuvo realmente en producción." />
-                            <OeeGauge label="Rendimiento" value={performance} color={getOeeColor("Rendimiento", performance)} icon={Target} description="Velocidad de producción como un porcentaje de su capacidad máxima teórica." />
-                            <OeeGauge label="Calidad" value={quality} color={getOeeColor("Calidad", quality)} icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (productos 'PB' se consideran no conformes)." />
-                            <OeeGauge label="OEE General" value={oee} color={getOeeColor("OEE General", oee)} icon={BarChart} description="Métrica global que combina Disponibilidad, Rendimiento y Calidad." isPrimary />
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <OeeExplanation />
+                            <div className="grid grid-cols-2 gap-4">
+                                <OeeGauge label="Disponibilidad" value={availability} color={getOeeColor("Disponibilidad", availability)} icon={CheckCircle} description="Porcentaje del tiempo planificado que el equipo estuvo realmente en producción." />
+                                <OeeGauge label="Rendimiento" value={performance} color={getOeeColor("Rendimiento", performance)} icon={Target} description="Velocidad de producción como un porcentaje de su capacidad máxima teórica." />
+                                <OeeGauge label="Calidad" value={quality} color={getOeeColor("Calidad", quality)} icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (productos 'PB' se consideran no conformes)." />
+                                <OeeGauge label="OEE General" value={oee} color={getOeeColor("OEE General", oee)} icon={BarChart} description="Métrica global que combina Disponibilidad, Rendimiento y Calidad." isPrimary />
+                            </div>
                         </div>
                         
                         <Card>
