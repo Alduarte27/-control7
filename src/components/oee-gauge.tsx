@@ -41,14 +41,14 @@ const OeeGauge = ({ label, value, color, icon: Icon, description, isPrimary = fa
             </CardHeader>
             <CardContent className="flex-1 flex flex-col items-center justify-center pt-2">
               {isClient ? (
-                <div className="relative w-[120px] h-[100px] flex items-center justify-center">
-                  <PieChart width={100} height={100}>
+                <div className="relative w-[120px] h-[120px] flex items-center justify-center">
+                  <PieChart width={120} height={120}>
                     <Pie
                       data={data}
                       cx="50%"
                       cy="50%"
-                      innerRadius={38}
-                      outerRadius={50}
+                      innerRadius={45}
+                      outerRadius={55}
                       paddingAngle={0}
                       dataKey="value"
                       stroke="none"
@@ -66,7 +66,7 @@ const OeeGauge = ({ label, value, color, icon: Icon, description, isPrimary = fa
                   </div>
                 </div>
               ) : (
-                <div className="h-[100px] flex items-center justify-center">
+                <div className="h-[120px] flex items-center justify-center">
                    <span className="text-2xl font-bold">-</span>
                 </div>
               )}
