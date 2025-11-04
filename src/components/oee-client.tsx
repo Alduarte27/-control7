@@ -61,6 +61,13 @@ type StopsByHour = {
     minutes: number;
 }
 
+type PerMachineOee = {
+    oee: number;
+    availability: number;
+    performance: number;
+    quality: number;
+}
+
 const formatMinutesToHours = (minutes: number) => {
     if (minutes === 0) return '0m';
     const h = Math.floor(minutes / 60);
@@ -85,6 +92,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
     const [quality, setQuality] = React.useState(0);
     const [oee, setOee] = React.useState(0);
     const [weeklyKpis, setWeeklyKpis] = React.useState<WeeklyKpiData[]>([]);
+    const [perMachineOee, setPerMachineOee] = React.useState<{[machineId: string]: PerMachineOee}>({});
     
     // New Reliability KPIs
     const [machineReliability, setMachineReliability] = React.useState<{[machineId: string]: MachineReliabilityKpis}>({});
@@ -113,6 +121,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         setWeeklyKpis([]);
         setMachineReliability({});
         setStopsByHour([]);
+        setPerMachineOee({});
 
         const startId = format(dateRange.from, 'yyyy-MM-dd');
         const endId = format(dateRange.to, 'yyyy-MM-dd');
@@ -159,6 +168,17 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             const stopsByHourOfDay: {[hour: string]: number} = {};
 
             const machineReliabilityData: { [machineId: string]: { totalOpTime: number, unplannedStops: number, repairTime: number, stopCount: number }} = {};
+            
+            // Per Machine OEE data
+            const perMachineTotals: {
+                [machineId: string]: {
+                    plannedTime: number;
+                    stopTime: number;
+                    actualProductionSacks: number;
+                    goodProductionSacks: number;
+                    theoreticalProductionSacks: number;
+                }
+            } = {};
 
             let grandTotalPlannedTime = 0;
             let grandTotalStopTime = 0;
@@ -180,13 +200,19 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                     const [logDate, logShift] = log.id.split('_');
                     const currentDate = new Date(logDate.replace(/-/g, '/'));
                     
-                    const shiftTotalTime = 12 * 60; // 12 hours per shift in minutes
-                    weeklyTotalPlannedTime += shiftTotalTime * 3; // For 3 machines
-
                     if (!log.machines || typeof log.machines !== 'object') {
                         log.machines = {};
                     }
+
                     Object.keys(log.machines).forEach(machineId => {
+                        const shiftTotalTime = 12 * 60; // 12 hours per shift in minutes
+                        weeklyTotalPlannedTime += shiftTotalTime;
+                        
+                        if (!perMachineTotals[machineId]) {
+                            perMachineTotals[machineId] = { plannedTime: 0, stopTime: 0, actualProductionSacks: 0, goodProductionSacks: 0, theoreticalProductionSacks: 0 };
+                        }
+                        perMachineTotals[machineId].plannedTime += shiftTotalTime;
+
                          if (!machineReliabilityData[machineId]) {
                             machineReliabilityData[machineId] = { totalOpTime: 0, unplannedStops: 0, repairTime: 0, stopCount: 0 };
                         }
@@ -195,7 +221,6 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                     
                     let lastKnownSpeed: { [key: string]: number } = {};
                     Object.entries(log.machines).forEach(([machineId, machineLog]) => {
-                        const productDef = prefetchedProducts.find(p => p.id === machineLog.productId);
                         // Default speed if not defined
                         lastKnownSpeed[machineId] = 40; 
                     });
@@ -211,6 +236,8 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 const machineId = key;
                                 const machineData = value as TimeSlot['machine_1'];
                                 
+                                const productDef = prefetchedProducts.find(p => p.id === log.machines[machineId]?.productId);
+
                                 if (typeof machineData.speed === 'number' && machineData.speed > 0) {
                                     lastKnownSpeed[machineId] = machineData.speed;
                                 }
@@ -221,6 +248,11 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                         const duration = stop.duration || 0;
                                         weeklyTotalStopTime += duration;
                                         timeSlotStopTime += duration;
+                                        
+                                        if (perMachineTotals[machineId]) {
+                                            perMachineTotals[machineId].stopTime += duration;
+                                        }
+
                                         machineReliabilityData[machineId].totalOpTime -= duration;
                                         machineReliabilityData[machineId].stopCount += 1;
 
@@ -252,8 +284,31 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 }
                                 
                                 const runTimeInMinutes = 30 - timeSlotStopTime;
+                                const theoreticalSacks = lastKnownSpeed[machineId] * runTimeInMinutes;
+
                                 if (runTimeInMinutes > 0 && lastKnownSpeed[machineId] > 0) {
-                                    weeklyTotalTheoreticalProductionSacks += lastKnownSpeed[machineId] * runTimeInMinutes;
+                                    weeklyTotalTheoreticalProductionSacks += theoreticalSacks;
+                                    if(perMachineTotals[machineId]) {
+                                        perMachineTotals[machineId].theoreticalProductionSacks += theoreticalSacks;
+                                    }
+                                }
+
+                                if (planProducts) {
+                                    const dayOfWeek = (currentDate.getDay() + 6) % 7;
+                                    const dayKey = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'][dayOfWeek];
+                                    
+                                    const productInPlan = planProducts.find(p => p.id === log.machines[machineId]?.productId);
+                                    if(productInPlan) {
+                                        const totalDailyProd = (productInPlan.actual[dayKey as keyof typeof productInPlan.actual]?.[logShift as 'day' | 'night'] || 0);
+                                        const productionInSlot = totalDailyProd / 24; // 24 slots of 30 mins
+                                        
+                                        if(perMachineTotals[machineId]) {
+                                           perMachineTotals[machineId].actualProductionSacks += productionInSlot;
+                                           if (!productDef?.productName.toLowerCase().includes('pb')) {
+                                               perMachineTotals[machineId].goodProductionSacks += productionInSlot;
+                                           }
+                                        }
+                                    }
                                 }
                             }
                         });
@@ -307,6 +362,19 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             setQuality(finalQuality);
             setOee(finalOee);
 
+            // --- Per Machine OEE Final Calculations ---
+            const machineOeeResults: {[machineId: string]: PerMachineOee} = {};
+            Object.entries(perMachineTotals).forEach(([machineId, totals]) => {
+                const runTime = totals.plannedTime - totals.stopTime;
+                const availability = totals.plannedTime > 0 ? (runTime / totals.plannedTime) * 100 : 0;
+                const performance = totals.theoreticalProductionSacks > 0 ? (totals.actualProductionSacks / totals.theoreticalProductionSacks) * 100 : 0;
+                const quality = totals.actualProductionSacks > 0 ? (totals.goodProductionSacks / totals.actualProductionSacks) * 100 : 0;
+                const oee = (availability / 100) * (performance / 100) * (quality / 100) * 100;
+
+                machineOeeResults[machineId] = { oee, availability, performance, quality };
+            });
+            setPerMachineOee(machineOeeResults);
+
             // --- Final Reliability KPIs Calculations ---
             const finalReliability: {[machineId: string]: MachineReliabilityKpis} = {};
             Object.entries(machineReliabilityData).forEach(([machineId, data]) => {
@@ -341,7 +409,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         } finally {
             setLoading(false);
         }
-    }, [dateRange, prefetchedStopCauses, prefetchedProducts, toast]);
+    }, [dateRange, prefetchedStopCauses, toast]);
     
     React.useEffect(() => {
         handleFetchData();
@@ -364,9 +432,9 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         };
         const limits = thresholds[label as keyof typeof thresholds] || thresholds.Disponibilidad;
         
-        if (value < limits.red) return 'hsl(var(--destructive))';
-        if (value < limits.yellow) return 'hsl(var(--chart-4))';
-        return 'hsl(var(--chart-2))';
+        if (value < limits.red) return 'text-red-600';
+        if (value < limits.yellow) return 'text-yellow-500';
+        return 'text-green-600';
     }
 
     const filteredStopsForTable = React.useMemo(() => {
@@ -441,13 +509,45 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <OeeExplanation />
                             <div className="grid grid-cols-2 gap-4">
-                                <OeeGauge label="Disponibilidad" value={availability} color={getOeeColor("Disponibilidad", availability)} icon={CheckCircle} description="Porcentaje del tiempo planificado que el equipo estuvo realmente en producción." />
-                                <OeeGauge label="Rendimiento" value={performance} color={getOeeColor("Rendimiento", performance)} icon={Target} description="Velocidad de producción como un porcentaje de su capacidad máxima teórica." />
-                                <OeeGauge label="Calidad" value={quality} color={getOeeColor("Calidad", quality)} icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (productos 'PB' se consideran no conformes)." />
-                                <OeeGauge label="OEE General" value={oee} color={getOeeColor("OEE General", oee)} icon={BarChart} description="Métrica global que combina Disponibilidad, Rendimiento y Calidad." isPrimary />
+                                <OeeGauge label="Disponibilidad" value={availability} color="hsl(var(--chart-1))" icon={CheckCircle} description="Porcentaje del tiempo planificado que el equipo estuvo realmente en producción." />
+                                <OeeGauge label="Rendimiento" value={performance} color="hsl(var(--chart-2))" icon={Target} description="Velocidad de producción como un porcentaje de su capacidad máxima teórica." />
+                                <OeeGauge label="Calidad" value={quality} color="hsl(var(--chart-3))" icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (productos 'PB' se consideran no conformes)." />
+                                <OeeGauge label="OEE General" value={oee} color="hsl(var(--chart-4))" icon={BarChart} description="Métrica global que combina Disponibilidad, Rendimiento y Calidad." isPrimary />
                             </div>
                         </div>
                         
+                        <Card className="lg:col-span-2">
+                             <CardHeader>
+                                <CardTitle>OEE Detallado por Máquina</CardTitle>
+                                <CardDescription>Indicadores OEE calculados individualmente para cada máquina en el período seleccionado.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                {Object.keys(perMachineOee).length > 0 ? Object.entries(perMachineOee).map(([machineId, kpis]) => (
+                                    <Card key={machineId} className="p-4">
+                                        <h4 className="font-bold text-center mb-4 text-primary">Máquina {machineId.split('_')[1]}</h4>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center border-b pb-2 text-sm">
+                                                <Label>Disponibilidad</Label>
+                                                <span className={cn("font-bold", getOeeColor("Disponibilidad", kpis.availability))}>{kpis.availability.toFixed(1)}%</span>
+                                            </div>
+                                             <div className="flex justify-between items-center border-b pb-2 text-sm">
+                                                <Label>Rendimiento</Label>
+                                                <span className={cn("font-bold", getOeeColor("Rendimiento", kpis.performance))}>{kpis.performance.toFixed(1)}%</span>
+                                            </div>
+                                             <div className="flex justify-between items-center border-b pb-2 text-sm">
+                                                <Label>Calidad</Label>
+                                                <span className={cn("font-bold", getOeeColor("Calidad", kpis.quality))}>{kpis.quality.toFixed(1)}%</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-base pt-2">
+                                                <Label className="font-bold">OEE General</Label>
+                                                <span className={cn("font-extrabold", getOeeColor("OEE General", kpis.oee))}>{kpis.oee.toFixed(1)}%</span>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                )) : <p className="text-center text-muted-foreground col-span-full py-8">No hay datos de OEE por máquina para mostrar.</p>}
+                            </CardContent>
+                        </Card>
+
                         <Card>
                             <CardHeader>
                                 <CardTitle>KPIs de Fiabilidad y Mantenimiento por Máquina</CardTitle>
