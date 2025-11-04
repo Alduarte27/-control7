@@ -65,26 +65,20 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     }, [type, reason, stopCauses]);
 
 
-    const calculateDuration = (start: string, end: string, currentShift: 'day' | 'night'): number => {
+    const calculateDuration = (start: string, end: string): number => {
         try {
             const [startHour, startMinute] = start.split(':').map(Number);
             const [endHour, endMinute] = end.split(':').map(Number);
-            
+
             const startDate = new Date();
             startDate.setHours(startHour, startMinute, 0, 0);
 
             const endDate = new Date();
             endDate.setHours(endHour, endMinute, 0, 0);
             
-            // If end time is before start time
+            // If end time is before start time, assume it's the next day
             if (endDate.getTime() < startDate.getTime()) {
-                // If it's the night shift, it's a valid overnight stop. Add a day to the end date.
-                if (currentShift === 'night') {
-                    endDate.setDate(endDate.getDate() + 1);
-                } else {
-                    // If it's the day shift, it's an error. Return negative duration.
-                    return -1;
-                }
+                endDate.setDate(endDate.getDate() + 1);
             }
             
             const diffMs = endDate.getTime() - startDate.getTime();
@@ -95,11 +89,19 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     };
     
     const handleSave = () => {
-        const duration = calculateDuration(actualStartTime, endTime, shift);
+        const duration = calculateDuration(actualStartTime, endTime);
         if (duration <= 0) {
             toast({
                 title: 'Error de Tiempo',
-                description: 'La hora de fin debe ser posterior a la hora de inicio y la duración debe ser mayor a cero.',
+                description: 'La hora de fin debe ser posterior a la hora de inicio.',
+                variant: 'destructive',
+            });
+            return;
+        }
+        if (duration > 720) { // More than 12 hours
+            toast({
+                title: 'Advertencia de Duración',
+                description: 'La parada excede las 12 horas. Por favor, verifica las horas de inicio y fin.',
                 variant: 'destructive',
             });
             return;
@@ -118,7 +120,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
         });
     };
     
-    const duration = calculateDuration(actualStartTime, endTime, shift);
+    const duration = calculateDuration(actualStartTime, endTime);
     const filteredStopCauses = stopCauses.filter(c => c.type === type);
 
     return (
