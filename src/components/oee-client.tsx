@@ -171,7 +171,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 });
                             }
                             
-                            const runTimeInSlot = (30 - timeSlotStopTime) / 60; // in hours
+                            const runTimeInMinutes = 30 - timeSlotStopTime;
                             
                             // Performance Calculation
                             if (typeof machineData.weight === 'string' && machineData.weight.trim() !== '') {
@@ -181,8 +181,8 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 }
                             }
                             
-                            if (runTimeInSlot > 0 && lastKnownSpeed[machineId] > 0) {
-                                const theoreticalBagsInSlot = lastKnownSpeed[machineId] * runTimeInSlot;
+                            if (runTimeInMinutes > 0 && lastKnownSpeed[machineId] > 0) {
+                                const theoreticalBagsInSlot = lastKnownSpeed[machineId] * runTimeInMinutes;
                                 totalTheoreticalProduction += theoreticalBagsInSlot;
                             }
                         }

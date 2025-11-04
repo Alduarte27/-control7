@@ -810,7 +810,7 @@ export default function StopsClient({
             const rawValue = e.target.value;
             let valueToSet: string | number = isPercentageField ? rawValue.replace(/%/g, '') : rawValue;
             
-            if (field === 'speed' || field === 'weight') {
+            if (field === 'speed') {
                 const num = Number(valueToSet);
                 if (!isNaN(num)) {
                     valueToSet = num;
