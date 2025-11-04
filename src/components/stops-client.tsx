@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -356,7 +357,7 @@ export default function StopsClient({
         const machineEntries: { [machineId: string]: MachineLog } = {};
         for (let i = 1; i <= NUM_MACHINES; i++) {
              machineEntries[`machine_${i}`] = {
-                productId: 'inactive',
+                productId: prefetchedProducts?.[0]?.id || '',
              };
         }
         return {
@@ -368,7 +369,7 @@ export default function StopsClient({
             machines: machineEntries,
             timeSlots: {}
         };
-    }, []);
+    }, [prefetchedProducts]);
 
     const handleSaveLog = React.useCallback(async (logToSave: DailyLog | null, showToast = true) => {
         if (!logToSave || !logToSave.id) return;
@@ -414,7 +415,7 @@ export default function StopsClient({
                 for (let i = 1; i <= NUM_MACHINES; i++) {
                     const machineId = `machine_${i}`;
                     if (!logData.machines[machineId]) {
-                        logData.machines[machineId] = { productId: 'inactive' };
+                        logData.machines[machineId] = { productId: prefetchedProducts?.[0]?.id || '' };
                     }
                 }
 
@@ -543,23 +544,14 @@ export default function StopsClient({
         }
     };
 
-    const handleMachineProductChange = (machineId: string, newProductId: string) => {
-        const oldProductId = dailyLog?.machines[machineId]?.productId;
-        
+    const handleMachineProductChange = (machineId: string, productId: string) => {
+        if (!dailyLog) return;
         triggerChange(prev => {
             const newMachines = { ...prev.machines };
-            if (!newMachines[machineId]) {
-                newMachines[machineId] = { productId: '' };
-            }
-            newMachines[machineId].productId = newProductId;
+            if (!newMachines[machineId]) newMachines[machineId] = { productId: '' };
+            newMachines[machineId].productId = productId;
             return { ...prev, machines: newMachines };
         });
-
-        // If changing from "inactive" to a real product, open the modal
-        if (oldProductId === 'inactive' && newProductId !== 'inactive') {
-            const firstTimeSlot = timeSlotsForTable[0] || '07:00';
-            setModalState({ isOpen: true, machineId: machineId, timeSlot: firstTimeSlot });
-        }
     };
 
     const handleCellChange = (timeSlot: string, field: keyof TimeSlot, value: string | number, machineId?: string) => {
@@ -1111,7 +1103,7 @@ export default function StopsClient({
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
                                             <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" colSpan={3}>
-                                                 <Select value={dailyLog.machines['machine_1']?.productId || 'inactive'} onValueChange={(val) => handleMachineProductChange('machine_1', val)}>
+                                                 <Select value={dailyLog.machines['machine_1']?.productId} onValueChange={(val) => handleMachineProductChange('machine_1', val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card justify-center">
                                                         <div className="flex items-center gap-2 truncate">
                                                             {familiarProducts.find(p => p.id === dailyLog.machines['machine_1']?.productId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === dailyLog.machines['machine_1']?.productId)?.color || '#ccc' }}></span>}
@@ -1119,7 +1111,6 @@ export default function StopsClient({
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="inactive">-- Sin Producción --</SelectItem>
                                                         {familiarProducts.map(p => (
                                                             <SelectItem key={p.id} value={p.id}>
                                                                 <div className="flex items-center gap-2">
@@ -1132,7 +1123,7 @@ export default function StopsClient({
                                                 </Select>
                                             </th>
                                             <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" colSpan={3}>
-                                                 <Select value={dailyLog.machines['machine_2']?.productId || 'inactive'} onValueChange={(val) => handleMachineProductChange('machine_2', val)}>
+                                                 <Select value={dailyLog.machines['machine_2']?.productId} onValueChange={(val) => handleMachineProductChange('machine_2', val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card justify-center">
                                                         <div className="flex items-center gap-2 truncate">
                                                             {familiarProducts.find(p => p.id === dailyLog.machines['machine_2']?.productId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === dailyLog.machines['machine_2']?.productId)?.color || '#ccc' }}></span>}
@@ -1140,7 +1131,6 @@ export default function StopsClient({
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="inactive">-- Sin Producción --</SelectItem>
                                                         {familiarProducts.map(p => (
                                                             <SelectItem key={p.id} value={p.id}>
                                                                 <div className="flex items-center gap-2">
@@ -1153,7 +1143,7 @@ export default function StopsClient({
                                                 </Select>
                                             </th>
                                             <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" colSpan={3}>
-                                                 <Select value={dailyLog.machines['machine_3']?.productId || 'inactive'} onValueChange={(val) => handleMachineProductChange('machine_3', val)}>
+                                                 <Select value={dailyLog.machines['machine_3']?.productId} onValueChange={(val) => handleMachineProductChange('machine_3', val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card justify-center">
                                                         <div className="flex items-center gap-2 truncate">
                                                             {familiarProducts.find(p => p.id === dailyLog.machines['machine_3']?.productId) && <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: familiarProducts.find(p => p.id === dailyLog.machines['machine_3']?.productId)?.color || '#ccc' }}></span>}
@@ -1161,7 +1151,6 @@ export default function StopsClient({
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="inactive">-- Sin Producción --</SelectItem>
                                                         {familiarProducts.map(p => (
                                                             <SelectItem key={p.id} value={p.id}>
                                                                 <div className="flex items-center gap-2">
