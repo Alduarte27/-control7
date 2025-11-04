@@ -114,6 +114,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             let totalPlannedTime = 0;
             let totalStopTime = 0;
             let totalActualProductionSacks = 0;
+            let totalGoodProductionSacks = 0;
             let totalTheoreticalProductionSacks = 0;
             let lastKnownSpeed: { [key: string]: number } = {};
 
@@ -123,7 +124,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
 
                 const log = doc.data() as DailyLog;
                 const [logDate, logShift] = doc.id.split('_');
-                const currentDate = new Date(logDate);
+                const currentDate = new Date(logDate.replace(/-/g, '/')); // Safer date parsing
                 
                 const planIdForDate = `${format(currentDate, 'yyyy')}-W${format(currentDate, 'w', { locale: es })}`;
                 const relevantPlanProducts = plansMap.get(planIdForDate);
@@ -132,11 +133,12 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                 
                 if (!log.timeSlots || typeof log.timeSlots !== 'object') return;
 
-                Object.values(log.machines).forEach((machineLog, index) => {
-                    const machineId = `machine_${index + 1}`;
-                    if (machineLog.theoreticalSpeed) {
-                        lastKnownSpeed[machineId] = machineLog.theoreticalSpeed;
-                    }
+                // Prime lastKnownSpeed with speeds from the machine definitions for the shift
+                Object.entries(log.machines).forEach(([machineId, machineLog]) => {
+                    const productDef = prefetchedProducts.find(p => p.id === machineLog.productId);
+                    // Let's assume a default speed if not defined anywhere.
+                    const theoreticalSpeed = 40; // Example: 40 bags/min
+                    lastKnownSpeed[machineId] = theoreticalSpeed;
                 });
 
                 Object.entries(log.timeSlots).forEach(([time, slotData]) => {
@@ -191,7 +193,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                             // Performance Calculation
                             const runTimeInMinutes = 30 - timeSlotStopTime;
                             if (runTimeInMinutes > 0 && lastKnownSpeed[machineId] > 0) {
-                                const theoreticalSacksInSlot = (lastKnownSpeed[machineId] / 60) * runTimeInMinutes; // speed is in f/min
+                                const theoreticalSacksInSlot = (lastKnownSpeed[machineId]) * runTimeInMinutes;
                                 totalTheoreticalProductionSacks += theoreticalSacksInSlot;
                             }
                         }
@@ -206,6 +208,11 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                     relevantPlanProducts.forEach(product => {
                         const shiftProduction = product.actual[dayKey as keyof typeof product.actual]?.[logShift as 'day' | 'night'] || 0;
                         totalActualProductionSacks += shiftProduction;
+                        
+                        // Quality Calculation: Add to "good" production if name doesn't include "PB"
+                        if (!product.productName.includes('PB')) {
+                            totalGoodProductionSacks += shiftProduction;
+                        }
                     });
                 }
             });
@@ -214,7 +221,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
             const runTime = totalPlannedTime > totalStopTime ? totalPlannedTime - totalStopTime : 0;
             const finalAvailability = totalPlannedTime > 0 ? (runTime / totalPlannedTime) * 100 : 0;
             const finalPerformance = totalTheoreticalProductionSacks > 0 ? (totalActualProductionSacks / totalTheoreticalProductionSacks) * 100 : 0;
-            const finalQuality = 100; // Assuming 100% quality for now
+            const finalQuality = totalActualProductionSacks > 0 ? (totalGoodProductionSacks / totalActualProductionSacks) * 100 : 0;
             const finalOee = (finalAvailability / 100) * (finalPerformance / 100) * (finalQuality / 100) * 100;
             
             setAvailability(finalAvailability);
@@ -244,7 +251,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
         } finally {
             setLoading(false);
         }
-    }, [dateRange, prefetchedStopCauses, toast]);
+    }, [dateRange, prefetchedStopCauses, prefetchedProducts, toast]);
     
     React.useEffect(() => {
         handleFetchData();
@@ -337,7 +344,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                              <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <KpiCard title="Disponibilidad" value={`${availability.toFixed(1)}%`} icon={CheckCircle} description="Porcentaje del tiempo planificado que el equipo estuvo realmente en producción." />
                                 <KpiCard title="Rendimiento" value={`${performance.toFixed(1)}%`} icon={Target} description="Velocidad de producción como un porcentaje de su capacidad máxima teórica." />
-                                <KpiCard title="Calidad" value={`${quality.toFixed(1)}%`} icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (actualmente 100% asumido)." />
+                                <KpiCard title="Calidad" value={`${quality.toFixed(1)}%`} icon={ShieldCheck} description="Porcentaje de productos que cumplen con los estándares de calidad (productos 'PB' se consideran no conformes)." />
                                 <KpiCard title="OEE General" value={`${oee.toFixed(1)}%`} icon={BarChart} description="Métrica global que combina Disponibilidad, Rendimiento y Calidad." valueColor={oee > 85 ? 'text-green-600' : oee > 60 ? 'text-yellow-600' : 'text-destructive'}/>
                              </CardContent>
                          </Card>
