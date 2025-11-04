@@ -1071,7 +1071,7 @@ export default function StopsClient({
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
-                                            <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50 w-[372px]" colSpan={3}>
+                                            <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" colSpan={3}>
                                                  <Select value={dailyLog.machines['machine_1']?.productId || ''} onValueChange={(val) => handleMachineProductChange('machine_1', val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card justify-center">
                                                         <div className="flex items-center gap-2 truncate">
@@ -1091,7 +1091,7 @@ export default function StopsClient({
                                                     </SelectContent>
                                                 </Select>
                                             </th>
-                                            <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50 w-[372px]" colSpan={3}>
+                                            <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" colSpan={3}>
                                                  <Select value={dailyLog.machines['machine_2']?.productId || ''} onValueChange={(val) => handleMachineProductChange('machine_2', val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card justify-center">
                                                         <div className="flex items-center gap-2 truncate">
@@ -1111,7 +1111,7 @@ export default function StopsClient({
                                                     </SelectContent>
                                                 </Select>
                                             </th>
-                                            <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50 w-[372px]" colSpan={3}>
+                                            <th className="p-1 align-middle bg-purple-100 dark:bg-purple-900/50" colSpan={3}>
                                                  <Select value={dailyLog.machines['machine_3']?.productId || ''} onValueChange={(val) => handleMachineProductChange('machine_3', val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card justify-center">
                                                         <div className="flex items-center gap-2 truncate">
@@ -1235,7 +1235,7 @@ export default function StopsClient({
                 )}
             </main>
 
-            {modalState?.isOpen && (
+            {modalState?.isOpen && dailyLog && (
                 <StopRegistrationModal 
                     isOpen={modalState.isOpen}
                     onClose={() => setModalState(null)}
@@ -1245,6 +1245,7 @@ export default function StopsClient({
                     stopData={modalState.stopData}
                     stopCauses={stopCauses}
                     maintenanceTypes={maintenanceTypes}
+                    shift={dailyLog.shift}
                 />
             )}
             {configModalOpen && (

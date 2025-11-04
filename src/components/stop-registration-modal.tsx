@@ -20,9 +20,10 @@ type StopRegistrationModalProps = {
     stopCauses: StopCause[];
     maintenanceTypes: MaintenanceType[];
     stopData?: StopData;
+    shift: 'day' | 'night';
 };
 
-export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopCauses, maintenanceTypes, stopData }: StopRegistrationModalProps) {
+export default function StopRegistrationModal({ isOpen, onClose, onSave, machineId, startTime, stopCauses, maintenanceTypes, stopData, shift }: StopRegistrationModalProps) {
     const [actualStartTime, setActualStartTime] = React.useState(stopData?.startTime || startTime);
     const [endTime, setEndTime] = React.useState(stopData?.endTime || actualStartTime);
     const [type, setType] = React.useState<'planned' | 'unplanned'>(stopData?.type || 'planned');
@@ -64,7 +65,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     }, [type, reason, stopCauses]);
 
 
-    const calculateDuration = (start: string, end: string): number => {
+    const calculateDuration = (start: string, end: string, currentShift: 'day' | 'night'): number => {
         try {
             const [startHour, startMinute] = start.split(':').map(Number);
             const [endHour, endMinute] = end.split(':').map(Number);
@@ -74,15 +75,16 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
 
             const endDate = new Date();
             endDate.setHours(endHour, endMinute, 0, 0);
-
-            // Handle overnight duration, but only if it's a reasonable overnight stop, not a full day.
-            // A simple check is if end time is less than start time.
+            
+            // If end time is before start time
             if (endDate.getTime() < startDate.getTime()) {
-                // Let's check if it's a valid overnight stop (e.g. starts at 23:00, ends at 01:00)
-                // or a data entry error (e.g. starts at 10:00, ends at 09:00).
-                // A simple way is to just return a negative number for errors.
-                // A more robust way could check if the duration is > 12h, but for now negative is fine.
-                 return (endDate.getTime() - startDate.getTime()) / (1000 * 60);
+                // If it's the night shift, it's a valid overnight stop. Add a day to the end date.
+                if (currentShift === 'night') {
+                    endDate.setDate(endDate.getDate() + 1);
+                } else {
+                    // If it's the day shift, it's an error. Return negative duration.
+                    return -1;
+                }
             }
             
             const diffMs = endDate.getTime() - startDate.getTime();
@@ -93,7 +95,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     };
     
     const handleSave = () => {
-        const duration = calculateDuration(actualStartTime, endTime);
+        const duration = calculateDuration(actualStartTime, endTime, shift);
         if (duration <= 0) {
             toast({
                 title: 'Error de Tiempo',
@@ -116,7 +118,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
         });
     };
     
-    const duration = calculateDuration(actualStartTime, endTime);
+    const duration = calculateDuration(actualStartTime, endTime, shift);
     const filteredStopCauses = stopCauses.filter(c => c.type === type);
 
     return (
