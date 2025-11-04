@@ -546,10 +546,11 @@ export default function StopsClient({
 
     const handleMachineProductChange = (machineId: string, productId: string) => {
         if (!dailyLog) return;
+        const actualProductId = productId === 'no_production' ? '' : productId;
         triggerChange(prev => {
             const newMachines = { ...prev.machines };
             if (!newMachines[machineId]) newMachines[machineId] = { productId: '' };
-            newMachines[machineId].productId = productId;
+            newMachines[machineId].productId = actualProductId;
             return { ...prev, machines: newMachines };
         });
     };
@@ -1120,7 +1121,7 @@ export default function StopsClient({
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                         <SelectItem value="">-- Sin Producción --</SelectItem>
+                                                         <SelectItem value="no_production">-- Sin Producción --</SelectItem>
                                                         {familiarProducts.map(p => (
                                                             <SelectItem key={p.id} value={p.id}>
                                                                 <div className="flex items-center gap-2">
@@ -1141,7 +1142,7 @@ export default function StopsClient({
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                         <SelectItem value="">-- Sin Producción --</SelectItem>
+                                                         <SelectItem value="no_production">-- Sin Producción --</SelectItem>
                                                         {familiarProducts.map(p => (
                                                             <SelectItem key={p.id} value={p.id}>
                                                                 <div className="flex items-center gap-2">
@@ -1162,7 +1163,7 @@ export default function StopsClient({
                                                         </div>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                         <SelectItem value="">-- Sin Producción --</SelectItem>
+                                                         <SelectItem value="no_production">-- Sin Producción --</SelectItem>
                                                         {familiarProducts.map(p => (
                                                             <SelectItem key={p.id} value={p.id}>
                                                                 <div className="flex items-center gap-2">
