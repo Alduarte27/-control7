@@ -89,10 +89,10 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
     
     const handleSave = () => {
         const duration = calculateDuration(actualStartTime, endTime);
-        if (duration < 0) {
+        if (duration <= 0) {
             toast({
                 title: 'Error de Tiempo',
-                description: 'La hora de fin no puede ser anterior a la hora de inicio.',
+                description: 'La hora de fin debe ser posterior a la hora de inicio.',
                 variant: 'destructive',
             });
             return;
@@ -215,7 +215,7 @@ export default function StopRegistrationModal({ isOpen, onClose, onSave, machine
                     <DialogClose asChild>
                         <Button variant="secondary">Cancelar</Button>
                     </DialogClose>
-                    <Button onClick={handleSave} disabled={!type || !reason || duration < 0}>Guardar Parada</Button>
+                    <Button onClick={handleSave} disabled={!type || !reason || duration <= 0}>Guardar Parada</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
