@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -170,15 +171,26 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
             return;
         }
 
-        const dates = parsedData.map(row => parse(row[dateColumn], 'yyyy-MM-dd', new Date())).filter(isValid);
-        if (dates.length > 0) {
-            const minDate = min(dates);
-            const maxDate = max(dates);
+        const dateFormatsToTry = ['yyyy-MM-dd', 'dd-MM-yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'];
+        
+        let validDates: Date[] = [];
+
+        for (const format of dateFormatsToTry) {
+            const dates = parsedData.map(row => parse(row[dateColumn], format, new Date())).filter(isValid);
+            if (dates.length > 0) {
+                validDates = dates;
+                break; // Found a format that works
+            }
+        }
+        
+        if (validDates.length > 0) {
+            const minDate = min(validDates);
+            const maxDate = max(validDates);
             setFileDateBounds({ min: minDate, max: maxDate });
             setDateRange({ from: minDate, to: maxDate });
             setStep(3);
         } else {
-            toast({title: "No se encontraron fechas", description: "No se pudieron encontrar fechas válidas en la columna mapeada.", variant: "destructive"});
+            toast({title: "No se encontraron fechas", description: "No se pudieron encontrar fechas válidas en la columna mapeada. Asegúrate de que el formato sea consistente (ej: yyyy-MM-dd).", variant: "destructive"});
         }
     };
 
@@ -198,8 +210,17 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
         const filteredData = parsedData.filter(row => {
             const dateStr = row[mapping['date']];
             if (!dateStr) return false;
-            const date = parse(dateStr, 'yyyy-MM-dd', new Date());
-            return isValid(date) && date >= dateRange.from! && date <= dateRange.to!;
+            // Use a more robust date parsing logic for filtering as well
+            const dateFormatsToTry = ['yyyy-MM-dd', 'dd-MM-yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'];
+            let date: Date | null = null;
+            for(const format of dateFormatsToTry) {
+                const parsed = parse(dateStr, format, new Date());
+                if (isValid(parsed)) {
+                    date = parsed;
+                    break;
+                }
+            }
+            return date && date >= dateRange.from! && date <= dateRange.to!;
         });
 
         if (filteredData.length === 0) {
@@ -215,8 +236,16 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
 
             if (!dateStr || !timeStr) continue;
 
-            const date = parse(dateStr, 'yyyy-MM-dd', new Date());
-            if (!isValid(date)) continue;
+            const dateFormatsToTry = ['yyyy-MM-dd', 'dd-MM-yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'];
+            let date: Date | null = null;
+            for(const format of dateFormatsToTry) {
+                const parsed = parse(dateStr, format, new Date());
+                if (isValid(parsed)) {
+                    date = parsed;
+                    break;
+                }
+            }
+            if (!date) continue;
 
             const hour = parseInt(timeStr.split(':')[0]);
             const shift = (hour >= 7 && hour < 19) ? 'day' : 'night';
@@ -371,9 +400,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
 
     const previewData = step === 4 ? getPreviewData() : [];
     const visibleTargetFields = TARGET_FIELDS.filter(f => {
-        // Always show date and time
         if (f.value === 'date' || f.value === 'time') return true;
-        // Show fields that are not specific to a format, or that match the selected format
         return !f.format || f.format === formatType;
     });
 
