@@ -634,6 +634,7 @@ export default function StopsClient({
 
      const handleDeleteStop = (timeSlot: string, machineId: string, stopId: string) => {
         triggerChange(prev => {
+            if (!prev) return prev;
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
             
             const registrationSlot = format(setMinutes(parse(timeSlot, 'HH:mm', new Date()), getMinutes(parse(timeSlot, 'HH:mm', new Date())) < 30 ? 0 : 30), 'HH:mm');

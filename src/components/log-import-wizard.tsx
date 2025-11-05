@@ -250,6 +250,8 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
             TARGET_FIELDS.forEach(field => {
                 if (mapping[field.value]) {
                     previewRow[field.label] = row[mapping[field.value]] || '';
+                } else {
+                    previewRow[field.label] = ''
                 }
             });
             return previewRow;
