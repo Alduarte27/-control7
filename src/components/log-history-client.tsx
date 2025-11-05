@@ -6,7 +6,7 @@ import { CalendarCheck, ChevronLeft, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, limit, startAfter, doc, deleteDoc, type DocumentData, type QueryDocumentSnapshot } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, startAfter, doc, deleteDoc, type DocumentData, type QueryDocumentSnapshot, writeBatch, where } from 'firebase/firestore';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Label } from './ui/label';
+import { Separator } from './ui/separator';
 
 
 type DailyLogMeta = {
@@ -30,12 +33,18 @@ type DailyLogMeta = {
 const LOGS_PER_PAGE = 20;
 
 export default function LogHistoryClient() {
-  const [savedLogs, setSavedLogs] = React.useState<DailyLogMeta[]>([]);
+  const [allLogs, setAllLogs] = React.useState<DailyLogMeta[]>([]);
+  const [paginatedLogs, setPaginatedLogs] = React.useState<DailyLogMeta[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [lastVisible, setLastVisible] = React.useState<QueryDocumentSnapshot<DocumentData> | null>(null);
   const [hasMore, setHasMore] = React.useState(true);
   const { toast } = useToast();
+
+  // For range deletion
+  const [startLog, setStartLog] = React.useState<string>('');
+  const [endLog, setEndLog] = React.useState<string>('');
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const fetchLogs = React.useCallback(async (initialLoad = false) => {
     if (initialLoad) {
@@ -80,7 +89,16 @@ export default function LogHistoryClient() {
             setHasMore(false);
         }
 
-        setSavedLogs(prevLogs => initialLoad ? newLogs : [...prevLogs, ...newLogs]);
+        setPaginatedLogs(prevLogs => initialLoad ? newLogs : [...prevLogs, ...newLogs]);
+
+        if (initialLoad) {
+          const allLogsSnapshot = await getDocs(query(collection(db, 'dailyLogs'), orderBy('id', 'desc')));
+          const allFetchedLogs = allLogsSnapshot.docs.map(doc => {
+            const [date, shift] = doc.id.split('_');
+            return { id: doc.id, date, shift: shift as 'day' | 'night' };
+          });
+          setAllLogs(allFetchedLogs);
+        }
 
     } catch (error) {
         console.error("Error fetching history from Firestore:", error);
@@ -98,7 +116,8 @@ export default function LogHistoryClient() {
   const handleDeleteLog = async (logId: string) => {
     try {
         await deleteDoc(doc(db, 'dailyLogs', logId));
-        setSavedLogs(prevLogs => prevLogs.filter(log => log.id !== logId));
+        setPaginatedLogs(prevLogs => prevLogs.filter(log => log.id !== logId));
+        setAllLogs(prevLogs => prevLogs.filter(log => log.id !== logId));
         toast({
             title: 'Registro Eliminado',
             description: `Se ha eliminado la bitácora ${logId}.`,
@@ -112,6 +131,53 @@ export default function LogHistoryClient() {
         });
     }
   };
+
+  const handleDeleteRange = async () => {
+    if (!startLog || !endLog) {
+        toast({ title: 'Error', description: 'Debes seleccionar un rango de inicio y fin.', variant: 'destructive'});
+        return;
+    }
+
+    if (startLog < endLog) {
+        toast({ title: 'Error de Rango', description: 'La fecha de inicio debe ser más reciente o igual a la fecha de fin.', variant: 'destructive'});
+        return;
+    }
+    
+    setIsDeleting(true);
+    
+    const logsToDeleteQuery = query(
+        collection(db, 'dailyLogs'),
+        where('__name__', '>=', endLog),
+        where('__name__', '<=', startLog)
+    );
+
+    try {
+        const logsSnapshot = await getDocs(logsToDeleteQuery);
+        if (logsSnapshot.empty) {
+            toast({ title: 'Sin Datos', description: 'No se encontraron bitácoras en el rango seleccionado para eliminar.' });
+            setIsDeleting(false);
+            return;
+        }
+
+        const batch = writeBatch(db);
+        logsSnapshot.forEach(doc => {
+            batch.delete(doc.ref);
+        });
+
+        await batch.commit();
+
+        toast({ title: 'Rango Eliminado', description: `Se han eliminado ${logsSnapshot.size} bitácoras.`});
+        // Refetch all data
+        fetchLogs(true);
+        setStartLog('');
+        setEndLog('');
+    } catch(error) {
+        console.error("Error deleting log range:", error);
+        toast({ title: 'Error', description: 'No se pudo completar la eliminación del rango.', variant: 'destructive'});
+    } finally {
+        setIsDeleting(false);
+    }
+  }
 
 
   return (
@@ -135,12 +201,55 @@ export default function LogHistoryClient() {
             <CardDescription>Aquí puedes ver y gestionar todas las bitácoras de producción que has guardado.</CardDescription>
           </CardHeader>
           <CardContent>
+             <div className="p-4 border rounded-lg bg-muted/30 mb-6">
+                <h4 className="font-semibold mb-2">Eliminar por Rango</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="start-log">Desde (la más reciente)</Label>
+                        <Select value={startLog} onValueChange={setStartLog}>
+                            <SelectTrigger id="start-log"><SelectValue placeholder="Fecha de inicio"/></SelectTrigger>
+                            <SelectContent>
+                                {allLogs.map(log => <SelectItem key={log.id} value={log.id}>{log.date} ({log.shift === 'day' ? 'Día' : 'Noche'})</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="end-log">Hasta (la más antigua)</Label>
+                         <Select value={endLog} onValueChange={setEndLog}>
+                            <SelectTrigger id="end-log"><SelectValue placeholder="Fecha de fin"/></SelectTrigger>
+                            <SelectContent>
+                                {allLogs.map(log => <SelectItem key={log.id} value={log.id}>{log.date} ({log.shift === 'day' ? 'Día' : 'Noche'})</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button variant="destructive" disabled={isDeleting || !startLog || !endLog}>
+                                {isDeleting ? 'Eliminando...' : 'Eliminar Rango'}
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>¿Confirmar Eliminación Masiva?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Esta acción es permanente. Se eliminarán todas las bitácoras desde el <strong>{startLog}</strong> hasta el <strong>{endLog}</strong>.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteRange}>Sí, eliminar rango</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+            </div>
+            <Separator className="mb-6"/>
             {loading ? (
                 <p className="text-muted-foreground text-center py-4">Cargando historial...</p>
-            ) : savedLogs.length > 0 ? (
+            ) : paginatedLogs.length > 0 ? (
               <div className="space-y-4">
                 <ul className="space-y-2">
-                  {savedLogs.map((log) => (
+                  {paginatedLogs.map((log) => (
                     <li key={log.id} className="border p-4 rounded-md flex justify-between items-center">
                         <span className="font-medium">
                             {log.date} - <span className="capitalize">{log.shift === 'day' ? 'Día' : 'Noche'}</span>
