@@ -370,7 +370,12 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
     };
 
     const previewData = step === 4 ? getPreviewData() : [];
-    const visibleTargetFields = TARGET_FIELDS.filter(f => !f.format || f.format === formatType);
+    const visibleTargetFields = TARGET_FIELDS.filter(f => {
+        // Always show date and time
+        if (f.value === 'date' || f.value === 'time') return true;
+        // Show fields that are not specific to a format, or that match the selected format
+        return !f.format || f.format === formatType;
+    });
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
@@ -437,7 +442,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                                 {visibleTargetFields.map(field => (
                                     <div key={field.value} className="grid grid-cols-3 items-center gap-4">
                                         <div className="col-span-1">
-                                            <p className={cn("font-medium text-sm", (field.value.endsWith('(Requerido)')) && 'text-primary font-bold')}>{field.label}</p>
+                                            <p className={cn("font-medium text-sm", (field.label.includes('(Requerido)')) && 'text-primary font-bold')}>{field.label}</p>
                                             {field.example && <p className="text-xs text-muted-foreground">Ej: {field.example}</p>}
                                         </div>
                                         <div className="col-span-2">
@@ -578,5 +583,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
         </Dialog>
     );
 }
+
+    
 
     
