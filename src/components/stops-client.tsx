@@ -27,6 +27,7 @@ import { Separator } from './ui/separator';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import LogImportWizard from './log-import-wizard';
 import LogHelpDialog from './log-help-dialog';
+import { Card, CardHeader, CardTitle, CardContent } from './ui/card';
 
 
 const NUM_MACHINES = 3;
@@ -1134,7 +1135,7 @@ export default function StopsClient({
             </header>
             <main className="p-2 md:p-4">
                 {loading ? <p>Cargando bitácora...</p> : dailyLog && (
-                    <div className="space-y-2">
+                    <div className="space-y-4">
                         {/* Header */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 p-2 border rounded-lg bg-card">
                             <div className="space-y-1.5">
@@ -1190,7 +1191,7 @@ export default function StopsClient({
                                 <table className="table-fixed min-w-full text-xs border-collapse">
                                     <thead className='sticky top-0 z-20'>
                                         <tr className="divide-x divide-border">
-                                            <th className="p-1 align-bottom sticky left-0 z-25 bg-muted">
+                                            <th className="p-1 align-bottom sticky left-0 z-30 bg-muted">
                                                 <div className="w-20">Hora</div>
                                             </th>
                                             <th className="p-1 bg-purple-100 dark:bg-purple-900/50" colSpan={3}>Máquina #1</th>
@@ -1198,7 +1199,7 @@ export default function StopsClient({
                                             <th className="p-1 bg-purple-100 dark:bg-purple-900/50" colSpan={3}>Máquina #3</th>
                                             <th className="p-1 bg-green-100 dark:bg-green-900/50" colSpan={9} rowSpan={1}>INGRESO DE PRODUCTO</th>
                                             <th colSpan={6} className="p-1 bg-blue-100 dark:bg-blue-900/50" rowSpan={1}>SALIDA DE PRODUCTO TERMINADO</th>
-                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50" style={{ minWidth: '40.4rem' }}>NOVEDADES DE EMPAQUE DE AZÚCAR</th>
+                                            <th rowSpan={3} className="p-1 bg-purple-100 dark:bg-purple-900/50 min-w-80">NOVEDADES DE EMPAQUE DE AZÚCAR</th>
                                         </tr>
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
@@ -1372,43 +1373,45 @@ export default function StopsClient({
                                         ))}
 
                                     </tbody>
-                                    <tfoot>
-                                        <tr className="divide-x divide-border bg-muted/50">
-                                            <th className="p-2 font-semibold sticky left-0 bg-muted z-10">OEE</th>
-                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => {
-                                                const machineId = `machine_${i + 1}`;
-                                                const oeeData = machineOEE[machineId] || { availability: 0, performance: 0, quality: 0, oee: 0 };
-                                                return (
-                                                    <td key={`oee-${machineId}`} colSpan={3} className="p-0">
-                                                        <div className='grid grid-cols-4 divide-x divide-border text-center'>
-                                                            <div className='py-1 px-2'>
-                                                                <div className='text-xs text-muted-foreground'>A</div>
-                                                                <div className='font-bold'>{oeeData.availability}%</div>
-                                                            </div>
-                                                            <div className='py-1 px-2'>
-                                                                <div className='text-xs text-muted-foreground'>P</div>
-                                                                <div className='font-bold'>{oeeData.performance}%</div>
-                                                            </div>
-                                                            <div className='py-1 px-2'>
-                                                                <div className='text-xs text-muted-foreground'>Q</div>
-                                                                <div className='font-bold'>{oeeData.quality}%</div>
-                                                            </div>
-                                                            <div className='py-1 px-2 bg-primary/10'>
-                                                                <div className='text-xs font-bold text-primary'>OEE</div>
-                                                                <div className='font-bold text-primary'>{oeeData.oee}%</div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                )
-                                            })}
-                                            <td colSpan={16} className="p-1 text-center text-muted-foreground">
-                                                <Percent className="inline-block h-4 w-4 mr-2" />
-                                                Overall Equipment Effectiveness (Eficiencia General del Equipo)
-                                            </td>
-                                        </tr>
-                                    </tfoot>
                                 </table>
                             </div>
+                        </div>
+
+                        {/* OEE Section */}
+                        <div className="pt-6">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <Percent className="h-5 w-5 text-primary" />
+                                        OEE del Turno (Tiempo Real)
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                     {Object.keys(machineOEE).length > 0 ? Object.entries(machineOEE).map(([machineId, kpis]) => (
+                                        <Card key={machineId} className="p-4">
+                                            <h4 className="font-bold text-center mb-4 text-primary">Máquina {machineId.split('_')[1]}</h4>
+                                            <div className="space-y-3">
+                                                <div className="flex justify-between items-center border-b pb-2 text-sm">
+                                                    <Label>Disponibilidad</Label>
+                                                    <span className="font-bold">{kpis.availability}%</span>
+                                                </div>
+                                                 <div className="flex justify-between items-center border-b pb-2 text-sm">
+                                                    <Label>Rendimiento</Label>
+                                                    <span className="font-bold">{kpis.performance}%</span>
+                                                </div>
+                                                 <div className="flex justify-between items-center border-b pb-2 text-sm">
+                                                    <Label>Calidad</Label>
+                                                    <span className="font-bold">{kpis.quality}%</span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-base pt-2">
+                                                    <Label className="font-bold">OEE General</Label>
+                                                    <span className="font-extrabold text-primary">{kpis.oee}%</span>
+                                                </div>
+                                            </div>
+                                        </Card>
+                                    )) : <p className="text-center text-muted-foreground col-span-full py-8">No hay datos suficientes para calcular el OEE.</p>}
+                                </CardContent>
+                            </Card>
                         </div>
                     </div>
                 )}
@@ -1457,4 +1460,3 @@ export default function StopsClient({
         </div>
     );
 }
-
