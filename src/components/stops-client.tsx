@@ -1070,11 +1070,11 @@ export default function StopsClient({
                     </div>
                 </div>
             </header>
-            <main className="p-2 md:p-6">
+            <main className="p-2 md:p-4">
                 {loading ? <p>Cargando bitácora...</p> : dailyLog && (
-                    <div className="space-y-4 pt-4">
+                    <div className="space-y-2">
                         {/* Header */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 p-4 border rounded-lg bg-card">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2 p-2 border rounded-lg bg-card">
                             <div className="space-y-1.5">
                                 <Label>Operador</Label>
                                 <Select value={dailyLog.operador} onValueChange={val => handleHeaderChange('operador', val)}>
@@ -1360,4 +1360,3 @@ export default function StopsClient({
         </div>
     );
 }
-
