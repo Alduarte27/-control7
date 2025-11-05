@@ -3,7 +3,7 @@
 import React from 'react';
 import type { ProductData, ProductDefinition, CategoryDefinition, DailyProduction, ShiftProduction } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks, startOfWeek, getDayOfYear, addDays } from 'date-fns';
+import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks, startOfWeek, getDayOfYear, addDays, parse } from 'date-fns';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
 import { useSearchParams } from 'next/navigation';
@@ -30,11 +30,16 @@ const emptyActual: DailyProduction = {
   sun: { ...emptyProductionDay },
 };
 
-const getDateFromPlanId = (planId: string): Date => {
-    const [year, week] = planId.split('-W');
-    // Using startOfWeek ensures we get the Monday of that week, which is consistent.
-    const date = setISOWeek(new Date(parseInt(year), 0, 4), parseInt(week));
-    return startOfWeek(date, { weekStartsOn: 1 });
+const getDateFromPlanId = (planId: string): Date | null => {
+    const [yearStr, weekStr] = planId.split('-W');
+    const year = parseInt(yearStr, 10);
+    const week = parseInt(weekStr, 10);
+    if (isNaN(year) || isNaN(week)) return null;
+
+    // Create a date in the middle of the year to avoid DST issues
+    const midYearDate = new Date(year, 6, 1); 
+    const dateWithWeek = setISOWeek(midYearDate, week);
+    return startOfISOWeek(dateWithWeek);
 }
 
 const getDayOfYearForWeek = (weekDate: Date) => {
@@ -86,17 +91,25 @@ export default function Control7Client({
   React.useEffect(() => {
     // This effect runs only on the client and ensures the date is set correctly,
     // avoiding the hydration mismatch caused by `new Date()` on the server.
-    if (planIdFromUrl) {
-        const newDate = getDateFromPlanId(planIdFromUrl);
-        // Avoid state update if the date is already correct
-        if (newDate.getTime() !== date?.getTime()) {
-            setDate(newDate);
-        }
-    } else if (!date) { // Only set to today if date is not already set
-        setDate(new Date());
+    const urlPlanId = searchParams.get('planId');
+    let newDate;
+    if (urlPlanId) {
+        newDate = getDateFromPlanId(urlPlanId);
     }
+    
+    // If we have a valid date from URL, use it. Otherwise, default to today.
+    const targetDate = newDate || new Date();
+
+    setDate(d => {
+        // Only update state if the date is different to avoid unnecessary re-renders
+        if (d?.getTime() !== targetDate.getTime()) {
+            return targetDate;
+        }
+        return d;
+    });
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planIdFromUrl]);
+  }, [searchParams]);
 
   React.useEffect(() => {
     const showDialogPreference = localStorage.getItem('showInfoDialogOnStartup');

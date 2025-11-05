@@ -177,7 +177,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
 
         for (const format of dateFormatsToTry) {
             const dates = parsedData.map(row => parse(row[dateColumn], format, new Date())).filter(isValid);
-            if (dates.length > 0) {
+            if (dates.length > parsedData.length / 2) { // Heuristic: if more than half parse, it's probably the right format
                 validDates = dates;
                 break; // Found a format that works
             }
@@ -210,7 +210,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
         const filteredData = parsedData.filter(row => {
             const dateStr = row[mapping['date']];
             if (!dateStr) return false;
-            // Use a more robust date parsing logic for filtering as well
+            
             const dateFormatsToTry = ['yyyy-MM-dd', 'dd-MM-yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'];
             let date: Date | null = null;
             for(const format of dateFormatsToTry) {
@@ -220,7 +220,16 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                     break;
                 }
             }
-            return date && date >= dateRange.from! && date <= dateRange.to!;
+            if (!date) return false;
+            
+            // Normalize dates to avoid time zone issues in comparison
+            const from = dateRange.from!;
+            const to = dateRange.to!;
+            const recordDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const fromDate = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+            const toDate = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+
+            return recordDate >= fromDate && recordDate <= toDate;
         });
 
         if (filteredData.length === 0) {
@@ -378,8 +387,25 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
         const filteredData = parsedData.filter(row => {
             const dateStr = row[mapping['date']];
             if (!dateStr) return false;
-            const date = parse(dateStr, 'yyyy-MM-dd', new Date());
-            return isValid(date) && date >= dateRange.from! && date <= dateRange.to!;
+            
+            const dateFormatsToTry = ['yyyy-MM-dd', 'dd-MM-yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'];
+            let date: Date | null = null;
+            for(const format of dateFormatsToTry) {
+                const parsed = parse(dateStr, format, new Date());
+                if (isValid(parsed)) {
+                    date = parsed;
+                    break;
+                }
+            }
+            if (!date) return false;
+            
+            const from = dateRange.from!;
+            const to = dateRange.to!;
+            const recordDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const fromDate = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+            const toDate = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+
+            return recordDate >= fromDate && recordDate <= toDate;
         });
 
         if (filteredData.length === 0) return [];
@@ -391,7 +417,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                 if (mapping[field.value]) {
                     previewRow[field.label] = row[mapping[field.value]] || '';
                 } else {
-                    previewRow[field.label] = ''
+                     previewRow[field.label] = ''
                 }
             });
             return previewRow;
@@ -400,7 +426,6 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
 
     const previewData = step === 4 ? getPreviewData() : [];
     const visibleTargetFields = TARGET_FIELDS.filter(f => {
-        if (f.value === 'date' || f.value === 'time') return true;
         return !f.format || f.format === formatType;
     });
 
@@ -534,8 +559,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                                         selected={dateRange}
                                         onSelect={setDateRange}
                                         numberOfMonths={2}
-                                        min={fileDateBounds.min}
-                                        max={fileDateBounds.max}
+                                        disabled={{ before: fileDateBounds.min, after: fileDateBounds.max }}
                                         locale={es}
                                     />
                                 </PopoverContent>
@@ -614,3 +638,4 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
     
 
     
+
