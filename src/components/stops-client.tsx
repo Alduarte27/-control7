@@ -335,6 +335,7 @@ export default function StopsClient({
 
     const [saveStatus, setSaveStatus] = React.useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle');
     const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+    const [highlightedTime, setHighlightedTime] = React.useState<string | null>(null);
 
     const isCurrentDay = React.useMemo(() => isToday(date), [date]);
     
@@ -1240,10 +1241,20 @@ export default function StopsClient({
                                             <th className="p-1 font-normal bg-blue-100 dark:bg-blue-900/50 min-w-[3rem]">Turb</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-border">
+                                    <tbody 
+                                        className="divide-y divide-border"
+                                        onMouseLeave={() => setHighlightedTime(null)}
+                                    >
                                         {timeSlotsForTable.map((time) => (
-                                            <tr key={time} className="divide-x divide-border">
-                                                <td className="p-1 w-24 text-center font-mono sticky left-0 bg-card z-10">{time}</td>
+                                            <tr 
+                                                key={time} 
+                                                className="divide-x divide-border"
+                                                onMouseEnter={() => setHighlightedTime(time)}
+                                            >
+                                                <td className={cn(
+                                                    "p-1 w-24 text-center font-mono sticky left-0 bg-card z-10 transition-colors",
+                                                    highlightedTime === time && "bg-primary/20"
+                                                )}>{time}</td>
                                                 {Array.from({ length: NUM_MACHINES }).map((_, machineIndex) => {
                                                     const machineId = `machine_${machineIndex + 1}`;
                                                     return (
@@ -1324,3 +1335,4 @@ export default function StopsClient({
         </div>
     );
 }
+
