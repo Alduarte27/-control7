@@ -6,7 +6,7 @@ import { Factory, ChevronLeft, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, limit, startAfter, type DocumentData, type QueryDocumentSnapshot, writeBatch, where } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, limit, startAfter, type DocumentData, type QueryDocumentSnapshot, writeBatch, doc } from 'firebase/firestore';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
-import { Separator } from './ui/separator';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+
 
 type SavedPlan = {
   id: string; // Document ID from Firestore
@@ -30,6 +31,79 @@ type SavedPlan = {
 };
 
 const PLANS_PER_PAGE = 20;
+
+function DeleteRangeDialog({ allPlans, onConfirm, isDeleting }: { allPlans: SavedPlan[], onConfirm: (start: string, end: string) => void, isDeleting: boolean }) {
+    const [startWeek, setStartWeek] = React.useState<string>('');
+    const [endWeek, setEndWeek] = React.useState<string>('');
+    const { toast } = useToast();
+
+    const handleDelete = () => {
+        if (!startWeek || !endWeek) {
+            toast({ title: 'Error', description: 'Debes seleccionar un rango de inicio y fin.', variant: 'destructive'});
+            return;
+        }
+        if (allPlans.findIndex(p => p.id === startWeek) < allPlans.findIndex(p => p.id === endWeek)) {
+            toast({ title: 'Error de Rango', description: 'El inicio debe ser igual o más reciente que el fin.', variant: 'destructive'});
+            return;
+        }
+        onConfirm(startWeek, endWeek);
+    }
+    
+    return (
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Eliminar Planes por Rango</DialogTitle>
+                <DialogDescription>
+                    Selecciona el rango de planes que deseas eliminar. Esta acción es permanente y no se puede deshacer.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                 <div className="space-y-1.5">
+                    <Label htmlFor="start-week">Desde (el más reciente)</Label>
+                    <Select value={startWeek} onValueChange={setStartWeek}>
+                        <SelectTrigger id="start-week"><SelectValue placeholder="Semana de inicio"/></SelectTrigger>
+                        <SelectContent>
+                            {allPlans.map(p => <SelectItem key={p.id} value={p.id}>Semana {p.week}, {p.year}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-1.5">
+                    <Label htmlFor="end-week">Hasta (el más antiguo)</Label>
+                        <Select value={endWeek} onValueChange={setEndWeek}>
+                        <SelectTrigger id="end-week"><SelectValue placeholder="Semana de fin"/></SelectTrigger>
+                        <SelectContent>
+                            {allPlans.map(p => <SelectItem key={p.id} value={p.id}>Semana {p.week}, {p.year}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+            <DialogFooter>
+                <DialogClose asChild>
+                    <Button variant="secondary">Cancelar</Button>
+                </DialogClose>
+                 <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" disabled={isDeleting || !startWeek || !endWeek}>
+                            {isDeleting ? 'Eliminando...' : 'Eliminar Rango Seleccionado'}
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>¿Confirmar Eliminación Masiva?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Se eliminarán todos los planes y sus resúmenes asociados desde la <strong>Semana {allPlans.find(p=>p.id===startWeek)?.week}</strong> hasta la <strong>Semana {allPlans.find(p=>p.id===endWeek)?.week}</strong>.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDelete}>Sí, eliminar rango</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </DialogFooter>
+        </DialogContent>
+    )
+}
 
 export default function HistoryClient() {
   const [allPlans, setAllPlans] = React.useState<SavedPlan[]>([]);
@@ -40,9 +114,6 @@ export default function HistoryClient() {
   const [hasMore, setHasMore] = React.useState(true);
   const { toast } = useToast();
 
-  // For range deletion
-  const [startWeek, setStartWeek] = React.useState<string>('');
-  const [endWeek, setEndWeek] = React.useState<string>('');
   const [isDeleting, setIsDeleting] = React.useState(false);
 
   const fetchPlans = React.useCallback(async (initialLoad = false) => {
@@ -112,7 +183,7 @@ export default function HistoryClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   
-  const handleDelete = async (planId: string, collectionName: string) => {
+  const handleDelete = async (planId: string) => {
     try {
         const batch = writeBatch(db);
         const planRef = doc(db, 'productionPlans', planId);
@@ -139,23 +210,12 @@ export default function HistoryClient() {
     }
   };
 
-  const handleDeleteRange = async () => {
-    if (!startWeek || !endWeek) {
-        toast({ title: 'Error', description: 'Debes seleccionar un rango de inicio y fin.', variant: 'destructive'});
-        return;
-    }
+  const handleDeleteRange = async (startWeek: string, endWeek: string) => {
+    setIsDeleting(true);
 
     const startIndex = allPlans.findIndex(p => p.id === startWeek);
     const endIndex = allPlans.findIndex(p => p.id === endWeek);
-
-    if (startIndex < 0 || endIndex < 0 || startIndex < endIndex) {
-        toast({ title: 'Error de Rango', description: 'El inicio debe ser igual o más reciente que el fin.', variant: 'destructive'});
-        return;
-    }
-    
-    setIsDeleting(true);
-
-    const plansToDelete = allPlans.slice(endIndex, startIndex + 1);
+    const plansToDelete = allPlans.slice(startIndex, endIndex + 1);
     
     try {
         const batch = writeBatch(db);
@@ -169,10 +229,7 @@ export default function HistoryClient() {
         await batch.commit();
 
         toast({ title: 'Rango Eliminado', description: `Se han eliminado ${plansToDelete.length} planes.`});
-        // Refetch all data
         fetchPlans(true);
-        setStartWeek('');
-        setEndWeek('');
     } catch(error) {
         console.error("Error deleting range:", error);
         toast({ title: 'Error', description: 'No se pudo completar la eliminación del rango.', variant: 'destructive'});
@@ -197,105 +254,72 @@ export default function HistoryClient() {
         </Link>
       </header>
       <main className="p-4 md:p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Planes Guardados</CardTitle>
-            <CardDescription>Aquí puedes ver y gestionar todos los planes de producción que has guardado.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="p-4 border rounded-lg bg-muted/30 mb-6">
-                <h4 className="font-semibold mb-2">Eliminar por Rango</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="start-week">Desde (el más reciente)</Label>
-                        <Select value={startWeek} onValueChange={setStartWeek}>
-                            <SelectTrigger id="start-week"><SelectValue placeholder="Semana de inicio"/></SelectTrigger>
-                            <SelectContent>
-                                {allPlans.map(p => <SelectItem key={p.id} value={p.id}>Semana {p.week}, {p.year}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="end-week">Hasta (el más antiguo)</Label>
-                         <Select value={endWeek} onValueChange={setEndWeek}>
-                            <SelectTrigger id="end-week"><SelectValue placeholder="Semana de fin"/></SelectTrigger>
-                            <SelectContent>
-                                {allPlans.map(p => <SelectItem key={p.id} value={p.id}>Semana {p.week}, {p.year}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" disabled={isDeleting || !startWeek || !endWeek}>
-                                {isDeleting ? 'Eliminando...' : 'Eliminar Rango'}
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>¿Confirmar Eliminación Masiva?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    Esta acción es permanente. Se eliminarán todos los planes y sus resúmenes asociados desde la <strong>Semana {allPlans.find(p=>p.id===startWeek)?.week}</strong> hasta la <strong>Semana {allPlans.find(p=>p.id===endWeek)?.week}</strong>.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleDeleteRange}>Sí, eliminar rango</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+        <Dialog>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Planes Guardados</CardTitle>
+                    <CardDescription>Aquí puedes ver y gestionar todos los planes de producción que has guardado.</CardDescription>
                 </div>
-            </div>
-            <Separator className="mb-6"/>
-            {loading ? (
-                <p className="text-muted-foreground text-center py-4">Cargando historial...</p>
-            ) : paginatedPlans.length > 0 ? (
-              <div className="space-y-4">
-                <ul className="space-y-2">
-                  {paginatedPlans.map((plan) => (
-                    <li key={plan.id} className="border p-4 rounded-md flex justify-between items-center">
-                      <span className="font-medium">Semana {plan.week}, {plan.year}</span>
-                       <div className="flex items-center gap-2">
-                           <Button asChild variant="secondary">
-                              <Link href={`/?planId=${plan.id}`}>Ver Plan</Link>
-                           </Button>
-                           <AlertDialog>
-                               <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="icon">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                               </AlertDialogTrigger>
-                               <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            Esta acción es permanente y no se puede deshacer. Se eliminará el plan de la <strong>Semana {plan.week}, {plan.year}</strong> y su resumen de estadísticas.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDelete(plan.id, 'productionPlans')}>
-                                            Sí, eliminar
-                                        </AlertDialogAction>
-                                    </AlertDialogFooter>
-                               </AlertDialogContent>
-                           </AlertDialog>
-                       </div>
-                    </li>
-                  ))}
-                </ul>
-                {hasMore && (
-                    <div className="flex justify-center">
-                        <Button onClick={() => fetchPlans(false)} disabled={loadingMore}>
-                            {loadingMore ? 'Cargando...' : 'Cargar Más'}
-                        </Button>
-                    </div>
+                 <DialogTrigger asChild>
+                    <Button variant="outline" size="icon">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                </DialogTrigger>
+            </CardHeader>
+            <CardContent>
+                {loading ? (
+                    <p className="text-muted-foreground text-center py-4">Cargando historial...</p>
+                ) : paginatedPlans.length > 0 ? (
+                <div className="space-y-4">
+                    <ul className="space-y-2">
+                    {paginatedPlans.map((plan) => (
+                        <li key={plan.id} className="border p-4 rounded-md flex justify-between items-center">
+                        <span className="font-medium">Semana {plan.week}, {plan.year}</span>
+                        <div className="flex items-center gap-2">
+                            <Button asChild variant="secondary">
+                                <Link href={`/?planId=${plan.id}`}>Ver Plan</Link>
+                            </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Esta acción es permanente y no se puede deshacer. Se eliminará el plan de la <strong>Semana {plan.week}, {plan.year}</strong> y su resumen de estadísticas.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => handleDelete(plan.id)}>
+                                                Sí, eliminar
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                        </li>
+                    ))}
+                    </ul>
+                    {hasMore && (
+                        <div className="flex justify-center">
+                            <Button onClick={() => fetchPlans(false)} disabled={loadingMore}>
+                                {loadingMore ? 'Cargando...' : 'Cargar Más'}
+                            </Button>
+                        </div>
+                    )}
+                </div>
+                ) : (
+                <p className="text-muted-foreground text-center py-4">No hay planes guardados todavía.</p>
                 )}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-4">No hay planes guardados todavía.</p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+            </Card>
+            <DeleteRangeDialog allPlans={allPlans} onConfirm={handleDeleteRange} isDeleting={isDeleting} />
+        </Dialog>
       </main>
     </div>
   );

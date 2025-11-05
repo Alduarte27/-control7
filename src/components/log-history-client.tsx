@@ -21,7 +21,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
-import { Separator } from './ui/separator';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 
 
 type DailyLogMeta = {
@@ -32,6 +32,79 @@ type DailyLogMeta = {
 
 const LOGS_PER_PAGE = 20;
 
+function DeleteRangeDialog({ allLogs, onConfirm, isDeleting }: { allLogs: DailyLogMeta[], onConfirm: (start: string, end: string) => void, isDeleting: boolean }) {
+    const [startLog, setStartLog] = React.useState<string>('');
+    const [endLog, setEndLog] = React.useState<string>('');
+    const { toast } = useToast();
+
+    const handleDelete = () => {
+        if (!startLog || !endLog) {
+            toast({ title: 'Error', description: 'Debes seleccionar un rango de inicio y fin.', variant: 'destructive'});
+            return;
+        }
+        if (startLog < endLog) {
+            toast({ title: 'Error de Rango', description: 'La fecha de inicio debe ser más reciente o igual a la fecha de fin.', variant: 'destructive'});
+            return;
+        }
+        onConfirm(startLog, endLog);
+    }
+    
+    return (
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Eliminar Bitácoras por Rango</DialogTitle>
+                <DialogDescription>
+                    Selecciona el rango de bitácoras que deseas eliminar. Esta acción es permanente y no se puede deshacer.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+                <div className="space-y-1.5">
+                    <Label htmlFor="start-log">Desde (la más reciente)</Label>
+                    <Select value={startLog} onValueChange={setStartLog}>
+                        <SelectTrigger id="start-log"><SelectValue placeholder="Fecha de inicio"/></SelectTrigger>
+                        <SelectContent>
+                            {allLogs.map(log => <SelectItem key={log.id} value={log.id}>{log.date} ({log.shift === 'day' ? 'Día' : 'Noche'})</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-1.5">
+                    <Label htmlFor="end-log">Hasta (la más antigua)</Label>
+                        <Select value={endLog} onValueChange={setEndLog}>
+                        <SelectTrigger id="end-log"><SelectValue placeholder="Fecha de fin"/></SelectTrigger>
+                        <SelectContent>
+                            {allLogs.map(log => <SelectItem key={log.id} value={log.id}>{log.date} ({log.shift === 'day' ? 'Día' : 'Noche'})</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+            <DialogFooter>
+                <DialogClose asChild>
+                    <Button variant="secondary">Cancelar</Button>
+                </DialogClose>
+                 <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                        <Button variant="destructive" disabled={isDeleting || !startLog || !endLog}>
+                            {isDeleting ? 'Eliminando...' : 'Eliminar Rango Seleccionado'}
+                        </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>¿Confirmar Eliminación Masiva?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Se eliminarán todas las bitácoras desde el <strong>{startLog}</strong> hasta el <strong>{endLog}</strong>.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleDelete}>Sí, eliminar rango</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </DialogFooter>
+        </DialogContent>
+    )
+}
+
 export default function LogHistoryClient() {
   const [allLogs, setAllLogs] = React.useState<DailyLogMeta[]>([]);
   const [paginatedLogs, setPaginatedLogs] = React.useState<DailyLogMeta[]>([]);
@@ -41,9 +114,6 @@ export default function LogHistoryClient() {
   const [hasMore, setHasMore] = React.useState(true);
   const { toast } = useToast();
 
-  // For range deletion
-  const [startLog, setStartLog] = React.useState<string>('');
-  const [endLog, setEndLog] = React.useState<string>('');
   const [isDeleting, setIsDeleting] = React.useState(false);
 
   const fetchLogs = React.useCallback(async (initialLoad = false) => {
@@ -132,17 +202,7 @@ export default function LogHistoryClient() {
     }
   };
 
-  const handleDeleteRange = async () => {
-    if (!startLog || !endLog) {
-        toast({ title: 'Error', description: 'Debes seleccionar un rango de inicio y fin.', variant: 'destructive'});
-        return;
-    }
-
-    if (startLog < endLog) {
-        toast({ title: 'Error de Rango', description: 'La fecha de inicio debe ser más reciente o igual a la fecha de fin.', variant: 'destructive'});
-        return;
-    }
-    
+  const handleDeleteRange = async (startLog: string, endLog: string) => {
     setIsDeleting(true);
     
     const logsToDeleteQuery = query(
@@ -167,10 +227,7 @@ export default function LogHistoryClient() {
         await batch.commit();
 
         toast({ title: 'Rango Eliminado', description: `Se han eliminado ${logsSnapshot.size} bitácoras.`});
-        // Refetch all data
         fetchLogs(true);
-        setStartLog('');
-        setEndLog('');
     } catch(error) {
         console.error("Error deleting log range:", error);
         toast({ title: 'Error', description: 'No se pudo completar la eliminación del rango.', variant: 'destructive'});
@@ -195,110 +252,77 @@ export default function LogHistoryClient() {
         </Link>
       </header>
       <main className="p-4 md:p-8">
-        <Card>
-          <CardHeader>
-            <CardTitle>Registros Guardados</CardTitle>
-            <CardDescription>Aquí puedes ver y gestionar todas las bitácoras de producción que has guardado.</CardDescription>
-          </CardHeader>
-          <CardContent>
-             <div className="p-4 border rounded-lg bg-muted/30 mb-6">
-                <h4 className="font-semibold mb-2">Eliminar por Rango</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="start-log">Desde (la más reciente)</Label>
-                        <Select value={startLog} onValueChange={setStartLog}>
-                            <SelectTrigger id="start-log"><SelectValue placeholder="Fecha de inicio"/></SelectTrigger>
-                            <SelectContent>
-                                {allLogs.map(log => <SelectItem key={log.id} value={log.id}>{log.date} ({log.shift === 'day' ? 'Día' : 'Noche'})</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="end-log">Hasta (la más antigua)</Label>
-                         <Select value={endLog} onValueChange={setEndLog}>
-                            <SelectTrigger id="end-log"><SelectValue placeholder="Fecha de fin"/></SelectTrigger>
-                            <SelectContent>
-                                {allLogs.map(log => <SelectItem key={log.id} value={log.id}>{log.date} ({log.shift === 'day' ? 'Día' : 'Noche'})</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" disabled={isDeleting || !startLog || !endLog}>
-                                {isDeleting ? 'Eliminando...' : 'Eliminar Rango'}
-                            </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>¿Confirmar Eliminación Masiva?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                    Esta acción es permanente. Se eliminarán todas las bitácoras desde el <strong>{startLog}</strong> hasta el <strong>{endLog}</strong>.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleDeleteRange}>Sí, eliminar rango</AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </AlertDialog>
+        <Dialog>
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle>Registros Guardados</CardTitle>
+                    <CardDescription>Aquí puedes ver y gestionar todas las bitácoras de producción que has guardado.</CardDescription>
                 </div>
-            </div>
-            <Separator className="mb-6"/>
-            {loading ? (
-                <p className="text-muted-foreground text-center py-4">Cargando historial...</p>
-            ) : paginatedLogs.length > 0 ? (
-              <div className="space-y-4">
-                <ul className="space-y-2">
-                  {paginatedLogs.map((log) => (
-                    <li key={log.id} className="border p-4 rounded-md flex justify-between items-center">
-                        <span className="font-medium">
-                            {log.date} - <span className="capitalize">{log.shift === 'day' ? 'Día' : 'Noche'}</span>
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <Button asChild variant="secondary">
-                                <Link href={`/stops?date=${log.date}&shift=${log.shift}`}>Ver Bitácora</Link>
+                 <DialogTrigger asChild>
+                    <Button variant="outline" size="icon">
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                    </Button>
+                </DialogTrigger>
+            </CardHeader>
+            <CardContent>
+                {loading ? (
+                    <p className="text-muted-foreground text-center py-4">Cargando historial...</p>
+                ) : paginatedLogs.length > 0 ? (
+                <div className="space-y-4">
+                    <ul className="space-y-2">
+                    {paginatedLogs.map((log) => (
+                        <li key={log.id} className="border p-4 rounded-md flex justify-between items-center">
+                            <span className="font-medium">
+                                {log.date} - <span className="capitalize">{log.shift === 'day' ? 'Día' : 'Noche'}</span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                                <Button asChild variant="secondary">
+                                    <Link href={`/stops?date=${log.date}&shift=${log.shift}`}>Ver Bitácora</Link>
+                                </Button>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent>
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Esta acción es permanente y no se puede deshacer. Se eliminará el registro de la bitácora para el día <strong>{log.date}</strong> ({log.shift === 'day' ? 'Día' : 'Noche'}).
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => handleDeleteLog(log.id)}>
+                                                Sí, eliminar
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </div>
+                        </li>
+                    ))}
+                    </ul>
+                    {hasMore && (
+                        <div className="flex justify-center pt-4">
+                            <Button onClick={() => fetchLogs(false)} disabled={loadingMore}>
+                                {loadingMore ? 'Cargando...' : 'Cargar Más'}
                             </Button>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="icon">
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            Esta acción es permanente y no se puede deshacer. Se eliminará el registro de la bitácora para el día <strong>{log.date}</strong> ({log.shift === 'day' ? 'Día' : 'Noche'}).
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => handleDeleteLog(log.id)}>
-                                            Sí, eliminar
-                                        </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
                         </div>
-                    </li>
-                  ))}
-                </ul>
-                {hasMore && (
-                    <div className="flex justify-center pt-4">
-                        <Button onClick={() => fetchLogs(false)} disabled={loadingMore}>
-                            {loadingMore ? 'Cargando...' : 'Cargar Más'}
-                        </Button>
-                    </div>
+                    )}
+                    {!hasMore && (
+                        <p className="text-center text-muted-foreground text-sm pt-4">No hay más registros.</p>
+                    )}
+                </div>
+                ) : (
+                <p className="text-muted-foreground text-center py-4">No hay bitácoras guardadas todavía.</p>
                 )}
-                 {!hasMore && (
-                    <p className="text-center text-muted-foreground text-sm pt-4">No hay más registros.</p>
-                 )}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-center py-4">No hay bitácoras guardadas todavía.</p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+            </Card>
+            <DeleteRangeDialog allLogs={allLogs} onConfirm={handleDeleteRange} isDeleting={isDeleting} />
+        </Dialog>
       </main>
     </div>
   );
