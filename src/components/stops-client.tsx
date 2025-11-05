@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType, CategoryDefinition } from '@/lib/types';
+import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType, CategoryDefinition, BitacoraSettings } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { format, parse, setMinutes, getMinutes, getHours, isToday } from 'date-fns';
@@ -355,23 +355,29 @@ export default function StopsClient({
     }, [prefetchedProducts, familiarCategoryId]);
 
     React.useEffect(() => {
-        const savedWeightHeaderType = localStorage.getItem('weightHeaderType');
-        if (savedWeightHeaderType) {
-            try {
-                setWeightHeaderType(JSON.parse(savedWeightHeaderType));
-            } catch (e) {
-                console.error("Failed to parse weightHeaderType from localStorage", e);
+        const fetchSettings = async () => {
+            const settingsDocRef = doc(db, 'appConfiguration', 'bitacora_settings');
+            const settingsDocSnap = await getDoc(settingsDocRef);
+            if (settingsDocSnap.exists()) {
+                const settings = settingsDocSnap.data() as BitacoraSettings;
+                if (settings.weightHeaderType) {
+                    setWeightHeaderType(settings.weightHeaderType);
+                }
             }
-        }
+        };
+        fetchSettings();
     }, []);
 
-    React.useEffect(() => {
+    const handleWeightHeaderTypeChange = async (machineId: string, value: string) => {
+        const newTypes = { ...weightHeaderType, [machineId]: value };
+        setWeightHeaderType(newTypes);
         try {
-            localStorage.setItem('weightHeaderType', JSON.stringify(weightHeaderType));
+            const settingsDocRef = doc(db, 'appConfiguration', 'bitacora_settings');
+            await setDoc(settingsDocRef, { weightHeaderType: newTypes }, { merge: true });
         } catch (error) {
-            console.error("Failed to save weightHeaderType to localStorage", error);
+            console.error("Failed to save weight header type to Firestore", error);
         }
-    }, [weightHeaderType]);
+    };
 
     const createEmptyLog = React.useCallback((logDate: Date, shift: 'day' | 'night'): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
@@ -1205,7 +1211,7 @@ export default function StopsClient({
                                             <th className="p-1 sticky left-0 z-30 bg-muted"></th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">
-                                                <Select value={weightHeaderType['machine_1']} onValueChange={(val) => setWeightHeaderType(p => ({...p, machine_1: val}))}>
+                                                <Select value={weightHeaderType['machine_1']} onValueChange={(val) => handleWeightHeaderTypeChange('machine_1', val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card border-none focus:ring-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
@@ -1218,7 +1224,7 @@ export default function StopsClient({
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">
-                                                 <Select value={weightHeaderType['machine_2']} onValueChange={(val) => setWeightHeaderType(p => ({...p, machine_2: val}))}>
+                                                 <Select value={weightHeaderType['machine_2']} onValueChange={(val) => handleWeightHeaderTypeChange('machine_2', val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card border-none focus:ring-0">
                                                         <SelectValue />
                                                     </SelectTrigger>
@@ -1231,7 +1237,7 @@ export default function StopsClient({
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">Velocidad (f/min)</th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[9rem]">Observación</th>
                                             <th className="p-1 font-normal bg-purple-100 dark:bg-purple-900/50 min-w-[6rem]">
-                                                 <Select value={weightHeaderType['machine_3']} onValueChange={(val) => setWeightHeaderType(p => ({...p, machine_3: val}))}>
+                                                 <Select value={weightHeaderType['machine_3']} onValueChange={(val) => handleWeightHeaderTypeChange('machine_3', val)}>
                                                     <SelectTrigger className="h-8 text-xs bg-card border-none focus:ring-0">
                                                         <SelectValue />
                                                     </SelectTrigger>

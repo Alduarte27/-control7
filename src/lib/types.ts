@@ -124,3 +124,7 @@ export type DailyLog = {
   machines: { [machineId: string]: MachineLog };
   timeSlots: { [time: string]: Partial<TimeSlot> };
 };
+
+export type BitacoraSettings = {
+    weightHeaderType: { [key: string]: string };
+};
