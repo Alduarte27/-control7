@@ -354,6 +354,25 @@ export default function StopsClient({
         return prefetchedProducts.filter(p => p.categoryId === familiarCategoryId);
     }, [prefetchedProducts, familiarCategoryId]);
 
+    React.useEffect(() => {
+        const savedWeightHeaderType = localStorage.getItem('weightHeaderType');
+        if (savedWeightHeaderType) {
+            try {
+                setWeightHeaderType(JSON.parse(savedWeightHeaderType));
+            } catch (e) {
+                console.error("Failed to parse weightHeaderType from localStorage", e);
+            }
+        }
+    }, []);
+
+    React.useEffect(() => {
+        try {
+            localStorage.setItem('weightHeaderType', JSON.stringify(weightHeaderType));
+        } catch (error) {
+            console.error("Failed to save weightHeaderType to localStorage", error);
+        }
+    }, [weightHeaderType]);
+
     const createEmptyLog = React.useCallback((logDate: Date, shift: 'day' | 'night'): DailyLog => {
         const machineEntries: { [machineId: string]: MachineLog } = {};
         for (let i = 1; i <= NUM_MACHINES; i++) {
