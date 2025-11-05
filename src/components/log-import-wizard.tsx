@@ -287,77 +287,56 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
             if (!log.timeSlots[timeStr]) log.timeSlots[timeStr] = {};
             const slot = log.timeSlots[timeStr] as TimeSlot;
             
-            const processField = (fieldKey: string, machineIdSuffix?: string) => {
-                const mapKey = machineIdSuffix ? `${fieldKey}_${machineIdSuffix}` : fieldKey;
-                const machineId = `machine_${machineIdSuffix}`;
+            const processField = (fieldKey: string, machineIndex: number) => {
+                const machineId = `machine_${machineIndex}`;
+                
+                let sourceColumn: string | undefined;
+                let value: any;
 
-                if (mapping[mapKey] && row[mapping[mapKey]]) {
-                    const value = row[mapping[mapKey]];
-                    const fieldName = fieldKey.replace(`machine_${machineIdSuffix}_`, '');
-
-                     if (!slot[machineId]) slot[machineId] = {};
-                        
-                    if (fieldName === 'stops') {
-                        if (value && typeof value === 'string' && value.trim() !== '') {
-                            if (!slot[machineId]!.stops) slot[machineId]!.stops = [];
-                            const reason = stopCauseNames.has(value.trim()) ? value.trim() : 'No Planificada';
-                            const type = stopCauses.find(sc => sc.name === reason)?.type || 'unplanned';
-                            slot[machineId]!.stops!.push({
-                                id: new Date().toISOString() + Math.random(),
-                                startTime: timeStr,
-                                endTime: format(new Date(date.setMinutes(date.getMinutes() + 30)), 'HH:mm'),
-                                duration: 30,
-                                reason,
-                                type,
-                                cause: 'Importado desde Excel',
-                            });
-                        }
-                    } else {
-                        (slot[machineId] as any)[fieldName] = fieldName === 'speed' ? Number(value) : value;
+                if (formatType === 'wide') {
+                    sourceColumn = mapping[`${fieldKey}_${machineIndex}`];
+                    if (sourceColumn) value = row[sourceColumn];
+                } else { // long
+                    const rowMachineId = row[mapping['machine_id']];
+                    if (String(rowMachineId) === String(machineIndex)) {
+                        sourceColumn = mapping[fieldKey];
+                        if (sourceColumn) value = row[sourceColumn];
                     }
                 }
-            }
-
-            if (formatType === 'wide') {
-                for (let i = 1; i <= 3; i++) {
-                    processField(`machine_${i}_weight`);
-                    processField(`machine_${i}_speed`);
-                    processField(`machine_${i}_stops`);
-                }
-            } else { // 'long' format
-                const machineIdentifier = row[mapping['machine_id']];
-                if (machineIdentifier && ['1', '2', '3'].includes(String(machineIdentifier))) {
-                    const machineId = `machine_${machineIdentifier}`;
-                     if (!slot[machineId]) slot[machineId] = {};
-
-                    if (mapping['weight'] && row[mapping['weight']]) {
-                        (slot[machineId] as any)['weight'] = row[mapping['weight']];
-                    }
-                    if (mapping['speed'] && row[mapping['speed']]) {
-                        (slot[machineId] as any)['speed'] = Number(row[mapping['speed']]);
-                    }
-                    if (mapping['stops'] && row[mapping['stops']] && String(row[mapping['stops']]).trim() !== '') {
+                
+                if (value !== undefined && value !== null && String(value).trim() !== '') {
+                    if (!slot[machineId]) slot[machineId] = {};
+                    
+                    if (fieldKey === 'stops') {
                         if (!slot[machineId]!.stops) slot[machineId]!.stops = [];
-                        const value = String(row[mapping['stops']]).trim();
-                        const reason = stopCauseNames.has(value) ? value : 'No Planificada';
+                        const reason = stopCauseNames.has(String(value).trim()) ? String(value).trim() : 'No Planificada';
                         const type = stopCauses.find(sc => sc.name === reason)?.type || 'unplanned';
                         slot[machineId]!.stops!.push({
                             id: new Date().toISOString() + Math.random(),
                             startTime: timeStr,
-                            endTime: format(new Date(date.setMinutes(date.getMinutes() + 30)), 'HH:mm'),
+                            endTime: format(new Date(new Date().setHours(parseInt(timeStr.split(':')[0]), parseInt(timeStr.split(':')[1]) + 30)), 'HH:mm'),
                             duration: 30,
-                            reason, type,
+                            reason,
+                            type,
                             cause: 'Importado desde Excel',
                         });
+                    } else {
+                        (slot[machineId] as any)[fieldKey] = fieldKey === 'speed' ? Number(value) : value;
                     }
                 }
+            }
+
+            for (let i = 1; i <= 3; i++) {
+                processField('weight', i);
+                processField('speed', i);
+                processField('stops', i);
             }
 
             // Process common fields
             TARGET_FIELDS.filter(f => !f.format).forEach(field => {
                  if (mapping[field.value] && row[mapping[field.value]]) {
                     const value = row[mapping[field.value]];
-                     if (field.value !== 'date' && field.value !== 'time') {
+                     if (field.value !== 'date' && field.value !== 'time' && field.value !== 'operator' && field.value !== 'supervisor') {
                         (slot as any)[field.value] = value;
                     }
                  }
@@ -412,7 +391,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
         
         return filteredData.slice(0, 5).map(row => {
             const previewRow: { [key: string]: string } = {};
-            const relevantFields = TARGET_FIELDS.filter(f => !f.format || f.format === formatType);
+            const relevantFields = TARGET_FIELDS.filter(f => !f.format || f.format === formatType || f.value === 'date' || f.value === 'time');
             relevantFields.forEach(field => {
                 if (mapping[field.value]) {
                     previewRow[field.label] = row[mapping[field.value]] || '';
@@ -426,7 +405,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
 
     const previewData = step === 4 ? getPreviewData() : [];
     const visibleTargetFields = TARGET_FIELDS.filter(f => {
-        return !f.format || f.format === formatType;
+        return !f.format || f.format === formatType || f.value === 'date' || f.value === 'time';
     });
 
     return (
@@ -634,8 +613,3 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
         </Dialog>
     );
 }
-
-    
-
-    
-

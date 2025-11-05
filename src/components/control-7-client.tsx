@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -68,12 +69,7 @@ export default function Control7Client({
   const [data, setData] = React.useState<ProductData[]>([]);
   const [productSearch, setProductSearch] = React.useState('');
   
-  // Client-side search params are the source of truth for navigation
   const searchParams = useSearchParams();
-  const planIdFromUrl = searchParams.get('planId');
-
-  // Initialize date as undefined to prevent hydration mismatch.
-  // The useEffect below will set it on the client side.
   const [date, setDate] = React.useState<Date | undefined>(undefined);
   
   const [loading, setLoading] = React.useState(true);
@@ -89,20 +85,22 @@ export default function Control7Client({
   });
 
   React.useEffect(() => {
-    // This effect runs only on the client and ensures the date is set correctly,
-    // avoiding the hydration mismatch caused by `new Date()` on the server.
-    const urlPlanId = searchParams.get('planId');
-    let newDate;
-    if (urlPlanId) {
-        newDate = getDateFromPlanId(urlPlanId);
+    const planIdFromUrl = searchParams.get('planId');
+    let targetDate;
+
+    if (planIdFromUrl) {
+        const dateFromUrl = getDateFromPlanId(planIdFromUrl);
+        if (dateFromUrl) {
+            targetDate = dateFromUrl;
+        } else {
+            targetDate = new Date();
+        }
+    } else {
+        targetDate = new Date();
     }
-    
-    // If we have a valid date from URL, use it. Otherwise, default to today.
-    const targetDate = newDate || new Date();
 
     setDate(d => {
-        // Only update state if the date is different to avoid unnecessary re-renders
-        if (d?.getTime() !== targetDate.getTime()) {
+        if (!d || d.getTime() !== targetDate.getTime()) {
             return targetDate;
         }
         return d;
