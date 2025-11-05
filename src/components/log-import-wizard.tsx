@@ -259,7 +259,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                     logsToSave[logId] = {
                         id: logId,
                         shift,
-                        lote: String(format(date, 'D', { locale: es })),
+                        lote: String(format(date, 'd', { locale: es })),
                         operador: '', supervisor: '',
                         machines: { machine_1: {productId: ''}, machine_2: {productId: ''}, machine_3: {productId: ''} },
                         timeSlots: {}

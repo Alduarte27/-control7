@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType, CategoryDefinition } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
-import { format, getDayOfYear, parse, setMinutes, getMinutes, getHours, isToday } from 'date-fns';
+import { format, parse, setMinutes, getMinutes, getHours, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
@@ -364,7 +364,7 @@ export default function StopsClient({
             id: `${format(logDate, 'yyyy-MM-dd')}_${shift}`,
             operador: '',
             supervisor: '',
-            lote: String(getDayOfYear(logDate)),
+            lote: String(format(logDate, 'd', { locale: es })),
             shift: shift,
             machines: machineEntries,
             timeSlots: {}
@@ -419,7 +419,7 @@ export default function StopsClient({
                     }
                 }
 
-                if (!logData.lote) logData.lote = String(getDayOfYear(date));
+                if (!logData.lote) logData.lote = String(format(date, 'd', { locale: es }));
                 if (!logData.operador) logData.operador = '';
                 if (!logData.supervisor) logData.supervisor = '';
                 if (!logData.timeSlots) logData.timeSlots = {};
@@ -894,7 +894,7 @@ export default function StopsClient({
         const field = 'flujo';
         const value = dailyLog?.timeSlots[time]?.[field] || '';
         const options = ["Familiar", "Familiar/Granel 2", "Granel 2", "Granel 1"];
-
+        
         const handleValueChange = (newValue: string) => {
             handleCellChange(time, field, newValue);
         };
