@@ -6,16 +6,19 @@ import Papa from 'papaparse';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from './ui/dialog';
 import { Button } from './ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { ArrowLeft, ArrowRight, FileUp, Loader2, Sparkles, Table, CheckCircle2, Columns, Rows } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FileUp, Loader2, Sparkles, Table, CheckCircle2, Columns, Rows, Calendar as CalendarIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import type { DailyLog, Operator, StopCause, Supervisor, TimeSlot } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
-import { format } from 'date-fns';
+import { format, parse, isValid, min, max } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { RadioGroup, RadioGroupItem } from './ui/radio-group';
 import { Label } from './ui/label';
+import { Calendar } from './ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { DateRange } from 'react-day-picker';
 
 interface LogImportWizardProps {
     isOpen: boolean;
@@ -70,6 +73,8 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
     const [mapping, setMapping] = React.useState<{ [key: string]: string }>({});
     const [isProcessing, setIsProcessing] = React.useState(false);
     const [formatType, setFormatType] = React.useState<'wide' | 'long'>('wide');
+    const [dateRange, setDateRange] = React.useState<DateRange | undefined>();
+    const [fileDateBounds, setFileDateBounds] = React.useState<{min: Date, max: Date} | null>(null);
 
     const { toast } = useToast();
     
@@ -83,6 +88,8 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
             setMapping({});
             setIsProcessing(false);
             setFormatType('wide');
+            setDateRange(undefined);
+            setFileDateBounds(null);
         }
     }, [isOpen]);
 
@@ -155,22 +162,61 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
         if (formatType === 'long' && !mapping['machine_id']) return false;
         return true;
     }
+    
+    const goToDateFilterStep = () => {
+        const dateColumn = mapping['date'];
+        if (!dateColumn) {
+            toast({title: "Falta Mapeo", description: "Debes mapear la columna de 'Fecha'.", variant: "destructive"});
+            return;
+        }
+
+        const dates = parsedData.map(row => parse(row[dateColumn], 'yyyy-MM-dd', new Date())).filter(isValid);
+        if (dates.length > 0) {
+            const minDate = min(dates);
+            const maxDate = max(dates);
+            setFileDateBounds({ min: minDate, max: maxDate });
+            setDateRange({ from: minDate, to: maxDate });
+            setStep(3);
+        } else {
+            toast({title: "No se encontraron fechas", description: "No se pudieron encontrar fechas válidas en la columna mapeada.", variant: "destructive"});
+        }
+    };
+
 
     const processAndSaveData = async () => {
+        if (!dateRange?.from || !dateRange?.to) {
+            toast({ title: "Error de Rango", description: "Por favor, selecciona un rango de fechas válido.", variant: "destructive" });
+            return;
+        }
+
         setIsProcessing(true);
         const logsToSave: { [logId: string]: DailyLog } = {};
         const stopCauseNames = new Set(stopCauses.map(sc => sc.name));
         const operatorNames = new Set(operators.map(o => o.name));
         const supervisorNames = new Set(supervisors.map(s => s.name));
 
-        for (const row of parsedData) {
+        const filteredData = parsedData.filter(row => {
+            const dateStr = row[mapping['date']];
+            if (!dateStr) return false;
+            const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+            return isValid(date) && date >= dateRange.from! && date <= dateRange.to!;
+        });
+
+        if (filteredData.length === 0) {
+            toast({title: "Sin Datos", description: "No hay filas en tu archivo que coincidan con el rango de fechas seleccionado.", variant: "destructive"});
+            setIsProcessing(false);
+            return;
+        }
+
+
+        for (const row of filteredData) {
             const dateStr = row[mapping['date']];
             const timeStr = row[mapping['time']];
 
             if (!dateStr || !timeStr) continue;
 
-            const date = new Date(dateStr);
-            if (isNaN(date.getTime())) continue;
+            const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+            if (!isValid(date)) continue;
 
             const hour = parseInt(timeStr.split(':')[0]);
             const shift = (hour >= 7 && hour < 19) ? 'day' : 'night';
@@ -287,7 +333,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                 batch.set(docRef, log, { merge: true });
             });
             await batch.commit();
-            toast({ title: "Importación Exitosa", description: `${Object.keys(logsToSave).length} bitácoras han sido actualizadas.` });
+            toast({ title: "Importación Exitosa", description: `${Object.keys(logsToSave).length} bitácoras han sido creadas o actualizadas.` });
             onImportComplete();
         } catch (error) {
             console.error("Error saving imported logs:", error);
@@ -298,8 +344,18 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
     };
 
     const getPreviewData = () => {
-        if (parsedData.length === 0) return [];
-        return parsedData.slice(0, 5).map(row => {
+        if (!dateRange?.from || !dateRange?.to) return [];
+        
+        const filteredData = parsedData.filter(row => {
+            const dateStr = row[mapping['date']];
+            if (!dateStr) return false;
+            const date = parse(dateStr, 'yyyy-MM-dd', new Date());
+            return isValid(date) && date >= dateRange.from! && date <= dateRange.to!;
+        });
+
+        if (filteredData.length === 0) return [];
+        
+        return filteredData.slice(0, 5).map(row => {
             const previewRow: { [key: string]: string } = {};
             const relevantFields = TARGET_FIELDS.filter(f => !f.format || f.format === formatType);
             relevantFields.forEach(field => {
@@ -313,7 +369,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
         });
     };
 
-    const previewData = step === 3 ? getPreviewData() : [];
+    const previewData = step === 4 ? getPreviewData() : [];
     const visibleTargetFields = TARGET_FIELDS.filter(f => !f.format || f.format === formatType);
 
     return (
@@ -322,7 +378,12 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                 <DialogHeader>
                     <DialogTitle>Asistente de Importación de Bitácora</DialogTitle>
                     <DialogDescription>
-                        Sigue los pasos para importar tus datos desde un archivo CSV.
+                        Paso {step} de 4: {
+                            step === 1 ? "Cargar Archivo" :
+                            step === 2 ? "Formato y Mapeo de Columnas" :
+                            step === 3 ? "Filtrar Rango de Fechas" :
+                            "Previsualizar y Confirmar"
+                        }
                     </DialogDescription>
                 </DialogHeader>
 
@@ -347,8 +408,6 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                     )}
                     {step === 2 && (
                         <div>
-                            <h3 className="font-semibold text-lg mb-4">Paso 2: Formato y Mapeo de Columnas</h3>
-                            
                             <div className="mb-6 p-4 border rounded-lg bg-muted/30">
                                 <Label className="font-semibold text-base">Elige el formato de tu archivo</Label>
                                 <RadioGroup value={formatType} onValueChange={(v: 'wide' | 'long') => setFormatType(v)} className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -378,7 +437,7 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                                 {visibleTargetFields.map(field => (
                                     <div key={field.value} className="grid grid-cols-3 items-center gap-4">
                                         <div className="col-span-1">
-                                            <p className={cn("font-medium text-sm", formatType === 'long' && field.value === 'machine_id' && 'text-primary font-bold')}>{field.label}</p>
+                                            <p className={cn("font-medium text-sm", (field.value.endsWith('(Requerido)')) && 'text-primary font-bold')}>{field.label}</p>
                                             {field.example && <p className="text-xs text-muted-foreground">Ej: {field.example}</p>}
                                         </div>
                                         <div className="col-span-2">
@@ -402,9 +461,57 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                             </div>
                         </div>
                     )}
-                     {step === 3 && (
+                    {step === 3 && fileDateBounds && (
+                        <div className="flex flex-col items-center justify-center h-full">
+                            <Label className="font-semibold text-base mb-2">Selecciona el Rango de Fechas a Importar</Label>
+                             <p className="text-sm text-muted-foreground mb-4 text-center">
+                                El archivo contiene datos desde el <strong className="text-primary">{format(fileDateBounds.min, "PPP", { locale: es })}</strong> hasta el <strong className="text-primary">{format(fileDateBounds.max, "PPP", { locale: es })}</strong>.
+                                <br/>
+                                Elige el período que deseas procesar.
+                            </p>
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        id="date"
+                                        variant={"outline"}
+                                        className={cn(
+                                            "w-[300px] justify-start text-left font-normal",
+                                            !dateRange && "text-muted-foreground"
+                                        )}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {dateRange?.from ? (
+                                            dateRange.to ? (
+                                                <>
+                                                    {format(dateRange.from, "LLL dd, y", { locale: es })} -{' '}
+                                                    {format(dateRange.to, "LLL dd, y", { locale: es })}
+                                                </>
+                                            ) : (
+                                                format(dateRange.from, "LLL dd, y", { locale: es })
+                                            )
+                                        ) : (
+                                            <span>Elige un rango</span>
+                                        )}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="center">
+                                    <Calendar
+                                        initialFocus
+                                        mode="range"
+                                        defaultMonth={dateRange?.from}
+                                        selected={dateRange}
+                                        onSelect={setDateRange}
+                                        numberOfMonths={2}
+                                        min={fileDateBounds.min}
+                                        max={fileDateBounds.max}
+                                        locale={es}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    )}
+                     {step === 4 && (
                         <div>
-                            <h3 className="font-semibold text-lg mb-4">Paso 3: Previsualiza y Confirma</h3>
                             <p className="text-sm text-muted-foreground mb-4">
                                 Revisa una muestra de cómo se importarán tus datos. Si todo es correcto, procede con la importación.
                                 Las paradas se crearán con una duración de 30 minutos por cada celda con texto.
@@ -442,11 +549,16 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
                         </Button>
                     )}
                     {step === 2 && (
-                        <Button onClick={() => setStep(3)} disabled={!isMappingValid()}>
+                        <Button onClick={goToDateFilterStep} disabled={!isMappingValid()}>
+                            Siguiente <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                    )}
+                     {step === 3 && (
+                        <Button onClick={() => setStep(4)} disabled={!dateRange}>
                             Previsualizar <ArrowRight className="ml-2 h-4 w-4" />
                         </Button>
                     )}
-                    {step === 3 && (
+                    {step === 4 && (
                         <Button onClick={processAndSaveData} disabled={isProcessing}>
                             {isProcessing ? (
                                 <>
@@ -466,3 +578,5 @@ export default function LogImportWizard({ isOpen, onClose, onImportComplete, sto
         </Dialog>
     );
 }
+
+    
