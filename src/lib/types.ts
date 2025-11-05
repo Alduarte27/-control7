@@ -128,3 +128,10 @@ export type DailyLog = {
 export type BitacoraSettings = {
     weightHeaderType: { [key: string]: string };
 };
+
+export type MachineOEE = {
+    availability: number;
+    performance: number;
+    quality: number;
+    oee: number;
+};

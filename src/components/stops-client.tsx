@@ -4,13 +4,13 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Upload, HelpCircle, FileUp } from 'lucide-react';
+import { Factory, ChevronLeft, HardHat, Lock, Unlock, Settings, X, PlusCircle, Calendar as CalendarIcon, Activity, History, MoreVertical, Save, RefreshCw, CheckCircle2, Upload, HelpCircle, FileUp, Percent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType, CategoryDefinition, BitacoraSettings } from '@/lib/types';
+import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType, CategoryDefinition, BitacoraSettings, MachineOEE } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
 import { format, parse, setMinutes, getMinutes, getHours, isToday } from 'date-fns';
@@ -332,6 +332,8 @@ export default function StopsClient({
         machine_2: 'weight',
         machine_3: 'weight',
     });
+    const [machineOEE, setMachineOEE] = React.useState<{[key: string]: MachineOEE}>({});
+
 
     const [saveStatus, setSaveStatus] = React.useState<'idle' | 'dirty' | 'saving' | 'saved'>('idle');
     const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -419,6 +421,66 @@ export default function StopsClient({
             }
         }
     }, [toast]);
+
+    const calculateOEE = React.useCallback(() => {
+        if (!dailyLog) return;
+    
+        const plannedTime = 12 * 60; // 12 hours shift
+        const newOEE: {[key: string]: MachineOEE} = {};
+    
+        for (let i = 1; i <= NUM_MACHINES; i++) {
+            const machineId = `machine_${i}`;
+            const machineLog = dailyLog.machines[machineId];
+            
+            if (!machineLog || !machineLog.productId) {
+                newOEE[machineId] = { availability: 0, performance: 0, quality: 0, oee: 0 };
+                continue;
+            }
+    
+            let totalStopTime = 0;
+            let actualProductionSlots = 0;
+            let theoreticalProductionSlots = 0;
+            
+            timeSlotsForTable.forEach(time => {
+                const slotData = dailyLog.timeSlots[time]?.[machineId];
+                if (slotData) {
+                    if (slotData.stops) {
+                        slotData.stops.forEach(stop => {
+                            totalStopTime += stop.duration;
+                        });
+                    }
+                    if (slotData.speed && slotData.speed > 0) {
+                        const runtime = 30 - (slotData.stops?.reduce((sum, s) => sum + s.duration, 0) || 0);
+                        actualProductionSlots += slotData.speed * runtime;
+                        // For simplicity, using a standard theoretical speed if not defined per machine.
+                        // This should be improved by storing theoretical speed per product.
+                        const productTheoreticalSpeed = 40; // Example: bags/min
+                        theoreticalProductionSlots += productTheoreticalSpeed * runtime;
+                    }
+                }
+            });
+    
+            const runTime = plannedTime - totalStopTime;
+            const availability = (runTime / plannedTime) * 100;
+            const performance = theoreticalProductionSlots > 0 ? (actualProductionSlots / theoreticalProductionSlots) * 100 : 0;
+            const quality = 100; // Assuming 100% quality for now
+    
+            const oee = (availability / 100) * (performance / 100) * (quality / 100) * 100;
+            
+            newOEE[machineId] = {
+                availability: parseFloat(availability.toFixed(1)),
+                performance: parseFloat(performance.toFixed(1)),
+                quality: parseFloat(quality.toFixed(1)),
+                oee: parseFloat(oee.toFixed(1)),
+            };
+        }
+        setMachineOEE(newOEE);
+    }, [dailyLog, timeSlotsForTable]);
+    
+    React.useEffect(() => {
+        calculateOEE();
+    }, [dailyLog, calculateOEE]);
+
 
     React.useEffect(() => {
         const fetchLog = async () => {
@@ -1126,7 +1188,7 @@ export default function StopsClient({
                          <div className="border rounded-lg bg-card max-h-[75vh] overflow-y-auto">
                              <div className="overflow-x-auto">
                                 <table className="table-fixed min-w-full text-xs border-collapse">
-                                    <thead>
+                                    <thead className='sticky top-0 z-20'>
                                         <tr className="divide-x divide-border">
                                             <th className="p-1 align-bottom sticky left-0 z-25 bg-muted">
                                                 <div className="w-20">Hora</div>
@@ -1310,6 +1372,41 @@ export default function StopsClient({
                                         ))}
 
                                     </tbody>
+                                    <tfoot>
+                                        <tr className="divide-x divide-border bg-muted/50">
+                                            <th className="p-2 font-semibold sticky left-0 bg-muted z-10">OEE</th>
+                                            {Array.from({ length: NUM_MACHINES }).map((_, i) => {
+                                                const machineId = `machine_${i + 1}`;
+                                                const oeeData = machineOEE[machineId] || { availability: 0, performance: 0, quality: 0, oee: 0 };
+                                                return (
+                                                    <td key={`oee-${machineId}`} colSpan={3} className="p-0">
+                                                        <div className='grid grid-cols-4 divide-x divide-border text-center'>
+                                                            <div className='py-1 px-2'>
+                                                                <div className='text-xs text-muted-foreground'>A</div>
+                                                                <div className='font-bold'>{oeeData.availability}%</div>
+                                                            </div>
+                                                            <div className='py-1 px-2'>
+                                                                <div className='text-xs text-muted-foreground'>P</div>
+                                                                <div className='font-bold'>{oeeData.performance}%</div>
+                                                            </div>
+                                                            <div className='py-1 px-2'>
+                                                                <div className='text-xs text-muted-foreground'>Q</div>
+                                                                <div className='font-bold'>{oeeData.quality}%</div>
+                                                            </div>
+                                                            <div className='py-1 px-2 bg-primary/10'>
+                                                                <div className='text-xs font-bold text-primary'>OEE</div>
+                                                                <div className='font-bold text-primary'>{oeeData.oee}%</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                )
+                                            })}
+                                            <td colSpan={16} className="p-1 text-center text-muted-foreground">
+                                                <Percent className="inline-block h-4 w-4 mr-2" />
+                                                Overall Equipment Effectiveness (Eficiencia General del Equipo)
+                                            </td>
+                                        </tr>
+                                    </tfoot>
                                 </table>
                             </div>
                         </div>
@@ -1360,3 +1457,4 @@ export default function StopsClient({
         </div>
     );
 }
+
