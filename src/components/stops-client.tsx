@@ -558,6 +558,7 @@ export default function StopsClient({
     const handleCellChange = (timeSlot: string, field: keyof TimeSlot, value: string | number, machineId?: string) => {
         triggerChange(prev => {
             const newTimeSlots = JSON.parse(JSON.stringify(prev.timeSlots));
+            const valueToSet = value === '_' ? '' : value;
             
             if (!newTimeSlots[timeSlot]) {
                 newTimeSlots[timeSlot] = {};
@@ -570,9 +571,9 @@ export default function StopsClient({
                     timeSlotData[machineId] = {};
                 }
                 const machineData = timeSlotData[machineId] as { [key: string]: any };
-                machineData[field as string] = value;
+                machineData[field as string] = valueToSet;
             } else {
-                (timeSlotData as any)[field] = value;
+                (timeSlotData as any)[field] = valueToSet;
             }
 
             return { ...prev, timeSlots: newTimeSlots };
@@ -868,7 +869,7 @@ export default function StopsClient({
         const value = dailyLog?.timeSlots[time]?.[field] || '';
 
         const handleValueChange = (newValue: string) => {
-            handleCellChange(time, field, newValue === "_" ? "" : newValue);
+            handleCellChange(time, field, newValue);
         };
 
         return (
@@ -894,7 +895,7 @@ export default function StopsClient({
         const options = ["Familiar", "Familiar/Granel 2", "Granel 2", "Granel 1"];
 
         const handleValueChange = (newValue: string) => {
-            handleCellChange(time, field, newValue === "_" ? "" : newValue);
+            handleCellChange(time, field, newValue);
         };
 
         return (
@@ -919,7 +920,7 @@ export default function StopsClient({
         const options = ["0.01", "0.02", "0.03", "0.04", "0.05", "0.06", "0.07", "0.08"];
         
         const handleValueChange = (newValue: string) => {
-            handleCellChange(time, field, newValue === "_" ? "" : newValue);
+            handleCellChange(time, field, newValue);
         };
 
         return (
