@@ -135,3 +135,27 @@ export type MachineOEE = {
     quality: number;
     oee: number;
 };
+
+// --- Packaging Materials Control ---
+
+export type MaterialType = 'sacos' | 'rollo_envasado' | 'rollo_enfardado';
+export type MaterialStatus = 'recibido' | 'en_uso' | 'consumido';
+
+export const materialTypeLabels: { [key in MaterialType]: string } = {
+  sacos: "Paca de Sacos",
+  rollo_envasado: "Rollo de Envasado",
+  rollo_enfardado: "Rollo de Enfardado",
+};
+
+export type PackagingMaterial = {
+    id: string;
+    type: MaterialType;
+    code: string; // Unique code for the roll/bale, can be scanned or manually entered
+    labelWeight: number; // Weight from the supplier's label
+    actualWeight?: number; // Real weight measured before use
+    status: MaterialStatus;
+    receivedAt: number; // Timestamp
+    inUseAt?: number; // Timestamp
+    consumedAt?: number; // Timestamp
+    assignedMachine?: string; // e.g., 'machine_1'
+};

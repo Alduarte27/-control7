@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, Activity, CalendarCheck2 } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, Activity, CalendarCheck2, Boxes } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -87,6 +87,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
           <NavButton href="/ia" icon={Sparkles} label="Operaciones" tooltipText="Operaciones y Simulación" />
           <NavButton href="/dashboard" icon={LayoutDashboard} label="Dashboard" tooltipText="Dashboard General" />
           <NavButton href="/stops" icon={HardHat} label="Bitácora" tooltipText="Bitácora de Producción" />
+          <NavButton href="/materials" icon={Boxes} label="Materiales" tooltipText="Control de Materiales" />
           <NavButton href="/history" icon={History} label="Historial Planes" tooltipText="Historial de Planes" />
           <NavButton href="/admin" icon={Settings} label="Admin" tooltipText="Administración" />
           
@@ -136,6 +137,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                     <DropdownMenuItem asChild><Link href="/ia" className="flex items-center"><Sparkles className="mr-2 h-4 w-4" />Operaciones</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/dashboard" className="flex items-center"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/stops" className="flex items-center"><HardHat className="mr-2 h-4 w-4" />Bitácora</Link></DropdownMenuItem>
+                    <DropdownMenuItem asChild><Link href="/materials" className="flex items-center"><Boxes className="mr-2 h-4 w-4" />Materiales</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial Planes</Link></DropdownMenuItem>
                     <DropdownMenuItem asChild><Link href="/admin" className="flex items-center"><Settings className="mr-2 h-4 w-4" />Admin</Link></DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
