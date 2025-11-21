@@ -1,10 +1,8 @@
-
-
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,6 +91,173 @@ function ConfigModal({
     )
 }
 
+function EditMaterialDialog({ 
+    material,
+    onClose,
+    onSave,
+}: { 
+    material: PackagingMaterial;
+    onClose: () => void;
+    onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
+}) {
+    const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
+
+    const handleChange = (field: keyof PackagingMaterial, value: any) => {
+        setEditedMaterial(prev => ({...prev, [field]: value}));
+    };
+
+    const handleSaveChanges = () => {
+        const { id, type, supplier, receivedAt, status, ...updates } = editedMaterial;
+        onSave(material.id, updates);
+    };
+
+    const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
+    const isPlasticsacks = material.supplier?.toUpperCase().startsWith('PLASTICSACKS');
+
+    return (
+        <Dialog open={true} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Editar Material</DialogTitle>
+                    <DialogDescription>
+                        Código: <span className="font-mono">{material.code}</span>
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                     <div className="space-y-1.5">
+                        <Label htmlFor="edit-code">Código</Label>
+                        <Input id="edit-code" value={editedMaterial.code || ''} onChange={e => handleChange('code', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="edit-presentation">Presentación</Label>
+                        <Input id="edit-presentation" value={editedMaterial.presentation || ''} onChange={e => handleChange('presentation', e.target.value)} />
+                    </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="edit-lote">Lote</Label>
+                            <Input id="edit-lote" value={editedMaterial.lote || ''} onChange={e => handleChange('lote', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="edit-ot">O/T</Label>
+                            <Input id="edit-ot" value={editedMaterial.ot || ''} onChange={e => handleChange('ot', e.target.value)} />
+                        </div>
+                    </div>
+                    
+                    {isSacosType ? (
+                        isPlasticsacks ? (
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="edit-quantity">Cantidad</Label>
+                                    <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))}/>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="edit-total-weight">Peso Neto (kg)</Label>
+                                    <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))}/>
+                                </div>
+                            </div>
+                        ) : (
+                             <div className="grid grid-cols-3 gap-2">
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="edit-quantity">Cantidad</Label>
+                                    <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))}/>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="edit-unit-weight">Peso/Und (g)</Label>
+                                    <Input id="edit-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={e => handleChange('unitWeight', Number(e.target.value))}/>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="edit-total-weight">Peso Total (kg)</Label>
+                                    <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))}/>
+                                </div>
+                            </div>
+                        )
+                    ) : (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="edit-net-weight">Peso Neto (kg)</Label>
+                                <Input id="edit-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={e => handleChange('netWeight', Number(e.target.value))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="edit-gross-weight">Peso Bruto (kg)</Label>
+                                <Input id="edit-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={e => handleChange('grossWeight', Number(e.target.value))} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
+                    <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+
+function TraceabilityDialog({ material, onClose }: { material: PackagingMaterial; onClose: () => void }) {
+    const formatTimestamp = (ts: number | undefined) => {
+        if (!ts) return 'N/A';
+        return format(new Date(ts), "PPP p", { locale: es });
+    };
+
+    const timeline = [
+        {
+            status: 'Recibido',
+            timestamp: material.receivedAt,
+            icon: Inbox,
+            details: `Registrado en el sistema.`
+        },
+        {
+            status: 'En Uso',
+            timestamp: material.inUseAt,
+            icon: Weight,
+            details: `Pesado y puesto en uso. Peso Real: ${material.actualWeight || 'N/A'} kg. Asignado a: ${material.assignedMachine || 'N/A'}.`
+        },
+        {
+            status: 'Consumido',
+            timestamp: material.consumedAt,
+            icon: PackageCheck,
+            details: `Material marcado como consumido.`
+        }
+    ].filter(item => item.timestamp);
+
+    return (
+        <Dialog open={true} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Trazabilidad del Material</DialogTitle>
+                    <DialogDescription className="break-all">
+                        Historial completo para el código: <span className="font-mono font-bold">{material.code}</span>
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <ul className="space-y-6">
+                        {timeline.map((item, index) => (
+                            <li key={item.status} className="flex items-start gap-4">
+                                <div className={cn("flex flex-col items-center", index === timeline.length - 1 && "flex-grow-0")}>
+                                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground">
+                                        <item.icon className="h-5 w-5" />
+                                    </div>
+                                    {index < timeline.length - 1 && <div className="w-px h-12 bg-border mt-1"></div>}
+                                </div>
+                                <div>
+                                    <h4 className="font-semibold">{item.status}</h4>
+                                    <p className="text-sm text-muted-foreground">{formatTimestamp(item.timestamp)}</p>
+                                    <p className="text-sm mt-1">{item.details}</p>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button>Cerrar</Button></DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
 function MaterialActionDialog({
   material,
   action,
@@ -172,7 +337,21 @@ function MaterialActionDialog({
 }
 
 
-function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }: { material: PackagingMaterial, onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume') => void, onSelectionChange: (id: string, checked: boolean) => void, isSelected: boolean }) {
+function MaterialCard({ 
+    material, 
+    onActionClick, 
+    onSelectionChange, 
+    isSelected,
+    onEditClick,
+    onTraceClick,
+}: { 
+    material: PackagingMaterial, 
+    onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume') => void, 
+    onSelectionChange: (id: string, checked: boolean) => void, 
+    isSelected: boolean,
+    onEditClick: (material: PackagingMaterial) => void,
+    onTraceClick: (material: PackagingMaterial) => void,
+}) {
     const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
         recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
         en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
@@ -248,7 +427,12 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
 
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
-            <div className="absolute top-2 right-2">
+            <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                {material.status === 'recibido' && (
+                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditClick(material)}>
+                        <Edit className="h-4 w-4" />
+                    </Button>
+                )}
                 <Checkbox
                     checked={isSelected}
                     onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
@@ -259,7 +443,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
                  <div className="flex justify-between items-start">
                     <div>
                         <CardDescription>{material.presentation || materialTypeLabels[material.type]}</CardDescription>
-                        <CardTitle className="text-4xl font-bold text-primary">
+                        <CardTitle className="text-4xl font-bold text-primary hover:underline cursor-pointer" onClick={() => onTraceClick(material)}>
                             #{getShortCode(material.code)}
                         </CardTitle>
                         <p className="text-xs text-muted-foreground font-mono break-all">{material.code}</p>
@@ -392,6 +576,17 @@ export default function MaterialsClient({
     const unitWeightInputRef = React.useRef<HTMLInputElement>(null);
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
+    
+    // New states for editing and traceability
+    const [editingMaterial, setEditingMaterial] = React.useState<PackagingMaterial | null>(null);
+    const [traceMaterial, setTraceMaterial] = React.useState<PackagingMaterial | null>(null);
+
+    // New states for filtering
+    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
+    const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
+    const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
+    const [searchQuery, setSearchQuery] = React.useState('');
+
 
     const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
@@ -426,6 +621,22 @@ export default function MaterialsClient({
             setNewMaterialType(availableMaterialTypes[0] || 'sacos_familiar');
         }
     }, [availableMaterialTypes, newMaterialType]);
+
+    const filteredMaterials = React.useMemo(() => {
+        return materials.filter(material => {
+            const statusMatch = statusFilter === 'all' || material.status === statusFilter;
+            const typeMatch = typeFilter === 'all' || material.type === typeFilter;
+            const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
+
+            const searchMatch = !searchQuery ||
+                material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                (material.ot && material.ot.toLowerCase().includes(searchQuery.toLowerCase()));
+
+            return statusMatch && typeMatch && supplierMatch && searchMatch;
+        });
+    }, [materials, statusFilter, typeFilter, supplierFilter, searchQuery, suppliers]);
+
 
     const handleConfigSave = async (type: 'supplier', data: any, action: 'add' | 'delete') => {
         if (type !== 'supplier') return;
@@ -626,6 +837,19 @@ export default function MaterialsClient({
         setActionState(null);
     };
 
+     const handleEditSave = async (id: string, updates: Partial<PackagingMaterial>) => {
+        try {
+            await updateDoc(doc(db, 'packagingMaterials', id), updates);
+            setMaterials(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+            toast({ title: 'Material Actualizado', description: `Se guardaron los cambios para el material.` });
+            setEditingMaterial(null);
+        } catch (error) {
+            console.error("Error updating material:", error);
+            toast({ title: 'Error', description: 'No se pudo actualizar el material.', variant: 'destructive' });
+        }
+    };
+
+
     const handleSelectionChange = (id: string, checked: boolean) => {
         setSelectedMaterials(prev => {
             const newSet = new Set(prev);
@@ -819,10 +1043,43 @@ export default function MaterialsClient({
 
                     <Card>
                          <CardHeader>
-                            <div className="flex justify-between items-center">
+                            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                                 <div>
                                     <CardTitle>Inventario en Área de Empaque</CardTitle>
                                     <CardDescription>Visualiza los materiales recibidos, en uso y consumidos.</CardDescription>
+                                </div>
+                                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full md:w-auto">
+                                    <Input
+                                        placeholder="Buscar por código, lote..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="sm:max-w-xs"
+                                    />
+                                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos los Estados</SelectItem>
+                                            <SelectItem value="recibido">Recibido</SelectItem>
+                                            <SelectItem value="en_uso">En Uso</SelectItem>
+                                            <SelectItem value="consumido">Consumido</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                     <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos los Tipos</SelectItem>
+                                            {Object.entries(materialTypeLabels).map(([key, label]) => (
+                                                <SelectItem key={key} value={key}>{label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                     <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos los Proveedores</SelectItem>
+                                            {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 {selectedMaterials.size > 0 && (
                                     <AlertDialog>
@@ -849,20 +1106,25 @@ export default function MaterialsClient({
                             </div>
                         </CardHeader>
                         <CardContent>
-                            {materials.length > 0 ? (
+                            {filteredMaterials.length > 0 ? (
                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                    {materials.map(material => (
+                                    {filteredMaterials.map(material => (
                                         <MaterialCard
                                             key={material.id}
                                             material={material}
                                             onActionClick={(mat, action) => setActionState({ material: mat, action })}
                                             onSelectionChange={handleSelectionChange}
                                             isSelected={selectedMaterials.has(material.id)}
+                                            onEditClick={setEditingMaterial}
+                                            onTraceClick={setTraceMaterial}
                                         />
                                     ))}
                                 </div>
                             ) : (
-                                <p className="text-center text-muted-foreground py-8">No hay materiales registrados. Comienza añadiendo uno.</p>
+                                <div className="text-center py-12">
+                                    <p className="font-semibold text-lg">No se encontraron materiales</p>
+                                    <p className="text-muted-foreground mt-2">Intenta ajustar tus filtros o registrar un nuevo material.</p>
+                                </div>
                             )}
                         </CardContent>
                     </Card>
@@ -879,6 +1141,19 @@ export default function MaterialsClient({
                     action={actionState.action}
                     onClose={() => setActionState(null)}
                     onConfirm={handleActionConfirm}
+                />
+            )}
+            {editingMaterial && (
+                <EditMaterialDialog 
+                    material={editingMaterial}
+                    onClose={() => setEditingMaterial(null)}
+                    onSave={handleEditSave}
+                />
+            )}
+            {traceMaterial && (
+                <TraceabilityDialog
+                    material={traceMaterial}
+                    onClose={() => setTraceMaterial(null)}
                 />
             )}
              {configOpen && (
