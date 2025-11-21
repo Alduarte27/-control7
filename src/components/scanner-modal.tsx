@@ -24,21 +24,6 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
   const { toast } = useToast();
   const animationFrameId = useRef<number>();
 
-  const scanWithBarcodeDetector = useCallback(async (video: HTMLVideoElement, detector: any) => {
-    try {
-        const barcodes = await detector.detect(video);
-        if (barcodes.length > 0) {
-            onScanSuccess(barcodes[0].rawValue);
-        } else {
-            animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(video, detector));
-        }
-    } catch (error) {
-        console.error("Barcode Detector error:", error);
-        // Fallback to jsQR if BarcodeDetector fails unexpectedly
-        animationFrameId.current = requestAnimationFrame(scanWithJsQR);
-    }
-  }, [onScanSuccess, scanWithJsQR]);
-
   const scanWithJsQR = useCallback(() => {
     if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
       const canvas = canvasRef.current;
@@ -65,6 +50,22 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
        animationFrameId.current = requestAnimationFrame(scanWithJsQR);
     }
   }, [onScanSuccess]);
+
+  const scanWithBarcodeDetector = useCallback(async (video: HTMLVideoElement, detector: any) => {
+    try {
+        const barcodes = await detector.detect(video);
+        if (barcodes.length > 0) {
+            onScanSuccess(barcodes[0].rawValue);
+        } else {
+            animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(video, detector));
+        }
+    } catch (error) {
+        console.error("Barcode Detector error:", error);
+        // Fallback to jsQR if BarcodeDetector fails unexpectedly
+        animationFrameId.current = requestAnimationFrame(scanWithJsQR);
+    }
+  }, [onScanSuccess, scanWithJsQR]);
+
 
   useEffect(() => {
     if (!isOpen) {
