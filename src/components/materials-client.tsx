@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import React from 'react';
@@ -277,6 +275,7 @@ function TareWeightDialog({
 }) {
     const [plasticWeight, setPlasticWeight] = React.useState('');
     const [coreWeight, setCoreWeight] = React.useState('');
+    const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
 
     const totalTare = (parseFloat(plasticWeight) || 0) + (parseFloat(coreWeight) || 0);
     const actualNetWeight = (material.actualWeight || 0) - totalTare;
@@ -287,8 +286,6 @@ function TareWeightDialog({
             coreWeight: parseFloat(coreWeight) || 0,
         });
     };
-
-    const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
 
     return (
         <Dialog open={true} onOpenChange={onClose}>
@@ -494,11 +491,19 @@ function MaterialCard({
     };
 
     const currentStatus = statusConfig[material.status];
+    const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
+    const isRollosType = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
 
     const getPerformance = () => {
-        if (material.status !== 'consumido' || !material.actualNetWeight) return null;
+        if (material.status !== 'consumido' || material.actualNetWeight === undefined) return null;
         
-        const referenceWeight = material.netWeight || material.totalWeight || 0;
+        let referenceWeight = 0;
+        if (isRollosType) {
+            referenceWeight = material.netWeight || 0;
+        } else if (isSacosType) {
+            referenceWeight = material.totalWeight || 0;
+        }
+
         if(referenceWeight === 0) return null;
 
         const performance = (material.actualNetWeight / referenceWeight) * 100;
@@ -524,8 +529,7 @@ function MaterialCard({
 
         if (material.status !== 'consumido' || material.tareWeight === undefined) return null;
 
-        const isRollos = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
-        const referenceTare = isRollos ? material.labelTare : 0;
+        const referenceTare = isRollosType ? material.labelTare : 0; // Sacos no tienen tara de etiqueta
         
         const discrepancy = material.tareWeight - (referenceTare || 0);
         const color = Math.abs(discrepancy) > 0.1 ? 'text-red-600' : 'text-green-600';
@@ -537,9 +541,6 @@ function MaterialCard({
             </div>
         );
     };
-
-    const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
-    const isRollosType = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
 
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
@@ -594,7 +595,7 @@ function MaterialCard({
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            <div className="grid grid-cols-3 gap-2 text-center">
+                             <div className="grid grid-cols-3 gap-2 text-center">
                                 <div className="space-y-1">
                                     <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
                                     <p className="font-semibold text-lg">{material.netWeight} kg</p>
@@ -609,7 +610,7 @@ function MaterialCard({
                                 </div>
                             </div>
                             <Separator />
-                            <div className="grid grid-cols-3 gap-2 text-center">
+                             <div className="grid grid-cols-3 gap-2 text-center">
                                 <div className="space-y-1">
                                     <p className="text-muted-foreground">Peso Bruto (Balanza)</p>
                                     <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
