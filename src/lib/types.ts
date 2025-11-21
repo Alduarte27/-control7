@@ -151,7 +151,8 @@ export type PackagingMaterial = {
     id: string;
     type: MaterialType;
     code: string; // Unique code for the roll/bale, can be scanned or manually entered
-    labelWeight: number; // Weight from the supplier's label
+    netWeight: number; // Net weight from the supplier's label
+    grossWeight?: number; // Gross weight from the supplier's label
     actualWeight?: number; // Real weight measured before use
     status: MaterialStatus;
     receivedAt: number; // Timestamp
@@ -159,3 +160,5 @@ export type PackagingMaterial = {
     consumedAt?: number; // Timestamp
     assignedMachine?: string; // e.g., 'machine_1'
 };
+
+declare module 'jsqr';

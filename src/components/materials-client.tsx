@@ -111,8 +111,9 @@ function MaterialCard({ material, onActionClick }: { material: PackagingMaterial
 
     const getDiscrepancy = () => {
         if (material.status === 'recibido' || !material.actualWeight) return null;
-        const diff = material.actualWeight - material.labelWeight;
-        const diffPercentage = (diff / material.labelWeight) * 100;
+        const baseWeight = material.grossWeight || material.netWeight;
+        const diff = material.actualWeight - baseWeight;
+        const diffPercentage = (diff / baseWeight) * 100;
         const color = diff >= 0 ? 'text-green-600' : 'text-red-600';
 
         return (
@@ -137,14 +138,18 @@ function MaterialCard({ material, onActionClick }: { material: PackagingMaterial
             <CardContent className="flex-grow space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="space-y-1">
-                        <p className="text-muted-foreground">Peso Etiqueta</p>
-                        <p className="font-semibold text-lg">{material.labelWeight} kg</p>
+                        <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
+                        <p className="font-semibold text-lg">{material.netWeight} kg</p>
+                    </div>
+                     <div className="space-y-1">
+                        <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
+                        <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
                     </div>
                     <div className="space-y-1">
                         <p className="text-muted-foreground">Peso Real</p>
                         <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight} kg` : 'N/A'}</p>
                     </div>
-                     <div className="col-span-2 space-y-1">
+                     <div className="space-y-1">
                         <p className="text-muted-foreground">Discrepancia</p>
                         {getDiscrepancy() || <p className="text-sm text-muted-foreground">Pendiente de pesar</p>}
                     </div>
@@ -196,8 +201,13 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
                 setHasPermission(false);
                 return;
             }
-            const formats = await (window as any).BarcodeDetector.getSupportedFormats();
-            barcodeDetector = new (window as any).BarcodeDetector({ formats });
+            try {
+                const formats = await (window as any).BarcodeDetector.getSupportedFormats();
+                barcodeDetector = new (window as any).BarcodeDetector({ formats });
+            } catch (e) {
+                 setError("No se pudo inicializar el detector de códigos de barras.");
+                 setHasPermission(false);
+            }
         };
 
         const tick = async () => {
@@ -316,24 +326,26 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
     const [materials, setMaterials] = React.useState<PackagingMaterial[]>(initialMaterials);
     const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
-    const [newMaterialLabelWeight, setNewMaterialLabelWeight] = React.useState('');
+    const [newMaterialNetWeight, setNewMaterialNetWeight] = React.useState('');
+    const [newMaterialGrossWeight, setNewMaterialGrossWeight] = React.useState('');
     const { toast } = useToast();
     const [isScannerOpen, setIsScannerOpen] = React.useState(false);
-    const weightInputRef = React.useRef<HTMLInputElement>(null);
+    const netWeightInputRef = React.useRef<HTMLInputElement>(null);
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
 
 
     const handleAddMaterial = async () => {
-        if (!newMaterialCode.trim() || !newMaterialLabelWeight) {
-            toast({ title: "Error", description: "El código y el peso de etiqueta son obligatorios.", variant: "destructive" });
+        if (!newMaterialCode.trim() || !newMaterialNetWeight) {
+            toast({ title: "Error", description: "El código y el peso neto son obligatorios.", variant: "destructive" });
             return;
         }
 
         const newMaterial: Omit<PackagingMaterial, 'id'> = {
             type: newMaterialType,
             code: newMaterialCode.trim(),
-            labelWeight: parseFloat(newMaterialLabelWeight),
+            netWeight: parseFloat(newMaterialNetWeight),
+            grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight) : undefined,
             status: 'recibido',
             receivedAt: Date.now(),
         };
@@ -343,7 +355,8 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
             setMaterials(prev => [{ id: docRef.id, ...newMaterial } as PackagingMaterial, ...prev]);
 
             setNewMaterialCode('');
-            setNewMaterialLabelWeight('');
+            setNewMaterialNetWeight('');
+            setNewMaterialGrossWeight('');
             toast({ title: 'Material Registrado', description: `Se ha registrado el material con código ${newMaterial.code}.` });
         } catch (error) {
             console.error("Error adding material:", error);
@@ -358,7 +371,7 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
             title: "Código Escaneado",
             description: `Código detectado: ${code}`,
         });
-        weightInputRef.current?.focus();
+        netWeightInputRef.current?.focus();
     };
 
     const handleActionConfirm = async (data: { actualWeight?: number, assignedMachine?: string }) => {
@@ -417,8 +430,8 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
                             <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex flex-col md:flex-row items-end gap-4">
-                                <div className="w-full md:w-auto md:flex-grow-[2] space-y-1.5">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                                <div className="space-y-1.5">
                                     <Label htmlFor="material-type">Tipo de Material</Label>
                                     <Select value={newMaterialType} onValueChange={(v) => setNewMaterialType(v as MaterialType)}>
                                         <SelectTrigger id="material-type">
@@ -431,7 +444,7 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                <div className="w-full md:w-auto md:flex-grow-[3] space-y-1.5">
+                                <div className="space-y-1.5">
                                     <Label htmlFor="material-code">Código de Rollo / Paca</Label>
                                     <div className="flex gap-2">
                                         <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Ej: ROLLO-12345 o escanear" />
@@ -440,18 +453,30 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
                                         </Button>
                                     </div>
                                 </div>
-                                <div className="w-full md:w-auto md:flex-grow-[1] space-y-1.5">
-                                    <Label htmlFor="material-label-weight">Peso Etiqueta (kg)</Label>
-                                    <Input 
-                                        id="material-label-weight" 
-                                        ref={weightInputRef}
-                                        type="number" 
-                                        value={newMaterialLabelWeight} 
-                                        onChange={(e) => setNewMaterialLabelWeight(e.target.value)} 
-                                        placeholder="Ej: 35.6" 
-                                    />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
+                                        <Input 
+                                            id="material-net-weight" 
+                                            ref={netWeightInputRef}
+                                            type="number" 
+                                            value={newMaterialNetWeight} 
+                                            onChange={(e) => setNewMaterialNetWeight(e.target.value)} 
+                                            placeholder="Ej: 72.85" 
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
+                                        <Input 
+                                            id="material-gross-weight" 
+                                            type="number" 
+                                            value={newMaterialGrossWeight} 
+                                            onChange={(e) => setNewMaterialGrossWeight(e.target.value)} 
+                                            placeholder="Ej: 74.05" 
+                                        />
+                                    </div>
                                 </div>
-                                <Button onClick={handleAddMaterial} className="w-full md:w-auto">
+                                <Button onClick={handleAddMaterial} className="w-full">
                                     <PlusCircle className="mr-2 h-4 w-4" />
                                     Registrar Material
                                 </Button>
