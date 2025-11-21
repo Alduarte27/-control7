@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
@@ -34,7 +33,7 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
 
   const scanWithJsQR = useCallback(() => {
     if (!isScanningActive) {
-      animationFrameId.current = requestAnimationFrame(scanWithJsQR);
+      animationFrameId.current = requestAnimationFrame(scanWithJsQR); // Keep the loop running
       return;
     }
     if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
@@ -63,8 +62,8 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
   }, [onScanSuccess, isScanningActive]);
 
   const scanWithBarcodeDetector = useCallback(async (video: HTMLVideoElement, detector: any) => {
-    if (!isScanningActive) {
-      animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(video, detector));
+     if (!isScanningActive) {
+      animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(video, detector)); // Keep the loop running
       return;
     }
     try {
