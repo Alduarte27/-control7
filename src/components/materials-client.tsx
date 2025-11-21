@@ -260,7 +260,10 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
                             #{getShortCode(material.code)}
                         </CardTitle>
                         <p className="text-xs text-muted-foreground font-mono">{material.code}</p>
-                        {material.supplier && <p className="text-xs text-muted-foreground pt-1">Proveedor: {material.supplier}</p>}
+                        <div className="text-xs text-muted-foreground pt-1 space-y-0.5">
+                            {material.supplier && <p>Proveedor: {material.supplier}</p>}
+                            {material.lote && <p>Lote: {material.lote}</p>}
+                        </div>
                     </div>
                     <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full", currentStatus.color)}>
                         <currentStatus.icon className="h-3 w-3" />
@@ -360,6 +363,7 @@ export default function MaterialsClient({
     const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos_familiar');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
+    const [newMaterialLote, setNewMaterialLote] = React.useState('');
     
     // States for common fields
     const [newMaterialPresentation, setNewMaterialPresentation] = React.useState('');
@@ -371,6 +375,7 @@ export default function MaterialsClient({
     // States for sacos type
     const [newMaterialQuantity, setNewMaterialQuantity] = React.useState('');
     const [newMaterialUnitWeight, setNewMaterialUnitWeight] = React.useState('');
+    const [newMaterialTotalWeight, setNewMaterialTotalWeight] = React.useState('');
 
     const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());
     const { toast } = useToast();
@@ -381,7 +386,9 @@ export default function MaterialsClient({
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
 
+    const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
+    const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
     const granelCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'granel')?.id, [allCategories]);
@@ -397,15 +404,14 @@ export default function MaterialsClient({
     }, [allProducts, granelCategoryId]);
 
     const availableMaterialTypes = React.useMemo(() => {
-        const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
-        const supplierKey = supplierName.trim().toUpperCase();
-        const mappedTypes = Object.keys(supplierMaterialMapping).find(key => supplierKey.startsWith(key));
+        const upperCaseSupplierName = supplierName.trim().toUpperCase();
+        const mappedTypesKey = Object.keys(supplierMaterialMapping).find(key => upperCaseSupplierName.startsWith(key));
         
-        if (mappedTypes) {
-            return supplierMaterialMapping[mappedTypes];
+        if (mappedTypesKey) {
+            return supplierMaterialMapping[mappedTypesKey];
         }
         return Object.keys(materialTypeLabels) as MaterialType[];
-    }, [newMaterialSupplier, suppliers]);
+    }, [newMaterialSupplier, suppliers, supplierName]);
     
     React.useEffect(() => {
         if (!availableMaterialTypes.includes(newMaterialType)) {
@@ -455,33 +461,50 @@ export default function MaterialsClient({
             }
 
             let newMaterialData: Omit<PackagingMaterial, 'id'>;
-            const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
 
             if (isSacosType) {
-                 if (!newMaterialQuantity || !newMaterialUnitWeight) {
-                    toast({ title: "Error", description: "La cantidad y el peso por unidad son obligatorios para Sacos.", variant: "destructive" });
-                    return;
-                }
-                const quantity = parseInt(newMaterialQuantity, 10);
-                const unitWeightGrams = parseFloat(newMaterialUnitWeight.replace(',', '.'));
-                
-                // Use net weight if provided (from QR), otherwise calculate it
-                const totalWeightKg = newMaterialNetWeight 
-                    ? parseFloat(newMaterialNetWeight.replace(',', '.')) 
-                    : (quantity * unitWeightGrams) / 1000;
+                 if (isPlasticsacks) {
+                    if (!newMaterialQuantity || !newMaterialNetWeight) {
+                        toast({ title: "Error", description: "La cantidad y el peso neto son obligatorios para este proveedor.", variant: "destructive" });
+                        return;
+                    }
+                    newMaterialData = {
+                        type: newMaterialType,
+                        code: trimmedCode,
+                        supplier: supplierName,
+                        presentation: newMaterialPresentation.trim(),
+                        lote: newMaterialLote.trim(),
+                        quantity: parseInt(newMaterialQuantity, 10),
+                        totalWeight: parseFloat(newMaterialNetWeight.replace(',', '.')),
+                        status: 'recibido',
+                        receivedAt: Date.now(),
+                    };
+                 } else { // REYSAC etc.
+                    if (!newMaterialQuantity || !newMaterialUnitWeight) {
+                        toast({ title: "Error", description: "La cantidad y el peso por unidad son obligatorios para Sacos.", variant: "destructive" });
+                        return;
+                    }
+                    const quantity = parseInt(newMaterialQuantity, 10);
+                    const unitWeightGrams = parseFloat(newMaterialUnitWeight.replace(',', '.'));
+                    
+                    const totalWeightKg = newMaterialTotalWeight
+                        ? parseFloat(newMaterialTotalWeight.replace(',', '.')) 
+                        : (quantity * unitWeightGrams) / 1000;
 
-                newMaterialData = {
-                    type: newMaterialType,
-                    code: trimmedCode,
-                    supplier: supplierName,
-                    presentation: newMaterialPresentation.trim(),
-                    quantity,
-                    unitWeight: unitWeightGrams,
-                    totalWeight: totalWeightKg,
-                    status: 'recibido',
-                    receivedAt: Date.now(),
-                };
-            } else {
+                    newMaterialData = {
+                        type: newMaterialType,
+                        code: trimmedCode,
+                        supplier: supplierName,
+                        presentation: newMaterialPresentation.trim(),
+                        lote: newMaterialLote.trim(),
+                        quantity,
+                        unitWeight: unitWeightGrams,
+                        totalWeight: totalWeightKg,
+                        status: 'recibido',
+                        receivedAt: Date.now(),
+                    };
+                 }
+            } else { // Rollos
                  if (!newMaterialNetWeight && newMaterialType !== 'rollo_fardo') {
                     toast({ title: "Error", description: "El peso neto es obligatorio para este tipo de material.", variant: "destructive" });
                     return;
@@ -491,6 +514,7 @@ export default function MaterialsClient({
                     code: trimmedCode,
                     supplier: supplierName,
                     presentation: newMaterialType === 'rollo_fardo' ? '' : newMaterialPresentation.trim(),
+                    lote: newMaterialLote.trim(),
                     netWeight: parseFloat(newMaterialNetWeight.replace(',', '.')),
                     grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined,
                     status: 'recibido',
@@ -508,7 +532,9 @@ export default function MaterialsClient({
             setNewMaterialGrossWeight('');
             setNewMaterialQuantity('');
             setNewMaterialUnitWeight('');
+            setNewMaterialTotalWeight('');
             setNewMaterialSupplier('');
+            setNewMaterialLote('');
             
             toast({ title: 'Material Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
         } catch (error) {
@@ -535,7 +561,7 @@ export default function MaterialsClient({
                     setNewMaterialUnitWeight(unitWeightGrams);
                 }
                  if (totalWeightKg && !isNaN(Number(totalWeightKg))) {
-                    setNewMaterialNetWeight(totalWeightKg);
+                    setNewMaterialTotalWeight(totalWeightKg);
                 }
     
                 toast({
@@ -652,7 +678,7 @@ export default function MaterialsClient({
                             </Button>
                         </CardHeader>
                         <CardContent>
-                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-supplier">Proveedor</Label>
                                     <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
@@ -664,7 +690,7 @@ export default function MaterialsClient({
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-type">Tipo de Material</Label>
-                                    <Select value={newMaterialType} onValueChange={(v) => setNewMaterialType(v as MaterialType)}>
+                                    <Select value={newMaterialType} onValueChange={(v) => setNewMaterialType(v as MaterialType)} disabled={!newMaterialSupplier}>
                                         <SelectTrigger id="material-type"><SelectValue /></SelectTrigger>
                                         <SelectContent>
                                             {availableMaterialTypes.map(key => (
@@ -701,25 +727,44 @@ export default function MaterialsClient({
                                         </Button>
                                     </div>
                                 </div>
+                                
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="material-lote">Lote</Label>
+                                    <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" />
+                                </div>
 
-
-                                {isSacosType ? (
-                                    <div className="grid grid-cols-3 gap-2 col-span-full md:col-span-2 lg:col-span-2 xl:col-span-2">
+                                {isSacosType && isPlasticsacks && (
+                                     <div className="grid grid-cols-2 gap-2 col-span-full md:col-span-2 lg:col-span-3 xl:col-span-2">
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-quantity">Cantidad</Label>
                                             <Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
                                         </div>
                                          <div className="space-y-1.5">
-                                            <Label htmlFor="material-unit-weight">Peso/Und (g)</Label>
-                                            <Input id="material-unit-weight" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-total-weight">Peso Total (kg)</Label>
-                                            <Input id="material-total-weight" type="number" ref={netWeightInputRef} value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 51,6" />
+                                            <Label htmlFor="material-net-weight-ps">Peso Neto (kg)</Label>
+                                            <Input id="material-net-weight-ps" type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 51.6" />
                                         </div>
                                     </div>
-                                ) : (
-                                    <div className={cn("grid grid-cols-2 gap-2", newMaterialType === 'rollo_fardo' ? "col-span-full md:col-span-2 lg:col-span-3 xl:col-span-3" : "col-span-full md:col-span-2 lg:col-span-2 xl:col-span-1")}>
+                                )}
+
+                                {isSacosType && !isPlasticsacks && (
+                                     <div className="grid grid-cols-3 gap-2 col-span-full md:col-span-3 lg:col-span-3 xl:col-span-3">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-quantity-rs">Cantidad</Label>
+                                            <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
+                                        </div>
+                                         <div className="space-y-1.5">
+                                            <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
+                                            <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
+                                            <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" />
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {!isSacosType && (
+                                    <div className={cn("grid grid-cols-2 gap-2", newMaterialType === 'rollo_fardo' ? "col-span-full md:col-span-2 lg:col-span-3 xl:col-span-2" : "col-span-full md:col-span-2 lg:col-span-2 xl:col-span-1")}>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
                                             <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" />
@@ -730,7 +775,8 @@ export default function MaterialsClient({
                                         </div>
                                     </div>
                                 )}
-                                <div className="space-y-1.5 self-end">
+
+                                <div className="space-y-1.5 self-end xl:col-start-5">
                                     <Button onClick={handleAddMaterial} className="w-full">
                                         <PlusCircle className="mr-2 h-4 w-4" /> Registrar
                                     </Button>

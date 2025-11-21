@@ -158,6 +158,7 @@ export type PackagingMaterial = {
     type: MaterialType;
     code: string;
     supplier?: string;
+    lote?: string;
     presentation?: string;
     netWeight?: number; 
     grossWeight?: number;
