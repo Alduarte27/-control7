@@ -799,13 +799,13 @@ export default function MaterialsClient({
                                     </div>
                                 )}
 
-                                <div className="space-y-1.5 self-end">
+                                <div className="space-y-1.5 self-end col-span-1 md:col-span-2 lg:col-span-1">
                                     <div className="flex gap-2">
-                                        <Button onClick={handleAddMaterial} className="w-full">
+                                        <Button onClick={handleAddMaterial} className="flex-1">
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
                                         </Button>
-                                        <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)}>
-                                            <Camera className="h-4 w-4" />
+                                        <Button variant="outline" className="flex-1" onClick={() => setIsScannerOpen(true)}>
+                                            <Camera className="mr-2 h-4 w-4" /> Escanear
                                         </Button>
                                     </div>
                                 </div>
