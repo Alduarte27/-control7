@@ -18,7 +18,7 @@ import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs }
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription as UIDialogDescription } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Checkbox } from './ui/checkbox';
@@ -62,9 +62,9 @@ function MaterialActionDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Pesar y Poner en Uso</DialogTitle>
-                    <UIDialogDescription>
+                    <DialogDescription>
                         Registra el peso real del material con código <span className="font-mono font-bold">{material.code}</span> y asígnalo a una máquina.
-                    </UIDialogDescription>
+                    </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                      <div className="space-y-1.5">
@@ -421,7 +421,8 @@ export default function MaterialsClient({
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
 
-    const isDropdownPresentation = newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || newMaterialType === 'rollo_laminado';
+    const isDropdownForPresentation = newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || newMaterialType === 'rollo_laminado';
+    const isDropdownForFamiliar = newMaterialType === 'sacos_familiar' || newMaterialType === 'rollo_laminado';
     const isGranelType = newMaterialType === 'sacos_granel';
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
@@ -429,12 +430,12 @@ export default function MaterialsClient({
 
     const familiarProducts = React.useMemo(() => {
         if (!familiarCategoryId) return [];
-        return allProducts.filter(p => p.categoryId === familiarCategoryId);
+        return allProducts.filter(p => p.categoryId === familiarCategoryId && !p.productName.includes('(12'));
     }, [allProducts, familiarCategoryId]);
 
     const granelProducts = React.useMemo(() => {
         if (!granelCategoryId) return [];
-        return allProducts.filter(p => p.categoryId === granelCategoryId);
+        return allProducts.filter(p => p.categoryId === granelCategoryId && !p.productName.includes('(12'));
     }, [allProducts, granelCategoryId]);
 
     const handleAddMaterial = async () => {
@@ -632,14 +633,14 @@ export default function MaterialsClient({
                                 </div>
                                  <div className="space-y-1.5">
                                     <Label htmlFor="material-presentation">Presentación</Label>
-                                    {isDropdownPresentation ? (
+                                    {isDropdownForPresentation ? (
                                         <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
                                             <SelectTrigger id="material-presentation">
                                                 <SelectValue placeholder="Seleccionar producto..." />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {(newMaterialType === 'sacos_familiar' || newMaterialType === 'rollo_laminado' ? familiarProducts : granelProducts).map(p => (
-                                                    <SelectItem key={p.id} value={p.productName}>{p.productName.replace(/\s*\([^)]*\)\s*/g, ' ').trim()}</SelectItem>
+                                                {(isDropdownForFamiliar ? familiarProducts : granelProducts).map(p => (
+                                                    <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
