@@ -138,27 +138,32 @@ export type MachineOEE = {
 
 // --- Packaging Materials Control ---
 
-export type MaterialType = 'sacos' | 'rollo_envasado' | 'rollo_enfardado';
+export type MaterialType = 'sacos_familiar' | 'sacos_granel' | 'rollo_laminado' | 'rollo_fardo';
 export type MaterialStatus = 'recibido' | 'en_uso' | 'consumido';
 
 export const materialTypeLabels: { [key in MaterialType]: string } = {
-  sacos: "Paca de Sacos",
-  rollo_envasado: "Rollo de Envasado",
-  rollo_enfardado: "Rollo de Enfardado",
+  sacos_familiar: "Sacos de Familiar",
+  sacos_granel: "Sacos de Granel",
+  rollo_laminado: "Rollo Laminado",
+  rollo_fardo: "Rollo de Fardo",
 };
 
 export type PackagingMaterial = {
     id: string;
     type: MaterialType;
-    code: string; // Unique code for the roll/bale, can be scanned or manually entered
-    netWeight: number; // Net weight from the supplier's label
-    grossWeight?: number; // Gross weight from the supplier's label
-    actualWeight?: number; // Real weight measured before use
+    code: string;
+    presentation?: string;
+    netWeight?: number; 
+    grossWeight?: number;
+    quantity?: number;
+    unitWeight?: number;
+    totalWeight?: number;
+    actualWeight?: number;
     status: MaterialStatus;
-    receivedAt: number; // Timestamp
-    inUseAt?: number; // Timestamp
-    consumedAt?: number; // Timestamp
-    assignedMachine?: string; // e.g., 'machine_1'
+    receivedAt: number;
+    inUseAt?: number;
+    consumedAt?: number;
+    assignedMachine?: string;
 };
 
 declare module 'jsqr';

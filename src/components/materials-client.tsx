@@ -125,6 +125,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
     };
 
     const getShortCode = (fullCode: string): string => {
+        if (!fullCode) return '';
         if (fullCode.length <= 4) {
             return String(parseInt(fullCode, 10));
         }
@@ -135,8 +136,17 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
     const currentStatus = statusConfig[material.status];
 
     const getDiscrepancy = () => {
-        if (material.status === 'recibido' || !material.actualWeight || !material.netWeight) return null;
-        const baseWeight = material.grossWeight || material.netWeight;
+        if (material.status === 'recibido' || !material.actualWeight) return null;
+        
+        let baseWeight;
+        if (material.type === 'sacos_granel') {
+            baseWeight = material.totalWeight;
+        } else {
+            baseWeight = material.netWeight;
+        }
+        
+        if (!baseWeight) return null;
+
         const diff = material.actualWeight - baseWeight;
         const diffPercentage = (diff / baseWeight) * 100;
         const color = diff >= 0 ? 'text-green-600' : 'text-red-600';
@@ -147,6 +157,8 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
             </p>
         );
     };
+
+    const isGranel = material.type === 'sacos_granel';
 
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
@@ -160,7 +172,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
             <CardHeader>
                  <div className="flex justify-between items-start">
                     <div>
-                        <CardDescription>{materialTypeLabels[material.type]}</CardDescription>
+                        <CardDescription>{material.presentation || materialTypeLabels[material.type]}</CardDescription>
                         <CardTitle className="text-4xl font-bold text-primary">
                             #{getShortCode(material.code)}
                         </CardTitle>
@@ -173,16 +185,35 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
                 </div>
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="space-y-1">
-                        <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
-                        <p className="font-semibold text-lg">{material.netWeight} kg</p>
-                    </div>
+                 <div className="grid grid-cols-2 gap-4 text-sm">
+                    {isGranel ? (
+                        <>
+                            <div className="space-y-1">
+                                <p className="text-muted-foreground">Cantidad</p>
+                                <p className="font-semibold text-lg">{material.quantity}</p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-muted-foreground">Peso/Und.</p>
+                                <p className="font-semibold text-lg">{material.unitWeight} kg</p>
+                            </div>
+                            <div className="space-y-1 col-span-2">
+                                <p className="text-muted-foreground">Peso Total (Calculado)</p>
+                                <p className="font-semibold text-lg">{material.totalWeight} kg</p>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <div className="space-y-1">
+                                <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
+                                <p className="font-semibold text-lg">{material.netWeight} kg</p>
+                            </div>
+                             <div className="space-y-1">
+                                <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
+                                <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
+                            </div>
+                        </>
+                    )}
                      <div className="space-y-1">
-                        <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
-                        <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
-                    </div>
-                    <div className="space-y-1">
                         <p className="text-muted-foreground">Peso Real</p>
                         <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight} kg` : 'N/A'}</p>
                     </div>
@@ -239,8 +270,8 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
                 return;
             }
             try {
-                const formats = await (window as any).BarcodeDetector.getSupportedFormats();
-                barcodeDetector = new (window as any).BarcodeDetector({ formats });
+                const supportedFormats = await (window as any).BarcodeDetector.getSupportedFormats();
+                barcodeDetector = new (window as any).BarcodeDetector({ formats: supportedFormats });
             } catch (e) {
                  setError("No se pudo inicializar el detector de códigos de barras.");
                  setHasPermission(false);
@@ -361,10 +392,20 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
 
 export default function MaterialsClient({ initialMaterials }: { initialMaterials: PackagingMaterial[] }) {
     const [materials, setMaterials] = React.useState<PackagingMaterial[]>(initialMaterials);
-    const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos');
+    const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos_familiar');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
+    
+    // States for common fields
+    const [newMaterialPresentation, setNewMaterialPresentation] = React.useState('');
+    
+    // States for net/gross weight types
     const [newMaterialNetWeight, setNewMaterialNetWeight] = React.useState('');
     const [newMaterialGrossWeight, setNewMaterialGrossWeight] = React.useState('');
+
+    // States for granel type
+    const [newMaterialQuantity, setNewMaterialQuantity] = React.useState('');
+    const [newMaterialUnitWeight, setNewMaterialUnitWeight] = React.useState('');
+
     const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());
     const { toast } = useToast();
     const [isScannerOpen, setIsScannerOpen] = React.useState(false);
@@ -372,16 +413,17 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
 
+    const isGranelType = newMaterialType === 'sacos_granel';
 
     const handleAddMaterial = async () => {
-        if (!newMaterialCode.trim() || !newMaterialNetWeight) {
-            toast({ title: "Error", description: "El código y el peso neto son obligatorios.", variant: "destructive" });
+        if (!newMaterialCode.trim()) {
+            toast({ title: "Error", description: "El código es obligatorio.", variant: "destructive" });
             return;
         }
 
+        const trimmedCode = newMaterialCode.trim();
+        
         try {
-            // Check for duplicates
-            const trimmedCode = newMaterialCode.trim();
             const q = query(collection(db, 'packagingMaterials'), where('code', '==', trimmedCode));
             const querySnapshot = await getDocs(q);
 
@@ -394,22 +436,53 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
                 return;
             }
 
-            const newMaterial: Omit<PackagingMaterial, 'id'> = {
-                type: newMaterialType,
-                code: trimmedCode,
-                netWeight: parseFloat(newMaterialNetWeight),
-                grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight) : undefined,
-                status: 'recibido',
-                receivedAt: Date.now(),
-            };
+            let newMaterialData: Omit<PackagingMaterial, 'id'>;
 
-            const docRef = await addDoc(collection(db, 'packagingMaterials'), newMaterial);
-            setMaterials(prev => [{ id: docRef.id, ...newMaterial } as PackagingMaterial, ...prev]);
+            if (isGranelType) {
+                 if (!newMaterialQuantity || !newMaterialUnitWeight) {
+                    toast({ title: "Error", description: "La cantidad y el peso por unidad son obligatorios para Sacos de Granel.", variant: "destructive" });
+                    return;
+                }
+                const quantity = parseInt(newMaterialQuantity, 10);
+                const unitWeight = parseFloat(newMaterialUnitWeight);
+                newMaterialData = {
+                    type: newMaterialType,
+                    code: trimmedCode,
+                    presentation: newMaterialPresentation.trim(),
+                    quantity,
+                    unitWeight,
+                    totalWeight: quantity * unitWeight,
+                    status: 'recibido',
+                    receivedAt: Date.now(),
+                };
+            } else {
+                 if (!newMaterialNetWeight) {
+                    toast({ title: "Error", description: "El peso neto es obligatorio para este tipo de material.", variant: "destructive" });
+                    return;
+                }
+                newMaterialData = {
+                    type: newMaterialType,
+                    code: trimmedCode,
+                    presentation: newMaterialPresentation.trim(),
+                    netWeight: parseFloat(newMaterialNetWeight),
+                    grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight) : undefined,
+                    status: 'recibido',
+                    receivedAt: Date.now(),
+                };
+            }
 
+            const docRef = await addDoc(collection(db, 'packagingMaterials'), newMaterialData);
+            setMaterials(prev => [{ id: docRef.id, ...newMaterialData } as PackagingMaterial, ...prev]);
+
+            // Reset all fields
             setNewMaterialCode('');
+            setNewMaterialPresentation('');
             setNewMaterialNetWeight('');
             setNewMaterialGrossWeight('');
-            toast({ title: 'Material Registrado', description: `Se ha registrado el material con código ${newMaterial.code}.` });
+            setNewMaterialQuantity('');
+            setNewMaterialUnitWeight('');
+            
+            toast({ title: 'Material Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
         } catch (error) {
             console.error("Error adding material:", error);
             toast({ title: 'Error', description: 'No se pudo registrar el material.', variant: 'destructive' });
@@ -423,7 +496,8 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
             title: "Código Escaneado",
             description: `Código detectado: ${code}`,
         });
-        netWeightInputRef.current?.focus();
+        // Focus next logical input
+        document.getElementById('material-presentation')?.focus();
     };
 
     const handleActionConfirm = async (data: { actualWeight?: number, assignedMachine?: string }) => {
@@ -513,56 +587,65 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
                             <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-type">Tipo de Material</Label>
                                     <Select value={newMaterialType} onValueChange={(v) => setNewMaterialType(v as MaterialType)}>
-                                        <SelectTrigger id="material-type">
-                                            <SelectValue />
-                                        </SelectTrigger>
+                                        <SelectTrigger id="material-type"><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="sacos">Paca de Sacos</SelectItem>
-                                            <SelectItem value="rollo_envasado">Rollo de Envasado</SelectItem>
-                                            <SelectItem value="rollo_enfardado">Rollo de Enfardado</SelectItem>
+                                            {Object.entries(materialTypeLabels).map(([key, label]) => (
+                                                <SelectItem key={key} value={key}>{label}</SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <Label htmlFor="material-code">Código de Rollo / Paca</Label>
+                                    <Label htmlFor="material-code">Código</Label>
                                     <div className="flex gap-2">
-                                        <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Ej: ROLLO-12345 o escanear" />
+                                        <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escanear o escribir..." />
                                         <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)}>
                                             <Camera className="h-4 w-4" />
                                         </Button>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
-                                        <Input 
-                                            id="material-net-weight" 
-                                            ref={netWeightInputRef}
-                                            type="number" 
-                                            value={newMaterialNetWeight} 
-                                            onChange={(e) => setNewMaterialNetWeight(e.target.value)} 
-                                            placeholder="Ej: 72.85" 
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
-                                        <Input 
-                                            id="material-gross-weight" 
-                                            type="number" 
-                                            value={newMaterialGrossWeight} 
-                                            onChange={(e) => setNewMaterialGrossWeight(e.target.value)} 
-                                            placeholder="Ej: 74.05" 
-                                        />
-                                    </div>
+                                 <div className="space-y-1.5">
+                                    <Label htmlFor="material-presentation">Presentación</Label>
+                                    <Input id="material-presentation" value={newMaterialPresentation} onChange={(e) => setNewMaterialPresentation(e.target.value)} placeholder="Ej: San Juan 1Kg" />
                                 </div>
-                                <Button onClick={handleAddMaterial} className="w-full">
-                                    <PlusCircle className="mr-2 h-4 w-4" />
-                                    Registrar Material
-                                </Button>
+
+                                {isGranelType ? (
+                                    <div className="grid grid-cols-3 gap-2 col-span-1 lg:col-span-2">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-quantity">Cantidad</Label>
+                                            <Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
+                                        </div>
+                                         <div className="space-y-1.5">
+                                            <Label htmlFor="material-unit-weight">Peso/Und (kg)</Label>
+                                            <Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 1" />
+                                        </div>
+                                         <div className="space-y-1.5 self-end">
+                                             <Button onClick={handleAddMaterial} className="w-full">
+                                                <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-3 gap-2 col-span-1 lg:col-span-2">
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
+                                            <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
+                                            <Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05" />
+                                        </div>
+                                        <div className="space-y-1.5 self-end">
+                                            <Button onClick={handleAddMaterial} className="w-full">
+                                                <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
