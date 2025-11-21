@@ -801,6 +801,10 @@ export default function MaterialsClient({
                 status: 'recibido',
                 receivedAt: Date.now(),
             };
+            
+            if (isPlasticsacks) {
+                 newMaterialData.lote = newMaterialLote.trim();
+            }
 
             if (isSacosType) {
                 if (!newMaterialQuantity) {
@@ -815,7 +819,6 @@ export default function MaterialsClient({
                         return;
                     }
                     newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
-                    newMaterialData.lote = newMaterialLote.trim();
                  } else { 
                     if (!newMaterialUnitWeight || !newMaterialTotalWeight) {
                         toast({ title: "Error", description: "Peso/Und y Peso Total son obligatorios para este proveedor.", variant: "destructive" });
@@ -1059,117 +1062,116 @@ export default function MaterialsClient({
                             </Button>
                         </CardHeader>
                         <CardContent>
-                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="material-supplier">Proveedor</Label>
-                                    <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
-                                        <SelectTrigger id="material-supplier"><SelectValue placeholder="Seleccionar..."/></SelectTrigger>
-                                        <SelectContent>
-                                            {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="material-type">Tipo de Material</Label>
-                                    <Select value={newMaterialType} onValueChange={(v) => setNewMaterialType(v as MaterialType)} disabled={!newMaterialSupplier}>
-                                        <SelectTrigger id="material-type"><SelectValue /></SelectTrigger>
-                                        <SelectContent>
-                                            {availableMaterialTypes.map(key => (
-                                                <SelectItem key={key} value={key}>{materialTypeLabels[key as MaterialType]}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                
-                                { newMaterialType !== 'rollo_fardo' && (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                        <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation} disabled={!newMaterialSupplier}>
-                                            <SelectTrigger id="material-presentation-trigger">
-                                                <SelectValue placeholder="Seleccionar producto..." />
-                                            </SelectTrigger>
+                                        <Label htmlFor="material-supplier">Proveedor</Label>
+                                        <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
+                                            <SelectTrigger id="material-supplier"><SelectValue placeholder="Seleccionar..."/></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="Sacos sin LOGO">Sacos sin LOGO</SelectItem>
-                                                {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
-                                                    <SelectItem key={p.id} value={p.productName}>
-                                                        {p.productName.replace(/\s*\([^)]*\)\s*/g, ' ')}
-                                                    </SelectItem>
+                                                {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="material-type">Tipo de Material</Label>
+                                        <Select value={newMaterialType} onValueChange={(v) => setNewMaterialType(v as MaterialType)} disabled={!newMaterialSupplier}>
+                                            <SelectTrigger id="material-type"><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                {availableMaterialTypes.map(key => (
+                                                    <SelectItem key={key} value={key}>{materialTypeLabels[key as MaterialType]}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                )}
-                                
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="material-code">Código</Label>
-                                    <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
-                                </div>
-
-                                {isPlasticsacks && (
+                                    {newMaterialType !== 'rollo_fardo' && (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-presentation-trigger">Presentación</Label>
+                                            <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation} disabled={!newMaterialSupplier}>
+                                                <SelectTrigger id="material-presentation-trigger">
+                                                    <SelectValue placeholder="Seleccionar producto..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Sacos sin LOGO">Sacos sin LOGO</SelectItem>
+                                                    {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
+                                                        <SelectItem key={p.id} value={p.productName}>
+                                                            {p.productName.replace(/\s*\([^)]*\)\s*/g, ' ')}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="material-lote">Lote</Label>
-                                        <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
+                                        <Label htmlFor="material-code">Código</Label>
+                                        <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
                                     </div>
-                                )}
-                                
-                                {isMilanplastic && (
-                                     <div className="space-y-1.5">
-                                        <Label>Fecha</Label>
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}>
-                                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                                    {newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
-                                        </Popover>
-                                    </div>
-                                )}
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4 pt-4">
+                                     {isPlasticsacks && (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-lote">Lote</Label>
+                                            <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
+                                        </div>
+                                    )}
+                                    
+                                    {isMilanplastic && (
+                                        <div className="space-y-1.5">
+                                            <Label>Fecha</Label>
+                                            <Popover>
+                                                <PopoverTrigger asChild>
+                                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}>
+                                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                                        {newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
+                                            </Popover>
+                                        </div>
+                                    )}
 
-                                {isSacosType ? (
-                                    isPlasticsacks ? (
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="material-quantity-ps">Cantidad</Label>
-                                                <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="material-total-weight-ps">Peso Neto (kg)</Label>
-                                                <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
-                                            </div>
-                                        </div>
+                                    {isSacosType ? (
+                                        isPlasticsacks ? (
+                                            <>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="material-quantity-ps">Cantidad</Label>
+                                                    <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="material-total-weight-ps">Peso Neto (kg)</Label>
+                                                    <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="material-quantity-rs">Cantidad</Label>
+                                                    <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
+                                                    <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
+                                                    <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" disabled={!newMaterialSupplier}/>
+                                                </div>
+                                            </>
+                                        )
                                     ) : (
-                                        <div className="grid grid-cols-2 gap-2">
+                                        <>
                                             <div className="space-y-1.5">
-                                                <Label htmlFor="material-quantity-rs">Cantidad</Label>
-                                                <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
+                                                <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
+                                                <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" disabled={!newMaterialSupplier}/>
                                             </div>
                                             <div className="space-y-1.5">
-                                                <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
-                                                <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
+                                                <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
+                                                <Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05" disabled={!newMaterialSupplier}/>
                                             </div>
-                                            <div className="space-y-1.5 col-span-2">
-                                                <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
-                                                <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" disabled={!newMaterialSupplier}/>
-                                            </div>
-                                        </div>
-                                    )
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
-                                            <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" disabled={!newMaterialSupplier}/>
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
-                                            <Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05" disabled={!newMaterialSupplier}/>
-                                        </div>
-                                    </div>
-                                )}
-                                
-                                <div className="space-y-1.5 self-end col-span-1 md:col-span-2 lg:col-span-1 xl:col-span-full">
-                                    <div className="flex gap-2">
+                                        </>
+                                    )}
+
+                                    <div className="flex gap-2 lg:col-start-4">
                                         <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
                                         </Button>
