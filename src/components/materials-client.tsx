@@ -4,17 +4,17 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2 } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { PackagingMaterial, MaterialType, MaterialStatus, ProductDefinition, CategoryDefinition } from '@/lib/types';
+import type { PackagingMaterial, MaterialType, MaterialStatus, ProductDefinition, CategoryDefinition, Supplier } from '@/lib/types';
 import { materialTypeLabels } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -22,7 +22,73 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogC
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Checkbox } from './ui/checkbox';
+import { Separator } from './ui/separator';
 
+
+function ConfigModal({ 
+    isOpen, 
+    onClose, 
+    suppliers,
+    onConfigSave,
+}: { 
+    isOpen: boolean; 
+    onClose: () => void; 
+    suppliers: Supplier[];
+    onConfigSave: (type: 'supplier', data: any, action: 'add' | 'delete') => Promise<void>;
+}) {
+    const [newSupplierName, setNewSupplierName] = React.useState('');
+    const { toast } = useToast();
+
+    const handleAdd = async () => {
+        const name = newSupplierName.trim();
+        if (!name) {
+            toast({ title: 'Error', description: 'El nombre del proveedor es obligatorio.', variant: 'destructive'});
+            return;
+        }
+        await onConfigSave('supplier', { name }, 'add');
+        setNewSupplierName('');
+    }
+
+    const handleDelete = async (id: string) => {
+        await onConfigSave('supplier', { id }, 'delete');
+    }
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Configurar Catálogos</DialogTitle>
+                </DialogHeader>
+                <div className="py-4 space-y-4">
+                     <h3 className="font-semibold text-lg">Proveedores</h3>
+                      <div className="flex items-end gap-2">
+                          <div className="flex-grow space-y-1.5">
+                              <Label htmlFor="new-supplier-name">Nombre del Proveedor</Label>
+                              <Input id="new-supplier-name" value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)} />
+                          </div>
+                          <Button onClick={handleAdd}><PlusCircle className="h-4 w-4" /></Button>
+                      </div>
+                      <Separator />
+                      <ul className="space-y-2 max-h-60 overflow-y-auto">
+                          {suppliers.map(sup => (
+                              <li key={sup.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
+                                  <span>{sup.name}</span>
+                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete(sup.id)}>
+                                      <X className="h-4 w-4 text-destructive" />
+                                  </Button>
+                              </li>
+                          ))}
+                      </ul>
+                </div>
+                 <DialogFooter>
+                    <DialogClose asChild>
+                        <Button variant="secondary">Cerrar</Button>
+                    </DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
 
 function MaterialActionDialog({
   material,
@@ -419,12 +485,15 @@ export default function MaterialsClient({
     initialMaterials,
     allProducts,
     allCategories,
+    initialSuppliers,
 }: { 
     initialMaterials: PackagingMaterial[],
     allProducts: ProductDefinition[],
     allCategories: CategoryDefinition[],
+    initialSuppliers: Supplier[],
 }) {
     const [materials, setMaterials] = React.useState<PackagingMaterial[]>(initialMaterials);
+    const [suppliers, setSuppliers] = React.useState<Supplier[]>(initialSuppliers);
     const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos_familiar');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
@@ -443,6 +512,7 @@ export default function MaterialsClient({
     const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());
     const { toast } = useToast();
     const [isScannerOpen, setIsScannerOpen] = React.useState(false);
+    const [configOpen, setConfigOpen] = React.useState(false);
     const netWeightInputRef = React.useRef<HTMLInputElement>(null);
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
@@ -465,20 +535,41 @@ export default function MaterialsClient({
     }, [allProducts, granelCategoryId]);
 
     const availableMaterialTypes = React.useMemo(() => {
-        const supplierKey = newMaterialSupplier.trim().toUpperCase();
+        const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
+        const supplierKey = supplierName.trim().toUpperCase();
         const mappedTypes = Object.keys(supplierMaterialMapping).find(key => supplierKey.startsWith(key));
         
         if (mappedTypes) {
             return supplierMaterialMapping[mappedTypes];
         }
         return Object.keys(materialTypeLabels) as MaterialType[];
-    }, [newMaterialSupplier]);
+    }, [newMaterialSupplier, suppliers]);
     
     React.useEffect(() => {
         if (!availableMaterialTypes.includes(newMaterialType)) {
             setNewMaterialType(availableMaterialTypes[0] || 'sacos_familiar');
         }
     }, [availableMaterialTypes, newMaterialType]);
+
+    const handleConfigSave = async (type: 'supplier', data: any, action: 'add' | 'delete') => {
+        if (type !== 'supplier') return;
+
+        try {
+            if (action === 'add') {
+                const docRef = await addDoc(collection(db, 'suppliers'), data);
+                setSuppliers(prev => [...prev, {id: docRef.id, ...data}].sort((a,b) => a.name.localeCompare(b.name)));
+                toast({ title: "Proveedor añadido" });
+            } else if (action === 'delete') {
+                await deleteDoc(doc(db, 'suppliers', data.id));
+                setSuppliers(prev => prev.filter(s => s.id !== data.id));
+                toast({ title: "Proveedor eliminado" });
+            }
+        } catch (e) {
+            console.error("Error saving supplier config", e);
+            toast({ title: "Error", description: "No se pudo actualizar el catálogo de proveedores.", variant: 'destructive'});
+        }
+    };
+
 
     const handleAddMaterial = async () => {
         if (!newMaterialCode.trim()) {
@@ -502,6 +593,7 @@ export default function MaterialsClient({
             }
 
             let newMaterialData: Omit<PackagingMaterial, 'id'>;
+            const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
 
             if (isGranelType) {
                  if (!newMaterialQuantity || !newMaterialUnitWeight) {
@@ -513,7 +605,7 @@ export default function MaterialsClient({
                 newMaterialData = {
                     type: newMaterialType,
                     code: trimmedCode,
-                    supplier: newMaterialSupplier.trim(),
+                    supplier: supplierName,
                     presentation: newMaterialPresentation.trim(),
                     quantity,
                     unitWeight,
@@ -529,7 +621,7 @@ export default function MaterialsClient({
                 newMaterialData = {
                     type: newMaterialType,
                     code: trimmedCode,
-                    supplier: newMaterialSupplier.trim(),
+                    supplier: supplierName,
                     presentation: newMaterialType === 'rollo_fardo' ? '' : newMaterialPresentation.trim(),
                     netWeight: parseFloat(newMaterialNetWeight),
                     grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight) : undefined,
@@ -644,12 +736,18 @@ export default function MaterialsClient({
                         <Boxes className="h-8 w-8 text-primary" />
                         <h1 className="text-2xl font-bold text-foreground">Control de Materiales de Empaque</h1>
                     </div>
-                    <Link href="/">
-                        <Button variant="outline">
-                            <ChevronLeft className="mr-2 h-4 w-4" />
-                            Volver a la Planificación
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={() => setConfigOpen(true)}>
+                            <Settings className="mr-2 h-4 w-4" />
+                            Configuración
                         </Button>
-                    </Link>
+                        <Link href="/">
+                            <Button variant="outline">
+                                <ChevronLeft className="mr-2 h-4 w-4" />
+                                Volver
+                            </Button>
+                        </Link>
+                    </div>
                 </header>
 
                 <main className="p-4 md:p-8 space-y-6">
@@ -662,7 +760,12 @@ export default function MaterialsClient({
                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-supplier">Proveedor</Label>
-                                    <Input id="material-supplier" value={newMaterialSupplier} onChange={(e) => setNewMaterialSupplier(e.target.value)} placeholder="Ej: Peruplast" />
+                                    <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
+                                        <SelectTrigger id="material-supplier"><SelectValue placeholder="Seleccionar..."/></SelectTrigger>
+                                        <SelectContent>
+                                            {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-type">Tipo de Material</Label>
@@ -802,6 +905,14 @@ export default function MaterialsClient({
                     action={actionState.action}
                     onClose={() => setActionState(null)}
                     onConfirm={handleActionConfirm}
+                />
+            )}
+             {configOpen && (
+                <ConfigModal
+                    isOpen={configOpen}
+                    onClose={() => setConfigOpen(false)}
+                    suppliers={suppliers}
+                    onConfigSave={handleConfigSave}
                 />
             )}
         </>

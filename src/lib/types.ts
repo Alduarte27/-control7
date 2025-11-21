@@ -138,6 +138,11 @@ export type MachineOEE = {
 
 // --- Packaging Materials Control ---
 
+export type Supplier = {
+    id: string;
+    name: string;
+};
+
 export type MaterialType = 'sacos_familiar' | 'sacos_granel' | 'rollo_laminado' | 'rollo_fardo';
 export type MaterialStatus = 'recibido' | 'en_uso' | 'consumido';
 
