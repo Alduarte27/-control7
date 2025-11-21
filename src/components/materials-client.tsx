@@ -343,7 +343,7 @@ function TareWeightDialog({
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
-                    <Button onClick={handleConfirm} disabled={!plasticWeight || (!isSacosType && !coreWeight)}>Confirmar y Guardar Tara</Button>
+                    <Button onClick={handleConfirm} disabled={!plasticWeight}>Confirmar y Guardar Tara</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -619,10 +619,10 @@ function MaterialCard({
                         </div>
                     )}
                     
-                    <div className="col-span-2">{getPerformance()}</div>
-                    {getDiscrepancy() && (
-                        <div className="col-span-2">{getDiscrepancy()}</div>
-                    )}
+                    <div className="grid grid-cols-2 gap-4">
+                        {getPerformance()}
+                        {getDiscrepancy()}
+                    </div>
                 </div>
                 <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 min-h-[50px]">
                     {material.assignedMachine && (
