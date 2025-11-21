@@ -159,3 +159,5 @@ export type PackagingMaterial = {
     consumedAt?: number; // Timestamp
     assignedMachine?: string; // e.g., 'machine_1'
 };
+
+declare module 'jsqr';
