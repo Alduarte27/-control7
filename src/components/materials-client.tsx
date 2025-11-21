@@ -505,6 +505,18 @@ function MaterialCard({
             </div>
         )
     }
+    
+    const getDiscrepancy = () => {
+        if (material.status !== 'consumido' || material.tareWeight === undefined || material.labelTare === undefined) return null;
+        const discrepancy = material.tareWeight - material.labelTare;
+        const color = discrepancy > 0.1 ? 'text-red-600' : 'text-green-600';
+        return (
+            <div className="space-y-1">
+                <p className="text-muted-foreground">Discrepancia de Tara</p>
+                <p className={cn("font-semibold text-lg", color)}>{discrepancy.toFixed(2)} kg</p>
+            </div>
+        );
+    };
 
     const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
     const isRollosType = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
@@ -566,7 +578,7 @@ function MaterialCard({
                                 <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
                                 <p className="font-semibold text-lg">{material.netWeight} kg</p>
                             </div>
-                             <div className="space-y-1">
+                            <div className="space-y-1">
                                 <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
                                 <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
                             </div>
@@ -574,22 +586,24 @@ function MaterialCard({
                                 <p className="text-muted-foreground">Tara (Etiqueta)</p>
                                 <p className="font-semibold text-lg">{material.labelTare?.toFixed(2) ?? 'N/A'} kg</p>
                             </div>
-                             <div className="space-y-1">
+                            <Separator className="col-span-2 my-2" />
+                            <div className="space-y-1">
                                 <p className="text-muted-foreground">Peso Bruto (Balanza)</p>
-                                <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight} kg` : 'N/A'}</p>
+                                <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
+                            </div>
+                             <div className="space-y-1">
+                                <p className="text-muted-foreground">Peso Neto Real</p>
+                                <p className="font-semibold text-lg text-green-600">{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
                             </div>
                             <div className="space-y-1">
                                 <p className="text-muted-foreground">Tara (Real)</p>
                                 <p className="font-semibold text-lg">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
                             </div>
-                            <div className="space-y-1">
-                                <p className="text-muted-foreground">Peso Neto Real</p>
-                                <p className="font-semibold text-lg text-green-600">{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
-                            </div>
                         </>
                     )}
                     
                     <div className="col-span-2">{getPerformance()}</div>
+                    <div className="col-span-2">{getDiscrepancy()}</div>
                 </div>
                 <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 min-h-[50px]">
                     {material.assignedMachine && (
@@ -687,7 +701,6 @@ export default function MaterialsClient({
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
     const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
     const isMilanplastic = supplierName.toUpperCase().startsWith('MILANPLASTIC');
-    const isReysac = supplierName.toUpperCase().startsWith('REYSAC');
 
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
@@ -1096,7 +1109,7 @@ export default function MaterialsClient({
                                         <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4 pt-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
                                      {isPlasticsacks && (
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-lote">Lote</Label>
@@ -1160,7 +1173,7 @@ export default function MaterialsClient({
                                         </>
                                     )}
 
-                                    <div className="flex gap-2 lg:col-start-4">
+                                    <div className="flex gap-2 lg:col-start-5">
                                         <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
                                         </Button>
