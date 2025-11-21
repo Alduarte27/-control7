@@ -204,7 +204,6 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
 
         if (fullCode.length > 4) {
             const lastPart = fullCode.slice(-4);
-            // This is a simple heuristic. A better one might be needed if codes vary a lot.
             if (!isNaN(parseInt(lastPart, 10))) {
                  return lastPart;
             }
@@ -728,12 +727,7 @@ export default function MaterialsClient({
                                 
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-code">Código</Label>
-                                    <div className="flex gap-2">
-                                        <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escanear o escribir..." />
-                                        <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)}>
-                                            <Camera className="h-4 w-4" />
-                                        </Button>
-                                    </div>
+                                    <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escanear o escribir..." />
                                 </div>
 
                                 {(isMilanplastic || isPlasticsacks) && (
@@ -806,9 +800,14 @@ export default function MaterialsClient({
                                 )}
 
                                 <div className="space-y-1.5 self-end">
-                                    <Button onClick={handleAddMaterial} className="w-full">
-                                        <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        <Button onClick={handleAddMaterial} className="w-full">
+                                            <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                        </Button>
+                                        <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)}>
+                                            <Camera className="h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>
