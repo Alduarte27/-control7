@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -752,7 +753,7 @@ export default function MaterialsClient({
         if (!granelCategoryId) return [];
         const dbProducts = allProducts.filter(p => p.categoryId === granelCategoryId && !p.productName.includes('(12'));
         // Manually add the "Sacos sin logo" option
-        return [{id: 'sacos-sin-logo', productName: 'Sacos sin logo', order: -1, categoryId: granelCategoryId, isActive: true}, ...dbProducts];
+        return [{id: 'sacos-sin-logo', productName: 'Sacos sin logo', order: -1, categoryId: granelCategoryId, isActive: true} as any, ...dbProducts];
     }, [allProducts, granelCategoryId]);
 
     const availableMaterialTypes = React.useMemo(() => {
@@ -1049,10 +1050,28 @@ export default function MaterialsClient({
         const headers = [
             'Tipo', 'Código', 'Proveedor', 'Lote', 'Presentación', 'Fecha Proveedor', 'Estado',
             'Fecha Recibido', 'Fecha En Uso', 'Fecha Consumido', 'Máquina Asignada', 'Cantidad', 
-            'Peso/Und (g)', 'Peso Total (kg)', 'Peso Neto (kg)', 'Peso Bruto (kg)', 'Peso Real (kg)'
+            'Peso/Und (g)', 'Peso Total (kg)', 'Peso Neto Etiqueta (kg)', 'Peso Bruto Etiqueta (kg)', 'Tara Etiqueta (kg)',
+            'Peso Real Bruto (kg)', 'Tara Real (kg)', 'Peso Neto Real (kg)', 'Fecha Pesaje Tara',
+            'Discrepancia (kg)', 'Rendimiento (%)'
         ];
 
         const rows = materials.map(m => {
+            const isRollosType = m.type === 'rollo_fardo' || m.type === 'rollo_laminado';
+            const isSacosType = m.type === 'sacos_familiar' || m.type === 'sacos_granel';
+            
+            let referenceNetWeight = 0;
+            if (isRollosType) {
+                referenceNetWeight = m.netWeight || 0;
+            } else if (isSacosType) {
+                referenceNetWeight = m.totalWeight || 0; 
+            }
+            const discrepancy = m.actualNetWeight !== undefined ? referenceNetWeight - m.actualNetWeight : null;
+            
+            let performance = null;
+            if (m.actualNetWeight !== undefined && referenceNetWeight > 0) {
+                performance = (m.actualNetWeight / referenceNetWeight) * 100;
+            }
+
             return [
                 materialTypeLabels[m.type],
                 `"${m.code.replace(/"/g, '""')}"`,
@@ -1070,7 +1089,13 @@ export default function MaterialsClient({
                 m.totalWeight || '',
                 m.netWeight || '',
                 m.grossWeight || '',
-                m.actualWeight || '',
+                m.labelTare?.toFixed(2) || '',
+                m.actualWeight?.toFixed(2) || '',
+                m.tareWeight?.toFixed(2) || '',
+                m.actualNetWeight?.toFixed(2) || '',
+                m.tareWeightedAt ? format(new Date(m.tareWeightedAt), 'yyyy-MM-dd HH:mm:ss') : '',
+                discrepancy?.toFixed(2) || '',
+                performance?.toFixed(1) || ''
             ].join(',');
         });
 
@@ -1182,7 +1207,7 @@ export default function MaterialsClient({
                                     
                                     {!isPlastiempaques && (
                                         <div className="space-y-1.5">
-                                            <Label>Fecha</Label>
+                                            <Label>Fecha Proveedor</Label>
                                             <Popover>
                                                 <PopoverTrigger asChild>
                                                     <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}>
@@ -1236,7 +1261,7 @@ export default function MaterialsClient({
                                         </>
                                     )}
                                     <div className="flex items-end gap-2 lg:col-start-5">
-                                        <Button onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier} variant="outline">
+                                        <Button onClick={() => setIsScannerOpen(true)} variant="outline" disabled={!newMaterialSupplier}>
                                             <Camera className="mr-2 h-4 w-4" /> Escanear
                                         </Button>
                                          <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
@@ -1388,4 +1413,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
