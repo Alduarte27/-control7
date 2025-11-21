@@ -195,33 +195,22 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
         });
     }, [material]);
 
-    const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
-        recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
-        en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
-        consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
-    };
-
     const getShortCode = (fullCode: string): string => {
         if (!fullCode) return 'N/A';
         
-        // If it's a complex QR code from ReySac
         if (fullCode.includes('|')) {
             return fullCode.split('|')[0] || 'N/A';
         }
 
-        // For simple codes, try parsing last 4 digits
         if (fullCode.length > 4) {
             const lastPart = fullCode.slice(-4);
-            try {
-                // Attempt to parse, if it's a number, return it, otherwise return the slice
-                return String(parseInt(lastPart, 10));
-            } catch {
-                return lastPart; // fallback to last 4 chars if not a number
+            // This is a simple heuristic. A better one might be needed if codes vary a lot.
+            if (!isNaN(parseInt(lastPart, 10))) {
+                 return lastPart;
             }
         }
         
-        // For short codes or if parsing fails for some reason
-        return fullCode;
+        return fullCode.slice(-6); // Fallback to last 6 chars
     };
 
     const currentStatus = statusConfig[material.status];
@@ -250,6 +239,11 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
     };
 
     const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
+    const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
+        recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
+        en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
+        consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
+    };
 
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
@@ -267,7 +261,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
                         <CardTitle className="text-4xl font-bold text-primary">
                             #{getShortCode(material.code)}
                         </CardTitle>
-                        <p className="text-xs text-muted-foreground font-mono break-all truncate">{material.code}</p>
+                        <p className="text-xs text-muted-foreground font-mono break-all truncate" title={material.code}>{material.code}</p>
                         <div className="text-xs text-muted-foreground pt-1 space-y-0.5">
                             {material.supplier && <p>Proveedor: {material.supplier}</p>}
                             {material.providerDate && <p>Fecha Prov: {material.providerDate}</p>}
@@ -424,7 +418,7 @@ export default function MaterialsClient({
             return supplierMaterialMapping[mappedTypesKey];
         }
         return Object.keys(materialTypeLabels) as MaterialType[];
-    }, [newMaterialSupplier, suppliers, supplierName]);
+    }, [supplierName]);
     
     React.useEffect(() => {
         if (!availableMaterialTypes.includes(newMaterialType)) {
