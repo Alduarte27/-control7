@@ -377,6 +377,7 @@ export default function MaterialsClient({
     const [isScannerOpen, setIsScannerOpen] = React.useState(false);
     const [configOpen, setConfigOpen] = React.useState(false);
     const netWeightInputRef = React.useRef<HTMLInputElement>(null);
+    const unitWeightInputRef = React.useRef<HTMLInputElement>(null);
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
 
@@ -464,15 +465,16 @@ export default function MaterialsClient({
                     return;
                 }
                 const quantity = parseInt(newMaterialQuantity, 10);
-                const unitWeight = parseFloat(newMaterialUnitWeight);
+                const unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.')); // Handle comma decimal
+                const totalWeight = (quantity * unitWeight) / 1000; // Convert grams to kg for total weight
                 newMaterialData = {
                     type: newMaterialType,
                     code: trimmedCode,
                     supplier: supplierName,
                     presentation: newMaterialPresentation.trim(),
                     quantity,
-                    unitWeight,
-                    totalWeight: quantity * unitWeight,
+                    unitWeight: unitWeight, // Store in grams
+                    totalWeight: totalWeight,
                     status: 'recibido',
                     receivedAt: Date.now(),
                 };
@@ -486,8 +488,8 @@ export default function MaterialsClient({
                     code: trimmedCode,
                     supplier: supplierName,
                     presentation: newMaterialType === 'rollo_fardo' ? '' : newMaterialPresentation.trim(),
-                    netWeight: parseFloat(newMaterialNetWeight),
-                    grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight) : undefined,
+                    netWeight: parseFloat(newMaterialNetWeight.replace(',', '.')),
+                    grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined,
                     status: 'recibido',
                     receivedAt: Date.now(),
                 };
@@ -519,11 +521,37 @@ export default function MaterialsClient({
             title: "Código Escaneado",
             description: `Código detectado: ${code}`,
         });
-        
-        if (newMaterialType === 'rollo_fardo') {
-             netWeightInputRef.current?.focus();
+
+        // REYSAC QR Code parsing logic
+        if (code.includes('|')) {
+            const parts = code.split('|');
+            if (parts.length >= 5) {
+                const quantity = parts[2];
+                const unitWeightGrams = parts[3]?.replace(',', '.'); // Handle comma decimal
+
+                if (quantity && !isNaN(Number(quantity))) {
+                    setNewMaterialQuantity(quantity);
+                }
+                if (unitWeightGrams && !isNaN(Number(unitWeightGrams))) {
+                    setNewMaterialUnitWeight(unitWeightGrams);
+                }
+                toast({
+                    title: "Datos Extraídos del QR",
+                    description: `Cantidad: ${quantity}, Peso/Und: ${unitWeightGrams}g`
+                });
+                
+                // Focus on the next logical field, which would be presentation.
+                 setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
+            }
         } else {
-            document.getElementById('material-presentation')?.focus();
+            // Default behavior for simple codes
+            if (newMaterialType === 'rollo_fardo') {
+                netWeightInputRef.current?.focus();
+            } else if (isGranelType) {
+                 setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
+            } else {
+                 setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
+            }
         }
     };
 
@@ -616,7 +644,7 @@ export default function MaterialsClient({
                                 <CardTitle>Registrar Nuevo Material</CardTitle>
                                 <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
                             </div>
-                            <Button variant="outline" onClick={() => setConfigOpen(true)}>
+                             <Button variant="outline" onClick={() => setConfigOpen(true)}>
                                 <Settings className="mr-2 h-4 w-4" />
                                 Configuración
                             </Button>
@@ -655,10 +683,10 @@ export default function MaterialsClient({
 
                                 { newMaterialType !== 'rollo_fardo' && (
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="material-presentation">Presentación</Label>
+                                        <Label htmlFor="material-presentation-trigger">Presentación</Label>
                                         {isDropdownForPresentation ? (
                                             <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
-                                                <SelectTrigger id="material-presentation">
+                                                <SelectTrigger id="material-presentation-trigger">
                                                     <SelectValue placeholder="Seleccionar producto..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -683,8 +711,8 @@ export default function MaterialsClient({
                                             <Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
                                         </div>
                                          <div className="space-y-1.5">
-                                            <Label htmlFor="material-unit-weight">Peso/Und (kg)</Label>
-                                            <Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 1" />
+                                            <Label htmlFor="material-unit-weight">Peso/Und (g)</Label>
+                                            <Input id="material-unit-weight" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 76,8" />
                                         </div>
                                     </div>
                                 ) : (
@@ -783,3 +811,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
