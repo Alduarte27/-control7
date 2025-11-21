@@ -139,12 +139,12 @@ function EditMaterialDialog({
                         <Label htmlFor="edit-presentation">Presentación</Label>
                         <Input id="edit-presentation" value={editedMaterial.presentation || ''} onChange={e => handleChange('presentation', e.target.value)} />
                     </div>
-                     <div className="grid grid-cols-2 gap-4">
+                    {isPlasticsacks && (
                         <div className="space-y-1.5">
                             <Label htmlFor="edit-lote">Lote</Label>
                             <Input id="edit-lote" value={editedMaterial.lote || ''} onChange={e => handleChange('lote', e.target.value)} />
                         </div>
-                    </div>
+                    )}
                     
                     {isSacosType ? (
                         isPlasticsacks ? (
@@ -159,7 +159,7 @@ function EditMaterialDialog({
                                 </div>
                             </div>
                         ) : (
-                             <div className="grid grid-cols-3 gap-2">
+                             <div className="grid grid-cols-2 gap-2">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="edit-quantity">Cantidad</Label>
                                     <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))}/>
@@ -168,7 +168,7 @@ function EditMaterialDialog({
                                     <Label htmlFor="edit-unit-weight">Peso/Und (g)</Label>
                                     <Input id="edit-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={e => handleChange('unitWeight', Number(e.target.value))}/>
                                 </div>
-                                <div className="space-y-1.5">
+                                <div className="col-span-2 space-y-1.5">
                                     <Label htmlFor="edit-total-weight">Peso Total (kg)</Label>
                                     <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))}/>
                                 </div>
@@ -706,7 +706,6 @@ export default function MaterialsClient({
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
     const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
     const isMilanplastic = supplierName.toUpperCase().startsWith('MILANPLASTIC');
-    const isReysac = supplierName.toUpperCase().startsWith('REYSAC');
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
     const granelCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'granel')?.id, [allCategories]);
@@ -816,7 +815,8 @@ export default function MaterialsClient({
                         return;
                     }
                     newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
-                 } else { // REYSAC etc.
+                    newMaterialData.lote = newMaterialLote.trim();
+                 } else { 
                     if (!newMaterialUnitWeight || !newMaterialTotalWeight) {
                         toast({ title: "Error", description: "Peso/Und y Peso Total son obligatorios para este proveedor.", variant: "destructive" });
                         return;
@@ -833,10 +833,6 @@ export default function MaterialsClient({
                 newMaterialData.grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined;
             }
             
-             if (isReysac || isMilanplastic) {
-                newMaterialData.lote = newMaterialLote.trim();
-             }
-
             if (isMilanplastic && newMaterialProviderDate) {
                 newMaterialData.providerDate = format(newMaterialProviderDate, 'yyyy-MM-dd');
             }
@@ -1109,7 +1105,7 @@ export default function MaterialsClient({
                                     <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
                                 </div>
 
-                                {(isReysac || isMilanplastic) && (
+                                {isPlasticsacks && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-lote">Lote</Label>
                                         <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
@@ -1144,7 +1140,7 @@ export default function MaterialsClient({
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-3 gap-2">
+                                        <div className="grid grid-cols-2 gap-2">
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-quantity-rs">Cantidad</Label>
                                                 <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
@@ -1153,7 +1149,7 @@ export default function MaterialsClient({
                                                 <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
                                                 <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
                                             </div>
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1.5 col-span-2">
                                                 <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
                                                 <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" disabled={!newMaterialSupplier}/>
                                             </div>
