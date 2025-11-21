@@ -861,12 +861,13 @@ export default function MaterialsClient({
             } else { // Rollos
                 const netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : 0;
                 const grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : 0;
-
-                newMaterialData.netWeight = netWeight;
-                newMaterialData.grossWeight = grossWeight;
-                if(netWeight > 0 && grossWeight > 0) {
+            
+                if (grossWeight > 0 && netWeight > 0 && grossWeight > netWeight) {
                     newMaterialData.labelTare = grossWeight - netWeight;
                 }
+            
+                newMaterialData.netWeight = netWeight;
+                newMaterialData.grossWeight = grossWeight;
             }
             
             if (isMilanplastic && newMaterialProviderDate) {
@@ -1100,7 +1101,7 @@ export default function MaterialsClient({
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
-                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-supplier">Proveedor</Label>
                                         <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
@@ -1121,7 +1122,7 @@ export default function MaterialsClient({
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                     <div className="space-y-1.5">
+                                    <div className="space-y-1.5">
                                         <Label htmlFor="material-presentation-trigger">Presentación</Label>
                                         <Input
                                             id="material-presentation-trigger"
@@ -1131,7 +1132,7 @@ export default function MaterialsClient({
                                             disabled={!newMaterialSupplier}
                                         />
                                     </div>
-                                     <div className="space-y-1.5">
+                                    <div className="space-y-1.5">
                                         <Label htmlFor="material-code">Código</Label>
                                         <div className="flex gap-2">
                                             <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
@@ -1142,7 +1143,7 @@ export default function MaterialsClient({
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
-                                     {isPlasticsacks && (
+                                    {isPlasticsacks && (
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-lote">Lote</Label>
                                             <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
