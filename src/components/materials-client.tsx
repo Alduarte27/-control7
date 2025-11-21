@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -18,7 +19,6 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Checkbox } from './ui/checkbox';
 import { Separator } from './ui/separator';
 import ScannerModal from './scanner-modal';
@@ -119,7 +119,7 @@ function EditMaterialDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Editar Material</DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription className="break-all">
                         Código: <span className="font-mono">{material.code}</span>
                     </DialogDescription>
                 </DialogHeader>
@@ -279,7 +279,7 @@ function MaterialActionDialog({
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Confirmar Consumo?</AlertDialogTitle>
                         <AlertDialogDescriptionComponent>
-                            Estás a punto de marcar el material con código <span className="font-mono font-bold">{material.code}</span> como 'Consumido'. Esta acción no se puede deshacer fácilmente.
+                            Estás a punto de marcar el material con código <span className="font-mono font-bold break-all">{material.code}</span> como 'Consumido'. Esta acción no se puede deshacer fácilmente.
                         </AlertDialogDescriptionComponent>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -592,6 +592,7 @@ export default function MaterialsClient({
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
     const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
     const isMilanplastic = supplierName.toUpperCase().startsWith('MILANPLASTIC');
+    const isReysac = supplierName.toUpperCase().startsWith('REYSAC');
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
     const granelCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'granel')?.id, [allCategories]);
@@ -713,6 +714,7 @@ export default function MaterialsClient({
                         supplier: supplierName,
                         presentation: newMaterialPresentation.trim(),
                         lote: newMaterialLote.trim(),
+                        ot: newMaterialOt.trim(),
                         quantity,
                         unitWeight: unitWeightGrams,
                         totalWeight: totalWeightKg,
@@ -731,7 +733,7 @@ export default function MaterialsClient({
                     supplier: supplierName,
                     presentation: newMaterialType === 'rollo_fardo' ? '' : newMaterialPresentation.trim(),
                     lote: newMaterialLote.trim(),
-                    ot: isMilanplastic ? newMaterialOt.trim() : undefined,
+                    ot: (isMilanplastic || isReysac) ? newMaterialOt.trim() : undefined,
                     providerDate: isMilanplastic && newMaterialProviderDate ? format(newMaterialProviderDate, 'yyyy-MM-dd') : undefined,
                     netWeight: parseFloat(newMaterialNetWeight.replace(',', '.')),
                     grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined,
@@ -958,32 +960,33 @@ export default function MaterialsClient({
                                     <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
                                 </div>
 
-                                {(isMilanplastic || isPlasticsacks) && (
+                                {(isMilanplastic || isPlasticsacks || isReysac) && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-lote">Lote</Label>
                                         <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
                                     </div>
                                 )}
                                 
+                                {(isMilanplastic || isReysac) && (
+                                     <div className="space-y-1.5">
+                                        <Label htmlFor="material-ot">O/T</Label>
+                                        <Input id="material-ot" value={newMaterialOt} onChange={(e) => setNewMaterialOt(e.target.value)} placeholder="Orden de Trabajo" disabled={!newMaterialSupplier}/>
+                                    </div>
+                                )}
+
                                 {isMilanplastic && (
-                                     <>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-ot">O/T</Label>
-                                            <Input id="material-ot" value={newMaterialOt} onChange={(e) => setNewMaterialOt(e.target.value)} placeholder="Orden de Trabajo" disabled={!newMaterialSupplier}/>
-                                        </div>
-                                         <div className="space-y-1.5">
-                                            <Label>Fecha</Label>
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}>
-                                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                                        {newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
-                                            </Popover>
-                                        </div>
-                                     </>
+                                     <div className="space-y-1.5">
+                                        <Label>Fecha</Label>
+                                        <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}>
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
+                                        </Popover>
+                                    </div>
                                 )}
 
                                 {isSacosType ? (
