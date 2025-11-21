@@ -17,7 +17,7 @@ import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs }
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from './ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription as UIDialogDescription } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Checkbox } from './ui/checkbox';
@@ -61,9 +61,9 @@ function MaterialActionDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Pesar y Poner en Uso</DialogTitle>
-                    <DialogDescription>
+                    <UIDialogDescription>
                         Registra el peso real del material con código <span className="font-mono font-bold">{material.code}</span> y asígnalo a una máquina.
-                    </DialogDescription>
+                    </UIDialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                      <div className="space-y-1.5">
@@ -110,7 +110,6 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
     });
     
     React.useEffect(() => {
-        // This effect runs only on the client, preventing hydration mismatch
         setFormattedDates({
             received: material.receivedAt ? format(new Date(material.receivedAt), "PPP p", { locale: es }) : null,
             inUse: material.inUseAt ? format(new Date(material.inUseAt), "PPP p", { locale: es }) : null,
@@ -421,7 +420,7 @@ export default function MaterialsClient({
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
 
-    const isSacoType = newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel';
+    const isDropdownPresentation = newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || newMaterialType === 'rollo_laminado';
     const isGranelType = newMaterialType === 'sacos_granel';
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
@@ -632,13 +631,13 @@ export default function MaterialsClient({
                                 </div>
                                  <div className="space-y-1.5">
                                     <Label htmlFor="material-presentation">Presentación</Label>
-                                    {isSacoType ? (
+                                    {isDropdownPresentation ? (
                                         <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
                                             <SelectTrigger id="material-presentation">
                                                 <SelectValue placeholder="Seleccionar producto..." />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {(newMaterialType === 'sacos_familiar' ? familiarProducts : granelProducts).map(p => (
+                                                {(newMaterialType === 'sacos_familiar' || newMaterialType === 'rollo_laminado' ? familiarProducts : granelProducts).map(p => (
                                                     <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
                                                 ))}
                                             </SelectContent>
