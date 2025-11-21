@@ -501,6 +501,7 @@ function MaterialCard({
         if (isRollosType) {
             referenceWeight = material.netWeight || 0;
         } else if (isSacosType) {
+            // For sacks, the reference is the total labeled weight
             referenceWeight = material.totalWeight || 0;
         }
 
@@ -521,22 +522,29 @@ function MaterialCard({
         if (material.status === 'por_pesar_tara') {
              return (
                 <div className="space-y-1">
-                    <p className="text-muted-foreground">Discrepancia de Tara</p>
+                    <p className="text-muted-foreground">Discrepancia</p>
                     <p className="font-semibold text-lg text-amber-600">Pendiente de pesar</p>
                 </div>
             );
         }
-        
-        if (material.status !== 'consumido' || material.tareWeight === undefined) return null;
 
-        const referenceTare = isRollosType ? material.labelTare : 0;
+        if (material.status !== 'consumido' || material.actualNetWeight === undefined) return null;
+
+        let referenceNetWeight = 0;
+        if (isRollosType) {
+            referenceNetWeight = material.netWeight || 0;
+        } else if (isSacosType) {
+            referenceNetWeight = material.totalWeight || 0;
+        }
         
-        const discrepancy = material.tareWeight - (referenceTare || 0);
+        if (referenceNetWeight === 0) return null;
+
+        const discrepancy = referenceNetWeight - material.actualNetWeight;
         const color = Math.abs(discrepancy) > 0.1 ? 'text-red-600' : 'text-green-600';
         
         return (
             <div className="space-y-1">
-                <p className="text-muted-foreground">Discrepancia de Tara</p>
+                <p className="text-muted-foreground">Discrepancia</p>
                 <p className={cn("font-semibold text-lg", color)}>{discrepancy.toFixed(2)} kg</p>
             </div>
         );
@@ -604,7 +612,7 @@ function MaterialCard({
                                     <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
                                     <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
                                 </div>
-                                <div className="space-y-1">
+                                 <div className="space-y-1">
                                     <p className="text-muted-foreground">Tara (Etiqueta)</p>
                                     <p className="font-semibold text-lg">{material.labelTare?.toFixed(2) ?? 'N/A'} kg</p>
                                 </div>
@@ -851,10 +859,6 @@ export default function MaterialsClient({
                     newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                  }
             } else { // Rollos
-                 if (!newMaterialNetWeight && newMaterialType !== 'rollo_fardo') {
-                    toast({ title: "Error", description: "El peso neto es obligatorio para este tipo de material.", variant: "destructive" });
-                    return;
-                }
                 const netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : 0;
                 const grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : 0;
 
