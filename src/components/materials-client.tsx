@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -102,13 +102,19 @@ function EditMaterialDialog({
 }) {
     const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
 
+    React.useEffect(() => {
+        setEditedMaterial(material);
+    }, [material]);
+
     const handleChange = (field: keyof PackagingMaterial, value: any) => {
         setEditedMaterial(prev => ({...prev, [field]: value}));
     };
 
     const handleSaveChanges = () => {
-        const { id, type, supplier, receivedAt, status, ...updates } = editedMaterial;
+        // Exclude fields that should not be edited or are controlled elsewhere
+        const { id, type, supplier, receivedAt, status, inUseAt, consumedAt, assignedMachine, ...updates } = editedMaterial;
         onSave(material.id, updates);
+        onClose();
     };
 
     const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
@@ -450,8 +456,8 @@ function MaterialCard({
                         <div className="text-xs text-muted-foreground pt-1 space-y-0.5">
                             {material.supplier && <p>Proveedor: {material.supplier}</p>}
                             {material.providerDate && <p>Fecha Prov: {material.providerDate}</p>}
-                            {material.ot && <p>O/T: {material.ot}</p>}
                             {material.lote && <p>Lote: {material.lote}</p>}
+                             {material.ot && <p>O/T: {material.ot}</p>}
                         </div>
                     </div>
                     <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full", currentStatus.color)}>
@@ -553,6 +559,7 @@ export default function MaterialsClient({
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
     const [newMaterialLote, setNewMaterialLote] = React.useState('');
+    const [newMaterialOt, setNewMaterialOt] = React.useState('');
     const [newMaterialProviderDate, setNewMaterialProviderDate] = React.useState<Date | undefined>();
     
     // States for common fields
@@ -576,11 +583,9 @@ export default function MaterialsClient({
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
     
-    // New states for editing and traceability
     const [editingMaterial, setEditingMaterial] = React.useState<PackagingMaterial | null>(null);
     const [traceMaterial, setTraceMaterial] = React.useState<PackagingMaterial | null>(null);
 
-    // New states for filtering
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
@@ -679,70 +684,54 @@ export default function MaterialsClient({
                 return;
             }
 
-            let newMaterialData: Omit<PackagingMaterial, 'id'>;
+            let newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
+                type: newMaterialType,
+                code: trimmedCode,
+                supplier: supplierName,
+                lote: newMaterialLote.trim(),
+                ot: newMaterialOt.trim(),
+                presentation: newMaterialPresentation.trim(),
+                status: 'recibido',
+                receivedAt: Date.now(),
+            };
 
             if (isSacosType) {
+                if (!newMaterialQuantity) {
+                    toast({ title: "Error", description: "La cantidad es obligatoria para Sacos.", variant: "destructive" });
+                    return;
+                }
+                newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
+
                  if (isPlasticsacks) {
-                    if (!newMaterialQuantity || !newMaterialNetWeight) {
-                        toast({ title: "Error", description: "La cantidad y el peso neto son obligatorios para este proveedor.", variant: "destructive" });
+                    if (!newMaterialTotalWeight) {
+                        toast({ title: "Error", description: "El peso neto es obligatorio para PLASTICSACKS.", variant: "destructive" });
                         return;
                     }
-                    newMaterialData = {
-                        type: newMaterialType,
-                        code: trimmedCode,
-                        supplier: supplierName,
-                        lote: newMaterialLote.trim(),
-                        presentation: newMaterialPresentation.trim(),
-                        quantity: parseInt(newMaterialQuantity, 10),
-                        totalWeight: parseFloat(newMaterialNetWeight.replace(',', '.')),
-                        status: 'recibido',
-                        receivedAt: Date.now(),
-                    };
+                    newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                  } else { // REYSAC etc.
-                    if (!newMaterialQuantity || !newMaterialUnitWeight || !newMaterialTotalWeight) {
-                        toast({ title: "Error", description: "Cantidad, Peso/Und y Peso Total son obligatorios para Sacos.", variant: "destructive" });
+                    if (!newMaterialUnitWeight || !newMaterialTotalWeight) {
+                        toast({ title: "Error", description: "Peso/Und y Peso Total son obligatorios para este proveedor.", variant: "destructive" });
                         return;
                     }
-                    const quantity = parseInt(newMaterialQuantity, 10);
-                    const unitWeightGrams = parseFloat(newMaterialUnitWeight.replace(',', '.'));
-                    const totalWeightKg = parseFloat(newMaterialTotalWeight.replace(',', '.'));
-                    
-                    newMaterialData = {
-                        type: newMaterialType,
-                        code: trimmedCode,
-                        supplier: supplierName,
-                        presentation: newMaterialPresentation.trim(),
-                        lote: newMaterialLote.trim(),
-                        quantity,
-                        unitWeight: unitWeightGrams,
-                        totalWeight: totalWeightKg,
-                        status: 'recibido',
-                        receivedAt: Date.now(),
-                    };
+                    newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
+                    newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                  }
             } else { // Rollos
                  if (!newMaterialNetWeight && newMaterialType !== 'rollo_fardo') {
                     toast({ title: "Error", description: "El peso neto es obligatorio para este tipo de material.", variant: "destructive" });
                     return;
                 }
-                newMaterialData = {
-                    type: newMaterialType,
-                    code: trimmedCode,
-                    supplier: supplierName,
-                    presentation: newMaterialType === 'rollo_fardo' ? '' : newMaterialPresentation.trim(),
-                    lote: newMaterialLote.trim(),
-                    providerDate: isMilanplastic && newMaterialProviderDate ? format(newMaterialProviderDate, 'yyyy-MM-dd') : undefined,
-                    netWeight: parseFloat(newMaterialNetWeight.replace(',', '.')),
-                    grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined,
-                    status: 'recibido',
-                    receivedAt: Date.now(),
-                };
+                newMaterialData.netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : undefined;
+                newMaterialData.grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined;
+            }
+            
+            if (isMilanplastic && newMaterialProviderDate) {
+                newMaterialData.providerDate = format(newMaterialProviderDate, 'yyyy-MM-dd');
             }
 
             const docRef = await addDoc(collection(db, 'packagingMaterials'), newMaterialData);
             setMaterials(prev => [{ id: docRef.id, ...newMaterialData } as PackagingMaterial, ...prev]);
 
-            // Reset all fields
             setNewMaterialCode('');
             setNewMaterialPresentation('');
             setNewMaterialNetWeight('');
@@ -752,6 +741,7 @@ export default function MaterialsClient({
             setNewMaterialTotalWeight('');
             setNewMaterialSupplier('');
             setNewMaterialLote('');
+            setNewMaterialOt('');
             setNewMaterialProviderDate(undefined);
             
             toast({ title: 'Material Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
@@ -791,7 +781,6 @@ export default function MaterialsClient({
                 setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
             }
         } else {
-            // Default behavior for simple codes
             if (newMaterialType === 'rollo_fardo') {
                 netWeightInputRef.current?.focus();
             } else if (isSacosType) {
@@ -847,7 +836,6 @@ export default function MaterialsClient({
         }
     };
 
-
     const handleSelectionChange = (id: string, checked: boolean) => {
         setSelectedMaterials(prev => {
             const newSet = new Set(prev);
@@ -877,6 +865,47 @@ export default function MaterialsClient({
             console.error("Error deleting selected materials:", error);
             toast({ title: 'Error', description: 'No se pudieron eliminar los materiales.', variant: 'destructive' });
         }
+    };
+    
+    const handleExportCSV = () => {
+        const headers = [
+            'Tipo', 'Código', 'Proveedor', 'Lote', 'O/T', 'Presentación', 'Fecha Proveedor', 'Estado',
+            'Fecha Recibido', 'Fecha En Uso', 'Fecha Consumido', 'Máquina Asignada', 'Cantidad', 
+            'Peso/Und (g)', 'Peso Total (kg)', 'Peso Neto (kg)', 'Peso Bruto (kg)', 'Peso Real (kg)'
+        ];
+
+        const rows = materials.map(m => {
+            return [
+                materialTypeLabels[m.type],
+                `"${m.code.replace(/"/g, '""')}"`,
+                m.supplier || '',
+                m.lote || '',
+                m.ot || '',
+                m.presentation || '',
+                m.providerDate || '',
+                m.status,
+                m.receivedAt ? format(new Date(m.receivedAt), 'yyyy-MM-dd HH:mm:ss') : '',
+                m.inUseAt ? format(new Date(m.inUseAt), 'yyyy-MM-dd HH:mm:ss') : '',
+                m.consumedAt ? format(new Date(m.consumedAt), 'yyyy-MM-dd HH:mm:ss') : '',
+                m.assignedMachine || '',
+                m.quantity || '',
+                m.unitWeight || '',
+                m.totalWeight || '',
+                m.netWeight || '',
+                m.grossWeight || '',
+                m.actualWeight || '',
+            ].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'reporte-materiales-empaque.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     };
 
     return (
@@ -910,7 +939,7 @@ export default function MaterialsClient({
                             </Button>
                         </CardHeader>
                         <CardContent>
-                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-supplier">Proveedor</Label>
                                     <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
@@ -962,6 +991,10 @@ export default function MaterialsClient({
                                         <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
                                     </div>
                                 )}
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="material-ot">O/T</Label>
+                                    <Input id="material-ot" value={newMaterialOt} onChange={e => setNewMaterialOt(e.target.value)} placeholder="Orden de Trabajo" disabled={!newMaterialSupplier}/>
+                                </div>
                                 
                                 {isMilanplastic && (
                                      <div className="space-y-1.5">
@@ -986,8 +1019,8 @@ export default function MaterialsClient({
                                                 <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
                                             </div>
                                             <div className="space-y-1.5">
-                                                <Label htmlFor="material-net-weight-ps">Peso Neto (kg)</Label>
-                                                <Input id="material-net-weight-ps" type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
+                                                <Label htmlFor="material-total-weight-ps">Peso Neto (kg)</Label>
+                                                <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
                                             </div>
                                         </div>
                                     ) : (
@@ -1073,28 +1106,33 @@ export default function MaterialsClient({
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                {selectedMaterials.size > 0 && (
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button variant="destructive">
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                Eliminar ({selectedMaterials.size})
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                                <AlertDialogDescriptionComponent>
-                                                    Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
-                                                </AlertDialogDescriptionComponent>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
-                                )}
+                                <div className="flex items-center gap-2">
+                                     <Button variant="outline" onClick={handleExportCSV}>
+                                        <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
+                                    </Button>
+                                    {selectedMaterials.size > 0 && (
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button variant="destructive">
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    Eliminar ({selectedMaterials.size})
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                                    <AlertDialogDescriptionComponent>
+                                                        Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
+                                                    </AlertDialogDescriptionComponent>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    )}
+                                </div>
                             </div>
                         </CardHeader>
                         <CardContent>
