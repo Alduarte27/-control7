@@ -177,6 +177,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
                             #{getShortCode(material.code)}
                         </CardTitle>
                         <p className="text-xs text-muted-foreground font-mono">{material.code}</p>
+                        {material.supplier && <p className="text-xs text-muted-foreground pt-1">Proveedor: {material.supplier}</p>}
                     </div>
                     <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full", currentStatus.color)}>
                         <currentStatus.icon className="h-3 w-3" />
@@ -402,6 +403,7 @@ export default function MaterialsClient({
     const [materials, setMaterials] = React.useState<PackagingMaterial[]>(initialMaterials);
     const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos_familiar');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
+    const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
     
     // States for common fields
     const [newMaterialPresentation, setNewMaterialPresentation] = React.useState('');
@@ -471,6 +473,7 @@ export default function MaterialsClient({
                 newMaterialData = {
                     type: newMaterialType,
                     code: trimmedCode,
+                    supplier: newMaterialSupplier.trim(),
                     presentation: newMaterialPresentation.trim(),
                     quantity,
                     unitWeight,
@@ -486,6 +489,7 @@ export default function MaterialsClient({
                 newMaterialData = {
                     type: newMaterialType,
                     code: trimmedCode,
+                    supplier: newMaterialSupplier.trim(),
                     presentation: newMaterialType === 'rollo_fardo' ? '' : newMaterialPresentation.trim(),
                     netWeight: parseFloat(newMaterialNetWeight),
                     grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight) : undefined,
@@ -504,6 +508,7 @@ export default function MaterialsClient({
             setNewMaterialGrossWeight('');
             setNewMaterialQuantity('');
             setNewMaterialUnitWeight('');
+            setNewMaterialSupplier('');
             
             toast({ title: 'Material Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
         } catch (error) {
@@ -658,8 +663,13 @@ export default function MaterialsClient({
                                     </div>
                                 )}
 
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="material-supplier">Proveedor</Label>
+                                    <Input id="material-supplier" value={newMaterialSupplier} onChange={(e) => setNewMaterialSupplier(e.target.value)} placeholder="Ej: Peruplast" />
+                                </div>
+
                                 {isGranelType ? (
-                                    <div className="grid grid-cols-3 gap-2 col-span-1 lg:col-span-2">
+                                    <div className="grid grid-cols-2 gap-2 col-span-1 lg:col-span-1">
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-quantity">Cantidad</Label>
                                             <Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
@@ -668,14 +678,9 @@ export default function MaterialsClient({
                                             <Label htmlFor="material-unit-weight">Peso/Und (kg)</Label>
                                             <Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 1" />
                                         </div>
-                                         <div className="space-y-1.5 self-end">
-                                             <Button onClick={handleAddMaterial} className="w-full">
-                                                <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                            </Button>
-                                        </div>
                                     </div>
                                 ) : (
-                                    <div className={cn("grid grid-cols-3 gap-2 col-span-1", newMaterialType === 'rollo_fardo' ? 'lg:col-span-3' : 'lg:col-span-2')}>
+                                    <div className={cn("grid grid-cols-2 gap-2 col-span-1 lg:col-span-1")}>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
                                             <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" />
@@ -684,13 +689,13 @@ export default function MaterialsClient({
                                             <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
                                             <Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05" />
                                         </div>
-                                        <div className="space-y-1.5 self-end">
-                                            <Button onClick={handleAddMaterial} className="w-full">
-                                                <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                            </Button>
-                                        </div>
                                     </div>
                                 )}
+                                <div className="space-y-1.5 self-end">
+                                    <Button onClick={handleAddMaterial} className="w-full">
+                                        <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                    </Button>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>
@@ -762,4 +767,3 @@ export default function MaterialsClient({
         </>
     );
 }
-

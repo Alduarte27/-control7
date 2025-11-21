@@ -152,6 +152,7 @@ export type PackagingMaterial = {
     id: string;
     type: MaterialType;
     code: string;
+    supplier?: string;
     presentation?: string;
     netWeight?: number; 
     grossWeight?: number;
