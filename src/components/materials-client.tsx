@@ -568,7 +568,7 @@ function MaterialCard({
                 </div>
                  <div className="flex flex-col">
                     <div>
-                        <CardDescription>{material.presentation || materialTypeLabels[material.type]}</CardDescription>
+                        <CardDescription>{materialTypeLabels[material.type]} - {material.presentation || ''}</CardDescription>
                         <CardTitle className="text-4xl font-bold text-primary hover:underline cursor-pointer" onClick={() => onTraceClick(material)}>
                             #{getShortCode(material.code)}
                         </CardTitle>
@@ -827,6 +827,8 @@ export default function MaterialsClient({
                 });
                 return;
             }
+            const netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : 0;
+            const grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : 0;
 
             const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
                 type: newMaterialType,
@@ -864,12 +866,8 @@ export default function MaterialsClient({
                     newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                  }
             } else { // Rollos
-                const netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : 0;
-                const grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : 0;
-            
                 newMaterialData.netWeight = netWeight;
                 newMaterialData.grossWeight = grossWeight;
-
                 if (grossWeight > 0 && netWeight > 0) {
                     newMaterialData.labelTare = grossWeight - netWeight;
                 }
@@ -1065,7 +1063,7 @@ export default function MaterialsClient({
             } else if (isSacosType) {
                 referenceNetWeight = m.totalWeight || 0; 
             }
-            const discrepancy = m.actualNetWeight !== undefined ? referenceNetWeight - m.actualNetWeight : null;
+            const discrepancy = m.actualNetWeight !== undefined && referenceNetWeight > 0 ? referenceNetWeight - m.actualNetWeight : null;
             
             let performance = null;
             if (m.actualNetWeight !== undefined && referenceNetWeight > 0) {
@@ -1166,7 +1164,7 @@ export default function MaterialsClient({
                                     {!isPlastiempaques && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                        {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel') ? (
+                                        {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || newMaterialType === 'rollo_laminado') ? (
                                             <Select
                                                 value={newMaterialPresentation}
                                                 onValueChange={setNewMaterialPresentation}
@@ -1176,7 +1174,7 @@ export default function MaterialsClient({
                                                     <SelectValue placeholder="Seleccionar producto..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {(newMaterialType === 'sacos_familiar' ? familiarProducts : granelProducts).map(p => (
+                                                    {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
                                                         <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
                                                     ))}
                                                 </SelectContent>
