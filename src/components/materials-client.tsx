@@ -329,13 +329,13 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
              {material.status !== 'consumido' && (
                 <div className="p-4 pt-0">
                     {material.status === 'recibido' && (
-                        <Button className="w-full" onClick={() => onActionClick(material, 'weigh')}>
-                            <Weight className="mr-2 h-4 w-4" /> Pesar y Poner en Uso
+                        <Button className="w-full h-auto whitespace-normal" onClick={() => onActionClick(material, 'weigh')}>
+                            <Weight className="mr-2 h-4 w-4 flex-shrink-0" /> Pesar y Poner en Uso
                         </Button>
                     )}
                     {material.status === 'en_uso' && (
-                        <Button className="w-full" variant="destructive" onClick={() => onActionClick(material, 'consume')}>
-                            <PackageCheck className="mr-2 h-4 w-4" /> Marcar como Consumido
+                        <Button className="w-full h-auto whitespace-normal" variant="destructive" onClick={() => onActionClick(material, 'consume')}>
+                            <PackageCheck className="mr-2 h-4 w-4 flex-shrink-0" /> Marcar como Consumido
                         </Button>
                     )}
                 </div>
@@ -892,3 +892,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
