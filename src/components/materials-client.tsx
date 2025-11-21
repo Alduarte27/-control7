@@ -500,7 +500,6 @@ function MaterialCard({
         if (isRollosType && material.netWeight) {
             referenceWeight = material.netWeight;
         } else if (isSacosType && material.totalWeight) {
-            // For bags, the theoretical net weight is the total weight on the label
             referenceWeight = material.totalWeight;
         }
 
@@ -1150,12 +1149,7 @@ export default function MaterialsClient({
                                     )}
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-code">Código</Label>
-                                        <div className="flex gap-2">
-                                            <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
-                                            <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier}>
-                                                <Camera className="h-4 w-4" />
-                                            </Button>
-                                        </div>
+                                        <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
@@ -1222,9 +1216,12 @@ export default function MaterialsClient({
                                         </>
                                     )}
 
-                                    <div className="flex gap-2 lg:col-start-5">
+                                    <div className="flex items-end gap-2 lg:col-start-5">
                                         <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                        </Button>
+                                        <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier}>
+                                            <Camera className="h-4 w-4" />
                                         </Button>
                                     </div>
                                 </div>
