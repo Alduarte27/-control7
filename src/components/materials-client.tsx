@@ -500,6 +500,7 @@ function MaterialCard({
         if (isRollosType && material.netWeight) {
             referenceWeight = material.netWeight;
         } else if (isSacosType && material.totalWeight) {
+            // For bags, the theoretical net weight is the total weight on the label
             referenceWeight = material.totalWeight;
         }
 
@@ -532,7 +533,7 @@ function MaterialCard({
         if (isRollosType) {
             referenceNetWeight = material.netWeight || 0;
         } else if (isSacosType) {
-            referenceNetWeight = material.totalWeight || 0; // For bags, total weight is theoretical net
+            referenceNetWeight = material.totalWeight || 0; 
         }
         
         if (referenceNetWeight === 0) return null;
@@ -736,7 +737,7 @@ export default function MaterialsClient({
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
     const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
     const isMilanplastic = supplierName.toUpperCase().startsWith('MILANPLASTIC');
-    const isPlastiempaques = supplierName.toUpperCase().startsWith('PLASTIEMPAQUES');
+    const isPlastiempaques = supplierName.toUpperCase().startsWith('PLASTIEMPAQUES S.A');
 
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
