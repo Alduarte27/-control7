@@ -37,7 +37,7 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
         // Fallback to jsQR if BarcodeDetector fails unexpectedly
         animationFrameId.current = requestAnimationFrame(scanWithJsQR);
     }
-  }, [onScanSuccess]);
+  }, [onScanSuccess, scanWithJsQR]);
 
   const scanWithJsQR = useCallback(() => {
     if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
