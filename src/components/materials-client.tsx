@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { PackagingMaterial, MaterialType, MaterialStatus } from '@/lib/types';
+import type { PackagingMaterial, MaterialType, MaterialStatus, ProductDefinition, CategoryDefinition } from '@/lib/types';
 import { materialTypeLabels } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
@@ -390,7 +390,15 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
     );
 }
 
-export default function MaterialsClient({ initialMaterials }: { initialMaterials: PackagingMaterial[] }) {
+export default function MaterialsClient({ 
+    initialMaterials,
+    allProducts,
+    allCategories,
+}: { 
+    initialMaterials: PackagingMaterial[],
+    allProducts: ProductDefinition[],
+    allCategories: CategoryDefinition[],
+}) {
     const [materials, setMaterials] = React.useState<PackagingMaterial[]>(initialMaterials);
     const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos_familiar');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
@@ -413,7 +421,21 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
 
+    const isSacoType = newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel';
     const isGranelType = newMaterialType === 'sacos_granel';
+
+    const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
+    const granelCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'granel')?.id, [allCategories]);
+
+    const familiarProducts = React.useMemo(() => {
+        if (!familiarCategoryId) return [];
+        return allProducts.filter(p => p.categoryId === familiarCategoryId);
+    }, [allProducts, familiarCategoryId]);
+
+    const granelProducts = React.useMemo(() => {
+        if (!granelCategoryId) return [];
+        return allProducts.filter(p => p.categoryId === granelCategoryId);
+    }, [allProducts, granelCategoryId]);
 
     const handleAddMaterial = async () => {
         if (!newMaterialCode.trim()) {
@@ -610,7 +632,20 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
                                 </div>
                                  <div className="space-y-1.5">
                                     <Label htmlFor="material-presentation">Presentación</Label>
-                                    <Input id="material-presentation" value={newMaterialPresentation} onChange={(e) => setNewMaterialPresentation(e.target.value)} placeholder="Ej: San Juan 1Kg" />
+                                    {isSacoType ? (
+                                        <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
+                                            <SelectTrigger id="material-presentation">
+                                                <SelectValue placeholder="Seleccionar producto..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(newMaterialType === 'sacos_familiar' ? familiarProducts : granelProducts).map(p => (
+                                                    <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Input id="material-presentation" value={newMaterialPresentation} onChange={(e) => setNewMaterialPresentation(e.target.value)} placeholder="Ej: Rollo Transparente 35cm" />
+                                    )}
                                 </div>
 
                                 {isGranelType ? (
