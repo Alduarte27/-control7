@@ -23,6 +23,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 import { Checkbox } from './ui/checkbox';
 import { Separator } from './ui/separator';
+import ScannerModal from './scanner-modal';
 
 
 function ConfigModal({ 
