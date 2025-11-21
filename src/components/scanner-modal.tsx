@@ -135,7 +135,7 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
           if (isBarcodeDetectorSupported()) {
             try {
               // @ts-ignore
-              barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13'] });
+              barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13', 'code_39'] });
               animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(videoRef.current!, barcodeDetector));
             } catch (detectorError) {
                 console.error("Failed to create BarcodeDetector, falling back to jsQR:", detectorError);
