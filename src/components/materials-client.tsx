@@ -513,13 +513,9 @@ function MaterialCard({
     }
     
     const getDiscrepancy = () => {
-        if (material.status !== 'consumido' || material.tareWeight === undefined) return null;
-        const isRollos = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
-        const referenceTare = isRollos ? material.labelTare : 0; // Assuming sacos have no label tare for now. This can be enhanced.
+        if (material.status !== 'consumido' || material.tareWeight === undefined || material.labelTare === undefined) return null;
         
-        if(referenceTare === undefined) return null;
-        
-        const discrepancy = material.tareWeight - referenceTare;
+        const discrepancy = material.tareWeight - material.labelTare;
         const color = Math.abs(discrepancy) > 0.1 ? 'text-red-600' : 'text-green-600';
         
         return (
@@ -619,7 +615,9 @@ function MaterialCard({
                     )}
                     
                     <div className="col-span-2">{getPerformance()}</div>
-                    <div className="col-span-2">{getDiscrepancy()}</div>
+                    {getDiscrepancy() && (
+                        <div className="col-span-2">{getDiscrepancy()}</div>
+                    )}
                 </div>
                 <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 min-h-[50px]">
                     {material.assignedMachine && (
@@ -640,12 +638,12 @@ function MaterialCard({
                             <Weight className="mr-2 h-4 w-4 flex-shrink-0" /> Pesar y Poner en Uso
                         </Button>
                     )}
-                    {material.status === 'en_uso' && (
+                    {(material.status === 'en_uso') && (
                         <Button className="w-full h-auto whitespace-normal" variant="destructive" onClick={() => onActionClick(material, 'consume')}>
                             <PackageCheck className="mr-2 h-4 w-4 flex-shrink-0" /> Marcar como Consumido
                         </Button>
                     )}
-                     {material.status === 'por_pesar_tara' && (
+                     {(material.status === 'por_pesar_tara') && (
                         <Button className="w-full h-auto whitespace-normal" variant="secondary" onClick={() => onActionClick(material, 'weigh_tare')}>
                             <Zap className="mr-2 h-4 w-4 flex-shrink-0" /> Pesar Tara
                         </Button>
