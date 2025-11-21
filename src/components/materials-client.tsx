@@ -178,6 +178,12 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
       inUse: null,
       consumed: null,
     });
+    
+    const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
+        recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
+        en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
+        consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
+    };
 
     React.useEffect(() => {
         const formatDate = (timestamp: number | undefined) => {
@@ -238,11 +244,6 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
     };
 
     const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
-    const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
-        recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
-        en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
-        consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
-    };
 
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
@@ -569,6 +570,7 @@ export default function MaterialsClient({
                 }
                  if (totalWeightKg && !isNaN(Number(totalWeightKg))) {
                     setNewMaterialTotalWeight(totalWeightKg);
+                    setNewMaterialNetWeight(totalWeightKg); // For plasticsacks
                 }
     
                 toast({
@@ -758,35 +760,35 @@ export default function MaterialsClient({
                                      </>
                                 )}
 
-                                {isSacosType && (isPlasticsacks ? (
-                                     <div className="grid grid-cols-2 gap-2">
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-quantity-ps">Cantidad</Label>
-                                            <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
+                                {isSacosType ? (
+                                    isPlasticsacks ? (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-quantity-ps">Cantidad</Label>
+                                                <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-net-weight-ps">Peso Neto (kg)</Label>
+                                                <Input id="material-net-weight-ps" type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 51.6" />
+                                            </div>
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-net-weight-ps">Peso Neto (kg)</Label>
-                                            <Input id="material-net-weight-ps" type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 51.6" />
+                                    ) : (
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-quantity-rs">Cantidad</Label>
+                                                <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
+                                                <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
+                                                <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" />
+                                            </div>
                                         </div>
-                                    </div>
+                                    )
                                 ) : (
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-quantity-rs">Cantidad</Label>
-                                            <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
-                                            <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" />
-                                        </div>
-                                         <div className="space-y-1.5">
-                                            <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
-                                            <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" />
-                                        </div>
-                                    </div>
-                                ))}
-                                
-                                {!isSacosType && (
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
@@ -798,7 +800,7 @@ export default function MaterialsClient({
                                         </div>
                                     </div>
                                 )}
-
+                                
                                 <div className="space-y-1.5 self-end col-span-1 md:col-span-2 lg:col-span-1">
                                     <div className="flex gap-2">
                                         <Button onClick={handleAddMaterial} className="flex-1">
