@@ -288,17 +288,19 @@ function TareWeightDialog({
         });
     };
 
+    const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
+
     return (
         <Dialog open={true} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Pesar Tara del Rollo</DialogTitle>
+                    <DialogTitle>Pesar Tara del Material</DialogTitle>
                     <DialogDescription>
-                        Registra el peso de los desechos para calcular el peso neto real y el rendimiento del material.
+                        Registra el peso de los desechos para calcular el peso neto real y el rendimiento.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={cn("grid gap-4", isSacosType ? "grid-cols-1" : "grid-cols-2")}>
                         <div className="space-y-1.5">
                             <Label htmlFor="plastic-weight">Peso envoltura (kg)</Label>
                             <Input
@@ -309,22 +311,24 @@ function TareWeightDialog({
                                 placeholder="0.00"
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="core-weight">Peso del Canuto (kg)</Label>
-                            <Input
-                                id="core-weight"
-                                type="number"
-                                value={coreWeight}
-                                onChange={(e) => setCoreWeight(e.target.value)}
-                                placeholder="0.00"
-                            />
-                        </div>
+                        {!isSacosType && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="core-weight">Peso del Canuto (kg)</Label>
+                                <Input
+                                    id="core-weight"
+                                    type="number"
+                                    value={coreWeight}
+                                    onChange={(e) => setCoreWeight(e.target.value)}
+                                    placeholder="0.00"
+                                />
+                            </div>
+                        )}
                     </div>
                     <Separator />
                      <div className="space-y-2 rounded-lg border p-4 bg-muted/50">
                         <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Peso Bruto (Balanza):</span>
-                            <span className="font-medium">{material.actualWeight?.toFixed(2) || '0.00'} kg</span>
+                            <span className="font-medium">{(material.actualWeight || material.totalWeight)?.toFixed(2) || '0.00'} kg</span>
                         </div>
                         <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Peso Total de Tara:</span>
@@ -339,7 +343,7 @@ function TareWeightDialog({
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
-                    <Button onClick={handleConfirm} disabled={!plasticWeight || !coreWeight}>Confirmar y Guardar Tara</Button>
+                    <Button onClick={handleConfirm} disabled={!plasticWeight || (!isSacosType && !coreWeight)}>Confirmar y Guardar Tara</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -369,9 +373,7 @@ function MaterialActionDialog({
                         <AlertDialogTitle>¿Confirmar Consumo?</AlertDialogTitle>
                         <AlertDialogDescriptionComponent>
                             Estás a punto de marcar el material con código <span className="font-mono font-bold break-all">{material.code}</span> como consumido.
-                            {material.type !== 'sacos_familiar' && material.type !== 'sacos_granel' && (
-                                <span className="block mt-2 font-semibold text-amber-700">A continuación, deberás registrar el peso de la tara.</span>
-                            )}
+                             <span className="block mt-2 font-semibold text-amber-700">A continuación, deberás registrar el peso de la tara.</span>
                         </AlertDialogDescriptionComponent>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -494,8 +496,12 @@ function MaterialCard({
     const currentStatus = statusConfig[material.status];
 
     const getPerformance = () => {
-        if (material.status !== 'consumido' || !material.actualNetWeight || !material.netWeight) return null;
-        const performance = (material.actualNetWeight / material.netWeight) * 100;
+        if (material.status !== 'consumido' || !material.actualNetWeight || (!material.netWeight && !material.totalWeight)) return null;
+        
+        const referenceWeight = material.netWeight || material.totalWeight || 0;
+        if(referenceWeight === 0) return null;
+
+        const performance = (material.actualNetWeight / referenceWeight) * 100;
         const color = performance >= 98 ? 'text-green-600' : 'text-yellow-600';
         return (
             <div className="space-y-1">
@@ -507,9 +513,15 @@ function MaterialCard({
     }
     
     const getDiscrepancy = () => {
-        if (material.status !== 'consumido' || material.tareWeight === undefined || material.labelTare === undefined) return null;
-        const discrepancy = material.tareWeight - material.labelTare;
-        const color = discrepancy > 0.1 ? 'text-red-600' : 'text-green-600';
+        if (material.status !== 'consumido' || material.tareWeight === undefined) return null;
+        const isRollos = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
+        const referenceTare = isRollos ? material.labelTare : 0; // Assuming sacos have no label tare for now. This can be enhanced.
+        
+        if(referenceTare === undefined) return null;
+        
+        const discrepancy = material.tareWeight - referenceTare;
+        const color = Math.abs(discrepancy) > 0.1 ? 'text-red-600' : 'text-green-600';
+        
         return (
             <div className="space-y-1">
                 <p className="text-muted-foreground">Discrepancia de Tara</p>
@@ -556,9 +568,9 @@ function MaterialCard({
                 </div>
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
-                 <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="space-y-4 text-sm">
                     {isSacosType ? (
-                        <>
+                        <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
                                 <p className="text-muted-foreground">Cantidad</p>
                                 <p className="font-semibold text-lg">{material.quantity}</p>
@@ -571,35 +583,39 @@ function MaterialCard({
                                 <p className="text-muted-foreground">Peso Total (Calculado)</p>
                                 <p className="font-semibold text-lg">{material.totalWeight} kg</p>
                             </div>
-                        </>
+                        </div>
                     ) : (
-                        <>
-                            <div className="space-y-1">
-                                <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
-                                <p className="font-semibold text-lg">{material.netWeight} kg</p>
+                        <div className="space-y-3">
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                                <div className="space-y-1">
+                                    <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
+                                    <p className="font-semibold text-lg">{material.netWeight} kg</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
+                                    <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-muted-foreground">Tara (Etiqueta)</p>
+                                    <p className="font-semibold text-lg">{material.labelTare?.toFixed(2) ?? 'N/A'} kg</p>
+                                </div>
                             </div>
-                            <div className="space-y-1">
-                                <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
-                                <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
+                            <Separator />
+                            <div className="grid grid-cols-3 gap-2 text-center">
+                                <div className="space-y-1">
+                                    <p className="text-muted-foreground">Peso Bruto (Balanza)</p>
+                                    <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-muted-foreground">Peso Neto Real</p>
+                                    <p className="font-semibold text-lg text-green-600">{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-muted-foreground">Tara (Real)</p>
+                                    <p className="font-semibold text-lg">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
+                                </div>
                             </div>
-                            <div className="space-y-1">
-                                <p className="text-muted-foreground">Tara (Etiqueta)</p>
-                                <p className="font-semibold text-lg">{material.labelTare?.toFixed(2) ?? 'N/A'} kg</p>
-                            </div>
-                            <Separator className="col-span-2 my-2" />
-                            <div className="space-y-1">
-                                <p className="text-muted-foreground">Peso Bruto (Balanza)</p>
-                                <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
-                            </div>
-                             <div className="space-y-1">
-                                <p className="text-muted-foreground">Peso Neto Real</p>
-                                <p className="font-semibold text-lg text-green-600">{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-muted-foreground">Tara (Real)</p>
-                                <p className="font-semibold text-lg">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
-                            </div>
-                        </>
+                        </div>
                     )}
                     
                     <div className="col-span-2">{getPerformance()}</div>
@@ -910,18 +926,21 @@ export default function MaterialsClient({
 
         try {
             if (action === 'weigh') {
-                const updateData = {
-                    status: 'en_uso' as MaterialStatus,
+                const updateData: Partial<PackagingMaterial> = {
+                    status: 'en_uso',
                     actualWeight: data.actualWeight,
                     assignedMachine: data.assignedMachine,
                     inUseAt: Date.now(),
                 };
-                await updateDoc(doc(db, 'packagingMaterials', material.id), updateData);
+                 // For sacos, the actual weight is the total weight if not specified
+                if(!updateData.actualWeight && material.totalWeight) {
+                    updateData.actualWeight = material.totalWeight;
+                }
+                await updateDoc(doc(db, 'packagingMaterials', material.id), updateData as any);
                 setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
                 toast({ title: 'Material en Uso', description: `El material ${material.code} ahora está en uso.` });
             } else if (action === 'consume') {
-                 const isSacos = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
-                 const finalStatus = isSacos ? 'consumido' : 'por_pesar_tara';
+                 const finalStatus: MaterialStatus = 'por_pesar_tara';
                  const updateData = {
                     status: finalStatus,
                     consumedAt: Date.now(),
@@ -929,18 +948,19 @@ export default function MaterialsClient({
                 await updateDoc(doc(db, 'packagingMaterials', material.id), updateData);
                 setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
                 toast({ title: 'Material Consumido', description: `El material ${material.code} se ha marcado como consumido.` });
-            } else if (action === 'weigh_tare' && data.plasticWeight !== undefined && data.coreWeight !== undefined) {
-                 const tareWeight = data.plasticWeight + data.coreWeight;
-                 const actualNetWeight = (material.actualWeight || 0) - tareWeight;
-                 const updateData = {
-                    status: 'consumido' as MaterialStatus,
+            } else if (action === 'weigh_tare' && data.plasticWeight !== undefined) {
+                 const tareWeight = data.plasticWeight + (data.coreWeight || 0);
+                 const referenceWeight = material.actualWeight || material.totalWeight || 0;
+                 const actualNetWeight = referenceWeight - tareWeight;
+                 const updateData: Partial<PackagingMaterial> = {
+                    status: 'consumido',
                     tareWeight: tareWeight,
                     actualNetWeight: actualNetWeight,
                     tareWeightedAt: Date.now(),
                 };
                 await updateDoc(doc(db, 'packagingMaterials', material.id), updateData);
                 setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
-                toast({ title: 'Tara Registrada', description: `Se registró la tara para el rollo ${material.code}.` });
+                toast({ title: 'Tara Registrada', description: `Se registró la tara para el material ${material.code}.` });
             }
         } catch (error) {
             console.error(`Error updating material to ${action}:`, error);
@@ -1086,27 +1106,24 @@ export default function MaterialsClient({
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    {newMaterialType !== 'rollo_fardo' && (
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                            <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation} disabled={!newMaterialSupplier}>
-                                                <SelectTrigger id="material-presentation-trigger">
-                                                    <SelectValue placeholder="Seleccionar producto..." />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Sacos sin LOGO">Sacos sin LOGO</SelectItem>
-                                                    {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
-                                                        <SelectItem key={p.id} value={p.productName}>
-                                                            {p.productName.replace(/\s*\([^)]*\)\s*/g, ' ')}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    )}
                                     <div className="space-y-1.5">
+                                        <Label htmlFor="material-presentation-trigger">Presentación</Label>
+                                        <Input
+                                            id="material-presentation-trigger"
+                                            value={newMaterialPresentation}
+                                            onChange={(e) => setNewMaterialPresentation(e.target.value)}
+                                            placeholder="Ej: Azúcar San Juan 1kg"
+                                            disabled={!newMaterialSupplier}
+                                        />
+                                    </div>
+                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-code">Código</Label>
-                                        <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
+                                        <div className="flex gap-2">
+                                            <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
+                                            <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier}>
+                                                <Camera className="h-4 w-4" />
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
@@ -1176,9 +1193,6 @@ export default function MaterialsClient({
                                     <div className="flex gap-2 lg:col-start-5">
                                         <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                        </Button>
-                                        <Button variant="outline" onClick={() => setIsScannerOpen(true)} className="flex-1" disabled={!newMaterialSupplier}>
-                                            <Camera className="mr-2 h-4 w-4" /> Escanear
                                         </Button>
                                     </div>
                                 </div>
