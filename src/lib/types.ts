@@ -162,8 +162,8 @@ export type PackagingMaterial = {
     netWeight?: number; 
     grossWeight?: number;
     quantity?: number;
-    unitWeight?: number;
-    totalWeight?: number;
+    unitWeight?: number; // in grams
+    totalWeight?: number; // in kg
     actualWeight?: number;
     status: MaterialStatus;
     receivedAt: number;

@@ -222,7 +222,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
         if (material.status === 'recibido' || !material.actualWeight) return null;
         
         let baseWeight;
-        if (material.type === 'sacos_granel') {
+        if (material.type === 'sacos_granel' || material.type === 'sacos_familiar') {
             baseWeight = material.totalWeight;
         } else {
             baseWeight = material.netWeight;
@@ -241,7 +241,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
         );
     };
 
-    const isGranel = material.type === 'sacos_granel';
+    const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
 
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
@@ -270,7 +270,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    {isGranel ? (
+                    {isSacosType ? (
                         <>
                             <div className="space-y-1">
                                 <p className="text-muted-foreground">Cantidad</p>
@@ -278,7 +278,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
                             </div>
                             <div className="space-y-1">
                                 <p className="text-muted-foreground">Peso/Und.</p>
-                                <p className="font-semibold text-lg">{material.unitWeight} kg</p>
+                                <p className="font-semibold text-lg">{material.unitWeight} g</p>
                             </div>
                             <div className="space-y-1 col-span-2">
                                 <p className="text-muted-foreground">Peso Total (Calculado)</p>
@@ -368,7 +368,7 @@ export default function MaterialsClient({
     const [newMaterialNetWeight, setNewMaterialNetWeight] = React.useState('');
     const [newMaterialGrossWeight, setNewMaterialGrossWeight] = React.useState('');
 
-    // States for granel type
+    // States for sacos type
     const [newMaterialQuantity, setNewMaterialQuantity] = React.useState('');
     const [newMaterialUnitWeight, setNewMaterialUnitWeight] = React.useState('');
 
@@ -382,8 +382,7 @@ export default function MaterialsClient({
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
 
     const isDropdownForPresentation = newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || newMaterialType === 'rollo_laminado';
-    const isDropdownForFamiliar = newMaterialType === 'sacos_familiar' || newMaterialType === 'rollo_laminado';
-    const isGranelType = newMaterialType === 'sacos_granel';
+    const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
     const granelCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'granel')?.id, [allCategories]);
@@ -459,15 +458,15 @@ export default function MaterialsClient({
             let newMaterialData: Omit<PackagingMaterial, 'id'>;
             const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
 
-            if (isGranelType) {
+            if (isSacosType) {
                  if (!newMaterialQuantity || !newMaterialUnitWeight) {
-                    toast({ title: "Error", description: "La cantidad y el peso por unidad son obligatorios para Sacos de Granel.", variant: "destructive" });
+                    toast({ title: "Error", description: "La cantidad y el peso por unidad son obligatorios para Sacos.", variant: "destructive" });
                     return;
                 }
                 const quantity = parseInt(newMaterialQuantity, 10);
-                const unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
+                const unitWeightGrams = parseFloat(newMaterialUnitWeight.replace(',', '.'));
                 
-                const totalWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : (quantity * unitWeight) / 1000;
+                const totalWeightKg = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : (quantity * unitWeightGrams) / 1000;
 
                 newMaterialData = {
                     type: newMaterialType,
@@ -475,8 +474,8 @@ export default function MaterialsClient({
                     supplier: supplierName,
                     presentation: newMaterialPresentation.trim(),
                     quantity,
-                    unitWeight: unitWeight, // Store in grams
-                    totalWeight: totalWeight,
+                    unitWeight: unitWeightGrams,
+                    totalWeight: totalWeightKg,
                     status: 'recibido',
                     receivedAt: Date.now(),
                 };
@@ -520,7 +519,6 @@ export default function MaterialsClient({
         setIsScannerOpen(false);
         setNewMaterialCode(code);
     
-        // REYSAC QR Code parsing logic
         if (code.includes('|')) {
             const parts = code.split('|');
             if (parts.length >= 5) {
@@ -549,7 +547,7 @@ export default function MaterialsClient({
             // Default behavior for simple codes
             if (newMaterialType === 'rollo_fardo') {
                 netWeightInputRef.current?.focus();
-            } else if (isGranelType) {
+            } else if (isSacosType) {
                  setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
             } else {
                  setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
@@ -692,9 +690,9 @@ export default function MaterialsClient({
                                                     <SelectValue placeholder="Seleccionar producto..." />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {(isDropdownForFamiliar ? familiarProducts : granelProducts).map(p => (
+                                                    {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
                                                         <SelectItem key={p.id} value={p.productName}>
-                                                            {p.productName.replace(/\s*\([^)]*\)\s*/g, ' ').trim()}
+                                                            {p.productName}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
@@ -706,7 +704,7 @@ export default function MaterialsClient({
                                 )}
 
 
-                                {isGranelType ? (
+                                {isSacosType ? (
                                     <div className="grid grid-cols-2 gap-2 col-span-1 lg:col-span-1">
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-quantity">Cantidad</Label>
