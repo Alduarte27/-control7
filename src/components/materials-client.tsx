@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -178,7 +178,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
         en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
         consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
     };
-
+    
     const [formattedDates, setFormattedDates] = React.useState<{ received: string | null, inUse: string | null, consumed: string | null }>({
       received: null,
       inUse: null,
@@ -731,7 +731,7 @@ export default function MaterialsClient({
                                 
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-code">Código</Label>
-                                    <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escanear o escribir..." disabled={!newMaterialSupplier} />
+                                    <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
                                 </div>
 
                                 {(isMilanplastic || isPlasticsacks) && (
@@ -803,7 +803,7 @@ export default function MaterialsClient({
                                     </div>
                                 )}
                                 
-                                <div className="space-y-1.5 self-end col-span-1 md:col-span-2 lg:col-span-1">
+                                <div className="space-y-1.5 self-end col-span-1 md:col-span-2 lg:col-span-1 xl:col-span-full">
                                     <div className="flex gap-2">
                                         <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
@@ -892,4 +892,3 @@ export default function MaterialsClient({
         </>
     );
 }
-

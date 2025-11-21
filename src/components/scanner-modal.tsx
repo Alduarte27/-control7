@@ -16,7 +16,7 @@ interface ScannerModalProps {
   onScanSuccess: (code: string) => void;
 }
 
-const isBarcodeDetectorSupported = (): boolean => 'BarcodeDetector' in window;
+const isBarcodeDetectorSupported = (): boolean => typeof window !== 'undefined' && 'BarcodeDetector' in window;
 
 export default function ScannerModal({ isOpen, onClose, onScanSuccess }: ScannerModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -46,28 +46,30 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
 
           if (code) {
             onScanSuccess(code.data);
-          } else {
-            animationFrameId.current = requestAnimationFrame(scanWithJsQR);
+            return; // Stop scanning
           }
         }
       }
-    } else {
-       animationFrameId.current = requestAnimationFrame(scanWithJsQR);
     }
+    // Continue scanning if no code found or video not ready
+    animationFrameId.current = requestAnimationFrame(scanWithJsQR);
   }, [onScanSuccess]);
+
 
   const scanWithBarcodeDetector = useCallback(async (video: HTMLVideoElement, detector: any) => {
     try {
         const barcodes = await detector.detect(video);
         if (barcodes.length > 0) {
             onScanSuccess(barcodes[0].rawValue);
-        } else {
-            animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(video, detector));
+            return; // Stop scanning
         }
     } catch (error) {
-        console.error("Barcode Detector error:", error);
+        console.error("Barcode Detector error, falling back to jsQR:", error);
         animationFrameId.current = requestAnimationFrame(scanWithJsQR);
+        return; // Stop this loop
     }
+    // Continue scanning
+    animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(video, detector));
   }, [onScanSuccess, scanWithJsQR]);
   
   const toggleTorch = async () => {
@@ -92,6 +94,9 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
 
   useEffect(() => {
     if (!isOpen) {
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
@@ -99,12 +104,10 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
       if (videoRef.current) {
         videoRef.current.srcObject = null;
       }
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current);
-      }
-      // Reset torch state when closing
+      // Reset state when closing
       setIsTorchOn(false);
       setIsTorchSupported(false);
+      setHasCameraPermission(null);
       return;
     }
 
@@ -115,23 +118,29 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         streamRef.current = stream;
         setHasCameraPermission(true);
-
-        const videoTrack = stream.getVideoTracks()[0];
-        // @ts-ignore
-        const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
-        // @ts-ignore
-        if (capabilities.torch) {
-            setIsTorchSupported(true);
-        }
-
+        
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
-          
+
+          // Check for torch support after stream is active
+          const videoTrack = stream.getVideoTracks()[0];
+          // @ts-ignore
+          const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+          // @ts-ignore
+          if (capabilities.torch) {
+              setIsTorchSupported(true);
+          }
+
           if (isBarcodeDetectorSupported()) {
-            // @ts-ignore
-            barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13'] });
-            animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(videoRef.current!, barcodeDetector));
+            try {
+              // @ts-ignore
+              barcodeDetector = new window.BarcodeDetector({ formats: ['qr_code', 'code_128', 'ean_13'] });
+              animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(videoRef.current!, barcodeDetector));
+            } catch (detectorError) {
+                console.error("Failed to create BarcodeDetector, falling back to jsQR:", detectorError);
+                animationFrameId.current = requestAnimationFrame(scanWithJsQR);
+            }
           } else {
             console.log("BarcodeDetector not supported, falling back to jsQR.");
             animationFrameId.current = requestAnimationFrame(scanWithJsQR);
@@ -155,11 +164,17 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
         cancelAnimationFrame(animationFrameId.current);
       }
        if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current.getTracks().forEach(track => {
+          if (track.readyState === 'live' && isTorchOn) {
+             // @ts-ignore
+             track.applyConstraints({ advanced: [{ torch: false }]});
+          }
+          track.stop()
+        });
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, onScanSuccess, scanWithBarcodeDetector, scanWithJsQR]);
+  }, [isOpen]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
