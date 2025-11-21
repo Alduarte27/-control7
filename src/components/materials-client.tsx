@@ -335,144 +335,6 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
     );
 }
 
-function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onClose: () => void; onScanSuccess: (code: string) => void; }) {
-    const videoRef = React.useRef<HTMLVideoElement>(null);
-    const streamRef = React.useRef<MediaStream | null>(null);
-    const [hasPermission, setHasPermission] = React.useState<boolean | null>(null);
-    const [error, setError] = React.useState<string | null>(null);
-    const isScanningRef = React.useRef(false);
-
-    React.useEffect(() => {
-        let animationFrameId: number;
-        let barcodeDetector: any;
-
-        const setupScanner = async () => {
-            if (!('BarcodeDetector' in window)) {
-                setError("Tu navegador no es compatible con el escaneo de códigos de barras.");
-                setHasPermission(false);
-                return;
-            }
-            try {
-                const supportedFormats = await (window as any).BarcodeDetector.getSupportedFormats();
-                barcodeDetector = new (window as any).BarcodeDetector({ formats: supportedFormats });
-            } catch (e) {
-                 setError("No se pudo inicializar el detector de códigos de barras.");
-                 setHasPermission(false);
-            }
-        };
-
-        const tick = async () => {
-            if (isScanningRef.current && videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && barcodeDetector) {
-                try {
-                    const barcodes = await barcodeDetector.detect(videoRef.current);
-                    if (barcodes.length > 0) {
-                        onScanSuccess(barcodes[0].rawValue);
-                        return; // Stop scanning
-                    }
-                } catch (e) {
-                    console.error("Error detecting barcode:", e);
-                }
-            }
-            if (isScanningRef.current) {
-                animationFrameId = requestAnimationFrame(tick);
-            }
-        };
-        
-
-        const startScan = async () => {
-            isScanningRef.current = true;
-            setError(null);
-            setHasPermission(null);
-            await setupScanner();
-
-            if (!barcodeDetector) return;
-
-            try {
-                streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-            } catch (err) {
-                console.warn("Back camera not found or failed, trying any available camera...");
-                try {
-                    streamRef.current = await navigator.mediaDevices.getUserMedia({ video: true });
-                } catch (finalErr: any) {
-                    console.error("Error accessing any camera:", finalErr);
-                    setHasPermission(false);
-                    if (finalErr.name === 'NotAllowedError') {
-                        setError("Permiso de cámara denegado. Habilita el acceso en la configuración de tu navegador.");
-                    } else {
-                        setError("No se encontró una cámara compatible en este dispositivo.");
-                    }
-                    return;
-                }
-            }
-            
-            if (streamRef.current && videoRef.current) {
-                videoRef.current.srcObject = streamRef.current;
-                await videoRef.current.play();
-                setHasPermission(true);
-                animationFrameId = requestAnimationFrame(tick);
-            } else if (!error) {
-                setHasPermission(false);
-                setError("No se pudo iniciar el stream de la cámara.");
-            }
-        };
-
-        if (isOpen) {
-            startScan();
-        } else {
-            isScanningRef.current = false;
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-                streamRef.current = null;
-            }
-            if(animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-            }
-        }
-        
-        return () => {
-            isScanningRef.current = false;
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-                streamRef.current = null;
-            }
-            if(animationFrameId) {
-                cancelAnimationFrame(animationFrameId);
-            }
-        };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isOpen]);
-
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Escanear Código</DialogTitle>
-                </DialogHeader>
-                <div className="relative aspect-video bg-black rounded-md overflow-hidden flex items-center justify-center">
-                    {hasPermission === null && !error && <p className="text-white text-center p-4">Solicitando acceso a la cámara...</p>}
-                    {error && (
-                         <div className="flex flex-col items-center justify-center h-full p-4">
-                            <Alert variant="destructive">
-                                <AlertTriangle className="h-4 w-4" />
-                                <AlertTitle>Error de Cámara</AlertTitle>
-                                <AlertDescription>
-                                    {error}
-                                </AlertDescription>
-                            </Alert>
-                        </div>
-                    )}
-                     <video ref={videoRef} playsInline className={cn("w-full h-full object-cover", hasPermission !== true && "hidden")} />
-                </div>
-                 <DialogFooter>
-                    <DialogClose asChild>
-                        <Button variant="secondary">Cancelar</Button>
-                    </DialogClose>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
 const supplierMaterialMapping: { [key: string]: MaterialType[] } = {
     'PLASTICSACKS CIA LTDA.': ['sacos_granel'],
     'REYSAC': ['sacos_granel'],
@@ -737,10 +599,6 @@ export default function MaterialsClient({
                         <h1 className="text-2xl font-bold text-foreground">Control de Materiales de Empaque</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={() => setConfigOpen(true)}>
-                            <Settings className="mr-2 h-4 w-4" />
-                            Configuración
-                        </Button>
                         <Link href="/">
                             <Button variant="outline">
                                 <ChevronLeft className="mr-2 h-4 w-4" />
@@ -752,9 +610,15 @@ export default function MaterialsClient({
 
                 <main className="p-4 md:p-8 space-y-6">
                     <Card>
-                        <CardHeader>
-                            <CardTitle>Registrar Nuevo Material</CardTitle>
-                            <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div>
+                                <CardTitle>Registrar Nuevo Material</CardTitle>
+                                <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
+                            </div>
+                            <Button variant="outline" onClick={() => setConfigOpen(true)}>
+                                <Settings className="mr-2 h-4 w-4" />
+                                Configuración
+                            </Button>
                         </CardHeader>
                         <CardContent>
                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
