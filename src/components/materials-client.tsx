@@ -381,7 +381,6 @@ export default function MaterialsClient({
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
 
-    const isDropdownForPresentation = newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || newMaterialType === 'rollo_laminado';
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
@@ -466,7 +465,10 @@ export default function MaterialsClient({
                 const quantity = parseInt(newMaterialQuantity, 10);
                 const unitWeightGrams = parseFloat(newMaterialUnitWeight.replace(',', '.'));
                 
-                const totalWeightKg = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : (quantity * unitWeightGrams) / 1000;
+                // Use net weight if provided (from QR), otherwise calculate it
+                const totalWeightKg = newMaterialNetWeight 
+                    ? parseFloat(newMaterialNetWeight.replace(',', '.')) 
+                    : (quantity * unitWeightGrams) / 1000;
 
                 newMaterialData = {
                     type: newMaterialType,
@@ -532,7 +534,7 @@ export default function MaterialsClient({
                 if (unitWeightGrams && !isNaN(Number(unitWeightGrams))) {
                     setNewMaterialUnitWeight(unitWeightGrams);
                 }
-                if (totalWeightKg && !isNaN(Number(totalWeightKg))) {
+                 if (totalWeightKg && !isNaN(Number(totalWeightKg))) {
                     setNewMaterialNetWeight(totalWeightKg);
                 }
     
@@ -650,7 +652,7 @@ export default function MaterialsClient({
                             </Button>
                         </CardHeader>
                         <CardContent>
-                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-end">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-supplier">Proveedor</Label>
                                     <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
@@ -671,6 +673,25 @@ export default function MaterialsClient({
                                         </SelectContent>
                                     </Select>
                                 </div>
+                                
+                                { newMaterialType !== 'rollo_fardo' && (
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="material-presentation-trigger">Presentación</Label>
+                                        <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
+                                            <SelectTrigger id="material-presentation-trigger">
+                                                <SelectValue placeholder="Seleccionar producto..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
+                                                    <SelectItem key={p.id} value={p.productName}>
+                                                        {p.productName.replace(/\s*\([^)]*\)\s*/g, ' ')}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+                                
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-code">Código</Label>
                                     <div className="flex gap-2">
@@ -681,42 +702,24 @@ export default function MaterialsClient({
                                     </div>
                                 </div>
 
-                                { newMaterialType !== 'rollo_fardo' && (
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                        {isDropdownForPresentation ? (
-                                            <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
-                                                <SelectTrigger id="material-presentation-trigger">
-                                                    <SelectValue placeholder="Seleccionar producto..." />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
-                                                        <SelectItem key={p.id} value={p.productName}>
-                                                            {p.productName}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        ) : (
-                                            <Input id="material-presentation" value={newMaterialPresentation} onChange={(e) => setNewMaterialPresentation(e.target.value)} placeholder="Ej: Rollo Transparente 35cm" />
-                                        )}
-                                    </div>
-                                )}
-
 
                                 {isSacosType ? (
-                                    <div className="grid grid-cols-2 gap-2 col-span-1 lg:col-span-1">
+                                    <div className="grid grid-cols-3 gap-2 col-span-full md:col-span-2 lg:col-span-2 xl:col-span-2">
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-quantity">Cantidad</Label>
                                             <Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
                                         </div>
                                          <div className="space-y-1.5">
                                             <Label htmlFor="material-unit-weight">Peso/Und (g)</Label>
-                                            <Input id="material-unit-weight" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 76,8" />
+                                            <Input id="material-unit-weight" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-total-weight">Peso Total (kg)</Label>
+                                            <Input id="material-total-weight" type="number" ref={netWeightInputRef} value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 51,6" />
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className={cn("grid grid-cols-2 gap-2 col-span-1", newMaterialType === 'rollo_fardo' ? "lg:col-span-2" : "lg:col-span-1")}>
+                                    <div className={cn("grid grid-cols-2 gap-2", newMaterialType === 'rollo_fardo' ? "col-span-full md:col-span-2 lg:col-span-3 xl:col-span-3" : "col-span-full md:col-span-2 lg:col-span-2 xl:col-span-1")}>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
                                             <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" />
