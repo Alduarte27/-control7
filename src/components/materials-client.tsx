@@ -338,7 +338,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
 
 const supplierMaterialMapping: { [key: string]: MaterialType[] } = {
     'PLASTICSACKS CIA LTDA.': ['sacos_granel'],
-    'REYSAC': ['sacos_granel'],
+    'REYSAC': ['sacos_granel', 'sacos_familiar'],
     'MILANPLASTIC': ['rollo_laminado'],
     'PLASTIEMPAQUES S.A': ['rollo_fardo'],
 };
