@@ -632,6 +632,10 @@ export default function MaterialsClient({
                                     </Select>
                                 </div>
                                 <div className="space-y-1.5">
+                                    <Label htmlFor="material-supplier">Proveedor</Label>
+                                    <Input id="material-supplier" value={newMaterialSupplier} onChange={(e) => setNewMaterialSupplier(e.target.value)} placeholder="Ej: Peruplast" />
+                                </div>
+                                <div className="space-y-1.5">
                                     <Label htmlFor="material-code">Código</Label>
                                     <div className="flex gap-2">
                                         <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escanear o escribir..." />
@@ -663,10 +667,6 @@ export default function MaterialsClient({
                                     </div>
                                 )}
 
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="material-supplier">Proveedor</Label>
-                                    <Input id="material-supplier" value={newMaterialSupplier} onChange={(e) => setNewMaterialSupplier(e.target.value)} placeholder="Ej: Peruplast" />
-                                </div>
 
                                 {isGranelType ? (
                                     <div className="grid grid-cols-2 gap-2 col-span-1 lg:col-span-1">
