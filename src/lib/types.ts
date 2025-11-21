@@ -1,3 +1,4 @@
+
 'use client';
 
 export type ShiftProduction = {
@@ -144,7 +145,7 @@ export type Supplier = {
 };
 
 export type MaterialType = 'sacos_familiar' | 'sacos_granel' | 'rollo_laminado' | 'rollo_fardo';
-export type MaterialStatus = 'recibido' | 'en_uso' | 'consumido';
+export type MaterialStatus = 'recibido' | 'en_uso' | 'consumido' | 'por_pesar_tara';
 
 export const materialTypeLabels: { [key in MaterialType]: string } = {
   sacos_familiar: "Sacos de Familiar",
@@ -159,7 +160,6 @@ export type PackagingMaterial = {
     code: string;
     supplier?: string;
     lote?: string;
-    ot?: string; // Order de Trabajo
     providerDate?: string; // Fecha de la etiqueta del proveedor
     presentation?: string;
     netWeight?: number; 
@@ -173,6 +173,9 @@ export type PackagingMaterial = {
     inUseAt?: number;
     consumedAt?: number;
     assignedMachine?: string;
+    tareWeight?: number; // Peso de la tara (plastico + canuto)
+    actualNetWeight?: number; // Peso neto real (Peso Real - Tara)
+    tareWeightedAt?: number; // Timestamp de cuando se pesó la tara
 };
 
 declare module 'jsqr';

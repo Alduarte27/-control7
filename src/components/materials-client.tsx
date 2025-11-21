@@ -25,6 +25,7 @@ import { Separator } from './ui/separator';
 import ScannerModal from './scanner-modal';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
+import { Progress } from './ui/progress';
 
 
 function ConfigModal({ 
@@ -215,11 +216,17 @@ function TraceabilityDialog({ material, onClose }: { material: PackagingMaterial
             icon: Weight,
             details: `Pesado y puesto en uso. Peso Real: ${material.actualWeight || 'N/A'} kg. Asignado a: ${material.assignedMachine || 'N/A'}.`
         },
-        {
-            status: 'Consumido',
+         {
+            status: 'Por Pesar Tara',
             timestamp: material.consumedAt,
+            icon: AlertTriangle,
+            details: `Material marcado como consumido, pendiente de pesar los desechos.`
+        },
+        {
+            status: 'Consumido y Verificado',
+            timestamp: material.tareWeightedAt,
             icon: PackageCheck,
-            details: `Material marcado como consumido.`
+            details: `Tara pesada. Peso Neto Real: ${material.actualNetWeight?.toFixed(2) || 'N/A'} kg.`
         }
     ].filter(item => item.timestamp);
 
@@ -259,6 +266,86 @@ function TraceabilityDialog({ material, onClose }: { material: PackagingMaterial
     );
 }
 
+function TareWeightDialog({
+    material,
+    onClose,
+    onConfirm,
+}: {
+    material: PackagingMaterial;
+    onClose: () => void;
+    onConfirm: (tareData: { plasticWeight: number; coreWeight: number }) => void;
+}) {
+    const [plasticWeight, setPlasticWeight] = React.useState('');
+    const [coreWeight, setCoreWeight] = React.useState('');
+
+    const totalTare = (parseFloat(plasticWeight) || 0) + (parseFloat(coreWeight) || 0);
+    const actualNetWeight = (material.actualWeight || 0) - totalTare;
+
+    const handleConfirm = () => {
+        onConfirm({
+            plasticWeight: parseFloat(plasticWeight) || 0,
+            coreWeight: parseFloat(coreWeight) || 0,
+        });
+    };
+
+    return (
+        <Dialog open={true} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Pesar Tara del Rollo</DialogTitle>
+                    <DialogDescription>
+                        Registra el peso de los desechos para calcular el peso neto real y el rendimiento del material.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="plastic-weight">Peso envoltura (kg)</Label>
+                            <Input
+                                id="plastic-weight"
+                                type="number"
+                                value={plasticWeight}
+                                onChange={(e) => setPlasticWeight(e.target.value)}
+                                placeholder="0.00"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="core-weight">Peso del Canuto (kg)</Label>
+                            <Input
+                                id="core-weight"
+                                type="number"
+                                value={coreWeight}
+                                onChange={(e) => setCoreWeight(e.target.value)}
+                                placeholder="0.00"
+                            />
+                        </div>
+                    </div>
+                    <Separator />
+                     <div className="space-y-2 rounded-lg border p-4 bg-muted/50">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Peso Real Medido:</span>
+                            <span className="font-medium">{material.actualWeight?.toFixed(2) || '0.00'} kg</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Peso Total de Tara:</span>
+                            <span className="font-medium text-red-600">-{totalTare.toFixed(2)} kg</span>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between text-lg font-bold">
+                            <span>Peso Neto Real:</span>
+                            <span className="text-green-600">{actualNetWeight.toFixed(2)} kg</span>
+                        </div>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
+                    <Button onClick={handleConfirm} disabled={!plasticWeight || !coreWeight}>Confirmar y Guardar Tara</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 
 function MaterialActionDialog({
   material,
@@ -281,7 +368,10 @@ function MaterialActionDialog({
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Confirmar Consumo?</AlertDialogTitle>
                         <AlertDialogDescriptionComponent>
-                            Estás a punto de marcar el material con código <span className="font-mono font-bold break-all">{material.code}</span> como 'Consumido'. Esta acción no se puede deshacer fácilmente.
+                            Estás a punto de marcar el material con código <span className="font-mono font-bold break-all">{material.code}</span> como consumido.
+                            {material.type !== 'sacos_familiar' && material.type !== 'sacos_granel' && (
+                                <span className="block mt-2 font-semibold text-amber-700">A continuación, deberás registrar el peso de la tara.</span>
+                            )}
                         </AlertDialogDescriptionComponent>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -348,7 +438,7 @@ function MaterialCard({
     onTraceClick,
 }: { 
     material: PackagingMaterial, 
-    onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume') => void, 
+    onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume' | 'weigh_tare') => void, 
     onSelectionChange: (id: string, checked: boolean) => void, 
     isSelected: boolean,
     onEditClick: (material: PackagingMaterial) => void,
@@ -358,6 +448,7 @@ function MaterialCard({
         recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
         en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
         consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
+        por_pesar_tara: { label: 'Por Pesar Tara', color: 'bg-orange-500', icon: AlertTriangle },
     };
     
     const [formattedDates, setFormattedDates] = React.useState<{ received: string | null, inUse: string | null, consumed: string | null }>({
@@ -424,6 +515,19 @@ function MaterialCard({
             </p>
         );
     };
+
+    const getPerformance = () => {
+        if (material.status !== 'consumido' || !material.actualNetWeight || !material.netWeight) return null;
+        const performance = (material.actualNetWeight / material.netWeight) * 100;
+        const color = performance >= 98 ? 'text-green-600' : 'text-yellow-600';
+        return (
+            <div className="space-y-1">
+                <p className="text-muted-foreground">Rendimiento</p>
+                <p className={cn("font-semibold text-lg", color)}>{performance.toFixed(1)}%</p>
+                <Progress value={performance} indicatorClassName={performance >= 98 ? "bg-green-500" : "bg-yellow-500"} />
+            </div>
+        )
+    }
 
     const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
 
@@ -498,6 +602,13 @@ function MaterialCard({
                         <p className="text-muted-foreground">Discrepancia</p>
                         {getDiscrepancy() || <p className="text-sm text-muted-foreground">Pendiente de pesar</p>}
                     </div>
+                     {material.actualNetWeight && (
+                        <div className="space-y-1 col-span-2">
+                            <p className="text-muted-foreground">Peso Neto Real</p>
+                            <p className="font-semibold text-lg text-green-600">{material.actualNetWeight.toFixed(2)} kg</p>
+                        </div>
+                    )}
+                    <div className="col-span-2">{getPerformance()}</div>
                 </div>
                 <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 min-h-[50px]">
                     {material.assignedMachine && (
@@ -521,6 +632,11 @@ function MaterialCard({
                     {material.status === 'en_uso' && (
                         <Button className="w-full h-auto whitespace-normal" variant="destructive" onClick={() => onActionClick(material, 'consume')}>
                             <PackageCheck className="mr-2 h-4 w-4 flex-shrink-0" /> Marcar como Consumido
+                        </Button>
+                    )}
+                     {material.status === 'por_pesar_tara' && (
+                        <Button className="w-full h-auto whitespace-normal" variant="secondary" onClick={() => onActionClick(material, 'weigh_tare')}>
+                            <Zap className="mr-2 h-4 w-4 flex-shrink-0" /> Pesar Tara
                         </Button>
                     )}
                 </div>
@@ -575,7 +691,7 @@ export default function MaterialsClient({
     const netWeightInputRef = React.useRef<HTMLInputElement>(null);
     const unitWeightInputRef = React.useRef<HTMLInputElement>(null);
 
-    const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
+    const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' | 'weigh_tare' } | null>(null);
     
     const [editingMaterial, setEditingMaterial] = React.useState<PackagingMaterial | null>(null);
     const [traceMaterial, setTraceMaterial] = React.useState<PackagingMaterial | null>(null);
@@ -717,6 +833,10 @@ export default function MaterialsClient({
                 newMaterialData.grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined;
             }
             
+             if (isReysac || isMilanplastic) {
+                newMaterialData.lote = newMaterialLote.trim();
+             }
+
             if (isMilanplastic && newMaterialProviderDate) {
                 newMaterialData.providerDate = format(newMaterialProviderDate, 'yyyy-MM-dd');
             }
@@ -782,7 +902,7 @@ export default function MaterialsClient({
         }
     };
 
-    const handleActionConfirm = async (data: { actualWeight?: number, assignedMachine?: string }) => {
+    const handleActionConfirm = async (data: { actualWeight?: number, assignedMachine?: string; plasticWeight?: number; coreWeight?: number; }) => {
         if (!actionState) return;
 
         const { material, action } = actionState;
@@ -799,13 +919,27 @@ export default function MaterialsClient({
                 setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
                 toast({ title: 'Material en Uso', description: `El material ${material.code} ahora está en uso.` });
             } else if (action === 'consume') {
+                 const isSacos = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
+                 const finalStatus = isSacos ? 'consumido' : 'por_pesar_tara';
                  const updateData = {
-                    status: 'consumido' as MaterialStatus,
+                    status: finalStatus,
                     consumedAt: Date.now(),
                 };
                 await updateDoc(doc(db, 'packagingMaterials', material.id), updateData);
                 setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
                 toast({ title: 'Material Consumido', description: `El material ${material.code} se ha marcado como consumido.` });
+            } else if (action === 'weigh_tare' && data.plasticWeight !== undefined && data.coreWeight !== undefined) {
+                 const tareWeight = data.plasticWeight + data.coreWeight;
+                 const actualNetWeight = (material.actualWeight || 0) - tareWeight;
+                 const updateData = {
+                    status: 'consumido' as MaterialStatus,
+                    tareWeight: tareWeight,
+                    actualNetWeight: actualNetWeight,
+                    tareWeightedAt: Date.now(),
+                };
+                await updateDoc(doc(db, 'packagingMaterials', material.id), updateData);
+                setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
+                toast({ title: 'Tara Registrada', description: `Se registró la tara para el rollo ${material.code}.` });
             }
         } catch (error) {
             console.error(`Error updating material to ${action}:`, error);
@@ -975,7 +1109,7 @@ export default function MaterialsClient({
                                     <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
                                 </div>
 
-                                {isReysac && (
+                                {(isReysac || isMilanplastic) && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-lote">Lote</Label>
                                         <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
@@ -1072,6 +1206,7 @@ export default function MaterialsClient({
                                             <SelectItem value="all">Todos los Estados</SelectItem>
                                             <SelectItem value="recibido">Recibido</SelectItem>
                                             <SelectItem value="en_uso">En Uso</SelectItem>
+                                            <SelectItem value="por_pesar_tara">Por Pesar Tara</SelectItem>
                                             <SelectItem value="consumido">Consumido</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -1152,12 +1287,20 @@ export default function MaterialsClient({
                 onScanSuccess={handleScanSuccess}
             />
             {actionState && (
-                <MaterialActionDialog
-                    material={actionState.material}
-                    action={actionState.action}
-                    onClose={() => setActionState(null)}
-                    onConfirm={handleActionConfirm}
-                />
+                actionState.action === 'weigh_tare' ? (
+                    <TareWeightDialog
+                        material={actionState.material}
+                        onClose={() => setActionState(null)}
+                        onConfirm={(data) => handleActionConfirm(data)}
+                    />
+                ) : (
+                    <MaterialActionDialog
+                        material={actionState.material}
+                        action={actionState.action}
+                        onClose={() => setActionState(null)}
+                        onConfirm={handleActionConfirm}
+                    />
+                )
             )}
             {editingMaterial && (
                 <EditMaterialDialog 
