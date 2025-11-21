@@ -111,7 +111,6 @@ function EditMaterialDialog({
     };
 
     const handleSaveChanges = () => {
-        // Exclude fields that should not be edited or are controlled elsewhere
         const { id, type, supplier, receivedAt, status, inUseAt, consumedAt, assignedMachine, ...updates } = editedMaterial;
         onSave(material.id, updates);
         onClose();
@@ -442,22 +441,22 @@ function MaterialCard({
                 />
             </div>
             <CardHeader>
-                 <div className="flex justify-between items-start">
+                 <div className="flex flex-col">
                     <div>
                         <CardDescription>{material.presentation || materialTypeLabels[material.type]}</CardDescription>
                         <CardTitle className="text-4xl font-bold text-primary hover:underline cursor-pointer" onClick={() => onTraceClick(material)}>
                             #{getShortCode(material.code)}
                         </CardTitle>
                         <p className="text-xs text-muted-foreground font-mono break-all">{material.code}</p>
-                        <div className="text-xs text-muted-foreground pt-1 space-y-0.5">
-                            {material.supplier && <p>Proveedor: {material.supplier}</p>}
-                            {material.providerDate && <p>Fecha Prov: {material.providerDate}</p>}
-                            {material.lote && <p>Lote: {material.lote}</p>}
-                        </div>
                     </div>
-                    <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full", currentStatus.color)}>
+                    <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full self-start mt-2", currentStatus.color)}>
                         <currentStatus.icon className="h-3 w-3" />
                         <span>{currentStatus.label}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground pt-1 space-y-0.5">
+                        {material.supplier && <p>Proveedor: {material.supplier}</p>}
+                        {material.providerDate && <p>Fecha Prov: {material.providerDate}</p>}
+                        {material.lote && <p>Lote: {material.lote}</p>}
                     </div>
                 </div>
             </CardHeader>
@@ -975,7 +974,7 @@ export default function MaterialsClient({
                                     <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
                                 </div>
 
-                                {(isMilanplastic || isPlasticsacks || isReysac) && (
+                                {(isMilanplastic || isReysac) && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-lote">Lote</Label>
                                         <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
