@@ -553,7 +553,6 @@ export default function MaterialsClient({
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
     const [newMaterialLote, setNewMaterialLote] = React.useState('');
-    const [newMaterialOt, setNewMaterialOt] = React.useState('');
     const [newMaterialProviderDate, setNewMaterialProviderDate] = React.useState<Date | undefined>();
     
     // States for common fields
@@ -714,7 +713,6 @@ export default function MaterialsClient({
                         supplier: supplierName,
                         presentation: newMaterialPresentation.trim(),
                         lote: newMaterialLote.trim(),
-                        ot: newMaterialOt.trim(),
                         quantity,
                         unitWeight: unitWeightGrams,
                         totalWeight: totalWeightKg,
@@ -733,7 +731,6 @@ export default function MaterialsClient({
                     supplier: supplierName,
                     presentation: newMaterialType === 'rollo_fardo' ? '' : newMaterialPresentation.trim(),
                     lote: newMaterialLote.trim(),
-                    ot: (isMilanplastic || isReysac) ? newMaterialOt.trim() : undefined,
                     providerDate: isMilanplastic && newMaterialProviderDate ? format(newMaterialProviderDate, 'yyyy-MM-dd') : undefined,
                     netWeight: parseFloat(newMaterialNetWeight.replace(',', '.')),
                     grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined,
@@ -755,7 +752,6 @@ export default function MaterialsClient({
             setNewMaterialTotalWeight('');
             setNewMaterialSupplier('');
             setNewMaterialLote('');
-            setNewMaterialOt('');
             setNewMaterialProviderDate(undefined);
             
             toast({ title: 'Material Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
@@ -967,13 +963,6 @@ export default function MaterialsClient({
                                     </div>
                                 )}
                                 
-                                {(isMilanplastic || isReysac) && (
-                                     <div className="space-y-1.5">
-                                        <Label htmlFor="material-ot">O/T</Label>
-                                        <Input id="material-ot" value={newMaterialOt} onChange={(e) => setNewMaterialOt(e.target.value)} placeholder="Orden de Trabajo" disabled={!newMaterialSupplier}/>
-                                    </div>
-                                )}
-
                                 {isMilanplastic && (
                                      <div className="space-y-1.5">
                                         <Label>Fecha</Label>
