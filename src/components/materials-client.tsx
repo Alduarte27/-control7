@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -16,8 +17,8 @@ import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from './ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from './ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 
@@ -41,9 +42,9 @@ function MaterialActionDialog({
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Confirmar Consumo?</AlertDialogTitle>
-                        <AlertDialogDescription>
+                        <AlertDialogDescriptionComponent>
                             Estás a punto de marcar el material con código <span className="font-mono font-bold">{material.code}</span> como 'Consumido'. Esta acción no se puede deshacer fácilmente.
-                        </AlertDialogDescription>
+                        </AlertDialogDescriptionComponent>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -124,7 +125,7 @@ function MaterialCard({ material, onActionClick }: { material: PackagingMaterial
     const currentStatus = statusConfig[material.status];
 
     const getDiscrepancy = () => {
-        if (material.status === 'recibido' || !material.actualWeight) return null;
+        if (material.status === 'recibido' || !material.actualWeight || !material.netWeight) return null;
         const baseWeight = material.grossWeight || material.netWeight;
         const diff = material.actualWeight - baseWeight;
         const diffPercentage = (diff / baseWeight) * 100;
