@@ -69,35 +69,8 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
     const [isScanning, setIsScanning] = React.useState(false);
 
     React.useEffect(() => {
-        if (isOpen) {
-            setIsScanning(true);
-            setHasPermission(null);
+        let animationFrameId: number;
 
-            const startScan = async () => {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    streamRef.current = stream;
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = stream;
-                        await videoRef.current.play();
-                    }
-                    setHasPermission(true);
-                    requestAnimationFrame(tick);
-                } catch (err) {
-                    console.error("Error accessing camera:", err);
-                    setHasPermission(false);
-                    onClose(); // Close modal if permission is denied
-                }
-            };
-            startScan();
-        } else {
-            setIsScanning(false);
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach(track => track.stop());
-                streamRef.current = null;
-            }
-        }
-        
         const tick = () => {
             if (isScanning && videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
                 const canvas = canvasRef.current;
@@ -120,15 +93,48 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
                 }
             }
             if (isScanning) {
-                requestAnimationFrame(tick);
+                animationFrameId = requestAnimationFrame(tick);
             }
         };
+
+        if (isOpen) {
+            setIsScanning(true);
+            setHasPermission(null);
+
+            const startScan = async () => {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                    streamRef.current = stream;
+                    if (videoRef.current) {
+                        videoRef.current.srcObject = stream;
+                        await videoRef.current.play();
+                    }
+                    setHasPermission(true);
+                    animationFrameId = requestAnimationFrame(tick);
+                } catch (err) {
+                    console.error("Error accessing camera:", err);
+                    setHasPermission(false);
+                    onClose(); // Close modal if permission is denied
+                }
+            };
+            startScan();
+        } else {
+            setIsScanning(false);
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach(track => track.stop());
+                streamRef.current = null;
+            }
+        }
+        
 
         return () => {
             setIsScanning(false);
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop());
                 streamRef.current = null;
+            }
+            if(animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
             }
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -300,4 +306,3 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
         </>
     );
 }
-```
