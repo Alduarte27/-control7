@@ -109,12 +109,20 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
       inUse: null,
       consumed: null,
     });
-    
+
     React.useEffect(() => {
+        const formatDate = (timestamp: number | undefined) => {
+            if (!timestamp) return null;
+            try {
+                return format(new Date(timestamp), "PPP p", { locale: es });
+            } catch (e) {
+                return 'Fecha inválida';
+            }
+        };
         setFormattedDates({
-            received: material.receivedAt ? format(new Date(material.receivedAt), "PPP p", { locale: es }) : null,
-            inUse: material.inUseAt ? format(new Date(material.inUseAt), "PPP p", { locale: es }) : null,
-            consumed: material.consumedAt ? format(new Date(material.consumedAt), "PPP p", { locale: es }) : null,
+            received: formatDate(material.receivedAt),
+            inUse: formatDate(material.inUseAt),
+            consumed: formatDate(material.consumedAt),
         });
     }, [material]);
 
@@ -127,10 +135,18 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
     const getShortCode = (fullCode: string): string => {
         if (!fullCode) return '';
         if (fullCode.length <= 4) {
-            return String(parseInt(fullCode, 10));
+            try {
+                return String(parseInt(fullCode, 10));
+            } catch {
+                return fullCode;
+            }
         }
         const lastPart = fullCode.slice(-4);
-        return String(parseInt(lastPart, 10));
+        try {
+            return String(parseInt(lastPart, 10));
+        } catch {
+            return lastPart;
+        }
     };
 
     const currentStatus = statusConfig[material.status];
@@ -391,6 +407,14 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
     );
 }
 
+const supplierMaterialMapping: { [key: string]: MaterialType[] } = {
+    'PLASTICSACKS CIA LTDA.': ['sacos_granel'],
+    'REYSAC': ['sacos_granel'],
+    'MILANPLASTIC': ['rollo_laminado'],
+    'PLASTIEMPAQUES S.A': ['rollo_fardo'],
+};
+
+
 export default function MaterialsClient({ 
     initialMaterials,
     allProducts,
@@ -439,6 +463,22 @@ export default function MaterialsClient({
         if (!granelCategoryId) return [];
         return allProducts.filter(p => p.categoryId === granelCategoryId && !p.productName.includes('(12'));
     }, [allProducts, granelCategoryId]);
+
+    const availableMaterialTypes = React.useMemo(() => {
+        const supplierKey = newMaterialSupplier.trim().toUpperCase();
+        const mappedTypes = Object.keys(supplierMaterialMapping).find(key => supplierKey.startsWith(key));
+        
+        if (mappedTypes) {
+            return supplierMaterialMapping[mappedTypes];
+        }
+        return Object.keys(materialTypeLabels) as MaterialType[];
+    }, [newMaterialSupplier]);
+    
+    React.useEffect(() => {
+        if (!availableMaterialTypes.includes(newMaterialType)) {
+            setNewMaterialType(availableMaterialTypes[0] || 'sacos_familiar');
+        }
+    }, [availableMaterialTypes, newMaterialType]);
 
     const handleAddMaterial = async () => {
         if (!newMaterialCode.trim()) {
@@ -621,19 +661,19 @@ export default function MaterialsClient({
                         <CardContent>
                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
                                 <div className="space-y-1.5">
+                                    <Label htmlFor="material-supplier">Proveedor</Label>
+                                    <Input id="material-supplier" value={newMaterialSupplier} onChange={(e) => setNewMaterialSupplier(e.target.value)} placeholder="Ej: Peruplast" />
+                                </div>
+                                <div className="space-y-1.5">
                                     <Label htmlFor="material-type">Tipo de Material</Label>
                                     <Select value={newMaterialType} onValueChange={(v) => setNewMaterialType(v as MaterialType)}>
                                         <SelectTrigger id="material-type"><SelectValue /></SelectTrigger>
                                         <SelectContent>
-                                            {Object.entries(materialTypeLabels).map(([key, label]) => (
-                                                <SelectItem key={key} value={key}>{label}</SelectItem>
+                                            {availableMaterialTypes.map(key => (
+                                                <SelectItem key={key} value={key}>{materialTypeLabels[key as MaterialType]}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="material-supplier">Proveedor</Label>
-                                    <Input id="material-supplier" value={newMaterialSupplier} onChange={(e) => setNewMaterialSupplier(e.target.value)} placeholder="Ej: Peruplast" />
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-code">Código</Label>
@@ -680,7 +720,7 @@ export default function MaterialsClient({
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className={cn("grid grid-cols-2 gap-2 col-span-1 lg:col-span-1")}>
+                                    <div className={cn("grid grid-cols-2 gap-2 col-span-1", newMaterialType === 'rollo_fardo' ? "lg:col-span-2" : "lg:col-span-1")}>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
                                             <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" />
