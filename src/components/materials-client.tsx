@@ -111,9 +111,7 @@ function EditMaterialDialog({
     };
 
     const handleSaveChanges = () => {
-        const { id, ...updates } = editedMaterial;
-        
-        onSave(material.id, updates);
+        onSave(material.id, editedMaterial);
         onClose();
     };
 
@@ -499,10 +497,10 @@ function MaterialCard({
         if (material.status !== 'consumido' || material.actualNetWeight === undefined) return null;
         
         let referenceWeight = 0;
-        if (isRollosType) {
-            referenceWeight = material.netWeight || 0;
-        } else if (isSacosType) {
-            referenceWeight = material.totalWeight || 0;
+        if (isRollosType && material.netWeight) {
+            referenceWeight = material.netWeight;
+        } else if (isSacosType && material.totalWeight) {
+            referenceWeight = material.totalWeight;
         }
 
         if(referenceWeight === 0) return null;
@@ -534,7 +532,7 @@ function MaterialCard({
         if (isRollosType) {
             referenceNetWeight = material.netWeight || 0;
         } else if (isSacosType) {
-            referenceNetWeight = material.totalWeight || 0;
+            referenceNetWeight = material.totalWeight || 0; // For bags, total weight is theoretical net
         }
         
         if (referenceNetWeight === 0) return null;
@@ -992,9 +990,10 @@ export default function MaterialsClient({
      const handleEditSave = async (id: string, updates: Partial<PackagingMaterial>) => {
         try {
             const finalUpdates = { ...updates };
-            const isRollType = materials.find(m => m.id === id)?.type.startsWith('rollo');
-            if (isRollType && ('netWeight' in finalUpdates || 'grossWeight' in finalUpdates)) {
-                const currentMaterial = materials.find(m => m.id === id);
+            const currentMaterial = materials.find(m => m.id === id);
+            const isRollType = currentMaterial?.type.startsWith('rollo');
+
+            if (isRollType) {
                 const netWeight = finalUpdates.netWeight ?? currentMaterial?.netWeight ?? 0;
                 const grossWeight = finalUpdates.grossWeight ?? currentMaterial?.grossWeight ?? 0;
                 if (grossWeight > 0 && netWeight > 0) {
@@ -1114,7 +1113,7 @@ export default function MaterialsClient({
                             </Button>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-4">
+                             <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-supplier">Proveedor</Label>
