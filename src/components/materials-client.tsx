@@ -396,7 +396,7 @@ function MaterialActionDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                      <div className="space-y-1.5">
-                        <Label htmlFor="actual-weight">Peso Real Medido (kg)</Label>
+                        <Label htmlFor="actual-weight">Peso Bruto (Balanza)</Label>
                         <Input
                             id="actual-weight"
                             type="number"
@@ -496,7 +496,7 @@ function MaterialCard({
     const currentStatus = statusConfig[material.status];
 
     const getPerformance = () => {
-        if (material.status !== 'consumido' || !material.actualNetWeight || (!material.netWeight && !material.totalWeight)) return null;
+        if (material.status !== 'consumido' || !material.actualNetWeight) return null;
         
         const referenceWeight = material.netWeight || material.totalWeight || 0;
         if(referenceWeight === 0) return null;
@@ -513,9 +513,14 @@ function MaterialCard({
     }
     
     const getDiscrepancy = () => {
-        if (material.status !== 'consumido' || material.tareWeight === undefined || material.labelTare === undefined) return null;
+        if (material.status !== 'consumido' || material.tareWeight === undefined) return null;
+
+        const isRollos = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
+        const referenceTare = isRollos ? material.labelTare : 0;
         
-        const discrepancy = material.tareWeight - material.labelTare;
+        if (isRollos && referenceTare === undefined) return null;
+
+        const discrepancy = material.tareWeight - (referenceTare || 0);
         const color = Math.abs(discrepancy) > 0.1 ? 'text-red-600' : 'text-green-600';
         
         return (
@@ -526,7 +531,7 @@ function MaterialCard({
         );
     };
 
-    const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
+    const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
     const isRollosType = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
 
     return (
@@ -842,8 +847,8 @@ export default function MaterialsClient({
                     toast({ title: "Error", description: "El peso neto es obligatorio para este tipo de material.", variant: "destructive" });
                     return;
                 }
-                const netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : undefined;
-                const grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined;
+                const netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : 0;
+                const grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : 0;
 
                 newMaterialData.netWeight = netWeight;
                 newMaterialData.grossWeight = grossWeight;
