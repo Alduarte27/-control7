@@ -526,10 +526,10 @@ function MaterialCard({
                 </div>
             );
         }
-
+        
         if (material.status !== 'consumido' || material.tareWeight === undefined) return null;
 
-        const referenceTare = isRollosType ? material.labelTare : 0; // Sacos no tienen tara de etiqueta
+        const referenceTare = isRollosType ? material.labelTare : 0;
         
         const discrepancy = material.tareWeight - (referenceTare || 0);
         const color = Math.abs(discrepancy) > 0.1 ? 'text-red-600' : 'text-green-600';
@@ -860,7 +860,7 @@ export default function MaterialsClient({
 
                 newMaterialData.netWeight = netWeight;
                 newMaterialData.grossWeight = grossWeight;
-                if(netWeight && grossWeight) {
+                if(netWeight > 0 && grossWeight > 0) {
                     newMaterialData.labelTare = grossWeight - netWeight;
                 }
             }
@@ -1096,7 +1096,7 @@ export default function MaterialsClient({
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
+                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-supplier">Proveedor</Label>
                                         <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
@@ -1117,7 +1117,7 @@ export default function MaterialsClient({
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <div className="space-y-1.5">
+                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-presentation-trigger">Presentación</Label>
                                         <Input
                                             id="material-presentation-trigger"
