@@ -124,6 +124,14 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
         consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
     };
 
+    const getShortCode = (fullCode: string): string => {
+        if (fullCode.length <= 4) {
+            return String(parseInt(fullCode, 10));
+        }
+        const lastPart = fullCode.slice(-4);
+        return String(parseInt(lastPart, 10));
+    };
+
     const currentStatus = statusConfig[material.status];
 
     const getDiscrepancy = () => {
@@ -149,14 +157,19 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
                     aria-label={`Seleccionar material ${material.code}`}
                 />
             </div>
-            <CardHeader className="flex flex-row items-start justify-between">
-                <div>
-                    <CardTitle className="text-lg pr-8">{materialTypeLabels[material.type]}</CardTitle>
-                    <CardDescription>Código: <span className="font-mono">{material.code}</span></CardDescription>
-                </div>
-                <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full", currentStatus.color)}>
-                    <currentStatus.icon className="h-3 w-3" />
-                    <span>{currentStatus.label}</span>
+            <CardHeader>
+                 <div className="flex justify-between items-start">
+                    <div>
+                        <CardDescription>{materialTypeLabels[material.type]}</CardDescription>
+                        <CardTitle className="text-4xl font-bold text-primary">
+                            #{getShortCode(material.code)}
+                        </CardTitle>
+                        <p className="text-xs text-muted-foreground font-mono">{material.code}</p>
+                    </div>
+                    <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full", currentStatus.color)}>
+                        <currentStatus.icon className="h-3 w-3" />
+                        <span>{currentStatus.label}</span>
+                    </div>
                 </div>
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
