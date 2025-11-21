@@ -465,8 +465,10 @@ export default function MaterialsClient({
                     return;
                 }
                 const quantity = parseInt(newMaterialQuantity, 10);
-                const unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.')); // Handle comma decimal
-                const totalWeight = (quantity * unitWeight) / 1000; // Convert grams to kg for total weight
+                const unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
+                
+                const totalWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : (quantity * unitWeight) / 1000;
+
                 newMaterialData = {
                     type: newMaterialType,
                     code: trimmedCode,
@@ -517,31 +519,31 @@ export default function MaterialsClient({
     const handleScanSuccess = (code: string) => {
         setIsScannerOpen(false);
         setNewMaterialCode(code);
-        toast({
-            title: "Código Escaneado",
-            description: `Código detectado: ${code}`,
-        });
-
+    
         // REYSAC QR Code parsing logic
         if (code.includes('|')) {
             const parts = code.split('|');
             if (parts.length >= 5) {
                 const quantity = parts[2];
-                const unitWeightGrams = parts[3]?.replace(',', '.'); // Handle comma decimal
-
+                const unitWeightGrams = parts[3]?.replace(',', '.');
+                const totalWeightKg = parts[4]?.replace(',', '.');
+    
                 if (quantity && !isNaN(Number(quantity))) {
                     setNewMaterialQuantity(quantity);
                 }
                 if (unitWeightGrams && !isNaN(Number(unitWeightGrams))) {
                     setNewMaterialUnitWeight(unitWeightGrams);
                 }
+                if (totalWeightKg && !isNaN(Number(totalWeightKg))) {
+                    setNewMaterialNetWeight(totalWeightKg);
+                }
+    
                 toast({
                     title: "Datos Extraídos del QR",
-                    description: `Cantidad: ${quantity}, Peso/Und: ${unitWeightGrams}g`
+                    description: `Cant: ${quantity}, P/Und: ${unitWeightGrams}g, Total: ${totalWeightKg}kg`
                 });
                 
-                // Focus on the next logical field, which would be presentation.
-                 setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
+                setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
             }
         } else {
             // Default behavior for simple codes
@@ -811,4 +813,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
