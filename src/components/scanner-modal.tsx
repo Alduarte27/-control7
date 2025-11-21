@@ -28,8 +28,15 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
 
   const [isTorchOn, setIsTorchOn] = useState(false);
   const [isTorchSupported, setIsTorchSupported] = useState(false);
+  const [isScanningActive, setIsScanningActive] = useState(false);
+  const startupTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
   const scanWithJsQR = useCallback(() => {
+    if (!isScanningActive) {
+      animationFrameId.current = requestAnimationFrame(scanWithJsQR);
+      return;
+    }
     if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
       const canvas = canvasRef.current;
       const video = videoRef.current;
@@ -53,10 +60,13 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
     }
     // Continue scanning if no code found or video not ready
     animationFrameId.current = requestAnimationFrame(scanWithJsQR);
-  }, [onScanSuccess]);
-
+  }, [onScanSuccess, isScanningActive]);
 
   const scanWithBarcodeDetector = useCallback(async (video: HTMLVideoElement, detector: any) => {
+    if (!isScanningActive) {
+      animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(video, detector));
+      return;
+    }
     try {
         const barcodes = await detector.detect(video);
         if (barcodes.length > 0) {
@@ -70,7 +80,7 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
     }
     // Continue scanning
     animationFrameId.current = requestAnimationFrame(() => scanWithBarcodeDetector(video, detector));
-  }, [onScanSuccess, scanWithJsQR]);
+  }, [onScanSuccess, scanWithJsQR, isScanningActive]);
   
   const toggleTorch = async () => {
     if (!streamRef.current || !isTorchSupported) return;
@@ -97,6 +107,9 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
       }
+      if (startupTimeoutRef.current) {
+        clearTimeout(startupTimeoutRef.current);
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
@@ -108,6 +121,7 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
       setIsTorchOn(false);
       setIsTorchSupported(false);
       setHasCameraPermission(null);
+      setIsScanningActive(false);
       return;
     }
 
@@ -131,6 +145,11 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
           if (capabilities.torch) {
               setIsTorchSupported(true);
           }
+
+          // Delay before starting the scan
+          startupTimeoutRef.current = setTimeout(() => {
+            setIsScanningActive(true);
+          }, 1500); // 1.5 second delay
 
           if (isBarcodeDetectorSupported()) {
             try {
@@ -163,6 +182,9 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
       }
+      if (startupTimeoutRef.current) {
+        clearTimeout(startupTimeoutRef.current);
+      }
        if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => {
           if (track.readyState === 'live' && isTorchOn) {
@@ -192,6 +214,12 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-3/4 h-1/2 border-4 border-dashed border-white/50 rounded-lg" />
           </div>
+
+          {!isScanningActive && hasCameraPermission && (
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center text-white font-bold text-lg">
+              <p>Preparando escáner...</p>
+            </div>
+          )}
 
           {hasCameraPermission === false && (
             <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
