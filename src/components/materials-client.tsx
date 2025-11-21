@@ -513,13 +513,20 @@ function MaterialCard({
     }
     
     const getDiscrepancy = () => {
+        if (material.status === 'por_pesar_tara') {
+             return (
+                <div className="space-y-1">
+                    <p className="text-muted-foreground">Discrepancia de Tara</p>
+                    <p className="font-semibold text-lg text-amber-600">Pendiente de pesar</p>
+                </div>
+            );
+        }
+
         if (material.status !== 'consumido' || material.tareWeight === undefined) return null;
 
         const isRollos = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
         const referenceTare = isRollos ? material.labelTare : 0;
         
-        if (isRollos && referenceTare === undefined) return null;
-
         const discrepancy = material.tareWeight - (referenceTare || 0);
         const color = Math.abs(discrepancy) > 0.1 ? 'text-red-600' : 'text-green-600';
         
