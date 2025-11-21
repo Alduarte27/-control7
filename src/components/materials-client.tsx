@@ -64,8 +64,52 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
     const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialLabelWeight, setNewMaterialLabelWeight] = React.useState('');
-
     const { toast } = useToast();
+
+    // Ref for the weight input to focus after barcode scan
+    const weightInputRef = React.useRef<HTMLInputElement>(null);
+
+    // Barcode scanner listener effect
+    React.useEffect(() => {
+        let barcode = '';
+        let lastKeyTime = Date.now();
+
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore events from input fields to allow manual typing
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+                return;
+            }
+
+            const currentTime = Date.now();
+            const timeDiff = currentTime - lastKeyTime;
+            lastKeyTime = currentTime;
+
+            if (timeDiff > 100) { // If time between keys is too long, reset buffer
+                barcode = '';
+            }
+
+            if (e.key === 'Enter') {
+                if (barcode.length > 3) { // Typical barcode length
+                    setNewMaterialCode(barcode);
+                    toast({
+                        title: "Código Escaneado",
+                        description: `Código detectado: ${barcode}`,
+                    });
+                    // Focus the next input field for faster workflow
+                    weightInputRef.current?.focus();
+                }
+                barcode = ''; // Reset after Enter
+            } else if (e.key.length === 1) { // Append character keys
+                barcode += e.key;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [toast]);
+
 
     const handleAddMaterial = async () => {
         if (!newMaterialCode.trim() || !newMaterialLabelWeight) {
@@ -136,7 +180,14 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
                             </div>
                             <div className="w-full md:w-auto md:flex-grow-[1] space-y-1.5">
                                 <Label htmlFor="material-label-weight">Peso Etiqueta (kg)</Label>
-                                <Input id="material-label-weight" type="number" value={newMaterialLabelWeight} onChange={(e) => setNewMaterialLabelWeight(e.target.value)} placeholder="Ej: 35.6" />
+                                <Input 
+                                    id="material-label-weight" 
+                                    ref={weightInputRef}
+                                    type="number" 
+                                    value={newMaterialLabelWeight} 
+                                    onChange={(e) => setNewMaterialLabelWeight(e.target.value)} 
+                                    placeholder="Ej: 35.6" 
+                                />
                             </div>
                             <Button onClick={handleAddMaterial} className="w-full md:w-auto">
                                 <PlusCircle className="mr-2 h-4 w-4" />
