@@ -101,6 +101,20 @@ function MaterialActionDialog({
 
 
 function MaterialCard({ material, onActionClick }: { material: PackagingMaterial, onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume') => void }) {
+    const [formattedDates, setFormattedDates] = React.useState<{ received: string | null, inUse: string | null, consumed: string | null }>({
+      received: null,
+      inUse: null,
+      consumed: null,
+    });
+    
+    React.useEffect(() => {
+        setFormattedDates({
+            received: format(new Date(material.receivedAt), "PPP p", { locale: es }),
+            inUse: material.inUseAt ? format(new Date(material.inUseAt), "PPP p", { locale: es }) : null,
+            consumed: material.consumedAt ? format(new Date(material.consumedAt), "PPP p", { locale: es }) : null,
+        });
+    }, [material]);
+
     const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
         recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
         en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
@@ -154,16 +168,16 @@ function MaterialCard({ material, onActionClick }: { material: PackagingMaterial
                         {getDiscrepancy() || <p className="text-sm text-muted-foreground">Pendiente de pesar</p>}
                     </div>
                 </div>
-                <div className="text-xs text-muted-foreground space-y-1 border-t pt-2">
+                <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 min-h-[50px]">
                     {material.assignedMachine && (
                         <p className="flex items-center gap-2 font-medium text-primary">
                             <HardHat className="h-3 w-3" />
                             <span>Asignado a: {material.assignedMachine.replace('_', ' ')}</span>
                         </p>
                     )}
-                    <p>Recibido: {format(new Date(material.receivedAt), "PPP p", { locale: es })}</p>
-                    {material.inUseAt && <p>En Uso desde: {format(new Date(material.inUseAt), "PPP p", { locale: es })}</p>}
-                    {material.consumedAt && <p>Consumido: {format(new Date(material.consumedAt), "PPP p", { locale: es })}</p>}
+                    {formattedDates.received && <p>Recibido: {formattedDates.received}</p>}
+                    {formattedDates.inUse && <p>En Uso desde: {formattedDates.inUse}</p>}
+                    {formattedDates.consumed && <p>Consumido: {formattedDates.consumed}</p>}
                 </div>
             </CardContent>
              {material.status !== 'consumido' && (
