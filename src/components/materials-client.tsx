@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -428,20 +429,20 @@ function MaterialCard({
 
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
-            <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
-                {material.status === 'recibido' && (
-                     <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditClick(material)}>
-                        <Edit className="h-4 w-4" />
-                    </Button>
-                )}
-                <Checkbox
-                    checked={isSelected}
-                    onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
-                    aria-label={`Seleccionar material ${material.code}`}
-                />
-            </div>
             <CardHeader>
                  <div className="flex flex-col">
+                    <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                        {material.status === 'recibido' && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditClick(material)}>
+                                <Edit className="h-4 w-4" />
+                            </Button>
+                        )}
+                        <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
+                            aria-label={`Seleccionar material ${material.code}`}
+                        />
+                    </div>
                     <div>
                         <CardDescription>{material.presentation || materialTypeLabels[material.type]}</CardDescription>
                         <CardTitle className="text-4xl font-bold text-primary hover:underline cursor-pointer" onClick={() => onTraceClick(material)}>
@@ -449,7 +450,7 @@ function MaterialCard({
                         </CardTitle>
                         <p className="text-xs text-muted-foreground font-mono break-all">{material.code}</p>
                     </div>
-                    <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full self-start mt-2", currentStatus.color)}>
+                     <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full self-start mt-2", currentStatus.color)}>
                         <currentStatus.icon className="h-3 w-3" />
                         <span>{currentStatus.label}</span>
                     </div>
@@ -974,7 +975,7 @@ export default function MaterialsClient({
                                     <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir código..." disabled={!newMaterialSupplier} />
                                 </div>
 
-                                {(isMilanplastic || isReysac) && (
+                                {isReysac && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-lote">Lote</Label>
                                         <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
@@ -1182,5 +1183,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
-    
