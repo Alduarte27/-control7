@@ -19,6 +19,7 @@ import { es } from 'date-fns/locale';
 import jsQR from 'jsqr';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 
 function MaterialActionDialog({
@@ -184,13 +185,14 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
     const canvasRef = React.useRef<HTMLCanvasElement>(null);
     const streamRef = React.useRef<MediaStream | null>(null);
     const [hasPermission, setHasPermission] = React.useState<boolean | null>(null);
-    const [isScanning, setIsScanning] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
+    const isScanningRef = React.useRef(false);
 
     React.useEffect(() => {
         let animationFrameId: number;
 
         const tick = () => {
-            if (isScanning && videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
+            if (isScanningRef.current && videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
                 const canvas = canvasRef.current;
                 const video = videoRef.current;
                 const context = canvas.getContext('2d');
@@ -210,43 +212,62 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
                     }
                 }
             }
-            if (isScanning) {
+            if (isScanningRef.current) {
                 animationFrameId = requestAnimationFrame(tick);
             }
         };
 
-        if (isOpen) {
-            setIsScanning(true);
+        const startScan = async () => {
+            isScanningRef.current = true;
+            setError(null);
             setHasPermission(null);
 
-            const startScan = async () => {
+            try {
+                // First, try to get the back camera
+                streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            } catch (err) {
+                console.warn("Back camera not found, trying front camera...");
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                    streamRef.current = stream;
-                    if (videoRef.current) {
-                        videoRef.current.srcObject = stream;
-                        await videoRef.current.play();
-                    }
-                    setHasPermission(true);
-                    animationFrameId = requestAnimationFrame(tick);
-                } catch (err) {
-                    console.error("Error accessing camera:", err);
+                    // If that fails, try any available camera
+                    streamRef.current = await navigator.mediaDevices.getUserMedia({ video: true });
+                } catch (finalErr: any) {
+                    console.error("Error accessing any camera:", finalErr);
                     setHasPermission(false);
-                    onClose(); // Close modal if permission is denied
+                    if (finalErr.name === 'NotAllowedError') {
+                        setError("Permiso denegado. Por favor, habilita el acceso a la cámara en la configuración de tu navegador.");
+                    } else {
+                        setError("No se encontró una cámara compatible en este dispositivo.");
+                    }
+                    return;
                 }
-            };
+            }
+            
+            if (streamRef.current && videoRef.current) {
+                videoRef.current.srcObject = streamRef.current;
+                await videoRef.current.play();
+                setHasPermission(true);
+                animationFrameId = requestAnimationFrame(tick);
+            } else {
+                setHasPermission(false);
+                setError("No se pudo iniciar el stream de la cámara.");
+            }
+        };
+
+        if (isOpen) {
             startScan();
         } else {
-            setIsScanning(false);
+            isScanningRef.current = false;
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop());
                 streamRef.current = null;
             }
+            if(animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
         }
         
-
         return () => {
-            setIsScanning(false);
+            isScanningRef.current = false;
             if (streamRef.current) {
                 streamRef.current.getTracks().forEach(track => track.stop());
                 streamRef.current = null;
@@ -264,13 +285,13 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
                 <DialogHeader>
                     <DialogTitle>Escanear Código de Barras</DialogTitle>
                 </DialogHeader>
-                <div className="relative aspect-video bg-black rounded-md overflow-hidden">
-                    {hasPermission === null && <p className="text-white text-center p-4">Solicitando acceso a la cámara...</p>}
-                    {hasPermission === false && (
+                <div className="relative aspect-video bg-black rounded-md overflow-hidden flex items-center justify-center">
+                    {hasPermission === null && !error && <p className="text-white text-center p-4">Solicitando acceso a la cámara...</p>}
+                    {error && (
                          <div className="flex flex-col items-center justify-center h-full text-white bg-destructive p-4">
                             <AlertTriangle className="h-8 w-8 mb-2" />
-                            <p className="font-bold">Acceso a la cámara denegado</p>
-                            <p className="text-sm text-center">Por favor, habilita los permisos de la cámara en tu navegador para usar esta función.</p>
+                            <p className="font-bold">Error de Cámara</p>
+                            <p className="text-sm text-center">{error}</p>
                         </div>
                     )}
                      <video ref={videoRef} playsInline className={cn("w-full h-full object-cover", hasPermission !== true && "hidden")} />
