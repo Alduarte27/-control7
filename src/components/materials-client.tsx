@@ -143,10 +143,6 @@ function EditMaterialDialog({
                             <Label htmlFor="edit-lote">Lote</Label>
                             <Input id="edit-lote" value={editedMaterial.lote || ''} onChange={e => handleChange('lote', e.target.value)} />
                         </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="edit-ot">O/T</Label>
-                            <Input id="edit-ot" value={editedMaterial.ot || ''} onChange={e => handleChange('ot', e.target.value)} />
-                        </div>
                     </div>
                     
                     {isSacosType ? (
@@ -457,7 +453,6 @@ function MaterialCard({
                             {material.supplier && <p>Proveedor: {material.supplier}</p>}
                             {material.providerDate && <p>Fecha Prov: {material.providerDate}</p>}
                             {material.lote && <p>Lote: {material.lote}</p>}
-                             {material.ot && <p>O/T: {material.ot}</p>}
                         </div>
                     </div>
                     <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full", currentStatus.color)}>
@@ -559,7 +554,6 @@ export default function MaterialsClient({
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
     const [newMaterialLote, setNewMaterialLote] = React.useState('');
-    const [newMaterialOt, setNewMaterialOt] = React.useState('');
     const [newMaterialProviderDate, setNewMaterialProviderDate] = React.useState<Date | undefined>();
     
     // States for common fields
@@ -635,8 +629,7 @@ export default function MaterialsClient({
 
             const searchMatch = !searchQuery ||
                 material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase())) ||
-                (material.ot && material.ot.toLowerCase().includes(searchQuery.toLowerCase()));
+                (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
 
             return statusMatch && typeMatch && supplierMatch && searchMatch;
         });
@@ -689,7 +682,6 @@ export default function MaterialsClient({
                 code: trimmedCode,
                 supplier: supplierName,
                 lote: newMaterialLote.trim(),
-                ot: newMaterialOt.trim(),
                 presentation: newMaterialPresentation.trim(),
                 status: 'recibido',
                 receivedAt: Date.now(),
@@ -741,7 +733,6 @@ export default function MaterialsClient({
             setNewMaterialTotalWeight('');
             setNewMaterialSupplier('');
             setNewMaterialLote('');
-            setNewMaterialOt('');
             setNewMaterialProviderDate(undefined);
             
             toast({ title: 'Material Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
@@ -869,7 +860,7 @@ export default function MaterialsClient({
     
     const handleExportCSV = () => {
         const headers = [
-            'Tipo', 'Código', 'Proveedor', 'Lote', 'O/T', 'Presentación', 'Fecha Proveedor', 'Estado',
+            'Tipo', 'Código', 'Proveedor', 'Lote', 'Presentación', 'Fecha Proveedor', 'Estado',
             'Fecha Recibido', 'Fecha En Uso', 'Fecha Consumido', 'Máquina Asignada', 'Cantidad', 
             'Peso/Und (g)', 'Peso Total (kg)', 'Peso Neto (kg)', 'Peso Bruto (kg)', 'Peso Real (kg)'
         ];
@@ -880,7 +871,6 @@ export default function MaterialsClient({
                 `"${m.code.replace(/"/g, '""')}"`,
                 m.supplier || '',
                 m.lote || '',
-                m.ot || '',
                 m.presentation || '',
                 m.providerDate || '',
                 m.status,
@@ -991,10 +981,6 @@ export default function MaterialsClient({
                                         <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
                                     </div>
                                 )}
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="material-ot">O/T</Label>
-                                    <Input id="material-ot" value={newMaterialOt} onChange={e => setNewMaterialOt(e.target.value)} placeholder="Orden de Trabajo" disabled={!newMaterialSupplier}/>
-                                </div>
                                 
                                 {isMilanplastic && (
                                      <div className="space-y-1.5">
@@ -1197,3 +1183,5 @@ export default function MaterialsClient({
         </>
     );
 }
+
+    
