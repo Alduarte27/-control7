@@ -500,6 +500,7 @@ function MaterialCard({
         if (isRollosType && material.netWeight) {
             referenceWeight = material.netWeight;
         } else if (isSacosType && material.totalWeight) {
+             // For sacos, the "net" weight from label is the total weight.
             referenceWeight = material.totalWeight;
         }
 
@@ -735,7 +736,6 @@ export default function MaterialsClient({
     const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
     const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
-    const isMilanplastic = supplierName.toUpperCase().startsWith('MILANPLASTIC');
     const isPlastiempaques = supplierName.toUpperCase().startsWith('PLASTIEMPAQUES S.A');
 
 
@@ -1138,13 +1138,30 @@ export default function MaterialsClient({
                                     {!isPlastiempaques && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                        <Input
-                                            id="material-presentation-trigger"
-                                            value={newMaterialPresentation}
-                                            onChange={(e) => setNewMaterialPresentation(e.target.value)}
-                                            placeholder="Ej: Azúcar San Juan 1kg"
-                                            disabled={!newMaterialSupplier}
-                                        />
+                                        {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel') ? (
+                                            <Select
+                                                value={newMaterialPresentation}
+                                                onValueChange={setNewMaterialPresentation}
+                                                disabled={!newMaterialSupplier}
+                                            >
+                                                <SelectTrigger id="material-presentation-trigger">
+                                                    <SelectValue placeholder="Seleccionar producto..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {(newMaterialType === 'sacos_familiar' ? familiarProducts : granelProducts).map(p => (
+                                                        <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <Input
+                                                id="material-presentation-trigger"
+                                                value={newMaterialPresentation}
+                                                onChange={(e) => setNewMaterialPresentation(e.target.value)}
+                                                placeholder="Ej: Azúcar San Juan 1kg"
+                                                disabled={!newMaterialSupplier}
+                                            />
+                                        )}
                                     </div>
                                     )}
                                     <div className="space-y-1.5">
@@ -1215,9 +1232,8 @@ export default function MaterialsClient({
                                             </div>
                                         </>
                                     )}
-
                                     <div className="flex items-end gap-2 lg:col-start-5">
-                                        <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
+                                         <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
                                         </Button>
                                         <Button variant="outline" onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier}>
