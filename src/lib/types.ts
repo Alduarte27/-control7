@@ -159,6 +159,8 @@ export type PackagingMaterial = {
     code: string;
     supplier?: string;
     lote?: string;
+    ot?: string; // Order de Trabajo
+    providerDate?: string; // Fecha de la etiqueta del proveedor
     presentation?: string;
     netWeight?: number; 
     grossWeight?: number;
