@@ -178,7 +178,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
         en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
         consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
     };
-    
+
     const [formattedDates, setFormattedDates] = React.useState<{ received: string | null, inUse: string | null, consumed: string | null }>({
       received: null,
       inUse: null,
@@ -713,7 +713,7 @@ export default function MaterialsClient({
                                 { newMaterialType !== 'rollo_fardo' && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                        <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
+                                        <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation} disabled={!newMaterialSupplier}>
                                             <SelectTrigger id="material-presentation-trigger">
                                                 <SelectValue placeholder="Seleccionar producto..." />
                                             </SelectTrigger>
@@ -731,13 +731,13 @@ export default function MaterialsClient({
                                 
                                 <div className="space-y-1.5">
                                     <Label htmlFor="material-code">Código</Label>
-                                    <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escanear o escribir..." />
+                                    <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escanear o escribir..." disabled={!newMaterialSupplier} />
                                 </div>
 
                                 {(isMilanplastic || isPlasticsacks) && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-lote">Lote</Label>
-                                        <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" />
+                                        <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
                                     </div>
                                 )}
                                 
@@ -745,13 +745,13 @@ export default function MaterialsClient({
                                      <>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-ot">O/T</Label>
-                                            <Input id="material-ot" value={newMaterialOt} onChange={(e) => setNewMaterialOt(e.target.value)} placeholder="Orden de Trabajo" />
+                                            <Input id="material-ot" value={newMaterialOt} onChange={(e) => setNewMaterialOt(e.target.value)} placeholder="Orden de Trabajo" disabled={!newMaterialSupplier}/>
                                         </div>
                                          <div className="space-y-1.5">
                                             <Label>Fecha</Label>
                                             <Popover>
                                                 <PopoverTrigger asChild>
-                                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")}>
+                                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}>
                                                         <CalendarIcon className="mr-2 h-4 w-4" />
                                                         {newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}
                                                     </Button>
@@ -767,26 +767,26 @@ export default function MaterialsClient({
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-quantity-ps">Cantidad</Label>
-                                                <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
+                                                <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-net-weight-ps">Peso Neto (kg)</Label>
-                                                <Input id="material-net-weight-ps" type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 51.6" />
+                                                <Input id="material-net-weight-ps" type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
                                             </div>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-3 gap-2">
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-quantity-rs">Cantidad</Label>
-                                                <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" />
+                                                <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
-                                                <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" />
+                                                <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
-                                                <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" />
+                                                <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" disabled={!newMaterialSupplier}/>
                                             </div>
                                         </div>
                                     )
@@ -794,21 +794,21 @@ export default function MaterialsClient({
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
-                                            <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" />
+                                            <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" disabled={!newMaterialSupplier}/>
                                         </div>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
-                                            <Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05" />
+                                            <Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05" disabled={!newMaterialSupplier}/>
                                         </div>
                                     </div>
                                 )}
                                 
                                 <div className="space-y-1.5 self-end col-span-1 md:col-span-2 lg:col-span-1">
                                     <div className="flex gap-2">
-                                        <Button onClick={handleAddMaterial} className="flex-1">
+                                        <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
                                         </Button>
-                                        <Button variant="outline" onClick={() => setIsScannerOpen(true)} className="flex-1">
+                                        <Button variant="outline" onClick={() => setIsScannerOpen(true)} className="flex-1" disabled={!newMaterialSupplier}>
                                             <Camera className="mr-2 h-4 w-4" /> Escanear
                                         </Button>
                                     </div>
