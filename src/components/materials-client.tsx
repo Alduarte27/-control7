@@ -479,14 +479,14 @@ export default function MaterialsClient({
                     receivedAt: Date.now(),
                 };
             } else {
-                 if (!newMaterialNetWeight) {
+                 if (!newMaterialNetWeight && newMaterialType !== 'rollo_fardo') {
                     toast({ title: "Error", description: "El peso neto es obligatorio para este tipo de material.", variant: "destructive" });
                     return;
                 }
                 newMaterialData = {
                     type: newMaterialType,
                     code: trimmedCode,
-                    presentation: newMaterialPresentation.trim(),
+                    presentation: newMaterialType === 'rollo_fardo' ? '' : newMaterialPresentation.trim(),
                     netWeight: parseFloat(newMaterialNetWeight),
                     grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight) : undefined,
                     status: 'recibido',
@@ -519,8 +519,12 @@ export default function MaterialsClient({
             title: "Código Escaneado",
             description: `Código detectado: ${code}`,
         });
-        // Focus next logical input
-        document.getElementById('material-presentation')?.focus();
+        
+        if (newMaterialType === 'rollo_fardo') {
+             netWeightInputRef.current?.focus();
+        } else {
+            document.getElementById('material-presentation')?.focus();
+        }
     };
 
     const handleActionConfirm = async (data: { actualWeight?: number, assignedMachine?: string }) => {
@@ -631,23 +635,28 @@ export default function MaterialsClient({
                                         </Button>
                                     </div>
                                 </div>
-                                 <div className="space-y-1.5">
-                                    <Label htmlFor="material-presentation">Presentación</Label>
-                                    {isDropdownForPresentation ? (
-                                        <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
-                                            <SelectTrigger id="material-presentation">
-                                                <SelectValue placeholder="Seleccionar producto..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {(isDropdownForFamiliar ? familiarProducts : granelProducts).map(p => (
-                                                    <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    ) : (
-                                        <Input id="material-presentation" value={newMaterialPresentation} onChange={(e) => setNewMaterialPresentation(e.target.value)} placeholder="Ej: Rollo Transparente 35cm" />
-                                    )}
-                                </div>
+
+                                { newMaterialType !== 'rollo_fardo' && (
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="material-presentation">Presentación</Label>
+                                        {isDropdownForPresentation ? (
+                                            <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
+                                                <SelectTrigger id="material-presentation">
+                                                    <SelectValue placeholder="Seleccionar producto..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {(isDropdownForFamiliar ? familiarProducts : granelProducts).map(p => (
+                                                        <SelectItem key={p.id} value={p.productName}>
+                                                            {p.productName.replace(/\s*\([^)]*\)\s*/g, ' ').trim()}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        ) : (
+                                            <Input id="material-presentation" value={newMaterialPresentation} onChange={(e) => setNewMaterialPresentation(e.target.value)} placeholder="Ej: Rollo Transparente 35cm" />
+                                        )}
+                                    </div>
+                                )}
 
                                 {isGranelType ? (
                                     <div className="grid grid-cols-3 gap-2 col-span-1 lg:col-span-2">
@@ -666,7 +675,7 @@ export default function MaterialsClient({
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-3 gap-2 col-span-1 lg:col-span-2">
+                                    <div className={cn("grid grid-cols-3 gap-2 col-span-1", newMaterialType === 'rollo_fardo' ? 'lg:col-span-3' : 'lg:col-span-2')}>
                                         <div className="space-y-1.5">
                                             <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
                                             <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" />
@@ -753,3 +762,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
