@@ -16,7 +16,6 @@ import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import jsQR from 'jsqr';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
@@ -182,7 +181,6 @@ function MaterialCard({ material, onActionClick }: { material: PackagingMaterial
 
 function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onClose: () => void; onScanSuccess: (code: string) => void; }) {
     const videoRef = React.useRef<HTMLVideoElement>(null);
-    const canvasRef = React.useRef<HTMLCanvasElement>(null);
     const streamRef = React.useRef<MediaStream | null>(null);
     const [hasPermission, setHasPermission] = React.useState<boolean | null>(null);
     const [error, setError] = React.useState<string | null>(null);
@@ -190,51 +188,55 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
 
     React.useEffect(() => {
         let animationFrameId: number;
+        let barcodeDetector: any;
 
-        const tick = () => {
-            if (isScanningRef.current && videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && canvasRef.current) {
-                const canvas = canvasRef.current;
-                const video = videoRef.current;
-                const context = canvas.getContext('2d');
-                
-                if (context) {
-                    canvas.height = video.videoHeight;
-                    canvas.width = video.videoWidth;
-                    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-                    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-                    const code = jsQR(imageData.data, imageData.width, imageData.height, {
-                        inversionAttempts: "dontInvert",
-                    });
+        const setupScanner = async () => {
+            if (!('BarcodeDetector' in window)) {
+                setError("Tu navegador no es compatible con el escaneo de códigos de barras.");
+                setHasPermission(false);
+                return;
+            }
+            const formats = await (window as any).BarcodeDetector.getSupportedFormats();
+            barcodeDetector = new (window as any).BarcodeDetector({ formats });
+        };
 
-                    if (code) {
-                        onScanSuccess(code.data);
+        const tick = async () => {
+            if (isScanningRef.current && videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA && barcodeDetector) {
+                try {
+                    const barcodes = await barcodeDetector.detect(videoRef.current);
+                    if (barcodes.length > 0) {
+                        onScanSuccess(barcodes[0].rawValue);
                         return; // Stop scanning
                     }
+                } catch (e) {
+                    console.error("Error detecting barcode:", e);
                 }
             }
             if (isScanningRef.current) {
                 animationFrameId = requestAnimationFrame(tick);
             }
         };
+        
 
         const startScan = async () => {
             isScanningRef.current = true;
             setError(null);
             setHasPermission(null);
+            await setupScanner();
+
+            if (!barcodeDetector) return;
 
             try {
-                // First, try to get the back camera
                 streamRef.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
             } catch (err) {
-                console.warn("Back camera not found, trying front camera...");
+                console.warn("Back camera not found or failed, trying any available camera...");
                 try {
-                    // If that fails, try any available camera
                     streamRef.current = await navigator.mediaDevices.getUserMedia({ video: true });
                 } catch (finalErr: any) {
                     console.error("Error accessing any camera:", finalErr);
                     setHasPermission(false);
                     if (finalErr.name === 'NotAllowedError') {
-                        setError("Permiso denegado. Por favor, habilita el acceso a la cámara en la configuración de tu navegador.");
+                        setError("Permiso de cámara denegado. Habilita el acceso en la configuración de tu navegador.");
                     } else {
                         setError("No se encontró una cámara compatible en este dispositivo.");
                     }
@@ -247,7 +249,7 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
                 await videoRef.current.play();
                 setHasPermission(true);
                 animationFrameId = requestAnimationFrame(tick);
-            } else {
+            } else if (!error) {
                 setHasPermission(false);
                 setError("No se pudo iniciar el stream de la cámara.");
             }
@@ -283,19 +285,22 @@ function ScannerModal({ isOpen, onClose, onScanSuccess }: { isOpen: boolean; onC
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Escanear Código de Barras</DialogTitle>
+                    <DialogTitle>Escanear Código</DialogTitle>
                 </DialogHeader>
                 <div className="relative aspect-video bg-black rounded-md overflow-hidden flex items-center justify-center">
                     {hasPermission === null && !error && <p className="text-white text-center p-4">Solicitando acceso a la cámara...</p>}
                     {error && (
-                         <div className="flex flex-col items-center justify-center h-full text-white bg-destructive p-4">
-                            <AlertTriangle className="h-8 w-8 mb-2" />
-                            <p className="font-bold">Error de Cámara</p>
-                            <p className="text-sm text-center">{error}</p>
+                         <div className="flex flex-col items-center justify-center h-full p-4">
+                            <Alert variant="destructive">
+                                <AlertTriangle className="h-4 w-4" />
+                                <AlertTitle>Error de Cámara</AlertTitle>
+                                <AlertDescription>
+                                    {error}
+                                </AlertDescription>
+                            </Alert>
                         </div>
                     )}
                      <video ref={videoRef} playsInline className={cn("w-full h-full object-cover", hasPermission !== true && "hidden")} />
-                     <canvas ref={canvasRef} className="hidden" />
                 </div>
                  <DialogFooter>
                     <DialogClose asChild>
