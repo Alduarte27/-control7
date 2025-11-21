@@ -871,7 +871,7 @@ export default function MaterialsClient({
                 }
             }
             
-            if (isMilanplastic && newMaterialProviderDate) {
+            if (!isPlastiempaques && newMaterialProviderDate) {
                 newMaterialData.providerDate = format(newMaterialProviderDate, 'yyyy-MM-dd');
             }
 
@@ -1160,7 +1160,7 @@ export default function MaterialsClient({
                                         </div>
                                     )}
                                     
-                                    {isMilanplastic && (
+                                    {!isPlastiempaques && (
                                         <div className="space-y-1.5">
                                             <Label>Fecha</Label>
                                             <Popover>
@@ -1217,14 +1217,12 @@ export default function MaterialsClient({
                                     )}
 
                                     <div className="flex items-end gap-2 lg:col-start-5">
-                                        <div className="flex items-end gap-2">
-                                            <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
-                                                <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                            </Button>
-                                            <Button variant="outline" onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier}>
-                                                <Camera className="mr-2 h-4 w-4" /> Escanear
-                                            </Button>
-                                        </div>
+                                        <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
+                                            <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                        </Button>
+                                        <Button variant="outline" onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier}>
+                                            <Camera className="mr-2 h-4 w-4" /> Escanear
+                                        </Button>
                                     </div>
                                 </div>
                             </div>
