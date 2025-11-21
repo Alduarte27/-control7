@@ -131,7 +131,7 @@ function MaterialActionDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Pesar y Poner en Uso</DialogTitle>
-                    <DialogDescription className="break-words">
+                    <DialogDescription className="break-all">
                         Registra el peso real del material con código <span className="font-mono font-bold">{material.code}</span> y asígnalo a una máquina.
                     </DialogDescription>
                 </DialogHeader>
