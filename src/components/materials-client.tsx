@@ -111,8 +111,7 @@ function EditMaterialDialog({
     };
 
     const handleSaveChanges = () => {
-        // Exclude fields that should not be edited here or are objects/timestamps
-        const { id, type, supplier, receivedAt, status, inUseAt, consumedAt, assignedMachine, ...updates } = editedMaterial;
+        const { id, ...updates } = editedMaterial;
         
         onSave(material.id, updates);
         onClose();
@@ -503,7 +502,6 @@ function MaterialCard({
         if (isRollosType) {
             referenceWeight = material.netWeight || 0;
         } else if (isSacosType) {
-            // For bags, performance is actual net weight vs total declared weight.
             referenceWeight = material.totalWeight || 0;
         }
 
@@ -522,7 +520,7 @@ function MaterialCard({
     
     const getDiscrepancy = () => {
         if (material.status === 'por_pesar_tara') {
-             return (
+            return (
                 <div className="space-y-1">
                     <p className="text-muted-foreground">Discrepancia</p>
                     <p className="font-semibold text-lg text-amber-600">Pendiente de pesar</p>
@@ -605,7 +603,7 @@ function MaterialCard({
                         </div>
                     ) : (
                         <div className="space-y-3">
-                             <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="grid grid-cols-3 gap-2 text-center">
                                 <div className="space-y-1">
                                     <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
                                     <p className="font-semibold text-lg">{material.netWeight} kg</p>
@@ -740,6 +738,7 @@ export default function MaterialsClient({
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
     const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
     const isMilanplastic = supplierName.toUpperCase().startsWith('MILANPLASTIC');
+    const isPlastiempaques = supplierName.toUpperCase().startsWith('PLASTIEMPAQUES');
 
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
@@ -993,7 +992,6 @@ export default function MaterialsClient({
      const handleEditSave = async (id: string, updates: Partial<PackagingMaterial>) => {
         try {
             const finalUpdates = { ...updates };
-            // Recalculate labelTare if netWeight or grossWeight are being updated
             const isRollType = materials.find(m => m.id === id)?.type.startsWith('rollo');
             if (isRollType && ('netWeight' in finalUpdates || 'grossWeight' in finalUpdates)) {
                 const currentMaterial = materials.find(m => m.id === id);
@@ -1138,16 +1136,18 @@ export default function MaterialsClient({
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                        <Input
-                                            id="material-presentation-trigger"
-                                            value={newMaterialPresentation}
-                                            onChange={(e) => setNewMaterialPresentation(e.target.value)}
-                                            placeholder="Ej: Azúcar San Juan 1kg"
-                                            disabled={!newMaterialSupplier}
-                                        />
-                                    </div>
+                                    {!isPlastiempaques && (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-presentation-trigger">Presentación</Label>
+                                            <Input
+                                                id="material-presentation-trigger"
+                                                value={newMaterialPresentation}
+                                                onChange={(e) => setNewMaterialPresentation(e.target.value)}
+                                                placeholder="Ej: Azúcar San Juan 1kg"
+                                                disabled={!newMaterialSupplier}
+                                            />
+                                        </div>
+                                    )}
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-code">Código</Label>
                                         <div className="flex gap-2">
