@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,13 +13,14 @@ import { useToast } from '@/hooks/use-toast';
 import type { PackagingMaterial, MaterialType, MaterialStatus } from '@/lib/types';
 import { materialTypeLabels } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { Checkbox } from './ui/checkbox';
 
 
 function MaterialActionDialog({
@@ -101,7 +102,7 @@ function MaterialActionDialog({
 }
 
 
-function MaterialCard({ material, onActionClick }: { material: PackagingMaterial, onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume') => void }) {
+function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }: { material: PackagingMaterial, onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume') => void, onSelectionChange: (id: string, checked: boolean) => void, isSelected: boolean }) {
     const [formattedDates, setFormattedDates] = React.useState<{ received: string | null, inUse: string | null, consumed: string | null }>({
       received: null,
       inUse: null,
@@ -109,8 +110,9 @@ function MaterialCard({ material, onActionClick }: { material: PackagingMaterial
     });
     
     React.useEffect(() => {
+        // This effect runs only on the client, preventing hydration mismatch
         setFormattedDates({
-            received: format(new Date(material.receivedAt), "PPP p", { locale: es }),
+            received: material.receivedAt ? format(new Date(material.receivedAt), "PPP p", { locale: es }) : null,
             inUse: material.inUseAt ? format(new Date(material.inUseAt), "PPP p", { locale: es }) : null,
             consumed: material.consumedAt ? format(new Date(material.consumedAt), "PPP p", { locale: es }) : null,
         });
@@ -139,10 +141,17 @@ function MaterialCard({ material, onActionClick }: { material: PackagingMaterial
     };
 
     return (
-        <Card className="flex flex-col">
+        <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
+            <div className="absolute top-2 right-2">
+                <Checkbox
+                    checked={isSelected}
+                    onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
+                    aria-label={`Seleccionar material ${material.code}`}
+                />
+            </div>
             <CardHeader className="flex flex-row items-start justify-between">
                 <div>
-                    <CardTitle className="text-lg">{materialTypeLabels[material.type]}</CardTitle>
+                    <CardTitle className="text-lg pr-8">{materialTypeLabels[material.type]}</CardTitle>
                     <CardDescription>Código: <span className="font-mono">{material.code}</span></CardDescription>
                 </div>
                 <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full", currentStatus.color)}>
@@ -343,6 +352,7 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialNetWeight, setNewMaterialNetWeight] = React.useState('');
     const [newMaterialGrossWeight, setNewMaterialGrossWeight] = React.useState('');
+    const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());
     const { toast } = useToast();
     const [isScannerOpen, setIsScannerOpen] = React.useState(false);
     const netWeightInputRef = React.useRef<HTMLInputElement>(null);
@@ -420,6 +430,37 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
         }
 
         setActionState(null);
+    };
+
+    const handleSelectionChange = (id: string, checked: boolean) => {
+        setSelectedMaterials(prev => {
+            const newSet = new Set(prev);
+            if (checked) {
+                newSet.add(id);
+            } else {
+                newSet.delete(id);
+            }
+            return newSet;
+        });
+    };
+
+    const handleDeleteSelected = async () => {
+        if (selectedMaterials.size === 0) return;
+
+        try {
+            const batch = writeBatch(db);
+            selectedMaterials.forEach(id => {
+                batch.delete(doc(db, 'packagingMaterials', id));
+            });
+            await batch.commit();
+
+            setMaterials(prev => prev.filter(m => !selectedMaterials.has(m.id)));
+            setSelectedMaterials(new Set());
+            toast({ title: `${selectedMaterials.size} material(es) eliminado(s)`, description: 'Se han eliminado los materiales seleccionados.' });
+        } catch (error) {
+            console.error("Error deleting selected materials:", error);
+            toast({ title: 'Error', description: 'No se pudieron eliminar los materiales.', variant: 'destructive' });
+        }
     };
 
     return (
@@ -501,14 +542,46 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
 
                     <Card>
                          <CardHeader>
-                            <CardTitle>Inventario en Área de Empaque</CardTitle>
-                            <CardDescription>Visualiza los materiales recibidos, en uso y consumidos.</CardDescription>
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <CardTitle>Inventario en Área de Empaque</CardTitle>
+                                    <CardDescription>Visualiza los materiales recibidos, en uso y consumidos.</CardDescription>
+                                </div>
+                                {selectedMaterials.size > 0 && (
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="destructive">
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Eliminar ({selectedMaterials.size})
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                                <AlertDialogDescriptionComponent>
+                                                    Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
+                                                </AlertDialogDescriptionComponent>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                )}
+                            </div>
                         </CardHeader>
                         <CardContent>
                             {materials.length > 0 ? (
                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                     {materials.map(material => (
-                                        <MaterialCard key={material.id} material={material} onActionClick={(mat, action) => setActionState({ material: mat, action })} />
+                                        <MaterialCard
+                                            key={material.id}
+                                            material={material}
+                                            onActionClick={(mat, action) => setActionState({ material: mat, action })}
+                                            onSelectionChange={handleSelectionChange}
+                                            isSelected={selectedMaterials.has(material.id)}
+                                        />
                                     ))}
                                 </div>
                             ) : (
