@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,14 +12,95 @@ import { useToast } from '@/hooks/use-toast';
 import type { PackagingMaterial, MaterialType, MaterialStatus } from '@/lib/types';
 import { materialTypeLabels } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import jsQR from 'jsqr';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from './ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 
-function MaterialCard({ material }: { material: PackagingMaterial }) {
+
+function MaterialActionDialog({
+  material,
+  action,
+  onClose,
+  onConfirm,
+}: {
+  material: PackagingMaterial;
+  action: 'weigh' | 'consume';
+  onClose: () => void;
+  onConfirm: (data: { actualWeight?: number, assignedMachine?: string }) => void;
+}) {
+    const [actualWeight, setActualWeight] = React.useState('');
+    const [assignedMachine, setAssignedMachine] = React.useState('');
+
+    if (action === 'consume') {
+        return (
+             <AlertDialog open={true} onOpenChange={onClose}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>¿Confirmar Consumo?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Estás a punto de marcar el material con código <span className="font-mono font-bold">{material.code}</span> como 'Consumido'. Esta acción no se puede deshacer fácilmente.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => onConfirm({})}>Sí, Marcar como Consumido</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        )
+    }
+
+    return (
+        <Dialog open={true} onOpenChange={onClose}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Pesar y Poner en Uso</DialogTitle>
+                    <DialogDescription>
+                        Registra el peso real del material con código <span className="font-mono font-bold">{material.code}</span> y asígnalo a una máquina.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                     <div className="space-y-1.5">
+                        <Label htmlFor="actual-weight">Peso Real Medido (kg)</Label>
+                        <Input
+                            id="actual-weight"
+                            type="number"
+                            value={actualWeight}
+                            onChange={(e) => setActualWeight(e.target.value)}
+                            placeholder="Introduce el peso de la balanza"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="assigned-machine">Asignar a Máquina</Label>
+                        <Select value={assignedMachine} onValueChange={setAssignedMachine}>
+                            <SelectTrigger id="assigned-machine">
+                                <SelectValue placeholder="Seleccionar máquina..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="machine_1">Máquina Envasadora 1</SelectItem>
+                                <SelectItem value="machine_2">Máquina Envasadora 2</SelectItem>
+                                <SelectItem value="machine_3">Máquina Envasadora 3</SelectItem>
+                                <SelectItem value="wrapper_1">Máquina Enfardadora 1</SelectItem>
+                                <SelectItem value="wrapper_2">Máquina Enfardadora 2</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
+                    <Button onClick={() => onConfirm({ actualWeight: parseFloat(actualWeight), assignedMachine })} disabled={!actualWeight || !assignedMachine}>Confirmar y Poner en Uso</Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+
+function MaterialCard({ material, onActionClick }: { material: PackagingMaterial, onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume') => void }) {
     const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
         recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
         en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
@@ -27,6 +108,19 @@ function MaterialCard({ material }: { material: PackagingMaterial }) {
     };
 
     const currentStatus = statusConfig[material.status];
+
+    const getDiscrepancy = () => {
+        if (material.status === 'recibido' || !material.actualWeight) return null;
+        const diff = material.actualWeight - material.labelWeight;
+        const diffPercentage = (diff / material.labelWeight) * 100;
+        const color = diff >= 0 ? 'text-green-600' : 'text-red-600';
+
+        return (
+            <p className={cn("text-sm font-bold", color)}>
+                {diff.toFixed(2)} kg ({diffPercentage.toFixed(1)}%)
+            </p>
+        );
+    };
 
     return (
         <Card className="flex flex-col">
@@ -50,13 +144,37 @@ function MaterialCard({ material }: { material: PackagingMaterial }) {
                         <p className="text-muted-foreground">Peso Real</p>
                         <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight} kg` : 'N/A'}</p>
                     </div>
+                     <div className="col-span-2 space-y-1">
+                        <p className="text-muted-foreground">Discrepancia</p>
+                        {getDiscrepancy() || <p className="text-sm text-muted-foreground">Pendiente de pesar</p>}
+                    </div>
                 </div>
-                 <div className="text-xs text-muted-foreground space-y-1">
+                <div className="text-xs text-muted-foreground space-y-1 border-t pt-2">
+                    {material.assignedMachine && (
+                        <p className="flex items-center gap-2 font-medium text-primary">
+                            <HardHat className="h-3 w-3" />
+                            <span>Asignado a: {material.assignedMachine.replace('_', ' ')}</span>
+                        </p>
+                    )}
                     <p>Recibido: {format(new Date(material.receivedAt), "PPP p", { locale: es })}</p>
                     {material.inUseAt && <p>En Uso desde: {format(new Date(material.inUseAt), "PPP p", { locale: es })}</p>}
                     {material.consumedAt && <p>Consumido: {format(new Date(material.consumedAt), "PPP p", { locale: es })}</p>}
                 </div>
             </CardContent>
+             {material.status !== 'consumido' && (
+                <div className="p-4 pt-0">
+                    {material.status === 'recibido' && (
+                        <Button className="w-full" onClick={() => onActionClick(material, 'weigh')}>
+                            <Weight className="mr-2 h-4 w-4" /> Pesar y Poner en Uso
+                        </Button>
+                    )}
+                    {material.status === 'en_uso' && (
+                        <Button className="w-full" variant="destructive" onClick={() => onActionClick(material, 'consume')}>
+                            <PackageCheck className="mr-2 h-4 w-4" /> Marcar como Consumido
+                        </Button>
+                    )}
+                </div>
+            )}
         </Card>
     );
 }
@@ -177,6 +295,9 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
     const [isScannerOpen, setIsScannerOpen] = React.useState(false);
     const weightInputRef = React.useRef<HTMLInputElement>(null);
 
+    const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' } | null>(null);
+
+
     const handleAddMaterial = async () => {
         if (!newMaterialCode.trim() || !newMaterialLabelWeight) {
             toast({ title: "Error", description: "El código y el peso de etiqueta son obligatorios.", variant: "destructive" });
@@ -212,6 +333,39 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
             description: `Código detectado: ${code}`,
         });
         weightInputRef.current?.focus();
+    };
+
+    const handleActionConfirm = async (data: { actualWeight?: number, assignedMachine?: string }) => {
+        if (!actionState) return;
+
+        const { material, action } = actionState;
+
+        try {
+            if (action === 'weigh') {
+                const updateData = {
+                    status: 'en_uso' as MaterialStatus,
+                    actualWeight: data.actualWeight,
+                    assignedMachine: data.assignedMachine,
+                    inUseAt: Date.now(),
+                };
+                await updateDoc(doc(db, 'packagingMaterials', material.id), updateData);
+                setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
+                toast({ title: 'Material en Uso', description: `El material ${material.code} ahora está en uso.` });
+            } else if (action === 'consume') {
+                 const updateData = {
+                    status: 'consumido' as MaterialStatus,
+                    consumedAt: Date.now(),
+                };
+                await updateDoc(doc(db, 'packagingMaterials', material.id), updateData);
+                setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
+                toast({ title: 'Material Consumido', description: `El material ${material.code} se ha marcado como consumido.` });
+            }
+        } catch (error) {
+            console.error(`Error updating material to ${action}:`, error);
+            toast({ title: 'Error', description: 'No se pudo actualizar el estado del material.', variant: 'destructive' });
+        }
+
+        setActionState(null);
     };
 
     return (
@@ -288,7 +442,7 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
                             {materials.length > 0 ? (
                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                     {materials.map(material => (
-                                        <MaterialCard key={material.id} material={material} />
+                                        <MaterialCard key={material.id} material={material} onActionClick={(mat, action) => setActionState({ material: mat, action })} />
                                     ))}
                                 </div>
                             ) : (
@@ -303,6 +457,14 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
                 onClose={() => setIsScannerOpen(false)}
                 onScanSuccess={handleScanSuccess}
             />
+            {actionState && (
+                <MaterialActionDialog
+                    material={actionState.material}
+                    action={actionState.action}
+                    onClose={() => setActionState(null)}
+                    onConfirm={handleActionConfirm}
+                />
+            )}
         </>
     );
 }
