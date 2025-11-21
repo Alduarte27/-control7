@@ -501,7 +501,6 @@ function MaterialCard({
         if (isRollosType) {
             referenceWeight = material.netWeight || 0;
         } else if (isSacosType) {
-            // For sacks, the reference is the total labeled weight
             referenceWeight = material.totalWeight || 0;
         }
 
@@ -529,7 +528,7 @@ function MaterialCard({
         }
 
         if (material.status !== 'consumido' || material.actualNetWeight === undefined) return null;
-
+        
         let referenceNetWeight = 0;
         if (isRollosType) {
             referenceNetWeight = material.netWeight || 0;
@@ -614,7 +613,7 @@ function MaterialCard({
                                 </div>
                                  <div className="space-y-1">
                                     <p className="text-muted-foreground">Tara (Etiqueta)</p>
-                                    <p className="font-semibold text-lg">{material.labelTare?.toFixed(2) ?? 'N/A'} kg</p>
+                                    <p className="font-semibold text-lg">{material.labelTare !== undefined && material.labelTare !== null ? `${material.labelTare.toFixed(2)} kg` : 'N/A'}</p>
                                 </div>
                             </div>
                             <Separator />
@@ -823,7 +822,7 @@ export default function MaterialsClient({
                 return;
             }
 
-            let newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
+            const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
                 type: newMaterialType,
                 code: trimmedCode,
                 supplier: supplierName,
@@ -862,12 +861,12 @@ export default function MaterialsClient({
                 const netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : 0;
                 const grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : 0;
             
-                if (grossWeight > 0 && netWeight > 0 && grossWeight > netWeight) {
-                    newMaterialData.labelTare = grossWeight - netWeight;
-                }
-            
                 newMaterialData.netWeight = netWeight;
                 newMaterialData.grossWeight = grossWeight;
+
+                if (grossWeight > 0 && netWeight > 0) {
+                    newMaterialData.labelTare = grossWeight - netWeight;
+                }
             }
             
             if (isMilanplastic && newMaterialProviderDate) {
