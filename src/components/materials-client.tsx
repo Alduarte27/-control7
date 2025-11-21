@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -638,7 +639,7 @@ export default function MaterialsClient({
                                             </SelectTrigger>
                                             <SelectContent>
                                                 {(newMaterialType === 'sacos_familiar' || newMaterialType === 'rollo_laminado' ? familiarProducts : granelProducts).map(p => (
-                                                    <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
+                                                    <SelectItem key={p.id} value={p.productName}>{p.productName.replace(/\s*\([^)]*\)\s*/g, ' ').trim()}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
