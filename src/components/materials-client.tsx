@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { PackagingMaterial, MaterialType, MaterialStatus } from '@/lib/types';
 import { materialTypeLabels } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -366,16 +366,30 @@ export default function MaterialsClient({ initialMaterials }: { initialMaterials
             return;
         }
 
-        const newMaterial: Omit<PackagingMaterial, 'id'> = {
-            type: newMaterialType,
-            code: newMaterialCode.trim(),
-            netWeight: parseFloat(newMaterialNetWeight),
-            grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight) : undefined,
-            status: 'recibido',
-            receivedAt: Date.now(),
-        };
-
         try {
+            // Check for duplicates
+            const trimmedCode = newMaterialCode.trim();
+            const q = query(collection(db, 'packagingMaterials'), where('code', '==', trimmedCode));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                toast({
+                    title: "Error de Duplicado",
+                    description: "El código de material que intentas registrar ya existe en el sistema.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
+            const newMaterial: Omit<PackagingMaterial, 'id'> = {
+                type: newMaterialType,
+                code: trimmedCode,
+                netWeight: parseFloat(newMaterialNetWeight),
+                grossWeight: newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight) : undefined,
+                status: 'recibido',
+                receivedAt: Date.now(),
+            };
+
             const docRef = await addDoc(collection(db, 'packagingMaterials'), newMaterial);
             setMaterials(prev => [{ id: docRef.id, ...newMaterial } as PackagingMaterial, ...prev]);
 
