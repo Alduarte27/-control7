@@ -165,7 +165,7 @@ export type PackagingMaterial = {
     presentation?: string;
     netWeight?: number; 
     grossWeight?: number;
-    labelTare?: number; // Diferencia entre bruto y neto de la etiqueta
+    labelTare?: number;
     quantity?: number;
     unitWeight?: number; // in grams
     totalWeight?: number; // in kg

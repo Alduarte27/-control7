@@ -214,7 +214,7 @@ function TraceabilityDialog({ material, onClose }: { material: PackagingMaterial
             status: 'En Uso',
             timestamp: material.inUseAt,
             icon: Weight,
-            details: `Pesado y puesto en uso. Peso Real: ${material.actualWeight || 'N/A'} kg. Asignado a: ${material.assignedMachine || 'N/A'}.`
+            details: `Pesado y puesto en uso. Peso Bruto (Balanza): ${material.actualWeight || 'N/A'} kg. Asignado a: ${material.assignedMachine || 'N/A'}.`
         },
          {
             status: 'Por Pesar Tara',
@@ -323,7 +323,7 @@ function TareWeightDialog({
                     <Separator />
                      <div className="space-y-2 rounded-lg border p-4 bg-muted/50">
                         <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Peso Real Medido:</span>
+                            <span className="text-muted-foreground">Peso Bruto (Balanza):</span>
                             <span className="font-medium">{material.actualWeight?.toFixed(2) || '0.00'} kg</span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -493,29 +493,6 @@ function MaterialCard({
 
     const currentStatus = statusConfig[material.status];
 
-    const getDiscrepancy = () => {
-        if (material.status === 'recibido' || !material.actualWeight) return null;
-        
-        let baseWeight;
-        if (material.type === 'sacos_granel' || material.type === 'sacos_familiar') {
-            baseWeight = material.totalWeight;
-        } else {
-            baseWeight = material.netWeight;
-        }
-        
-        if (!baseWeight) return null;
-
-        const diff = material.actualWeight - baseWeight;
-        const diffPercentage = (diff / baseWeight) * 100;
-        const color = diff >= 0 ? 'text-green-600' : 'text-red-600';
-
-        return (
-            <p className={cn("text-sm font-bold", color)}>
-                {diff.toFixed(2)} kg ({diffPercentage.toFixed(1)}%)
-            </p>
-        );
-    };
-
     const getPerformance = () => {
         if (material.status !== 'consumido' || !material.actualNetWeight || !material.netWeight) return null;
         const performance = (material.actualNetWeight / material.netWeight) * 100;
@@ -593,34 +570,25 @@ function MaterialCard({
                                 <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
                                 <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
                             </div>
-                        </>
-                    )}
-                     <div className="space-y-1">
-                        <p className="text-muted-foreground">Peso Real</p>
-                        <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight} kg` : 'N/A'}</p>
-                    </div>
-                     <div className="space-y-1">
-                        <p className="text-muted-foreground">Discrepancia</p>
-                        {getDiscrepancy() || <p className="text-sm text-muted-foreground">Pendiente de pesar</p>}
-                    </div>
-                     {isRollosType && (
-                        <>
                             <div className="space-y-1">
                                 <p className="text-muted-foreground">Tara (Etiqueta)</p>
                                 <p className="font-semibold text-lg">{material.labelTare?.toFixed(2) ?? 'N/A'} kg</p>
+                            </div>
+                             <div className="space-y-1">
+                                <p className="text-muted-foreground">Peso Bruto (Balanza)</p>
+                                <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight} kg` : 'N/A'}</p>
                             </div>
                             <div className="space-y-1">
                                 <p className="text-muted-foreground">Tara (Real)</p>
                                 <p className="font-semibold text-lg">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
                             </div>
+                            <div className="space-y-1">
+                                <p className="text-muted-foreground">Peso Neto Real</p>
+                                <p className="font-semibold text-lg text-green-600">{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
+                            </div>
                         </>
-                     )}
-                     {material.actualNetWeight && (
-                        <div className="space-y-1 col-span-2">
-                            <p className="text-muted-foreground">Peso Neto Real</p>
-                            <p className="font-semibold text-lg text-green-600">{material.actualNetWeight.toFixed(2)} kg</p>
-                        </div>
                     )}
+                    
                     <div className="col-span-2">{getPerformance()}</div>
                 </div>
                 <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 min-h-[50px]">
