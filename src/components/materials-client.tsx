@@ -1,3 +1,4 @@
+
 'use client';
 
 import React from 'react';
@@ -749,7 +750,9 @@ export default function MaterialsClient({
 
     const granelProducts = React.useMemo(() => {
         if (!granelCategoryId) return [];
-        return allProducts.filter(p => p.categoryId === granelCategoryId && !p.productName.includes('(12'));
+        const dbProducts = allProducts.filter(p => p.categoryId === granelCategoryId && !p.productName.includes('(12'));
+        // Manually add the "Sacos sin logo" option
+        return [{id: 'sacos-sin-logo', productName: 'Sacos sin logo', order: -1, categoryId: granelCategoryId, isActive: true}, ...dbProducts];
     }, [allProducts, granelCategoryId]);
 
     const availableMaterialTypes = React.useMemo(() => {
@@ -1233,11 +1236,11 @@ export default function MaterialsClient({
                                         </>
                                     )}
                                     <div className="flex items-end gap-2 lg:col-start-5">
+                                        <Button onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier} variant="outline">
+                                            <Camera className="mr-2 h-4 w-4" /> Escanear
+                                        </Button>
                                          <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                        </Button>
-                                        <Button variant="outline" onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier}>
-                                            <Camera className="mr-2 h-4 w-4" /> Escanear
                                         </Button>
                                     </div>
                                 </div>
@@ -1385,3 +1388,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
