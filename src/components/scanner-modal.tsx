@@ -3,10 +3,12 @@
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import jsQR from 'jsqr';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Camera, AlertTriangle } from 'lucide-react';
+import { Camera, AlertTriangle, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Button } from './ui/button';
+import { cn } from '@/lib/utils';
 
 interface ScannerModalProps {
   isOpen: boolean;
@@ -14,15 +16,18 @@ interface ScannerModalProps {
   onScanSuccess: (code: string) => void;
 }
 
-// Type guard to check if BarcodeDetector is available
 const isBarcodeDetectorSupported = (): boolean => 'BarcodeDetector' in window;
 
 export default function ScannerModal({ isOpen, onClose, onScanSuccess }: ScannerModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null); // For jsQR fallback
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const { toast } = useToast();
   const animationFrameId = useRef<number>();
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const [isTorchOn, setIsTorchOn] = useState(false);
+  const [isTorchSupported, setIsTorchSupported] = useState(false);
 
   const scanWithJsQR = useCallback(() => {
     if (videoRef.current && videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
@@ -61,22 +66,45 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
         }
     } catch (error) {
         console.error("Barcode Detector error:", error);
-        // Fallback to jsQR if BarcodeDetector fails unexpectedly
         animationFrameId.current = requestAnimationFrame(scanWithJsQR);
     }
   }, [onScanSuccess, scanWithJsQR]);
+  
+  const toggleTorch = async () => {
+    if (!streamRef.current || !isTorchSupported) return;
+    
+    const videoTrack = streamRef.current.getVideoTracks()[0];
+    try {
+        await videoTrack.applyConstraints({
+            advanced: [{ torch: !isTorchOn }]
+        });
+        setIsTorchOn(prev => !prev);
+    } catch (error) {
+        console.error("Error toggling torch:", error);
+        toast({
+            title: "Error de Linterna",
+            description: "No se pudo cambiar el estado de la linterna.",
+            variant: "destructive",
+        });
+    }
+  };
 
 
   useEffect(() => {
     if (!isOpen) {
-      if (videoRef.current?.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
         videoRef.current.srcObject = null;
       }
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
       }
+      // Reset torch state when closing
+      setIsTorchOn(false);
+      setIsTorchSupported(false);
       return;
     }
 
@@ -85,7 +113,16 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
     const startScan = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+        streamRef.current = stream;
         setHasCameraPermission(true);
+
+        const videoTrack = stream.getVideoTracks()[0];
+        // @ts-ignore
+        const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+        // @ts-ignore
+        if (capabilities.torch) {
+            setIsTorchSupported(true);
+        }
 
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -117,13 +154,12 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
       if (animationFrameId.current) {
         cancelAnimationFrame(animationFrameId.current);
       }
-       if (videoRef.current?.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
+       if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, onScanSuccess, scanWithBarcodeDetector, scanWithJsQR]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -138,7 +174,6 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
           <video ref={videoRef} className="w-full h-full" autoPlay playsInline muted />
           <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-          {/* Scanner Overlay */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div className="w-3/4 h-1/2 border-4 border-dashed border-white/50 rounded-lg" />
           </div>
@@ -160,6 +195,18 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
             </div>
           )}
         </div>
+         <DialogFooter>
+            {isTorchSupported && (
+                 <Button
+                    variant="outline"
+                    onClick={toggleTorch}
+                    className={cn("flex items-center gap-2", isTorchOn && "bg-yellow-400 hover:bg-yellow-500 text-black")}
+                >
+                    <Zap className="h-4 w-4" />
+                    {isTorchOn ? 'Apagar Luz' : 'Encender Luz'}
+                </Button>
+            )}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
