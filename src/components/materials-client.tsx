@@ -173,17 +173,18 @@ function MaterialActionDialog({
 
 
 function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }: { material: PackagingMaterial, onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume') => void, onSelectionChange: (id: string, checked: boolean) => void, isSelected: boolean }) {
+    const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
+        recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
+        en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
+        consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
+    };
+    
     const [formattedDates, setFormattedDates] = React.useState<{ received: string | null, inUse: string | null, consumed: string | null }>({
       received: null,
       inUse: null,
       consumed: null,
     });
     
-    const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
-        recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
-        en_uso: { label: 'En Uso', color: 'bg-yellow-500', icon: Play },
-        consumido: { label: 'Consumido', color: 'bg-green-500', icon: PackageCheck },
-    };
 
     React.useEffect(() => {
         const formatDate = (timestamp: number | undefined) => {
@@ -717,6 +718,7 @@ export default function MaterialsClient({
                                                 <SelectValue placeholder="Seleccionar producto..." />
                                             </SelectTrigger>
                                             <SelectContent>
+                                                <SelectItem value="Sacos sin LOGO">Sacos sin LOGO</SelectItem>
                                                 {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
                                                     <SelectItem key={p.id} value={p.productName}>
                                                         {p.productName.replace(/\s*\([^)]*\)\s*/g, ' ')}
