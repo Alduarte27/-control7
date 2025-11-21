@@ -674,7 +674,7 @@ export default function MaterialsClient({
 
                 <main className="p-4 md:p-8 space-y-6">
                     <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
+                        <CardHeader className="flex flex-row items-start justify-between">
                             <div>
                                 <CardTitle>Registrar Nuevo Material</CardTitle>
                                 <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
@@ -804,7 +804,7 @@ export default function MaterialsClient({
                                         <Button onClick={handleAddMaterial} className="flex-1">
                                             <PlusCircle className="mr-2 h-4 w-4" /> Registrar
                                         </Button>
-                                        <Button variant="outline" className="flex-1" onClick={() => setIsScannerOpen(true)}>
+                                        <Button variant="outline" onClick={() => setIsScannerOpen(true)} className="flex-1">
                                             <Camera className="mr-2 h-4 w-4" /> Escanear
                                         </Button>
                                     </div>
