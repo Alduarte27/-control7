@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -111,7 +111,9 @@ function EditMaterialDialog({
     };
 
     const handleSaveChanges = () => {
+        // Exclude fields that should not be edited here or are objects/timestamps
         const { id, type, supplier, receivedAt, status, inUseAt, consumedAt, assignedMachine, ...updates } = editedMaterial;
+        
         onSave(material.id, updates);
         onClose();
     };
@@ -297,7 +299,7 @@ function TareWeightDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                    <div className={cn("grid gap-4", isSacosType ? "grid-cols-1" : "grid-cols-2")}>
+                     <div className={cn("grid gap-4", isSacosType ? "grid-cols-1" : "grid-cols-2")}>
                         <div className="space-y-1.5">
                             <Label htmlFor="plastic-weight">Peso envoltura (kg)</Label>
                             <Input
@@ -501,6 +503,7 @@ function MaterialCard({
         if (isRollosType) {
             referenceWeight = material.netWeight || 0;
         } else if (isSacosType) {
+            // For bags, performance is actual net weight vs total declared weight.
             referenceWeight = material.totalWeight || 0;
         }
 
@@ -613,7 +616,9 @@ function MaterialCard({
                                 </div>
                                  <div className="space-y-1">
                                     <p className="text-muted-foreground">Tara (Etiqueta)</p>
-                                    <p className="font-semibold text-lg">{material.labelTare !== undefined && material.labelTare !== null ? `${material.labelTare.toFixed(2)} kg` : 'N/A'}</p>
+                                    <p className="font-semibold text-lg">
+                                        {material.labelTare !== undefined && material.labelTare !== null ? `${material.labelTare.toFixed(2)} kg` : 'N/A'}
+                                    </p>
                                 </div>
                             </div>
                             <Separator />
@@ -874,7 +879,7 @@ export default function MaterialsClient({
             }
 
             const docRef = await addDoc(collection(db, 'packagingMaterials'), newMaterialData);
-            setMaterials(prev => [{ id: docRef.id, ...newMaterialData } as PackagingMaterial, ...prev]);
+            setMaterials(prev => [{ id: docRef.id, ...newMaterialData } as PackagingMaterial, ...prev].sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0)));
 
             setNewMaterialCode('');
             setNewMaterialPresentation('');
@@ -987,8 +992,20 @@ export default function MaterialsClient({
 
      const handleEditSave = async (id: string, updates: Partial<PackagingMaterial>) => {
         try {
-            await updateDoc(doc(db, 'packagingMaterials', id), updates);
-            setMaterials(prev => prev.map(m => m.id === id ? { ...m, ...updates } : m));
+            const finalUpdates = { ...updates };
+            // Recalculate labelTare if netWeight or grossWeight are being updated
+            const isRollType = materials.find(m => m.id === id)?.type.startsWith('rollo');
+            if (isRollType && ('netWeight' in finalUpdates || 'grossWeight' in finalUpdates)) {
+                const currentMaterial = materials.find(m => m.id === id);
+                const netWeight = finalUpdates.netWeight ?? currentMaterial?.netWeight ?? 0;
+                const grossWeight = finalUpdates.grossWeight ?? currentMaterial?.grossWeight ?? 0;
+                if (grossWeight > 0 && netWeight > 0) {
+                    finalUpdates.labelTare = grossWeight - netWeight;
+                }
+            }
+
+            await updateDoc(doc(db, 'packagingMaterials', id), finalUpdates);
+            setMaterials(prev => prev.map(m => m.id === id ? { ...m, ...finalUpdates } as PackagingMaterial : m));
             toast({ title: 'Material Actualizado', description: `Se guardaron los cambios para el material.` });
             setEditingMaterial(null);
         } catch (error) {
