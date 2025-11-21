@@ -1136,16 +1136,16 @@ export default function MaterialsClient({
                                         </Select>
                                     </div>
                                     {!isPlastiempaques && (
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                            <Input
-                                                id="material-presentation-trigger"
-                                                value={newMaterialPresentation}
-                                                onChange={(e) => setNewMaterialPresentation(e.target.value)}
-                                                placeholder="Ej: Azúcar San Juan 1kg"
-                                                disabled={!newMaterialSupplier}
-                                            />
-                                        </div>
+                                    <div className="space-y-1.5">
+                                        <Label htmlFor="material-presentation-trigger">Presentación</Label>
+                                        <Input
+                                            id="material-presentation-trigger"
+                                            value={newMaterialPresentation}
+                                            onChange={(e) => setNewMaterialPresentation(e.target.value)}
+                                            placeholder="Ej: Azúcar San Juan 1kg"
+                                            disabled={!newMaterialSupplier}
+                                        />
+                                    </div>
                                     )}
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-code">Código</Label>
@@ -1217,12 +1217,14 @@ export default function MaterialsClient({
                                     )}
 
                                     <div className="flex items-end gap-2 lg:col-start-5">
-                                        <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
-                                            <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                        </Button>
-                                        <Button variant="outline" size="icon" onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier}>
-                                            <Camera className="h-4 w-4" />
-                                        </Button>
+                                        <div className="flex items-end gap-2">
+                                            <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
+                                                <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                            </Button>
+                                            <Button variant="outline" onClick={() => setIsScannerOpen(true)} disabled={!newMaterialSupplier}>
+                                                <Camera className="mr-2 h-4 w-4" /> Escanear
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
