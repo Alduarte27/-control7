@@ -131,7 +131,7 @@ function MaterialActionDialog({
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Pesar y Poner en Uso</DialogTitle>
-                    <DialogDescription>
+                    <DialogDescription className="break-words">
                         Registra el peso real del material con código <span className="font-mono font-bold">{material.code}</span> y asígnalo a una máquina.
                     </DialogDescription>
                 </DialogHeader>
@@ -262,7 +262,7 @@ function MaterialCard({ material, onActionClick, onSelectionChange, isSelected }
                         <CardTitle className="text-4xl font-bold text-primary">
                             #{getShortCode(material.code)}
                         </CardTitle>
-                        <p className="text-xs text-muted-foreground font-mono break-all" title={material.code}>{material.code}</p>
+                        <p className="text-xs text-muted-foreground font-mono break-all">{material.code}</p>
                         <div className="text-xs text-muted-foreground pt-1 space-y-0.5">
                             {material.supplier && <p>Proveedor: {material.supplier}</p>}
                             {material.providerDate && <p>Fecha Prov: {material.providerDate}</p>}
