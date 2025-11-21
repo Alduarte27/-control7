@@ -530,23 +530,24 @@ function MaterialCard({
     }
 
     const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
+    const isRollosType = material.type === 'rollo_fardo' || material.type === 'rollo_laminado';
 
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
             <CardHeader>
+                <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                    {material.status === 'recibido' && (
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditClick(material)}>
+                            <Edit className="h-4 w-4" />
+                        </Button>
+                    )}
+                    <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
+                        aria-label={`Seleccionar material ${material.code}`}
+                    />
+                </div>
                  <div className="flex flex-col">
-                    <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
-                        {material.status === 'recibido' && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditClick(material)}>
-                                <Edit className="h-4 w-4" />
-                            </Button>
-                        )}
-                        <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
-                            aria-label={`Seleccionar material ${material.code}`}
-                        />
-                    </div>
                     <div>
                         <CardDescription>{material.presentation || materialTypeLabels[material.type]}</CardDescription>
                         <CardTitle className="text-4xl font-bold text-primary hover:underline cursor-pointer" onClick={() => onTraceClick(material)}>
@@ -602,6 +603,18 @@ function MaterialCard({
                         <p className="text-muted-foreground">Discrepancia</p>
                         {getDiscrepancy() || <p className="text-sm text-muted-foreground">Pendiente de pesar</p>}
                     </div>
+                     {isRollosType && (
+                        <>
+                            <div className="space-y-1">
+                                <p className="text-muted-foreground">Tara (Etiqueta)</p>
+                                <p className="font-semibold text-lg">{material.labelTare?.toFixed(2) ?? 'N/A'} kg</p>
+                            </div>
+                            <div className="space-y-1">
+                                <p className="text-muted-foreground">Tara (Real)</p>
+                                <p className="font-semibold text-lg">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
+                            </div>
+                        </>
+                     )}
                      {material.actualNetWeight && (
                         <div className="space-y-1 col-span-2">
                             <p className="text-muted-foreground">Peso Neto Real</p>
@@ -706,6 +719,8 @@ export default function MaterialsClient({
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
     const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
     const isMilanplastic = supplierName.toUpperCase().startsWith('MILANPLASTIC');
+    const isReysac = supplierName.toUpperCase().startsWith('REYSAC');
+
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
     const granelCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'granel')?.id, [allCategories]);
@@ -796,7 +811,7 @@ export default function MaterialsClient({
                 type: newMaterialType,
                 code: trimmedCode,
                 supplier: supplierName,
-                lote: newMaterialLote.trim(),
+                lote: '',
                 presentation: newMaterialPresentation.trim(),
                 status: 'recibido',
                 receivedAt: Date.now(),
@@ -832,8 +847,14 @@ export default function MaterialsClient({
                     toast({ title: "Error", description: "El peso neto es obligatorio para este tipo de material.", variant: "destructive" });
                     return;
                 }
-                newMaterialData.netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : undefined;
-                newMaterialData.grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined;
+                const netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : undefined;
+                const grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : undefined;
+
+                newMaterialData.netWeight = netWeight;
+                newMaterialData.grossWeight = grossWeight;
+                if(netWeight && grossWeight) {
+                    newMaterialData.labelTare = grossWeight - netWeight;
+                }
             }
             
             if (isMilanplastic && newMaterialProviderDate) {

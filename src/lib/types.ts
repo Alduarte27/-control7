@@ -1,4 +1,5 @@
 
+
 'use client';
 
 export type ShiftProduction = {
@@ -164,6 +165,7 @@ export type PackagingMaterial = {
     presentation?: string;
     netWeight?: number; 
     grossWeight?: number;
+    labelTare?: number; // Diferencia entre bruto y neto de la etiqueta
     quantity?: number;
     unitWeight?: number; // in grams
     totalWeight?: number; // in kg
