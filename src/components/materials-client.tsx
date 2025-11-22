@@ -1387,33 +1387,35 @@ export default function MaterialsClient({
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                        {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || (newMaterialType === 'rollo_laminado' && isMilanplastic)) ? (
-                                            <Select
-                                                value={newMaterialPresentation}
-                                                onValueChange={setNewMaterialPresentation}
-                                                disabled={!newMaterialSupplier}
-                                            >
-                                                <SelectTrigger id="material-presentation-trigger">
-                                                    <SelectValue placeholder="Seleccionar producto..." />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
-                                                        <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        ) : (
-                                            <Input
-                                                id="material-presentation-trigger"
-                                                value={newMaterialPresentation}
-                                                onChange={(e) => setNewMaterialPresentation(e.target.value)}
-                                                placeholder="Ej: Azúcar San Juan 1kg"
-                                                disabled={!newMaterialSupplier}
-                                            />
-                                        )}
-                                    </div>
+                                    {!isPlastiempaques && (
+                                        <div className="space-y-1.5">
+                                            <Label htmlFor="material-presentation-trigger">Presentación</Label>
+                                            {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || (newMaterialType === 'rollo_laminado' && isMilanplastic)) ? (
+                                                <Select
+                                                    value={newMaterialPresentation}
+                                                    onValueChange={setNewMaterialPresentation}
+                                                    disabled={!newMaterialSupplier}
+                                                >
+                                                    <SelectTrigger id="material-presentation-trigger">
+                                                        <SelectValue placeholder="Seleccionar producto..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
+                                                            <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            ) : (
+                                                <Input
+                                                    id="material-presentation-trigger"
+                                                    value={newMaterialPresentation}
+                                                    onChange={(e) => setNewMaterialPresentation(e.target.value)}
+                                                    placeholder="Ej: Azúcar San Juan 1kg"
+                                                    disabled={!newMaterialSupplier}
+                                                />
+                                            )}
+                                        </div>
+                                    )}
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-code">Código</Label>
                                         <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
@@ -1670,3 +1672,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
