@@ -1067,7 +1067,6 @@ export default function MaterialsClient({
 
             const machineMatch = machineFilter === 'all' ||
                 (machineFilter === 'unassigned' && !material.assignedMachine) ||
-                (machineFilter === 'consumed' && material.status === 'consumido') ||
                 material.assignedMachine === machineFilter;
 
             const searchMatch = !searchQuery ||
@@ -1565,58 +1564,11 @@ export default function MaterialsClient({
 
 
                     <Card>
-                         <CardHeader>
-                            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                         <CardHeader className="space-y-4">
+                            <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
                                 <div>
                                     <CardTitle>Inventario en Área de Empaque</CardTitle>
                                     <CardDescription>Visualiza los materiales recibidos, en uso y consumidos.</CardDescription>
-                                </div>
-                                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full md:w-auto flex-wrap">
-                                    <Input
-                                        placeholder="Buscar por código, lote..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="sm:max-w-xs"
-                                    />
-                                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Todos los Estados</SelectItem>
-                                            <SelectItem value="recibido">Recibido</SelectItem>
-                                            <SelectItem value="en_uso">En Uso</SelectItem>
-                                            <SelectItem value="por_pesar_tara">Por Pesar Tara</SelectItem>
-                                            <SelectItem value="consumido">Consumido</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                     <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Todos los Tipos</SelectItem>
-                                            {Object.entries(materialTypeLabels).map(([key, label]) => (
-                                                <SelectItem key={key} value={key}>{label}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                     <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Todos los Proveedores</SelectItem>
-                                            {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={machineFilter} onValueChange={setMachineFilter}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Todas las Máquinas</SelectItem>
-                                            <SelectItem value="unassigned">Sin Asignar</SelectItem>
-                                            <SelectItem value="machine_1">Máquina 1</SelectItem>
-                                            <SelectItem value="machine_2">Máquina 2</SelectItem>
-                                            <SelectItem value="machine_3">Máquina 3</SelectItem>
-                                            <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
-                                            <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
-                                            <SelectItem value="consumed">Consumidos/Pesados</SelectItem>
-                                        </SelectContent>
-                                    </Select>
                                 </div>
                                 <div className="flex items-center gap-2">
                                      <Button variant="outline" onClick={handleExportCSV}>
@@ -1648,6 +1600,51 @@ export default function MaterialsClient({
                                         </AlertDialog>
                                     )}
                                 </div>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                                <Input
+                                    placeholder="Buscar por código, lote..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos los Estados</SelectItem>
+                                        <SelectItem value="recibido">Recibido</SelectItem>
+                                        <SelectItem value="en_uso">En Uso</SelectItem>
+                                        <SelectItem value="por_pesar_tara">Por Pesar Tara</SelectItem>
+                                        <SelectItem value="consumido">Consumido</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos los Tipos</SelectItem>
+                                        {Object.entries(materialTypeLabels).map(([key, label]) => (
+                                            <SelectItem key={key} value={key}>{label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos los Proveedores</SelectItem>
+                                        {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={machineFilter} onValueChange={setMachineFilter}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todas las Máquinas</SelectItem>
+                                        <SelectItem value="unassigned">Sin Asignar</SelectItem>
+                                        <SelectItem value="machine_1">Máquina 1</SelectItem>
+                                        <SelectItem value="machine_2">Máquina 2</SelectItem>
+                                        <SelectItem value="machine_3">Máquina 3</SelectItem>
+                                        <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
+                                        <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -1748,4 +1745,5 @@ export default function MaterialsClient({
         </>
     );
 }
+
 
