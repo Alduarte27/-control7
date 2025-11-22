@@ -16,7 +16,7 @@ import { materialTypeLabels } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
@@ -193,6 +193,126 @@ function EditMaterialDialog({
             </DialogContent>
         </Dialog>
     )
+}
+
+function AdvancedEditDialog({
+  material,
+  onClose,
+  onSave,
+}: {
+  material: PackagingMaterial;
+  onClose: () => void;
+  onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
+}) {
+  const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
+
+  React.useEffect(() => {
+    setEditedMaterial(material);
+  }, [material]);
+
+  const handleChange = (field: keyof PackagingMaterial, value: any) => {
+    setEditedMaterial((prev) => ({ ...prev, [field]: value }));
+  };
+  
+  const handleTimestampChange = (field: keyof PackagingMaterial, value: string) => {
+    const timestamp = new Date(value).getTime();
+    if (!isNaN(timestamp)) {
+      handleChange(field, timestamp);
+    }
+  };
+
+  const formatTimestampForInput = (timestamp?: number) => {
+    if (!timestamp) return "";
+    return format(new Date(timestamp), "yyyy-MM-dd'T'HH:mm");
+  };
+
+  const handleSaveChanges = () => {
+    onSave(material.id, editedMaterial);
+    onClose();
+  };
+  
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Edición Avanzada de Material</DialogTitle>
+                <DialogDescription className="break-all">Editando: <span className="font-mono font-bold">{material.code}</span></DialogDescription>
+            </DialogHeader>
+             <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-code">Código</Label>
+                        <Input id="adv-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-presentation">Presentación</Label>
+                        <Input id="adv-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
+                    </div>
+                </div>
+
+                <Separator />
+                <h4 className="font-semibold text-sm text-muted-foreground">Datos de Peso</h4>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                     <div className="space-y-1.5">
+                        <Label htmlFor="adv-net-weight">P. Neto (Etiqueta)</Label>
+                        <Input id="adv-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={(e) => handleChange('netWeight', Number(e.target.value))} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-gross-weight">P. Bruto (Etiqueta)</Label>
+                        <Input id="adv-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
+                    </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="adv-actual-weight">P. Bruto (Balanza)</Label>
+                        <Input id="adv-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-tare-weight">Tara Real</Label>
+                        <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight || ''} onChange={(e) => handleChange('tareWeight', Number(e.target.value))} />
+                    </div>
+                </div>
+
+                <Separator />
+                 <h4 className="font-semibold text-sm text-muted-foreground">Asignación y Fechas</h4>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-assigned-machine">Máquina Asignada</Label>
+                        <Select value={editedMaterial.assignedMachine || ''} onValueChange={(val) => handleChange('assignedMachine', val)}>
+                            <SelectTrigger id="adv-assigned-machine"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="machine_1">Máquina 1</SelectItem>
+                                <SelectItem value="machine_2">Máquina 2</SelectItem>
+                                <SelectItem value="machine_3">Máquina 3</SelectItem>
+                                <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
+                                <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="adv-received-at">Fecha Recibido</Label>
+                        <Input id="adv-received-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.receivedAt)} onChange={(e) => handleTimestampChange('receivedAt', e.target.value)} />
+                    </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="adv-inuse-at">Fecha Puesto en Uso</Label>
+                        <Input id="adv-inuse-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.inUseAt)} onChange={(e) => handleTimestampChange('inUseAt', e.target.value)} />
+                    </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="adv-consumed-at">Fecha Consumido</Label>
+                        <Input id="adv-consumed-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.consumedAt)} onChange={(e) => handleTimestampChange('consumedAt', e.target.value)} />
+                    </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="adv-tareweighted-at">Fecha Pesaje Tara</Label>
+                        <Input id="adv-tareweighted-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.tareWeightedAt)} onChange={(e) => handleTimestampChange('tareWeightedAt', e.target.value)} />
+                    </div>
+                 </div>
+
+             </div>
+             <DialogFooter>
+                 <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
+                 <Button onClick={handleSaveChanges}>Guardar Cambios Avanzados</Button>
+             </DialogFooter>
+        </DialogContent>
+    </Dialog>
+  );
 }
 
 
@@ -727,6 +847,7 @@ export default function MaterialsClient({
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' | 'weigh_tare' } | null>(null);
     
     const [editingMaterial, setEditingMaterial] = React.useState<PackagingMaterial | null>(null);
+    const [advancedEditingMaterial, setAdvancedEditingMaterial] = React.useState<PackagingMaterial | null>(null);
     const [traceMaterial, setTraceMaterial] = React.useState<PackagingMaterial | null>(null);
 
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
@@ -739,6 +860,7 @@ export default function MaterialsClient({
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
     const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
     const isPlastiempaques = supplierName.toUpperCase().startsWith('PLASTIEMPAQUES S.A');
+    const isMilanplastic = supplierName.toUpperCase().startsWith('MILANPLASTIC');
 
 
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
@@ -1007,6 +1129,7 @@ export default function MaterialsClient({
             setMaterials(prev => prev.map(m => m.id === id ? { ...m, ...finalUpdates } as PackagingMaterial : m));
             toast({ title: 'Material Actualizado', description: `Se guardaron los cambios para el material.` });
             setEditingMaterial(null);
+            setAdvancedEditingMaterial(null);
         } catch (error) {
             console.error("Error updating material:", error);
             toast({ title: 'Error', description: 'No se pudo actualizar el material.', variant: 'destructive' });
@@ -1108,6 +1231,16 @@ export default function MaterialsClient({
         document.body.removeChild(link);
     };
 
+    const handleOpenAdvancedEdit = () => {
+        if (selectedMaterials.size !== 1) return;
+        const selectedId = selectedMaterials.values().next().value;
+        const materialToEdit = materials.find(m => m.id === selectedId);
+        if (materialToEdit) {
+            setAdvancedEditingMaterial(materialToEdit);
+        }
+    };
+
+
     return (
         <>
             <div className="bg-background min-h-screen text-foreground">
@@ -1164,7 +1297,7 @@ export default function MaterialsClient({
                                     {!isPlastiempaques && (
                                     <div className="space-y-1.5">
                                         <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                        {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || newMaterialType === 'rollo_laminado') ? (
+                                        {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || (newMaterialType === 'rollo_laminado' && isMilanplastic)) ? (
                                             <Select
                                                 value={newMaterialPresentation}
                                                 onValueChange={setNewMaterialPresentation}
@@ -1259,7 +1392,7 @@ export default function MaterialsClient({
                                         </>
                                     )}
                                     <div className="flex items-end gap-2 lg:col-start-5">
-                                        <Button onClick={() => setIsScannerOpen(true)} variant="outline" disabled={!newMaterialSupplier}>
+                                         <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
                                             <Camera className="mr-2 h-4 w-4" /> Escanear
                                         </Button>
                                          <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
@@ -1315,6 +1448,9 @@ export default function MaterialsClient({
                                 <div className="flex items-center gap-2">
                                      <Button variant="outline" onClick={handleExportCSV}>
                                         <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
+                                    </Button>
+                                    <Button variant="outline" size="icon" onClick={handleOpenAdvancedEdit} disabled={selectedMaterials.size !== 1}>
+                                        <Edit className="h-4 w-4" />
                                     </Button>
                                     {selectedMaterials.size > 0 && (
                                         <AlertDialog>
@@ -1391,6 +1527,13 @@ export default function MaterialsClient({
                 <EditMaterialDialog 
                     material={editingMaterial}
                     onClose={() => setEditingMaterial(null)}
+                    onSave={handleEditSave}
+                />
+            )}
+            {advancedEditingMaterial && (
+                <AdvancedEditDialog
+                    material={advancedEditingMaterial}
+                    onClose={() => setAdvancedEditingMaterial(null)}
                     onSave={handleEditSave}
                 />
             )}
