@@ -124,7 +124,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
       { id: 'ia', href: '/ia', icon: Sparkles, label: 'Operaciones', tooltip: 'Operaciones y Simulación' },
       { id: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', tooltip: 'Dashboard General' },
       { id: 'stops', href: '/stops', icon: HardHat, label: 'Bitácora', tooltip: 'Bitácora de Producción' },
-      { id: 'log-history', href: '/log-history', icon: CalendarCheck2, label: 'Historial Bitácoras', tooltip: 'Historial de Bitácoras' },
       { id: 'materials', href: '/materials', icon: Boxes, label: 'Materiales', tooltip: 'Control de Materiales' },
       { id: 'history', href: '/history', icon: History, label: 'Historial Planes', tooltip: 'Historial de Planes' },
       { id: 'access', href: '/access', icon: Shield, label: 'Acceso', tooltip: 'Gestión de Acceso' },
@@ -197,19 +196,21 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                 ))
             )}
           
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-10 h-10 p-0 lg:w-auto lg:px-4">
-                            <Download className="h-4 w-4 lg:mr-2" />
-                            <span className="hidden lg:inline">Exportar / Reportes</span>
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>Exportar / Reportes</p>
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
+            {hasPermission('export') && (
+              <TooltipProvider>
+                  <Tooltip>
+                      <TooltipTrigger asChild>
+                          <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-10 h-10 p-0 lg:w-auto lg:px-4">
+                              <Download className="h-4 w-4 lg:mr-2" />
+                              <span className="hidden lg:inline">Exportar / Reportes</span>
+                          </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                          <p>Exportar / Reportes</p>
+                      </TooltipContent>
+                  </Tooltip>
+              </TooltipProvider>
+            )}
 
             <TooltipProvider>
                 <Tooltip>
@@ -249,7 +250,9 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                           isVisible={hasPermission(mod.id)}
                         />
                     ))}
-                    <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
+                    {hasPermission('export') && (
+                      <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
+                    )}
                     <DropdownMenuItem onClick={() => setIsInfoDialogOpen(true)}><Info className="mr-2 h-4 w-4" />Información</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
                           {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}

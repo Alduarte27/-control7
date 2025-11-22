@@ -11,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription }
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, ChevronLeft, Shield, QrCode, X, Share2 } from 'lucide-react';
+import { PlusCircle, Trash2, ChevronLeft, Shield, QrCode, X, Share2, Download, History } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -21,7 +21,10 @@ const availableModules = [
     { id: 'stops', label: 'Bitácora' },
     { id: 'log-history', label: 'Historial Bitácoras' },
     { id: 'materials', label: 'Materiales' },
-    { id: 'admin', label: 'Admin' }
+    { id: 'history', label: 'Historial Planes' },
+    { id: 'access', label: 'Gestión de Acceso' },
+    { id: 'admin', label: 'Admin' },
+    { id: 'export', label: 'Exportar / Reportes' }
 ];
 
 type Permissions = {

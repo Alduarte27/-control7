@@ -1050,19 +1050,6 @@ export default function StopsClient({
                             <Tooltip>
                                 <TooltipTrigger asChild>
                                     <Button asChild variant="outline" size="icon">
-                                      <Link href="/log-history">
-                                        <History className="h-4 w-4" />
-                                      </Link>
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent><p>Historial</p></TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
-
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button asChild variant="outline" size="icon">
                                       <Link href="/oee">
                                         <Activity className="h-4 w-4" />
                                       </Link>
@@ -1103,9 +1090,12 @@ export default function StopsClient({
                         </TooltipProvider>
                     </div>
                      <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={() => setImportWizardOpen(true)}>
+                         <Button variant="outline" onClick={() => setImportWizardOpen(true)}>
                             <FileUp className="mr-2 h-4 w-4" /> Importar
                         </Button>
+                        <Link href="/log-history">
+                            <Button variant="outline"><History className="mr-2 h-4 w-4" />Historial</Button>
+                        </Link>
                         <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
                     </div>
                     {/* Mobile Dropdown */}
