@@ -572,16 +572,26 @@ function MaterialCard({
         por_pesar_tara: { label: 'Por Pesar Tara', color: 'bg-orange-500', icon: AlertTriangle },
     };
     
-    const [formattedDates, setFormattedDates] = React.useState<{ received: string | null; inUse: string | null; consumed: string | null; receivedShift: 'Día' | 'Noche' | null }>({
+    const [formattedInfo, setFormattedInfo] = React.useState<{ 
+        received: string | null; 
+        inUse: string | null; 
+        consumed: string | null; 
+        receivedShift: 'Día' | 'Noche' | null,
+        inUseShift: 'Día' | 'Noche' | null,
+        consumedShift: 'Día' | 'Noche' | null,
+    }>({
         received: null,
         inUse: null,
         consumed: null,
         receivedShift: null,
+        inUseShift: null,
+        consumedShift: null,
     });
     
 
     React.useEffect(() => {
-        const getShift = (timestamp: number) => {
+        const getShift = (timestamp: number | undefined): 'Día' | 'Noche' | null => {
+            if (!timestamp) return null;
             const hour = new Date(timestamp).getHours();
             return hour >= 7 && hour < 19 ? 'Día' : 'Noche';
         };
@@ -595,11 +605,13 @@ function MaterialCard({
             }
         };
         
-        setFormattedDates({
+        setFormattedInfo({
             received: formatDate(material.receivedAt),
             inUse: formatDate(material.inUseAt),
             consumed: formatDate(material.consumedAt),
-            receivedShift: material.receivedAt ? getShift(material.receivedAt) : null,
+            receivedShift: getShift(material.receivedAt),
+            inUseShift: getShift(material.inUseAt),
+            consumedShift: getShift(material.consumedAt),
         });
     }, [material]);
 
@@ -779,17 +791,33 @@ function MaterialCard({
                             <span>Asignado a: {material.assignedMachine.replace('_', ' ')}</span>
                         </p>
                     )}
-                    {formattedDates.received && (
+                    {formattedInfo.received && (
                         <div className="flex items-center gap-2">
-                             <span className="flex items-center gap-1">
-                                {formattedDates.receivedShift === 'Día' ? <Sun className="h-3 w-3 text-amber-500" /> : <Moon className="h-3 w-3 text-blue-500" />}
-                                {formattedDates.receivedShift}
-                            </span>
-                             <p>Recibido: {formattedDates.received}</p>
+                             {formattedInfo.receivedShift && <span className="flex items-center gap-1">
+                                {formattedInfo.receivedShift === 'Día' ? <Sun className="h-3 w-3 text-amber-500" /> : <Moon className="h-3 w-3 text-blue-500" />}
+                                {formattedInfo.receivedShift}
+                            </span>}
+                             <p>Recibido: {formattedInfo.received}</p>
                         </div>
                     )}
-                    {formattedDates.inUse && <p>En Uso desde: {formattedDates.inUse}</p>}
-                    {formattedDates.consumed && <p>Consumido: {formattedDates.consumed}</p>}
+                    {formattedInfo.inUse && (
+                        <div className="flex items-center gap-2">
+                             {formattedInfo.inUseShift && <span className="flex items-center gap-1">
+                                {formattedInfo.inUseShift === 'Día' ? <Sun className="h-3 w-3 text-amber-500" /> : <Moon className="h-3 w-3 text-blue-500" />}
+                                {formattedInfo.inUseShift}
+                            </span>}
+                             <p>En Uso: {formattedInfo.inUse}</p>
+                        </div>
+                    )}
+                    {formattedInfo.consumed && (
+                         <div className="flex items-center gap-2">
+                             {formattedInfo.consumedShift && <span className="flex items-center gap-1">
+                                {formattedInfo.consumedShift === 'Día' ? <Sun className="h-3 w-3 text-amber-500" /> : <Moon className="h-3 w-3 text-blue-500" />}
+                                {formattedInfo.consumedShift}
+                            </span>}
+                             <p>Consumido: {formattedInfo.consumed}</p>
+                        </div>
+                    )}
                 </div>
             </CardContent>
              {material.status !== 'consumido' && (
@@ -1623,13 +1651,13 @@ export default function MaterialsClient({
                         <DialogHeader>
                             <DialogTitle>Sincronizar Escáner Móvil</DialogTitle>
                             <DialogDescription>
-                                Abre la aplicación en tu teléfono, ve a "Control de Materiales" y presiona "Sincronizar Escáner". Luego escanea este código.
+                                1. Abre esta misma página en tu teléfono. 2. Presiona "Sincronizar Escáner". 3. Escanea este código QR con tu teléfono.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="flex items-center justify-center p-4">
                              <div className="bg-white p-4 rounded-lg">
                                 <QRCodeSVG
-                                    value={`https://control-7-61a3f.web.app/remote-scanner?sessionId=${syncSessionId}`}
+                                    value={`${window.location.origin}/remote-scanner?sessionId=${syncSessionId}`}
                                     size={256}
                                     includeMargin={true}
                                 />
