@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { PackagingMaterial, MaterialType, MaterialStatus, ProductDefinition, CategoryDefinition, Supplier } from '@/lib/types';
 import { materialTypeLabels } from '@/lib/types';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs, deleteDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs, deleteDoc, onSnapshot, setDoc, orderBy } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -755,19 +755,17 @@ function MaterialCard({
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
                  <div className="space-y-4 text-sm">
-                    {isSacosType ? (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                                <p className="text-muted-foreground">Cantidad</p>
-                                <p className="font-semibold text-lg">{material.quantity}</p>
-                            </div>
-                            <div className="space-y-1">
-                                <p className="text-muted-foreground">Peso/Und.</p>
-                                <p className="font-semibold text-lg">{material.unitWeight} g</p>
-                            </div>
-                            <div className="space-y-1 col-span-2">
-                                <p className="text-muted-foreground">Peso Total (Calculado)</p>
-                                <p className="font-semibold text-lg">{material.totalWeight} kg</p>
+                     {isSacosType ? (
+                        <div className="space-y-3">
+                             <div className="grid grid-cols-2 gap-2 text-center">
+                                 <div className="space-y-1">
+                                    <p className="text-muted-foreground">P. Bruto (Balanza)</p>
+                                    <p className="font-semibold text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-muted-foreground">P. Neto Real</p>
+                                    <p className={cn("font-semibold", (material.actualNetWeight ?? 0) > (material.totalWeight ?? 0) ? "text-green-600" : "text-red-600")}>{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
+                                </div>
                             </div>
                         </div>
                     ) : (
@@ -876,17 +874,15 @@ const supplierMaterialMapping: { [key: string]: MaterialType[] } = {
 
 
 export default function MaterialsClient({ 
-    initialMaterials,
     allProducts,
     allCategories,
     initialSuppliers,
 }: { 
-    initialMaterials: PackagingMaterial[],
     allProducts: ProductDefinition[],
     allCategories: CategoryDefinition[],
     initialSuppliers: Supplier[],
 }) {
-    const [materials, setMaterials] = React.useState<PackagingMaterial[]>(initialMaterials);
+    const [materials, setMaterials] = React.useState<PackagingMaterial[]>([]);
     const [suppliers, setSuppliers] = React.useState<Supplier[]>(initialSuppliers);
     const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos_familiar');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
@@ -930,6 +926,24 @@ export default function MaterialsClient({
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('recibido');
     const [searchQuery, setSearchQuery] = React.useState('');
     
+    React.useEffect(() => {
+        const q = query(collection(db, "packagingMaterials"), orderBy("receivedAt", "desc"));
+        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+            const materialsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial));
+            setMaterials(materialsData);
+        }, (error) => {
+            console.error("Error fetching materials in real-time:", error);
+            toast({
+                title: "Error de Sincronización",
+                description: "No se pudieron obtener los datos en tiempo real. Intenta recargar la página.",
+                variant: "destructive"
+            });
+        });
+
+        // Cleanup subscription on unmount
+        return () => unsubscribe();
+    }, [toast]);
+
     const handleScanSuccess = React.useCallback((code: string) => {
         if (isMobileDevice && syncSessionId) {
              try {
@@ -1167,9 +1181,8 @@ export default function MaterialsClient({
                 newMaterialData.providerDate = format(newMaterialProviderDate, 'yyyy-MM-dd');
             }
 
-            const docRef = await addDoc(collection(db, 'packagingMaterials'), newMaterialData);
-            setMaterials(prev => [{ id: docRef.id, ...newMaterialData } as PackagingMaterial, ...prev].sort((a, b) => (b.receivedAt || 0) - (a.receivedAt || 0)));
-
+            await addDoc(collection(db, 'packagingMaterials'), newMaterialData);
+            
             setNewMaterialCode('');
             setNewMaterialPresentation('');
             setNewMaterialNetWeight('');
@@ -1207,7 +1220,6 @@ export default function MaterialsClient({
                     updateData.actualWeight = material.totalWeight;
                 }
                 await updateDoc(doc(db, 'packagingMaterials', material.id), updateData as any);
-                setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
                 toast({ title: 'Material en Uso', description: `El material ${material.code} ahora está en uso.` });
             } else if (action === 'consume') {
                  const finalStatus: MaterialStatus = 'por_pesar_tara';
@@ -1216,7 +1228,6 @@ export default function MaterialsClient({
                     consumedAt: Date.now(),
                 };
                 await updateDoc(doc(db, 'packagingMaterials', material.id), updateData);
-                setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
                 toast({ title: 'Material Consumido', description: `El material ${material.code} se ha marcado como consumido.` });
             } else if (action === 'weigh_tare' && data.plasticWeight !== undefined) {
                  const tareWeight = data.plasticWeight + (data.coreWeight || 0);
@@ -1231,7 +1242,6 @@ export default function MaterialsClient({
                     tareWeightedAt: Date.now(),
                 };
                 await updateDoc(doc(db, 'packagingMaterials', material.id), updateData);
-                setMaterials(prev => prev.map(m => m.id === material.id ? { ...m, ...updateData } : m));
                 toast({ title: 'Tara Registrada', description: `Se registró la tara para el material ${material.code}.` });
             }
         } catch (error) {
@@ -1270,7 +1280,6 @@ export default function MaterialsClient({
             }
 
             await updateDoc(doc(db, 'packagingMaterials', id), finalUpdates);
-            setMaterials(prev => prev.map(m => m.id === id ? { ...m, ...finalUpdates } as PackagingMaterial : m));
             toast({ title: 'Material Actualizado', description: `Se guardaron los cambios para el material.` });
             setEditingMaterial(null);
             setAdvancedEditingMaterial(null);
@@ -1302,7 +1311,6 @@ export default function MaterialsClient({
             });
             await batch.commit();
 
-            setMaterials(prev => prev.filter(m => !selectedMaterials.has(m.id)));
             setSelectedMaterials(new Set());
             toast({ title: `${selectedMaterials.size} material(es) eliminado(s)`, description: 'Se han eliminado los materiales seleccionados.' });
         } catch (error) {
@@ -1793,4 +1801,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
