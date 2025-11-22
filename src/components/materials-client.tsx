@@ -796,7 +796,7 @@ function MaterialCard({
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-muted-foreground">P. Neto Real</p>
-                                    <p className="font-semibold text-green-600">{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
+                                    <p className={cn("font-semibold", (material.actualNetWeight ?? 0) > (material.netWeight ?? 0) ? "text-green-600" : "text-red-600")}>{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-muted-foreground">Tara (Real)</p>
@@ -1384,9 +1384,7 @@ export default function MaterialsClient({
         }
     };
     
-    const enUsoMaterials = materials.filter(material => {
-        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
-        if (material.status !== 'en_uso') return false;
+    const applySharedFilters = (material: PackagingMaterial) => {
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
         const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
         const machineMatch = machineFilter === 'all' ||
@@ -1396,49 +1394,12 @@ export default function MaterialsClient({
             material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
         return typeMatch && supplierMatch && machineMatch && searchMatch;
-    });
-    
-    const recibidoMaterials = materials.filter(material => {
-        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
-        if (material.status !== 'recibido') return false;
-        const typeMatch = typeFilter === 'all' || material.type === typeFilter;
-        const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
-        const machineMatch = machineFilter === 'all' ||
-            (machineFilter === 'unassigned' && !material.assignedMachine) ||
-            material.assignedMachine === machineFilter;
-        const searchMatch = !searchQuery ||
-            material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-        return typeMatch && supplierMatch && machineMatch && searchMatch;
-    });
+    };
 
-    const porPesarTaraMaterials = materials.filter(material => {
-        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
-        if (material.status !== 'por_pesar_tara') return false;
-        const typeMatch = typeFilter === 'all' || material.type === typeFilter;
-        const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
-        const machineMatch = machineFilter === 'all' ||
-            (machineFilter === 'unassigned' && !material.assignedMachine) ||
-            material.assignedMachine === machineFilter;
-        const searchMatch = !searchQuery ||
-            material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-        return typeMatch && supplierMatch && machineMatch && searchMatch;
-    });
-
-    const consumidoMaterials = materials.filter(material => {
-        if (statusFilter !== 'all' && material.status !== 'consumido') return false;
-        if (material.status !== 'consumido') return false;
-        const typeMatch = typeFilter === 'all' || material.type === typeFilter;
-        const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
-        const machineMatch = machineFilter === 'all' ||
-            (machineFilter === 'unassigned' && !material.assignedMachine) ||
-            material.assignedMachine === machineFilter;
-        const searchMatch = !searchQuery ||
-            material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-        return typeMatch && supplierMatch && machineMatch && searchMatch;
-    });
+    const enUsoMaterials = materials.filter(material => material.status === 'en_uso' && applySharedFilters(material));
+    const recibidoMaterials = materials.filter(material => material.status === 'recibido' && applySharedFilters(material));
+    const porPesarTaraMaterials = materials.filter(material => material.status === 'por_pesar_tara' && applySharedFilters(material));
+    const consumidoMaterials = materials.filter(material => material.status === 'consumido' && applySharedFilters(material));
 
 
     const renderGrid = (mats: PackagingMaterial[]) => {
@@ -1736,6 +1697,8 @@ export default function MaterialsClient({
                                         <SelectItem value="machine_3">Máquina 3</SelectItem>
                                         <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
                                         <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                                        <SelectItem value="granelera_1">Granelera #1</SelectItem>
+                                        <SelectItem value="granelera_2">Granelera #2</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
