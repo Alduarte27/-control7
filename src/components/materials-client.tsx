@@ -535,8 +535,8 @@ function MaterialActionDialog({
                                 <SelectItem value="machine_1">Máquina Envasadora 1</SelectItem>
                                 <SelectItem value="machine_2">Máquina Envasadora 2</SelectItem>
                                 <SelectItem value="machine_3">Máquina Envasadora 3</SelectItem>
-                                <SelectItem value="wrapper_1">Máquina Enfardadora 1</SelectItem>
-                                <SelectItem value="wrapper_2">Máquina Enfardadora 2</SelectItem>
+                                <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
+                                <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -796,7 +796,6 @@ function MaterialCard({
                         <div className="flex items-center gap-2">
                              {formattedInfo.receivedShift && <span className="flex items-center gap-1">
                                 {formattedInfo.receivedShift === 'Día' ? <Sun className="h-3 w-3 text-amber-500" /> : <Moon className="h-3 w-3 text-blue-500" />}
-                                {formattedInfo.receivedShift}
                             </span>}
                              <p>Recibido: {formattedInfo.received}</p>
                         </div>
@@ -805,7 +804,6 @@ function MaterialCard({
                         <div className="flex items-center gap-2">
                              {formattedInfo.inUseShift && <span className="flex items-center gap-1">
                                 {formattedInfo.inUseShift === 'Día' ? <Sun className="h-3 w-3 text-amber-500" /> : <Moon className="h-3 w-3 text-blue-500" />}
-                                {formattedInfo.inUseShift}
                             </span>}
                              <p>En Uso: {formattedInfo.inUse}</p>
                         </div>
@@ -814,7 +812,6 @@ function MaterialCard({
                          <div className="flex items-center gap-2">
                              {formattedInfo.consumedShift && <span className="flex items-center gap-1">
                                 {formattedInfo.consumedShift === 'Día' ? <Sun className="h-3 w-3 text-amber-500" /> : <Moon className="h-3 w-3 text-blue-500" />}
-                                {formattedInfo.consumedShift}
                             </span>}
                              <p>Consumido: {formattedInfo.consumed}</p>
                         </div>
@@ -906,6 +903,7 @@ export default function MaterialsClient({
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
+    const [machineFilter, setMachineFilter] = React.useState<string>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     
     React.useEffect(() => {
@@ -947,6 +945,7 @@ export default function MaterialsClient({
 
         return () => unsub();
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen]);
 
     const handleScanSuccess = (code: string, isRemoteScan = false) => {
@@ -1066,13 +1065,18 @@ export default function MaterialsClient({
             const typeMatch = typeFilter === 'all' || material.type === typeFilter;
             const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
 
+            const machineMatch = machineFilter === 'all' ||
+                (machineFilter === 'unassigned' && !material.assignedMachine) ||
+                (machineFilter === 'consumed' && material.status === 'consumido') ||
+                material.assignedMachine === machineFilter;
+
             const searchMatch = !searchQuery ||
                 material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
 
-            return statusMatch && typeMatch && supplierMatch && searchMatch;
+            return statusMatch && typeMatch && supplierMatch && machineMatch && searchMatch;
         });
-    }, [materials, statusFilter, typeFilter, supplierFilter, searchQuery, suppliers]);
+    }, [materials, statusFilter, typeFilter, supplierFilter, machineFilter, searchQuery, suppliers]);
 
 
     const handleConfigSave = async (type: 'supplier', data: any, action: 'add' | 'delete') => {
@@ -1567,7 +1571,7 @@ export default function MaterialsClient({
                                     <CardTitle>Inventario en Área de Empaque</CardTitle>
                                     <CardDescription>Visualiza los materiales recibidos, en uso y consumidos.</CardDescription>
                                 </div>
-                                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full md:w-auto">
+                                <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full md:w-auto flex-wrap">
                                     <Input
                                         placeholder="Buscar por código, lote..."
                                         value={searchQuery}
@@ -1598,6 +1602,19 @@ export default function MaterialsClient({
                                         <SelectContent>
                                             <SelectItem value="all">Todos los Proveedores</SelectItem>
                                             {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={machineFilter} onValueChange={setMachineFilter}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todas las Máquinas</SelectItem>
+                                            <SelectItem value="unassigned">Sin Asignar</SelectItem>
+                                            <SelectItem value="machine_1">Máquina 1</SelectItem>
+                                            <SelectItem value="machine_2">Máquina 2</SelectItem>
+                                            <SelectItem value="machine_3">Máquina 3</SelectItem>
+                                            <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
+                                            <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                                            <SelectItem value="consumed">Consumidos/Pesados</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -1731,3 +1748,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
