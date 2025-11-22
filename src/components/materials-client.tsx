@@ -104,10 +104,19 @@ function EditMaterialDialog({
     onClose: () => void;
     onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
 }) {
-    const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
+    const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>({});
 
     React.useEffect(() => {
-        setEditedMaterial(material);
+        setEditedMaterial({
+            code: material.code,
+            presentation: material.presentation,
+            lote: material.lote,
+            quantity: material.quantity,
+            totalWeight: material.totalWeight,
+            unitWeight: material.unitWeight,
+            netWeight: material.netWeight,
+            grossWeight: material.grossWeight,
+        });
     }, [material]);
 
     const handleChange = (field: keyof PackagingMaterial, value: any) => {
@@ -900,7 +909,7 @@ export default function MaterialsClient({
     const [isDeviceConnected, setIsDeviceConnected] = React.useState(false);
 
 
-    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
+    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('recibido');
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
@@ -937,7 +946,7 @@ export default function MaterialsClient({
                  setIsDeviceConnected(true);
             }
             if (data?.scannedCode && data.timestamp > (data.lastProcessedTimestamp || 0)) {
-                handleScanSuccess(data.scannedCode, true); // Pass a flag to indicate it's a remote scan
+                handleScanSuccess(data.scannedCode);
                 // Mark as processed to avoid re-triggering
                 updateDoc(doc.ref, { lastProcessedTimestamp: data.timestamp });
             }
@@ -948,17 +957,17 @@ export default function MaterialsClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen]);
 
-    const handleScanSuccess = (code: string, isRemoteScan = false) => {
-        if (code.startsWith('sync_') || code.startsWith('http')) {
+    const handleScanSuccess = (code: string) => {
+        if (code.startsWith('http')) {
             const url = new URL(code);
-            const sessionId = url.searchParams.get('sessionId');
+            const sessionIdFromQr = url.searchParams.get('sessionId');
             
-            if (isMobileDevice && sessionId) {
+            if (isMobileDevice && sessionIdFromQr) {
                 try {
-                    updateDoc(doc(db, 'sessions', sessionId), { status: 'connected', deviceName: navigator.userAgent });
-                    setSyncSessionId(sessionId); // Store session ID on mobile
+                    updateDoc(doc(db, 'sessions', sessionIdFromQr), { status: 'connected', deviceName: navigator.userAgent });
+                    setSyncSessionId(sessionIdFromQr);
                     toast({ title: "Dispositivo Conectado", description: "Ahora puedes escanear códigos de materiales." });
-                    setTimeout(() => setIsScannerOpen(true), 500);
+                    setTimeout(() => setIsScannerOpen(true), 500); // Reopen scanner
                 } catch (error) {
                     toast({ title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive" });
                 }
@@ -967,21 +976,20 @@ export default function MaterialsClient({
         }
 
         if (isMobileDevice && syncSessionId) {
-            try {
+             try {
                 updateDoc(doc(db, 'sessions', syncSessionId), { scannedCode: code, timestamp: Date.now() });
                 toast({ title: "Código Enviado", description: `Se envió el código al computador.` });
-                setTimeout(() => setIsScannerOpen(true), 500);
+                // Do not close scanner on mobile
             } catch (error) {
                 toast({ title: "Error de Envío", description: "No se pudo enviar el código. Vuelve a conectar.", variant: "destructive" });
-                setSyncSessionId(null); // Reset session
+                setSyncSessionId(null);
+                setIsScannerOpen(false);
             }
             return;
         }
-
-        if (!isRemoteScan) {
-            setIsScannerOpen(false);
-        }
-
+        
+        // This part runs on Desktop or if not in remote sync mode
+        setIsScannerOpen(false);
         setNewMaterialCode(code);
     
         if (code.includes('|')) {
@@ -1564,11 +1572,11 @@ export default function MaterialsClient({
 
 
                     <Card>
-                         <CardHeader className="space-y-4">
-                            <div className="flex flex-col md:flex-row justify-between md:items-start gap-4">
+                         <CardHeader className="space-y-2">
+                            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                                 <div>
                                     <CardTitle>Inventario en Área de Empaque</CardTitle>
-                                    <CardDescription>Visualiza los materiales recibidos, en uso y consumidos.</CardDescription>
+                                    <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
                                      <Button variant="outline" onClick={handleExportCSV}>
@@ -1601,7 +1609,7 @@ export default function MaterialsClient({
                                     )}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-2">
                                 <Input
                                     placeholder="Buscar por código, lote..."
                                     value={searchQuery}
@@ -1745,5 +1753,6 @@ export default function MaterialsClient({
         </>
     );
 }
+
 
 
