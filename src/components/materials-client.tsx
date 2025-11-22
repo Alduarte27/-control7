@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -853,6 +853,8 @@ export default function MaterialsClient({
     const [isSyncModalOpen, setIsSyncModalOpen] = React.useState(false);
     const [syncSessionId, setSyncSessionId] = React.useState<string | null>(null);
     const [isMobileDevice, setIsMobileDevice] = React.useState(false);
+    const [isDeviceConnected, setIsDeviceConnected] = React.useState(false);
+
 
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
@@ -863,13 +865,13 @@ export default function MaterialsClient({
         setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
     }, []);
     
-    const handleSyncClick = () => {
+    const handleSyncClick = async () => {
         if (isMobileDevice) {
             setIsScannerOpen(true);
         } else {
             const newSessionId = `sync_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
             const sessionDocRef = doc(db, 'sessions', newSessionId);
-            setDoc(sessionDocRef, { createdAt: Date.now(), status: 'pending' });
+            await setDoc(sessionDocRef, { createdAt: Date.now(), status: 'pending' });
             setSyncSessionId(newSessionId);
             setIsSyncModalOpen(true);
         }
@@ -885,6 +887,7 @@ export default function MaterialsClient({
             if (data?.status === 'connected' && isSyncModalOpen) {
                  toast({ title: "Dispositivo móvil conectado", description: `Conectado a: ${data.deviceName}` });
                  setIsSyncModalOpen(false); // Close the QR dialog on PC
+                 setIsDeviceConnected(true);
             }
             if (data?.scannedCode && data.timestamp > (data.lastProcessedTimestamp || 0)) {
                 setNewMaterialCode(data.scannedCode);
@@ -1325,8 +1328,20 @@ export default function MaterialsClient({
                         <h1 className="text-2xl font-bold text-foreground">Control de Materiales de Empaque</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={handleSyncClick}>
-                            <Smartphone className="mr-2 h-4 w-4" /> Sincronizar Escáner
+                        <Button 
+                            variant="outline" 
+                            onClick={handleSyncClick} 
+                            disabled={isDeviceConnected}
+                        >
+                            {isDeviceConnected ? (
+                                <>
+                                    <CheckCircle2 className="mr-2 h-4 w-4 text-green-500" /> Dispositivo Conectado
+                                </>
+                            ) : (
+                                <>
+                                    <Smartphone className="mr-2 h-4 w-4" /> Sincronizar Escáner
+                                </>
+                            )}
                         </Button>
                         <Link href="/">
                             <Button variant="outline">
