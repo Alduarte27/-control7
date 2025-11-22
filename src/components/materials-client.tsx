@@ -105,20 +105,31 @@ function EditMaterialDialog({
   onClose: () => void;
   onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
 }) {
-  const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
+    const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>({});
 
-  React.useEffect(() => {
-    setEditedMaterial(material);
-  }, [material]);
+    React.useEffect(() => {
+        // Initialize with material data, but keep it editable
+        setEditedMaterial({
+            code: material.code,
+            presentation: material.presentation,
+            lote: material.lote,
+            quantity: material.quantity,
+            totalWeight: material.totalWeight,
+            unitWeight: material.unitWeight,
+            netWeight: material.netWeight,
+            grossWeight: material.grossWeight,
+        });
+    }, [material]);
 
-  const handleChange = (field: keyof PackagingMaterial, value: any) => {
-    setEditedMaterial((prev) => ({ ...prev, [field]: value }));
-  };
 
-  const handleSaveChanges = () => {
-    onSave(material.id, editedMaterial);
-    onClose();
-  };
+    const handleChange = (field: keyof PackagingMaterial, value: any) => {
+        setEditedMaterial((prev) => ({ ...prev, [field]: value }));
+    };
+
+    const handleSaveChanges = () => {
+        onSave(material.id, editedMaterial);
+        onClose();
+    };
 
   const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
   const isPlasticsacks = material.supplier?.toUpperCase().startsWith('PLASTICSACKS');
@@ -757,19 +768,19 @@ function MaterialCard({
                             </div>
                         </div>
                     ) : (
-                        <div className="space-y-3">
+                         <div className="space-y-3">
                             <div className="grid grid-cols-3 gap-2 text-center">
                                  <div className="space-y-1">
-                                    <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
-                                    <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
+                                    <p className="text-muted-foreground">P. Bruto (Etiqueta)</p>
+                                    <p className="font-semibold">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
-                                    <p className="font-semibold text-lg">{material.netWeight} kg</p>
+                                    <p className="text-muted-foreground">P. Neto (Etiqueta)</p>
+                                    <p className="font-semibold">{material.netWeight} kg</p>
                                 </div>
                                  <div className="space-y-1">
                                     <p className="text-muted-foreground">Tara (Etiqueta)</p>
-                                    <p className="font-semibold text-lg">
+                                    <p className="font-semibold">
                                         {material.labelTare !== undefined && material.labelTare !== null ? `${material.labelTare.toFixed(2)} kg` : 'N/A'}
                                     </p>
                                 </div>
@@ -777,16 +788,16 @@ function MaterialCard({
                             <Separator />
                              <div className="grid grid-cols-3 gap-2 text-center">
                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground">Peso Bruto (Balanza)</p>
-                                    <p className="font-semibold text-lg text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
+                                    <p className="text-muted-foreground">P. Bruto (Balanza)</p>
+                                    <p className="font-semibold text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
                                 </div>
                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground">Peso Neto Real</p>
-                                    <p className="font-semibold text-lg text-green-600">{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
+                                    <p className="text-muted-foreground">P. Neto Real</p>
+                                    <p className="font-semibold text-green-600">{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-muted-foreground">Tara (Real)</p>
-                                    <p className="font-semibold text-lg">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
+                                    <p className="font-semibold">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
                                 </div>
                             </div>
                         </div>
@@ -897,7 +908,6 @@ export default function MaterialsClient({
     const [isScannerOpen, setIsScannerOpen] = React.useState(false);
     const [configOpen, setConfigOpen] = React.useState(false);
     const netWeightInputRef = React.useRef<HTMLInputElement>(null);
-    const unitWeightInputRef = React.useRef<HTMLInputElement>(null);
     const [isAddMaterialOpen, setIsAddMaterialOpen] = React.useState(true);
 
 
@@ -987,7 +997,7 @@ export default function MaterialsClient({
                  setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
             }
         }
-    }, [isMobileDevice, syncSessionId, newMaterialType, toast]);
+    }, [isMobileDevice, newMaterialType, syncSessionId, toast]);
     
     const handleSyncClick = React.useCallback(async () => {
         if (isMobileDevice) {
@@ -1003,8 +1013,9 @@ export default function MaterialsClient({
         }
     }, [isMobileDevice]);
     
-    // Listener for desktop
     React.useEffect(() => {
+        setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+        
         let unsub: (() => void) | undefined;
         if (syncSessionId && !isMobileDevice) {
             unsub = onSnapshot(doc(db, 'sessions', syncSessionId), (doc) => {
@@ -1016,7 +1027,6 @@ export default function MaterialsClient({
                 }
                 if (data?.scannedCode && data.timestamp > (data.lastProcessedTimestamp || 0)) {
                     handleScanSuccess(data.scannedCode);
-                    // Mark as processed to avoid re-triggering
                     updateDoc(doc.ref, { lastProcessedTimestamp: data.timestamp });
                 }
             });
@@ -1024,11 +1034,7 @@ export default function MaterialsClient({
         return () => {
             if (unsub) unsub();
         };
-    }, [syncSessionId, isMobileDevice, isSyncModalOpen, toast, handleScanSuccess]);
-    
-    React.useEffect(() => {
-        setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-    }, []);
+    }, [syncSessionId, isMobileDevice, isSyncModalOpen, handleScanSuccess, toast]);
 
     const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
@@ -1067,25 +1073,6 @@ export default function MaterialsClient({
             setNewMaterialType(availableMaterialTypes[0] || 'sacos_familiar');
         }
     }, [availableMaterialTypes, newMaterialType]);
-
-    const filteredMaterials = React.useMemo(() => {
-        return materials.filter(material => {
-            const statusMatch = statusFilter === 'all' || material.status === statusFilter;
-            const typeMatch = typeFilter === 'all' || material.type === typeFilter;
-            const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
-
-            const machineMatch = machineFilter === 'all' ||
-                (machineFilter === 'unassigned' && !material.assignedMachine) ||
-                material.assignedMachine === machineFilter;
-
-            const searchMatch = !searchQuery ||
-                material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-
-            return statusMatch && typeMatch && supplierMatch && machineMatch && searchMatch;
-        });
-    }, [materials, statusFilter, typeFilter, supplierFilter, machineFilter, searchQuery, suppliers]);
-
 
     const handleConfigSave = async (type: 'supplier', data: any, action: 'add' | 'delete') => {
         if (type !== 'supplier') return;
@@ -1394,10 +1381,25 @@ export default function MaterialsClient({
         }
     };
     
-    const enUsoMaterials = filteredMaterials.filter(m => m.status === 'en_uso');
-    const recibidoMaterials = filteredMaterials.filter(m => m.status === 'recibido');
-    const porPesarTaraMaterials = filteredMaterials.filter(m => m.status === 'por_pesar_tara');
-    const consumidoMaterials = filteredMaterials.filter(m => m.status === 'consumido');
+    const baseFilteredMaterials = React.useMemo(() => {
+        return materials.filter(material => {
+            const typeMatch = typeFilter === 'all' || material.type === typeFilter;
+            const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
+            const machineMatch = machineFilter === 'all' ||
+                (machineFilter === 'unassigned' && !material.assignedMachine) ||
+                material.assignedMachine === machineFilter;
+            const searchMatch = !searchQuery ||
+                material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
+            return typeMatch && supplierMatch && machineMatch && searchMatch;
+        });
+    }, [materials, typeFilter, supplierFilter, machineFilter, searchQuery, suppliers]);
+
+
+    const enUsoMaterials = baseFilteredMaterials.filter(m => m.status === 'en_uso');
+    const recibidoMaterials = baseFilteredMaterials.filter(m => m.status === 'recibido');
+    const porPesarTaraMaterials = baseFilteredMaterials.filter(m => m.status === 'por_pesar_tara');
+    const consumidoMaterials = baseFilteredMaterials.filter(m => m.status === 'consumido');
 
 
     const renderGrid = (mats: PackagingMaterial[]) => {
@@ -1583,7 +1585,7 @@ export default function MaterialsClient({
                                                         </div>
                                                         <div className="space-y-1.5">
                                                             <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
-                                                            <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
+                                                            <Input id="material-unit-weight-rs" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
                                                         </div>
                                                         <div className="space-y-1.5">
                                                             <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
