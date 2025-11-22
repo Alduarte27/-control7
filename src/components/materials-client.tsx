@@ -755,54 +755,37 @@ function MaterialCard({
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
                  <div className="space-y-4 text-sm">
-                     {isSacosType ? (
-                        <div className="space-y-3">
-                             <div className="grid grid-cols-2 gap-2 text-center">
-                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground">P. Bruto (Balanza)</p>
-                                    <p className="font-semibold text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-muted-foreground">P. Neto Real</p>
-                                    <p className={cn("font-semibold", (material.actualNetWeight ?? 0) > (material.totalWeight ?? 0) ? "text-green-600" : "text-red-600")}>{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
-                                </div>
-                            </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                         <div className="space-y-1">
+                            <p className="text-muted-foreground">P. Bruto (Etiqueta)</p>
+                            <p className="font-semibold">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
                         </div>
-                    ) : (
-                         <div className="space-y-3">
-                            <div className="grid grid-cols-3 gap-2 text-center">
-                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground">P. Bruto (Etiqueta)</p>
-                                    <p className="font-semibold">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-muted-foreground">P. Neto (Etiqueta)</p>
-                                    <p className="font-semibold">{material.netWeight} kg</p>
-                                </div>
-                                 <div className="space-y-1">
-                                    <p className="text-muted-foreground">Tara (Etiqueta)</p>
-                                    <p className="font-semibold">
-                                        {material.labelTare !== undefined && material.labelTare !== null ? `${material.labelTare.toFixed(2)} kg` : 'N/A'}
-                                    </p>
-                                </div>
-                            </div>
-                            <Separator />
-                             <div className="grid grid-cols-3 gap-2 text-center">
-                                <div className="space-y-1">
-                                    <p className="text-muted-foreground">P. Bruto (Balanza)</p>
-                                    <p className="font-semibold text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-muted-foreground">P. Neto Real</p>
-                                    <p className={cn("font-semibold", (material.actualNetWeight ?? 0) > (material.netWeight ?? 0) ? "text-green-600" : "text-red-600")}>{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-muted-foreground">Tara (Real)</p>
-                                    <p className="font-semibold text-destructive">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
-                                </div>
-                            </div>
+                        <div className="space-y-1">
+                            <p className="text-muted-foreground">P. Neto (Etiqueta)</p>
+                            <p className="font-semibold">{material.netWeight} kg</p>
                         </div>
-                    )}
+                         <div className="space-y-1">
+                            <p className="text-muted-foreground">Tara (Etiqueta)</p>
+                            <p className="font-semibold">
+                                {material.labelTare !== undefined && material.labelTare !== null ? `${material.labelTare.toFixed(2)} kg` : 'N/A'}
+                            </p>
+                        </div>
+                    </div>
+                    <Separator />
+                     <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="space-y-1">
+                            <p className="text-muted-foreground">P. Bruto (Balanza)</p>
+                            <p className="font-semibold text-primary">{material.actualWeight ? `${material.actualWeight.toFixed(2)} kg` : 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-muted-foreground">P. Neto Real</p>
+                            <p className={cn("font-semibold", (material.actualNetWeight ?? 0) > (material.netWeight ?? 0) ? "text-green-600" : "text-red-600")}>{material.actualNetWeight ? `${material.actualNetWeight.toFixed(2)} kg` : 'N/A'}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-muted-foreground">Tara (Real)</p>
+                            <p className="font-semibold text-destructive">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
+                        </div>
+                    </div>
                     
                     <div className="grid grid-cols-2 gap-4">
                         {getPerformance()}
@@ -923,7 +906,7 @@ export default function MaterialsClient({
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
-    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('recibido');
+    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'recibido'>('recibido');
     const [searchQuery, setSearchQuery] = React.useState('');
     
     React.useEffect(() => {
@@ -1481,7 +1464,7 @@ export default function MaterialsClient({
                     </div>
                 </header>
 
-                <main className="p-4 md:p-8 space-y-6">
+                <main className="p-4 md:p-8 space-y-6 pb-24">
                     <Collapsible open={isAddMaterialOpen} onOpenChange={setIsAddMaterialOpen}>
                         <Card>
                              <CardHeader className="flex flex-row items-center justify-between">
@@ -1643,35 +1626,6 @@ export default function MaterialsClient({
                                     <CardTitle>Inventario en Área de Empaque</CardTitle>
                                     <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    {selectedMaterials.size > 0 && (
-                                        <>
-                                            <Button variant="outline" size="sm" onClick={handleOpenAdvancedEdit} disabled={selectedMaterials.size !== 1}>
-                                                <Edit className="mr-2 h-4 w-4" /> Edición Avanzada
-                                            </Button>
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="destructive" size="sm">
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Eliminar ({selectedMaterials.size})
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                                        <AlertDialogDescriptionComponent>
-                                                            Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
-                                                        </AlertDialogDescriptionComponent>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
-                                        </>
-                                    )}
-                                </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
                                 <Input
@@ -1728,6 +1682,43 @@ export default function MaterialsClient({
                     </Card>
                 </main>
             </div>
+            {selectedMaterials.size > 0 && (
+                 <div className="fixed bottom-0 left-0 right-0 z-20 p-4 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg">
+                    <div className="max-w-7xl mx-auto flex items-center justify-between">
+                         <div className="flex items-center gap-4">
+                            <Button variant="ghost" size="icon" onClick={() => setSelectedMaterials(new Set())}>
+                                <X className="h-5 w-5" />
+                            </Button>
+                            <span className="font-semibold">{selectedMaterials.size} seleccionado(s)</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                             <Button variant="outline" size="sm" onClick={handleOpenAdvancedEdit} disabled={selectedMaterials.size !== 1}>
+                                <Edit className="mr-2 h-4 w-4" /> Edición Avanzada
+                            </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="sm">
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Eliminar ({selectedMaterials.size})
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                        <AlertDialogDescriptionComponent>
+                                            Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
+                                        </AlertDialogDescriptionComponent>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                    </div>
+                </div>
+            )}
             {isSyncModalOpen && !isMobileDevice && syncSessionId && (
                 <Dialog open={isSyncModalOpen} onOpenChange={setIsSyncModalOpen}>
                     <DialogContent>
@@ -1801,3 +1792,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
