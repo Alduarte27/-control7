@@ -105,7 +105,7 @@ function EditMaterialDialog({
   onClose: () => void;
   onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
 }) {
-  const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
+  const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>({});
 
   React.useEffect(() => {
     setEditedMaterial(material);
@@ -901,7 +901,6 @@ export default function MaterialsClient({
     const [isMobileDevice, setIsMobileDevice] = React.useState(false);
     const [isDeviceConnected, setIsDeviceConnected] = React.useState(false);
 
-
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
@@ -911,7 +910,7 @@ export default function MaterialsClient({
         setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
     }, []);
     
-    const handleSyncClick = async () => {
+    const handleSyncClick = React.useCallback(async () => {
         if (isMobileDevice) {
             // On mobile, just open the scanner. It will handle the connection flow.
             setIsScannerOpen(true);
@@ -923,7 +922,7 @@ export default function MaterialsClient({
             setSyncSessionId(newSessionId);
             setIsSyncModalOpen(true);
         }
-    };
+    }, [isMobileDevice]);
     
      const handleScanSuccess = React.useCallback((code: string) => {
         if (isMobileDevice && syncSessionId) {
@@ -998,35 +997,27 @@ export default function MaterialsClient({
     }, [isMobileDevice, syncSessionId, newMaterialType, toast]);
 
     // Listener for desktop
-    const unsubRef = React.useRef<() => void>();
     React.useEffect(() => {
-        if (!syncSessionId || isMobileDevice) {
-            if (unsubRef.current) {
-                unsubRef.current();
-                unsubRef.current = undefined;
-            }
-            return;
+        let unsub: (() => void) | undefined;
+        if (syncSessionId && !isMobileDevice) {
+            unsub = onSnapshot(doc(db, 'sessions', syncSessionId), (doc) => {
+                const data = doc.data();
+                if (data?.status === 'connected' && isSyncModalOpen) {
+                     toast({ title: "Dispositivo móvil conectado", description: `Conectado a: ${data.deviceName}` });
+                     setIsSyncModalOpen(false); // Close the QR dialog on PC
+                     setIsDeviceConnected(true);
+                }
+                if (data?.scannedCode && data.timestamp > (data.lastProcessedTimestamp || 0)) {
+                    handleScanSuccess(data.scannedCode);
+                    // Mark as processed to avoid re-triggering
+                    updateDoc(doc.ref, { lastProcessedTimestamp: data.timestamp });
+                }
+            });
         }
-
-        const unsub = onSnapshot(doc(db, 'sessions', syncSessionId), (doc) => {
-            const data = doc.data();
-            if (data?.status === 'connected' && isSyncModalOpen) {
-                 toast({ title: "Dispositivo móvil conectado", description: `Conectado a: ${data.deviceName}` });
-                 setIsSyncModalOpen(false); // Close the QR dialog on PC
-                 setIsDeviceConnected(true);
-            }
-            if (data?.scannedCode && data.timestamp > (data.lastProcessedTimestamp || 0)) {
-                handleScanSuccess(data.scannedCode);
-                // Mark as processed to avoid re-triggering
-                updateDoc(doc.ref, { lastProcessedTimestamp: data.timestamp });
-            }
-        });
-        
-        unsubRef.current = unsub;
-
-        return () => unsub();
-
-    }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen, handleScanSuccess]);
+        return () => {
+            if (unsub) unsub();
+        };
+    }, [syncSessionId, isMobileDevice, isSyncModalOpen, toast, handleScanSuccess]);
 
     const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
@@ -1417,7 +1408,7 @@ export default function MaterialsClient({
                         <h1 className="text-2xl font-bold text-foreground">Control de Materiales de Empaque</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button 
+                         <Button 
                             variant="outline" 
                             onClick={handleSyncClick} 
                             disabled={isDeviceConnected}
@@ -1431,6 +1422,9 @@ export default function MaterialsClient({
                                     <Smartphone className="mr-2 h-4 w-4" /> Sincronizar Escáner
                                 </>
                             )}
+                        </Button>
+                        <Button variant="outline" onClick={handleExportCSV}>
+                            <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
                         </Button>
                         <Link href="/">
                             <Button variant="outline">
@@ -1601,24 +1595,21 @@ export default function MaterialsClient({
 
 
                     <Card>
-                         <CardHeader>
-                            <div className='space-y-2'>
-                                <div className="flex justify-between items-start">
-                                    <div className="space-y-1">
-                                        <CardTitle>Inventario en Área de Empaque</CardTitle>
-                                        <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button variant="outline" onClick={handleExportCSV}>
-                                            <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
-                                        </Button>
-                                        <Button variant="outline" size="icon" onClick={handleOpenAdvancedEdit} disabled={selectedMaterials.size !== 1}>
-                                            <Edit className="h-4 w-4" />
-                                        </Button>
-                                        {selectedMaterials.size > 0 && (
+                        <CardHeader>
+                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                <div className="space-y-1">
+                                    <CardTitle>Inventario en Área de Empaque</CardTitle>
+                                    <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {selectedMaterials.size > 0 && (
+                                        <>
+                                            <Button variant="outline" size="sm" onClick={handleOpenAdvancedEdit} disabled={selectedMaterials.size !== 1}>
+                                                <Edit className="mr-2 h-4 w-4" /> Edición Avanzada
+                                            </Button>
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
-                                                    <Button variant="destructive">
+                                                    <Button variant="destructive" size="sm">
                                                         <Trash2 className="mr-2 h-4 w-4" />
                                                         Eliminar ({selectedMaterials.size})
                                                     </Button>
@@ -1636,44 +1627,45 @@ export default function MaterialsClient({
                                                     </AlertDialogFooter>
                                                 </AlertDialogContent>
                                             </AlertDialog>
-                                        )}
-                                    </div>
+                                        </>
+                                    )}
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 pt-2">
-                                    <Input
-                                        placeholder="Buscar por código, lote..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                    />
-                                    <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Todos los Tipos</SelectItem>
-                                            {Object.entries(materialTypeLabels).map(([key, label]) => (
-                                                <SelectItem key={key} value={key}>{label}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Todos los Proveedores</SelectItem>
-                                            {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select value={machineFilter} onValueChange={setMachineFilter}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Todas las Máquinas</SelectItem>
-                                            <SelectItem value="unassigned">Sin Asignar</SelectItem>
-                                            <SelectItem value="machine_1">Máquina 1</SelectItem>
-                                            <SelectItem value="machine_2">Máquina 2</SelectItem>
-                                            <SelectItem value="machine_3">Máquina 3</SelectItem>
-                                            <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
-                                            <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-4">
+                                <Input
+                                    placeholder="Buscar por código, lote..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="lg:col-span-2"
+                                />
+                                <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos los Tipos</SelectItem>
+                                        {Object.entries(materialTypeLabels).map(([key, label]) => (
+                                            <SelectItem key={key} value={key}>{label}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos los Proveedores</SelectItem>
+                                        {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                <Select value={machineFilter} onValueChange={setMachineFilter}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todas las Máquinas</SelectItem>
+                                        <SelectItem value="unassigned">Sin Asignar</SelectItem>
+                                        <SelectItem value="machine_1">Máquina 1</SelectItem>
+                                        <SelectItem value="machine_2">Máquina 2</SelectItem>
+                                        <SelectItem value="machine_3">Máquina 3</SelectItem>
+                                        <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
+                                        <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -1705,7 +1697,7 @@ export default function MaterialsClient({
                         <div className="flex items-center justify-center p-4">
                              <div className="bg-white p-4 rounded-lg">
                                 <QRCodeSVG
-                                    value={`${window.location.origin}/remote-scanner?sessionId=${syncSessionId}`}
+                                    value={`${window.location.origin}/materials?sessionId=${syncSessionId}`}
                                     size={256}
                                     includeMargin={true}
                                 />
@@ -1766,10 +1758,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
-
-
-
-
-
-
