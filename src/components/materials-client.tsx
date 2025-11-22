@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2 } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -572,14 +572,20 @@ function MaterialCard({
         por_pesar_tara: { label: 'Por Pesar Tara', color: 'bg-orange-500', icon: AlertTriangle },
     };
     
-    const [formattedDates, setFormattedDates] = React.useState<{ received: string | null, inUse: string | null, consumed: string | null }>({
-      received: null,
-      inUse: null,
-      consumed: null,
+    const [formattedDates, setFormattedDates] = React.useState<{ received: string | null; inUse: string | null; consumed: string | null; receivedShift: 'Día' | 'Noche' | null }>({
+        received: null,
+        inUse: null,
+        consumed: null,
+        receivedShift: null,
     });
     
 
     React.useEffect(() => {
+        const getShift = (timestamp: number) => {
+            const hour = new Date(timestamp).getHours();
+            return hour >= 7 && hour < 19 ? 'Día' : 'Noche';
+        };
+
         const formatDate = (timestamp: number | undefined) => {
             if (!timestamp) return null;
             try {
@@ -588,10 +594,12 @@ function MaterialCard({
                 return 'Fecha inválida';
             }
         };
+        
         setFormattedDates({
             received: formatDate(material.receivedAt),
             inUse: formatDate(material.inUseAt),
             consumed: formatDate(material.consumedAt),
+            receivedShift: material.receivedAt ? getShift(material.receivedAt) : null,
         });
     }, [material]);
 
@@ -771,7 +779,15 @@ function MaterialCard({
                             <span>Asignado a: {material.assignedMachine.replace('_', ' ')}</span>
                         </p>
                     )}
-                    {formattedDates.received && <p>Recibido: {formattedDates.received}</p>}
+                    {formattedDates.received && (
+                        <div className="flex items-center gap-2">
+                             <span className="flex items-center gap-1">
+                                {formattedDates.receivedShift === 'Día' ? <Sun className="h-3 w-3 text-amber-500" /> : <Moon className="h-3 w-3 text-blue-500" />}
+                                {formattedDates.receivedShift}
+                            </span>
+                             <p>Recibido: {formattedDates.received}</p>
+                        </div>
+                    )}
                     {formattedDates.inUse && <p>En Uso desde: {formattedDates.inUse}</p>}
                     {formattedDates.consumed && <p>Consumido: {formattedDates.consumed}</p>}
                 </div>
@@ -867,8 +883,10 @@ export default function MaterialsClient({
     
     const handleSyncClick = async () => {
         if (isMobileDevice) {
+            // On mobile, just open the scanner. It will handle the connection flow.
             setIsScannerOpen(true);
         } else {
+            // On desktop, generate the session and show the QR code.
             const newSessionId = `sync_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
             const sessionDocRef = doc(db, 'sessions', newSessionId);
             await setDoc(sessionDocRef, { createdAt: Date.now(), status: 'pending' });
@@ -890,8 +908,7 @@ export default function MaterialsClient({
                  setIsDeviceConnected(true);
             }
             if (data?.scannedCode && data.timestamp > (data.lastProcessedTimestamp || 0)) {
-                setNewMaterialCode(data.scannedCode);
-                toast({ title: "Código Recibido", description: `Se recibió un nuevo código desde el dispositivo móvil.` });
+                handleScanSuccess(data.scannedCode, true); // Pass a flag to indicate it's a remote scan
                 // Mark as processed to avoid re-triggering
                 updateDoc(doc.ref, { lastProcessedTimestamp: data.timestamp });
             }
@@ -901,10 +918,7 @@ export default function MaterialsClient({
 
     }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen]);
 
-    const handleScanSuccess = async (code: string) => {
-        // Always close scanner on success. It will be re-opened if needed.
-        setIsScannerOpen(false);
-        
+    const handleScanSuccess = async (code: string, isRemoteScan = false) => {
         // Mobile device logic
         if (isMobileDevice) {
             // Case 1: Mobile is connecting to a PC session
@@ -918,7 +932,7 @@ export default function MaterialsClient({
                 } catch (error) {
                     toast({title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive"});
                 }
-                return;
+                return; // Stop processing here for sync codes
             } 
             // Case 2: Mobile is already in a session and scans a material code
             else if (syncSessionId) {
@@ -931,11 +945,15 @@ export default function MaterialsClient({
                     toast({title: "Error de Envío", description: "No se pudo enviar el código. Vuelve a conectar.", variant: "destructive"});
                     setSyncSessionId(null); // Reset session
                 }
-                return;
+                return; // Stop processing, the PC will handle the code
             }
         }
     
-        // Standard scanning behavior on Desktop (or mobile without sync)
+        // This part now only runs on the PC (or on mobile in standalone mode)
+        if (!isRemoteScan) {
+            setIsScannerOpen(false);
+        }
+
         setNewMaterialCode(code);
     
         if (code.includes('|')) {
@@ -1605,15 +1623,13 @@ export default function MaterialsClient({
                         <DialogHeader>
                             <DialogTitle>Sincronizar Escáner Móvil</DialogTitle>
                             <DialogDescription>
-                                1. Abre esta misma página en tu teléfono.
-                                2. Presiona "Sincronizar Escáner".
-                                3. Escanea este código QR con tu teléfono.
+                                Abre la aplicación en tu teléfono, ve a "Control de Materiales" y presiona "Sincronizar Escáner". Luego escanea este código.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="flex items-center justify-center p-4">
                              <div className="bg-white p-4 rounded-lg">
                                 <QRCodeSVG
-                                    value={syncSessionId}
+                                    value={`https://control-7-61a3f.web.app/remote-scanner?sessionId=${syncSessionId}`}
                                     size={256}
                                     includeMargin={true}
                                 />
