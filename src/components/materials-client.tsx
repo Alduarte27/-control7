@@ -104,27 +104,27 @@ function EditMaterialDialog({
     onClose: () => void;
     onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
 }) {
-    const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>({});
-
-    React.useEffect(() => {
-        setEditedMaterial({
-            code: material.code,
-            presentation: material.presentation,
-            lote: material.lote,
-            quantity: material.quantity,
-            totalWeight: material.totalWeight,
-            unitWeight: material.unitWeight,
-            netWeight: material.netWeight,
-            grossWeight: material.grossWeight,
-        });
-    }, [material]);
-
-    const handleChange = (field: keyof PackagingMaterial, value: any) => {
-        setEditedMaterial(prev => ({...prev, [field]: value}));
-    };
+    const [editedCode, setEditedCode] = React.useState(material.code || '');
+    const [editedPresentation, setEditedPresentation] = React.useState(material.presentation || '');
+    const [editedLote, setEditedLote] = React.useState(material.lote || '');
+    const [editedQuantity, setEditedQuantity] = React.useState(material.quantity || '');
+    const [editedTotalWeight, setEditedTotalWeight] = React.useState(material.totalWeight || '');
+    const [editedUnitWeight, setEditedUnitWeight] = React.useState(material.unitWeight || '');
+    const [editedNetWeight, setEditedNetWeight] = React.useState(material.netWeight || '');
+    const [editedGrossWeight, setEditedGrossWeight] = React.useState(material.grossWeight || '');
 
     const handleSaveChanges = () => {
-        onSave(material.id, editedMaterial);
+        const updates: Partial<PackagingMaterial> = {
+            code: editedCode,
+            presentation: editedPresentation,
+            lote: editedLote,
+            quantity: Number(editedQuantity) || undefined,
+            totalWeight: Number(editedTotalWeight) || undefined,
+            unitWeight: Number(editedUnitWeight) || undefined,
+            netWeight: Number(editedNetWeight) || undefined,
+            grossWeight: Number(editedGrossWeight) || undefined,
+        };
+        onSave(material.id, updates);
         onClose();
     };
 
@@ -143,16 +143,16 @@ function EditMaterialDialog({
                 <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
                      <div className="space-y-1.5">
                         <Label htmlFor="edit-code">Código</Label>
-                        <Input id="edit-code" value={editedMaterial.code || ''} onChange={e => handleChange('code', e.target.value)} />
+                        <Input id="edit-code" value={editedCode} onChange={e => setEditedCode(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="edit-presentation">Presentación</Label>
-                        <Input id="edit-presentation" value={editedMaterial.presentation || ''} onChange={e => handleChange('presentation', e.target.value)} />
+                        <Input id="edit-presentation" value={editedPresentation} onChange={e => setEditedPresentation(e.target.value)} />
                     </div>
                     {isPlasticsacks && (
                         <div className="space-y-1.5">
                             <Label htmlFor="edit-lote">Lote</Label>
-                            <Input id="edit-lote" value={editedMaterial.lote || ''} onChange={e => handleChange('lote', e.target.value)} />
+                            <Input id="edit-lote" value={editedLote} onChange={e => setEditedLote(e.target.value)} />
                         </div>
                     )}
                     
@@ -161,26 +161,26 @@ function EditMaterialDialog({
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="edit-quantity">Cantidad</Label>
-                                    <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))}/>
+                                    <Input id="edit-quantity" type="number" value={editedQuantity} onChange={e => setEditedQuantity(e.target.value)}/>
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="edit-total-weight">Peso Neto (kg)</Label>
-                                    <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))}/>
+                                    <Input id="edit-total-weight" type="number" value={editedTotalWeight} onChange={e => setEditedTotalWeight(e.target.value)}/>
                                 </div>
                             </div>
                         ) : (
                              <div className="grid grid-cols-2 gap-2">
                                 <div className="space-y-1.5">
                                     <Label htmlFor="edit-quantity">Cantidad</Label>
-                                    <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))}/>
+                                    <Input id="edit-quantity" type="number" value={editedQuantity} onChange={e => setEditedQuantity(e.target.value)}/>
                                 </div>
                                 <div className="space-y-1.5">
                                     <Label htmlFor="edit-unit-weight">Peso/Und (g)</Label>
-                                    <Input id="edit-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={e => handleChange('unitWeight', Number(e.target.value))}/>
+                                    <Input id="edit-unit-weight" type="number" value={editedUnitWeight} onChange={e => setEditedUnitWeight(e.target.value)}/>
                                 </div>
                                 <div className="col-span-2 space-y-1.5">
                                     <Label htmlFor="edit-total-weight">Peso Total (kg)</Label>
-                                    <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))}/>
+                                    <Input id="edit-total-weight" type="number" value={editedTotalWeight} onChange={e => setEditedTotalWeight(e.target.value)}/>
                                 </div>
                             </div>
                         )
@@ -188,11 +188,11 @@ function EditMaterialDialog({
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
                                 <Label htmlFor="edit-net-weight">Peso Neto (kg)</Label>
-                                <Input id="edit-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={e => handleChange('netWeight', Number(e.target.value))} />
+                                <Input id="edit-net-weight" type="number" value={editedNetWeight} onChange={e => setEditedNetWeight(e.target.value)} />
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="edit-gross-weight">Peso Bruto (kg)</Label>
-                                <Input id="edit-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={e => handleChange('grossWeight', Number(e.target.value))} />
+                                <Input id="edit-gross-weight" type="number" value={editedGrossWeight} onChange={e => setEditedGrossWeight(e.target.value)} />
                             </div>
                         </div>
                     )}
@@ -1573,7 +1573,7 @@ export default function MaterialsClient({
 
                     <Card>
                          <CardHeader className="space-y-2">
-                            <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                             <div className="flex justify-between items-center">
                                 <div>
                                     <CardTitle>Inventario en Área de Empaque</CardTitle>
                                     <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
@@ -1614,6 +1614,7 @@ export default function MaterialsClient({
                                     placeholder="Buscar por código, lote..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="lg:col-span-1"
                                 />
                                 <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
                                     <SelectTrigger><SelectValue/></SelectTrigger>
@@ -1753,6 +1754,7 @@ export default function MaterialsClient({
         </>
     );
 }
+
 
 
 
