@@ -4,7 +4,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database, PlayCircle, Edit, Upload, Activity, AlertTriangle, Clock, Shuffle } from 'lucide-react';
+import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database, PlayCircle, Edit, Upload, Activity, AlertTriangle, Clock, Shuffle, PackageCheck, Boxes, QrCode, Smartphone } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -56,7 +56,7 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
           <div className="space-y-6 py-4">
             
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Funcionalidades Principales</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Planificación y Control</h3>
                 <div className="space-y-4">
                     <FeatureItem 
                         icon={Target}
@@ -80,102 +80,76 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                     />
                 </div>
             </div>
-            
-             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Análisis de Paradas y OEE</h3>
-                <div className="space-y-4">
-                     <FeatureItem 
-                        icon={Activity}
-                        title="Dashboard de OEE"
-                        description="Accede al análisis OEE desde la bitácora para ver gráficos del tiempo total de parada por máquina, un desglose por motivo, y la distribución del tiempo productivo vs. paradas."
-                    />
-                     <FeatureItem 
-                        icon={Zap}
-                        title="KPIs de Fiabilidad (MTBF/MTTR)"
-                        description="El dashboard de OEE ahora incluye el Tiempo Promedio Entre Fallas (MTBF) y el Tiempo Promedio de Reparación (MTTR) por máquina, indicadores clave para medir la fiabilidad y eficiencia del mantenimiento."
-                    />
-                     <FeatureItem 
-                        icon={BarChart2}
-                        title="OEE Detallado por Máquina"
-                        description="Analiza la Disponibilidad, Rendimiento, Calidad y el OEE general de forma individual para cada máquina, permitiéndote identificar cuellos de botella con precisión."
-                    />
-                     <FeatureItem 
-                        icon={Clock}
-                        title="Análisis de Paradas por Hora"
-                        description="Un nuevo gráfico te muestra los minutos de parada acumulados en cada hora del turno, ayudándote a detectar patrones y problemas recurrentes en momentos específicos del día."
-                    />
-                </div>
-            </div>
 
              <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Centro de Operaciones y Simulación</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Control de Materiales de Empaque</h3>
                 <div className="space-y-4">
                      <FeatureItem 
-                        icon={Edit}
-                        title="Configura tu Planta Virtual"
-                        description="En 'Operaciones', haz clic en el icono de lápiz en cada componente (Tachos, Silos, Envasadoras, Enfardadoras) para ajustar sus parámetros como velocidad, capacidad, mermas y más."
+                        icon={Boxes}
+                        title="Gestión de Inventario en Tiempo Real"
+                        description="Registra la entrada de cada rollo o paca de sacos en el área de empaque. Visualiza al instante qué material está 'Recibido', 'En Uso' o 'Consumido'."
                     />
                      <FeatureItem 
-                        icon={Upload}
-                        title="Personaliza con tus Propias Imágenes"
-                        description="Puedes subir tus propias fotos para cada máquina y silo. Simplemente edita un componente y haz clic en 'Cambiar Foto' para darle a la simulación un toque realista."
+                        icon={QrCode}
+                        title="Registro Rápido con Código QR"
+                        description="Usa el botón 'Escanear' para leer los códigos de las etiquetas de los proveedores. El sistema extraerá automáticamente el código, cantidad y peso, minimizando errores."
                     />
                     <FeatureItem 
-                        icon={PlayCircle}
-                        title="Simulación Dinámica del Proceso"
-                        description="Inicia, pausa y acelera una simulación en tiempo real para visualizar el flujo de producción, desde el consumo de materia prima hasta el empaque final. Ideal para formación y análisis."
+                        icon={Smartphone}
+                        title="Sincronización con Escáner Móvil"
+                        description="Conecta tu teléfono a la computadora para usarlo como un escáner remoto. Ideal para registrar materiales sin tener que llevarlos hasta el escritorio."
                     />
                     <FeatureItem 
-                        icon={AlertTriangle}
-                        title="Detección de Cuellos de Botella"
-                        description="El simulador analiza la configuración de tu línea y te alerta en tiempo real si la materia prima es insuficiente para la demanda o si el empaque está limitando la producción."
+                        icon={PackageCheck}
+                        title="Trazabilidad y Rendimiento"
+                        description="Sigue el ciclo de vida de cada material, desde que se recibe hasta que se pesa la tara. Calcula el rendimiento real de cada rollo o paca para controlar mermas."
                     />
                 </div>
             </div>
 
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Reportes y Datos</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Análisis y Reportes</h3>
                 <div className="space-y-4">
-                    <FeatureItem 
+                     <FeatureItem 
                         icon={HardHat}
                         title="Bitácora de Producción Detallada"
-                        description="En 'Bitácora', documenta eventos en intervalos de 30 minutos. Registra paradas, velocidad, peso por saco, flujo de masa, análisis de calidad (NS, color, humedad) y novedades de empaque."
+                        description="En 'Bitácora', documenta paradas, velocidad, peso y datos de calidad en intervalos de 30 minutos, creando un registro completo de cada turno."
                     />
-                    <FeatureItem 
-                        icon={Shuffle}
-                        title="Dos Formatos de Exportación CSV"
-                        description="Usa el botón 'Importar / Exportar' en la bitácora. Ahora puedes elegir entre un 'Resumen de Paradas' (ideal para OEE) o una 'Bitácora Completa por Intervalo' con todos los datos del turno."
+                     <FeatureItem 
+                        icon={Activity}
+                        title="Dashboard de OEE y Fiabilidad"
+                        description="Accede al análisis OEE desde la bitácora para ver gráficos del tiempo total de parada, MTBF, MTTR, y la distribución del tiempo productivo vs. paradas."
                     />
                     <FeatureItem 
                         icon={Database}
-                        title="Backup y Restauración con JSON"
-                        description="Desde el mismo modal de exportación, puedes descargar una copia de seguridad completa de tus bitácoras en formato JSON. Estos archivos se pueden usar para importar y restaurar datos en cualquier momento."
+                        title="Importación y Exportación Avanzada"
+                        description="Desde la bitácora, puedes exportar un 'Resumen de Paradas' para OEE o una 'Bitácora Completa'. También puedes importar datos masivamente desde un archivo CSV."
                     />
                     <FeatureItem 
                         icon={FileText}
-                        title="Página de Reportes Profesionales"
+                        title="Reportes Profesionales"
                         description="Usa el botón 'Exportar / Reportes' en la página principal para generar un reporte visual profesional, listo para imprimir o guardar como PDF."
                     />
                 </div>
             </div>
 
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Gestión y Administración</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Simulación y Administración</h3>
                 <div className="space-y-4">
                      <FeatureItem 
+                        icon={PlayCircle}
+                        title="Simulador de Planta Virtual"
+                        description="En 'Operaciones', configura y ejecuta una simulación dinámica de tu línea de producción para visualizar flujos, detectar cuellos de botella y entrenar personal."
+                    />
+                    <FeatureItem 
                         icon={Settings}
-                        title="Gestión de Catálogos"
-                        description="Desde la bitácora, haz clic en 'Configuración' para añadir y administrar motivos de parada, tipos de mantenimiento, operadores y supervisores, estandarizando tus registros."
+                        title="Gestión Centralizada de Catálogos"
+                        description="Desde la bitácora ('Configuración') o el módulo de materiales, puedes añadir y administrar motivos de parada, proveedores, operadores y más."
                     />
                     <FeatureItem 
                         icon={History}
                         title="Historial de Planes y Bitácoras"
                         description="Navega por los planes de producción y las bitácoras de días anteriores de forma rápida y paginada desde sus respectivas secciones de 'Historial'."
-                    />
-                    <FeatureItem 
-                        icon={CheckCircle2}
-                        title="Sincronización de Datos Históricos"
-                        description="Desde 'Admin', usa el botón 'Sincronizar' para actualizar todos los planes antiguos con los nombres y categorías más recientes de tus productos."
                     />
                 </div>
             </div>
