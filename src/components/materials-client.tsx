@@ -904,8 +904,7 @@ export default function MaterialsClient({
             setIsScannerOpen(true); // Re-open scanner to keep scanning.
             // The onScanSuccess prop for THIS scanner instance should be `sendScan`.
             // This requires changing the state logic for `isScannerOpen` to handle this new mode.
-            // Let's modify the onScanSuccess for the currently open scanner.
-            // This is getting complex, let's simplify for now. The POC will just send one code.
+            // Let's simplify for now. The POC will just send one code.
              await updateDoc(doc(db, 'sessions', scannedId), { lastScannedCode: "placeholder", timestamp: Date.now() });
         } catch (error) {
             toast({title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive"});
@@ -1487,9 +1486,9 @@ export default function MaterialsClient({
                                         </>
                                     )}
                                     <div className="flex items-end gap-2 lg:col-start-5">
-                                         <div className='flex gap-2'>
-                                            <Button onClick={() => setIsScannerOpen(true)} variant="outline" size="icon" disabled={!newMaterialSupplier}>
-                                                <Camera className="h-4 w-4" />
+                                         <div className='flex gap-2 w-full'>
+                                            <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
+                                                <Camera className="mr-2 h-4 w-4" /> Escanear
                                             </Button>
                                             <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
                                                 <PlusCircle className="mr-2 h-4 w-4" /> Registrar
