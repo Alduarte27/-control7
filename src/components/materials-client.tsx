@@ -868,48 +868,13 @@ export default function MaterialsClient({
             setIsScannerOpen(true);
         } else {
             const newSessionId = `sync_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            const sessionDocRef = doc(db, 'sessions', newSessionId);
+            setDoc(sessionDocRef, { createdAt: Date.now(), status: 'pending' });
             setSyncSessionId(newSessionId);
             setIsSyncModalOpen(true);
         }
     };
 
-    const handleRemoteScanSuccess = async (scannedId: string) => {
-        try {
-            const sessionDocRef = doc(db, 'sessions', scannedId);
-            await updateDoc(sessionDocRef, { status: 'connected', deviceName: navigator.userAgent });
-            setIsScannerOpen(false); // Close the initial scanner
-            // Open a new scanner instance dedicated to sending data
-            const sendScan = (code: string) => {
-                updateDoc(sessionDocRef, { scannedCode: code, timestamp: Date.now() });
-                toast({ title: "Código Enviado", description: `Se envió el código ${code} al computador.`});
-            };
-            
-            // This is a bit of a hack. We need a way to show a persistent scanner UI on mobile.
-            // For now, we'll just re-open the scanner modal. A better UI would be a dedicated scanning page.
-            const MobileScanningInterface = () => (
-                 <Dialog open={true}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Escaneando Remotamente</DialogTitle>
-                            <DialogDescription>Los códigos que escanees aparecerán en tu computadora.</DialogDescription>
-                        </DialogHeader>
-                        <ScannerModal isOpen={true} onClose={() => {}} onScanSuccess={sendScan} />
-                    </DialogContent>
-                </Dialog>
-            );
-            // This part is tricky to implement with the current structure.
-            // For this implementation, we will just show a toast on mobile.
-            toast({ title: "Dispositivo Conectado", description: "Ahora puedes escanear códigos de materiales."});
-            // A more complete solution would replace the UI here. For now, we just enable scanning.
-            setIsScannerOpen(true); // Re-open scanner to keep scanning.
-            // The onScanSuccess prop for THIS scanner instance should be `sendScan`.
-            // This requires changing the state logic for `isScannerOpen` to handle this new mode.
-            // Let's simplify for now. The POC will just send one code.
-             await updateDoc(doc(db, 'sessions', scannedId), { lastScannedCode: "placeholder", timestamp: Date.now() });
-        } catch (error) {
-            toast({title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive"});
-        }
-    };
     
     // Listener for desktop
     React.useEffect(() => {
@@ -917,18 +882,92 @@ export default function MaterialsClient({
 
         const unsub = onSnapshot(doc(db, 'sessions', syncSessionId), (doc) => {
             const data = doc.data();
-            if (data?.scannedCode) {
-                // Prevent processing the same code multiple times if listener fires again quickly
-                if (newMaterialCode !== data.scannedCode) {
-                    setNewMaterialCode(data.scannedCode);
-                    toast({ title: "Código Recibido", description: `Se recibió un nuevo código desde el dispositivo móvil.` });
-                }
+            if (data?.status === 'connected' && isSyncModalOpen) {
+                 toast({ title: "Dispositivo móvil conectado", description: `Conectado a: ${data.deviceName}` });
+                 setIsSyncModalOpen(false); // Close the QR dialog on PC
+            }
+            if (data?.scannedCode && data.timestamp > (data.lastProcessedTimestamp || 0)) {
+                setNewMaterialCode(data.scannedCode);
+                toast({ title: "Código Recibido", description: `Se recibió un nuevo código desde el dispositivo móvil.` });
+                // Mark as processed to avoid re-triggering
+                updateDoc(doc.ref, { lastProcessedTimestamp: data.timestamp });
             }
         });
 
         return () => unsub();
 
-    }, [syncSessionId, isMobileDevice, toast, newMaterialCode]);
+    }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen]);
+
+    const handleScanSuccess = async (code: string) => {
+        setIsScannerOpen(false); // Close scanner immediately
+        
+        // If this is the mobile device
+        if (isMobileDevice) {
+            // And it's scanning a sync QR code
+            if (code.startsWith('sync_')) {
+                try {
+                    await updateDoc(doc(db, 'sessions', code), { status: 'connected', deviceName: navigator.userAgent });
+                    setSyncSessionId(code); // Store session ID on mobile
+                    toast({ title: "Dispositivo Conectado", description: "Ahora puedes escanear códigos de materiales."});
+                    // Re-open scanner to scan materials
+                    setTimeout(() => setIsScannerOpen(true), 500); 
+                } catch (error) {
+                    toast({title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive"});
+                }
+            } 
+            // And it's scanning a material code while in a session
+            else if (syncSessionId) {
+                try {
+                    await updateDoc(doc(db, 'sessions', syncSessionId), { scannedCode: code, timestamp: Date.now() });
+                    toast({ title: "Código Enviado", description: `Se envió el código al computador.`});
+                     // Re-open scanner to allow continuous scanning
+                    setTimeout(() => setIsScannerOpen(true), 500);
+                } catch (error) {
+                    toast({title: "Error de Envío", description: "No se pudo enviar el código. Vuelve a conectar.", variant: "destructive"});
+                    setSyncSessionId(null); // Reset session
+                }
+            }
+            return;
+        }
+
+        // Standard scanning behavior on Desktop
+        setNewMaterialCode(code);
+    
+        if (code.includes('|')) {
+            const parts = code.split('|');
+            if (parts.length >= 5) {
+                const quantity = parts[2];
+                const unitWeightGrams = parts[3]?.replace(',', '.');
+                const totalWeightKg = parts[4]?.replace(',', '.');
+    
+                if (quantity && !isNaN(Number(quantity))) {
+                    setNewMaterialQuantity(quantity);
+                }
+                if (unitWeightGrams && !isNaN(Number(unitWeightGrams))) {
+                    setNewMaterialUnitWeight(unitWeightGrams);
+                }
+                 if (totalWeightKg && !isNaN(Number(totalWeightKg))) {
+                    setNewMaterialTotalWeight(totalWeightKg);
+                    setNewMaterialNetWeight(totalWeightKg); // For plasticsacks
+                }
+    
+                toast({
+                    title: "Datos Extraídos del QR",
+                    description: `Cant: ${quantity}, P/Und: ${unitWeightGrams}g, Total: ${totalWeightKg}kg`
+                });
+                
+                setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
+            }
+        } else {
+            if (newMaterialType === 'rollo_fardo' || newMaterialType === 'rollo_laminado') {
+                netWeightInputRef.current?.focus();
+            } else if (isSacosType) {
+                 setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
+            } else {
+                 setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
+            }
+        }
+    };
 
 
     const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
@@ -1095,63 +1134,6 @@ export default function MaterialsClient({
         }
     };
     
-    const handleScanSuccess = (code: string) => {
-        setIsScannerOpen(false);
-        // If this is the mobile device in a sync session
-        if (syncSessionId && isMobileDevice) {
-            updateDoc(doc(db, 'sessions', syncSessionId), { scannedCode: code, timestamp: Date.now() });
-            toast({ title: "Código Enviado", description: `Se envió el código al computador.`});
-            return; // Don't populate the local form
-        }
-
-        // If this is the mobile device opening the scanner to connect
-        if (isMobileDevice && code.startsWith('sync_')) {
-            setSyncSessionId(code);
-            updateDoc(doc(db, 'sessions', code), { status: 'connected', deviceName: navigator.userAgent });
-            toast({ title: "Dispositivo Conectado", description: "Ahora puedes escanear códigos de materiales."});
-            // Keep scanner open to scan materials
-            setTimeout(() => setIsScannerOpen(true), 500); 
-            return;
-        }
-
-        // Standard scanning behavior
-        setNewMaterialCode(code);
-    
-        if (code.includes('|')) {
-            const parts = code.split('|');
-            if (parts.length >= 5) {
-                const quantity = parts[2];
-                const unitWeightGrams = parts[3]?.replace(',', '.');
-                const totalWeightKg = parts[4]?.replace(',', '.');
-    
-                if (quantity && !isNaN(Number(quantity))) {
-                    setNewMaterialQuantity(quantity);
-                }
-                if (unitWeightGrams && !isNaN(Number(unitWeightGrams))) {
-                    setNewMaterialUnitWeight(unitWeightGrams);
-                }
-                 if (totalWeightKg && !isNaN(Number(totalWeightKg))) {
-                    setNewMaterialTotalWeight(totalWeightKg);
-                    setNewMaterialNetWeight(totalWeightKg); // For plasticsacks
-                }
-    
-                toast({
-                    title: "Datos Extraídos del QR",
-                    description: `Cant: ${quantity}, P/Und: ${unitWeightGrams}g, Total: ${totalWeightKg}kg`
-                });
-                
-                setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
-            }
-        } else {
-            if (newMaterialType === 'rollo_fardo' || newMaterialType === 'rollo_laminado') {
-                netWeightInputRef.current?.focus();
-            } else if (isSacosType) {
-                 setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
-            } else {
-                 setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
-            }
-        }
-    };
 
     const handleActionConfirm = async (data: { actualWeight?: number, assignedMachine?: string; plasticWeight?: number; coreWeight?: number; }) => {
         if (!actionState) return;
@@ -1624,7 +1606,7 @@ export default function MaterialsClient({
             <ScannerModal
                 isOpen={isScannerOpen}
                 onClose={() => setIsScannerOpen(false)}
-                onScanSuccess={isMobileDevice && !syncSessionId ? handleRemoteScanSuccess : handleScanSuccess}
+                onScanSuccess={handleScanSuccess}
             />
             {actionState && (
                 actionState.action === 'weigh_tare' ? (
@@ -1673,3 +1655,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
