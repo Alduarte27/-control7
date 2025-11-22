@@ -28,6 +28,7 @@ import { Calendar } from './ui/calendar';
 import { Progress } from './ui/progress';
 import { QRCodeSVG } from 'qrcode.react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 
 function ConfigModal({ 
@@ -901,7 +902,6 @@ export default function MaterialsClient({
     const [isDeviceConnected, setIsDeviceConnected] = React.useState(false);
 
 
-    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
@@ -925,7 +925,7 @@ export default function MaterialsClient({
         }
     };
     
-    const handleScanSuccess = React.useCallback((code: string) => {
+     const handleScanSuccess = React.useCallback((code: string) => {
         if (isMobileDevice && syncSessionId) {
              try {
                 // When on mobile in sync mode, send the code to the session document
@@ -1068,7 +1068,6 @@ export default function MaterialsClient({
 
     const filteredMaterials = React.useMemo(() => {
         return materials.filter(material => {
-            const statusMatch = statusFilter === 'all' || material.status === statusFilter;
             const typeMatch = typeFilter === 'all' || material.type === typeFilter;
             const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
 
@@ -1080,9 +1079,9 @@ export default function MaterialsClient({
                 material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
 
-            return statusMatch && typeMatch && supplierMatch && machineMatch && searchMatch;
+            return typeMatch && supplierMatch && machineMatch && searchMatch;
         });
-    }, [materials, statusFilter, typeFilter, supplierFilter, machineFilter, searchQuery, suppliers]);
+    }, [materials, typeFilter, supplierFilter, machineFilter, searchQuery, suppliers]);
 
 
     const handleConfigSave = async (type: 'supplier', data: any, action: 'add' | 'delete') => {
@@ -1376,7 +1375,38 @@ export default function MaterialsClient({
             setAdvancedEditingMaterial(materialToEdit);
         }
     };
+    
+    const enUsoMaterials = filteredMaterials.filter(m => m.status === 'en_uso');
+    const recibidoMaterials = filteredMaterials.filter(m => m.status === 'recibido');
+    const porPesarTaraMaterials = filteredMaterials.filter(m => m.status === 'por_pesar_tara');
+    const consumidoMaterials = filteredMaterials.filter(m => m.status === 'consumido');
 
+
+    const renderGrid = (mats: PackagingMaterial[]) => {
+        if (mats.length === 0) {
+            return (
+                <div className="text-center py-12 col-span-full">
+                    <p className="font-semibold text-lg">No se encontraron materiales</p>
+                    <p className="text-muted-foreground mt-2">No hay materiales que coincidan con el estado y filtros seleccionados.</p>
+                </div>
+            );
+        }
+        return (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {mats.map(material => (
+                    <MaterialCard
+                        key={material.id}
+                        material={material}
+                        onActionClick={(mat, action) => setActionState({ material: mat, action })}
+                        onSelectionChange={handleSelectionChange}
+                        isSelected={selectedMaterials.has(material.id)}
+                        onEditClick={setEditingMaterial}
+                        onTraceClick={setTraceMaterial}
+                    />
+                ))}
+            </div>
+        );
+    };
 
     return (
         <>
@@ -1574,7 +1604,7 @@ export default function MaterialsClient({
                          <CardHeader>
                             <div className='space-y-2'>
                                 <div className="flex justify-between items-start">
-                                    <div>
+                                    <div className="space-y-1">
                                         <CardTitle>Inventario en Área de Empaque</CardTitle>
                                         <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
                                     </div>
@@ -1609,24 +1639,12 @@ export default function MaterialsClient({
                                         )}
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-2">
-                                    <div className="lg:col-span-1">
-                                        <Input
-                                            placeholder="Buscar por código, lote..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                        />
-                                    </div>
-                                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-                                        <SelectTrigger><SelectValue/></SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">Todos los Estados</SelectItem>
-                                            <SelectItem value="recibido">Recibido</SelectItem>
-                                            <SelectItem value="en_uso">En Uso</SelectItem>
-                                            <SelectItem value="por_pesar_tara">Por Pesar Tara</SelectItem>
-                                            <SelectItem value="consumido">Consumido</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 pt-2">
+                                    <Input
+                                        placeholder="Buscar por código, lote..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                    />
                                     <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
                                         <SelectTrigger><SelectValue/></SelectTrigger>
                                         <SelectContent>
@@ -1659,26 +1677,18 @@ export default function MaterialsClient({
                             </div>
                         </CardHeader>
                         <CardContent>
-                            {filteredMaterials.length > 0 ? (
-                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                    {filteredMaterials.map(material => (
-                                        <MaterialCard
-                                            key={material.id}
-                                            material={material}
-                                            onActionClick={(mat, action) => setActionState({ material: mat, action })}
-                                            onSelectionChange={handleSelectionChange}
-                                            isSelected={selectedMaterials.has(material.id)}
-                                            onEditClick={setEditingMaterial}
-                                            onTraceClick={setTraceMaterial}
-                                        />
-                                    ))}
-                                </div>
-                            ) : (
-                                <div className="text-center py-12">
-                                    <p className="font-semibold text-lg">No se encontraron materiales</p>
-                                    <p className="text-muted-foreground mt-2">Intenta ajustar tus filtros o registrar un nuevo material.</p>
-                                </div>
-                            )}
+                             <Tabs defaultValue="en_uso" className="w-full">
+                                <TabsList className="grid w-full grid-cols-4">
+                                    <TabsTrigger value="en_uso">En Uso ({enUsoMaterials.length})</TabsTrigger>
+                                    <TabsTrigger value="recibido">Recibido ({recibidoMaterials.length})</TabsTrigger>
+                                    <TabsTrigger value="por_pesar_tara">Por Pesar Tara ({porPesarTaraMaterials.length})</TabsTrigger>
+                                    <TabsTrigger value="consumido">Consumido ({consumidoMaterials.length})</TabsTrigger>
+                                </TabsList>
+                                <TabsContent value="en_uso" className="mt-4">{renderGrid(enUsoMaterials)}</TabsContent>
+                                <TabsContent value="recibido" className="mt-4">{renderGrid(recibidoMaterials)}</TabsContent>
+                                <TabsContent value="por_pesar_tara" className="mt-4">{renderGrid(porPesarTaraMaterials)}</TabsContent>
+                                <TabsContent value="consumido" className="mt-4">{renderGrid(consumidoMaterials)}</TabsContent>
+                            </Tabs>
                         </CardContent>
                     </Card>
                 </main>
@@ -1756,6 +1766,7 @@ export default function MaterialsClient({
         </>
     );
 }
+
 
 
 
