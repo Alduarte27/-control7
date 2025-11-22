@@ -95,116 +95,108 @@ function ConfigModal({
     )
 }
 
-function EditMaterialDialog({ 
-    material,
-    onClose,
-    onSave,
-}: { 
-    material: PackagingMaterial;
-    onClose: () => void;
-    onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
+function EditMaterialDialog({
+  material,
+  onClose,
+  onSave,
+}: {
+  material: PackagingMaterial;
+  onClose: () => void;
+  onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
 }) {
-    const [editedCode, setEditedCode] = React.useState(material.code || '');
-    const [editedPresentation, setEditedPresentation] = React.useState(material.presentation || '');
-    const [editedLote, setEditedLote] = React.useState(material.lote || '');
-    const [editedQuantity, setEditedQuantity] = React.useState(material.quantity || '');
-    const [editedTotalWeight, setEditedTotalWeight] = React.useState(material.totalWeight || '');
-    const [editedUnitWeight, setEditedUnitWeight] = React.useState(material.unitWeight || '');
-    const [editedNetWeight, setEditedNetWeight] = React.useState(material.netWeight || '');
-    const [editedGrossWeight, setEditedGrossWeight] = React.useState(material.grossWeight || '');
+  const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
 
-    const handleSaveChanges = () => {
-        const updates: Partial<PackagingMaterial> = {
-            code: editedCode,
-            presentation: editedPresentation,
-            lote: editedLote,
-            quantity: Number(editedQuantity) || undefined,
-            totalWeight: Number(editedTotalWeight) || undefined,
-            unitWeight: Number(editedUnitWeight) || undefined,
-            netWeight: Number(editedNetWeight) || undefined,
-            grossWeight: Number(editedGrossWeight) || undefined,
-        };
-        onSave(material.id, updates);
-        onClose();
-    };
+  React.useEffect(() => {
+    setEditedMaterial(material);
+  }, [material]);
 
-    const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
-    const isPlasticsacks = material.supplier?.toUpperCase().startsWith('PLASTICSACKS');
+  const handleChange = (field: keyof PackagingMaterial, value: any) => {
+    setEditedMaterial((prev) => ({ ...prev, [field]: value }));
+  };
 
-    return (
-        <Dialog open={true} onOpenChange={onClose}>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Editar Material</DialogTitle>
-                    <DialogDescription className="break-all">
-                        Código: <span className="font-mono">{material.code}</span>
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
-                     <div className="space-y-1.5">
-                        <Label htmlFor="edit-code">Código</Label>
-                        <Input id="edit-code" value={editedCode} onChange={e => setEditedCode(e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="edit-presentation">Presentación</Label>
-                        <Input id="edit-presentation" value={editedPresentation} onChange={e => setEditedPresentation(e.target.value)} />
-                    </div>
-                    {isPlasticsacks && (
-                        <div className="space-y-1.5">
-                            <Label htmlFor="edit-lote">Lote</Label>
-                            <Input id="edit-lote" value={editedLote} onChange={e => setEditedLote(e.target.value)} />
-                        </div>
-                    )}
-                    
-                    {isSacosType ? (
-                        isPlasticsacks ? (
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="edit-quantity">Cantidad</Label>
-                                    <Input id="edit-quantity" type="number" value={editedQuantity} onChange={e => setEditedQuantity(e.target.value)}/>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="edit-total-weight">Peso Neto (kg)</Label>
-                                    <Input id="edit-total-weight" type="number" value={editedTotalWeight} onChange={e => setEditedTotalWeight(e.target.value)}/>
-                                </div>
-                            </div>
-                        ) : (
-                             <div className="grid grid-cols-2 gap-2">
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="edit-quantity">Cantidad</Label>
-                                    <Input id="edit-quantity" type="number" value={editedQuantity} onChange={e => setEditedQuantity(e.target.value)}/>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <Label htmlFor="edit-unit-weight">Peso/Und (g)</Label>
-                                    <Input id="edit-unit-weight" type="number" value={editedUnitWeight} onChange={e => setEditedUnitWeight(e.target.value)}/>
-                                </div>
-                                <div className="col-span-2 space-y-1.5">
-                                    <Label htmlFor="edit-total-weight">Peso Total (kg)</Label>
-                                    <Input id="edit-total-weight" type="number" value={editedTotalWeight} onChange={e => setEditedTotalWeight(e.target.value)}/>
-                                </div>
-                            </div>
-                        )
-                    ) : (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="edit-net-weight">Peso Neto (kg)</Label>
-                                <Input id="edit-net-weight" type="number" value={editedNetWeight} onChange={e => setEditedNetWeight(e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="edit-gross-weight">Peso Bruto (kg)</Label>
-                                <Input id="edit-gross-weight" type="number" value={editedGrossWeight} onChange={e => setEditedGrossWeight(e.target.value)} />
-                            </div>
-                        </div>
-                    )}
+  const handleSaveChanges = () => {
+    onSave(material.id, editedMaterial);
+    onClose();
+  };
+
+  const isSacosType = material.type === 'sacos_granel' || material.type === 'sacos_familiar';
+  const isPlasticsacks = material.supplier?.toUpperCase().startsWith('PLASTICSACKS');
+
+  return (
+    <Dialog open={true} onOpenChange={onClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Editar Material</DialogTitle>
+          <DialogDescription className="break-all">
+            Código: <span className="font-mono">{material.code}</span>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-code">Código</Label>
+            <Input id="edit-code" value={editedMaterial.code || ''} onChange={e => handleChange('code', e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-presentation">Presentación</Label>
+            <Input id="edit-presentation" value={editedMaterial.presentation || ''} onChange={e => handleChange('presentation', e.target.value)} />
+          </div>
+          {isPlasticsacks && (
+            <div className="space-y-1.5">
+              <Label htmlFor="edit-lote">Lote</Label>
+              <Input id="edit-lote" value={editedMaterial.lote || ''} onChange={e => handleChange('lote', e.target.value)} />
+            </div>
+          )}
+
+          {isSacosType ? (
+            isPlasticsacks ? (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-quantity">Cantidad</Label>
+                  <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))} />
                 </div>
-                <DialogFooter>
-                    <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
-                    <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    )
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-total-weight">Peso Neto (kg)</Label>
+                  <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))} />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-quantity">Cantidad</Label>
+                  <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-unit-weight">Peso/Und (g)</Label>
+                  <Input id="edit-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={e => handleChange('unitWeight', Number(e.target.value))} />
+                </div>
+                <div className="col-span-2 space-y-1.5">
+                  <Label htmlFor="edit-total-weight">Peso Total (kg)</Label>
+                  <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))} />
+                </div>
+              </div>
+            )
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-net-weight">Peso Neto (kg)</Label>
+                <Input id="edit-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={e => handleChange('netWeight', Number(e.target.value))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-gross-weight">Peso Bruto (kg)</Label>
+                <Input id="edit-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={e => handleChange('grossWeight', Number(e.target.value))} />
+              </div>
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
+          <Button onClick={handleSaveChanges}>Guardar Cambios</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
+
 
 function AdvancedEditDialog({
   material,
@@ -794,7 +786,7 @@ function MaterialCard({
                         {getDiscrepancy()}
                     </div>
                 </div>
-                <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 min-h-[50px]">
+                 <div className="text-xs text-muted-foreground space-y-1 border-t pt-2 min-h-[50px]">
                     {material.assignedMachine && (
                         <p className="flex items-center gap-2 font-medium text-primary">
                             <HardHat className="h-3 w-3" />
@@ -909,7 +901,7 @@ export default function MaterialsClient({
     const [isDeviceConnected, setIsDeviceConnected] = React.useState(false);
 
 
-    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('recibido');
+    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
@@ -934,6 +926,20 @@ export default function MaterialsClient({
     };
     
     const handleScanSuccess = React.useCallback((code: string) => {
+        if (isMobileDevice && syncSessionId) {
+             try {
+                // When on mobile in sync mode, send the code to the session document
+                updateDoc(doc(db, 'sessions', syncSessionId), { scannedCode: code, timestamp: Date.now() });
+                toast({ title: "Código Enviado", description: `Se envió el código al computador.` });
+                // Keep the scanner open on mobile for multiple scans
+            } catch (error) {
+                toast({ title: "Error de Envío", description: "No se pudo enviar el código. Vuelve a conectar.", variant: "destructive" });
+                setSyncSessionId(null); // Disconnect on error
+                setIsScannerOpen(false);
+            }
+            return;
+        }
+        
         if (code.startsWith('http')) {
             const url = new URL(code);
             const sessionIdFromQr = url.searchParams.get('sessionId');
@@ -948,23 +954,10 @@ export default function MaterialsClient({
                     toast({ title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive" });
                 }
             }
-            return;
-        }
-
-        if (isMobileDevice && syncSessionId) {
-             try {
-                updateDoc(doc(db, 'sessions', syncSessionId), { scannedCode: code, timestamp: Date.now() });
-                toast({ title: "Código Enviado", description: `Se envió el código al computador.` });
-                // Do not close scanner on mobile
-            } catch (error) {
-                toast({ title: "Error de Envío", description: "No se pudo enviar el código. Vuelve a conectar.", variant: "destructive" });
-                setSyncSessionId(null);
-                setIsScannerOpen(false);
-            }
-            return;
+            return; // Don't process URL as material code
         }
         
-        // This part runs on Desktop or if not in remote sync mode
+        // This part runs on Desktop, or on Mobile if not in sync mode
         setIsScannerOpen(false);
         setNewMaterialCode(code);
     
@@ -1005,8 +998,15 @@ export default function MaterialsClient({
     }, [isMobileDevice, syncSessionId, newMaterialType, toast]);
 
     // Listener for desktop
+    const unsubRef = React.useRef<() => void>();
     React.useEffect(() => {
-        if (!syncSessionId || isMobileDevice) return;
+        if (!syncSessionId || isMobileDevice) {
+            if (unsubRef.current) {
+                unsubRef.current();
+                unsubRef.current = undefined;
+            }
+            return;
+        }
 
         const unsub = onSnapshot(doc(db, 'sessions', syncSessionId), (doc) => {
             const data = doc.data();
@@ -1021,6 +1021,8 @@ export default function MaterialsClient({
                 updateDoc(doc.ref, { lastProcessedTimestamp: data.timestamp });
             }
         });
+        
+        unsubRef.current = unsub;
 
         return () => unsub();
 
@@ -1608,12 +1610,13 @@ export default function MaterialsClient({
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-2">
-                                    <Input
-                                        placeholder="Buscar por código, lote..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="lg:col-span-1"
-                                    />
+                                    <div className="lg:col-span-1">
+                                        <Input
+                                            placeholder="Buscar por código, lote..."
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                        />
+                                    </div>
                                     <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
                                         <SelectTrigger><SelectValue/></SelectTrigger>
                                         <SelectContent>
@@ -1753,6 +1756,7 @@ export default function MaterialsClient({
         </>
     );
 }
+
 
 
 
