@@ -303,11 +303,13 @@ function AdvancedEditDialog({
                         <Select value={editedMaterial.assignedMachine || ''} onValueChange={(val) => handleChange('assignedMachine', val)}>
                             <SelectTrigger id="adv-assigned-machine"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="machine_1">Máquina 1</SelectItem>
-                                <SelectItem value="machine_2">Máquina 2</SelectItem>
-                                <SelectItem value="machine_3">Máquina 3</SelectItem>
+                                <SelectItem value="machine_1">Máquina Envasadora 1</SelectItem>
+                                <SelectItem value="machine_2">Máquina Envasadora 2</SelectItem>
+                                <SelectItem value="machine_3">Máquina Envasadora 3</SelectItem>
                                 <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
                                 <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                                <SelectItem value="granelera_1">Granelera #1</SelectItem>
+                                <SelectItem value="granelera_2">Granelera #2</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -559,6 +561,8 @@ function MaterialActionDialog({
                                 <SelectItem value="machine_3">Máquina Envasadora 3</SelectItem>
                                 <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
                                 <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                                <SelectItem value="granelera_1">Granelera #1</SelectItem>
+                                <SelectItem value="granelera_2">Granelera #2</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -768,7 +772,7 @@ function MaterialCard({
                         </div>
                     ) : (
                          <div className="space-y-3">
-                             <div className="grid grid-cols-3 gap-2 text-center">
+                            <div className="grid grid-cols-3 gap-2 text-center">
                                  <div className="space-y-1">
                                     <p className="text-muted-foreground">P. Bruto (Etiqueta)</p>
                                     <p className="font-semibold">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
@@ -923,7 +927,7 @@ export default function MaterialsClient({
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
-    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
+    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('recibido');
     const [searchQuery, setSearchQuery] = React.useState('');
     
     const handleScanSuccess = React.useCallback((code: string) => {
@@ -1423,6 +1427,7 @@ export default function MaterialsClient({
     });
 
     const consumidoMaterials = materials.filter(material => {
+        if (statusFilter !== 'all' && material.status !== 'consumido') return false;
         if (material.status !== 'consumido') return false;
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
         const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
@@ -1736,7 +1741,7 @@ export default function MaterialsClient({
                             </div>
                         </CardHeader>
                         <CardContent>
-                             <Tabs defaultValue="en_uso" value={statusFilter} onValueChange={(v) => setStatusFilter(v as MaterialStatus | 'all')}>
+                             <Tabs defaultValue="recibido" value={statusFilter} onValueChange={(v) => setStatusFilter(v as MaterialStatus | 'all')}>
                                 <TabsList className="grid w-full grid-cols-4">
                                     <TabsTrigger value="en_uso">En Uso ({enUsoMaterials.length})</TabsTrigger>
                                     <TabsTrigger value="recibido">Recibido ({recibidoMaterials.length})</TabsTrigger>
@@ -1825,3 +1830,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
