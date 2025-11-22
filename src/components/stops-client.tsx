@@ -1071,16 +1071,6 @@ export default function StopsClient({
                                 <TooltipContent><p>Análisis de Paradas (OEE)</p></TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
-                         <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button variant="outline" size="icon" onClick={() => setImportWizardOpen(true)}>
-                                        <FileUp className="h-4 w-4" />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent><p>Importar desde CSV</p></TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
@@ -1112,8 +1102,12 @@ export default function StopsClient({
                             </Tooltip>
                         </TooltipProvider>
                     </div>
-
-                    <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
+                     <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={() => setImportWizardOpen(true)}>
+                            <FileUp className="mr-2 h-4 w-4" /> Importar
+                        </Button>
+                        <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
+                    </div>
                     {/* Mobile Dropdown */}
                     <div className="md:hidden">
                         <DropdownMenu>
