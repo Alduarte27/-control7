@@ -932,32 +932,8 @@ export default function MaterialsClient({
             setIsSyncModalOpen(true);
         }
     };
-
     
-    // Listener for desktop
-    React.useEffect(() => {
-        if (!syncSessionId || isMobileDevice) return;
-
-        const unsub = onSnapshot(doc(db, 'sessions', syncSessionId), (doc) => {
-            const data = doc.data();
-            if (data?.status === 'connected' && isSyncModalOpen) {
-                 toast({ title: "Dispositivo móvil conectado", description: `Conectado a: ${data.deviceName}` });
-                 setIsSyncModalOpen(false); // Close the QR dialog on PC
-                 setIsDeviceConnected(true);
-            }
-            if (data?.scannedCode && data.timestamp > (data.lastProcessedTimestamp || 0)) {
-                handleScanSuccess(data.scannedCode);
-                // Mark as processed to avoid re-triggering
-                updateDoc(doc.ref, { lastProcessedTimestamp: data.timestamp });
-            }
-        });
-
-        return () => unsub();
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen]);
-
-    const handleScanSuccess = (code: string) => {
+    const handleScanSuccess = React.useCallback((code: string) => {
         if (code.startsWith('http')) {
             const url = new URL(code);
             const sessionIdFromQr = url.searchParams.get('sessionId');
@@ -1020,14 +996,35 @@ export default function MaterialsClient({
         } else {
             if (newMaterialType === 'rollo_fardo' || newMaterialType === 'rollo_laminado') {
                 netWeightInputRef.current?.focus();
-            } else if (isSacosType) {
+            } else if (newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel') {
                  setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
             } else {
                  setTimeout(() => document.getElementById('material-presentation-trigger')?.focus(), 100);
             }
         }
-    };
+    }, [isMobileDevice, syncSessionId, newMaterialType, toast]);
 
+    // Listener for desktop
+    React.useEffect(() => {
+        if (!syncSessionId || isMobileDevice) return;
+
+        const unsub = onSnapshot(doc(db, 'sessions', syncSessionId), (doc) => {
+            const data = doc.data();
+            if (data?.status === 'connected' && isSyncModalOpen) {
+                 toast({ title: "Dispositivo móvil conectado", description: `Conectado a: ${data.deviceName}` });
+                 setIsSyncModalOpen(false); // Close the QR dialog on PC
+                 setIsDeviceConnected(true);
+            }
+            if (data?.scannedCode && data.timestamp > (data.lastProcessedTimestamp || 0)) {
+                handleScanSuccess(data.scannedCode);
+                // Mark as processed to avoid re-triggering
+                updateDoc(doc.ref, { lastProcessedTimestamp: data.timestamp });
+            }
+        });
+
+        return () => unsub();
+
+    }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen, handleScanSuccess]);
 
     const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
@@ -1572,88 +1569,90 @@ export default function MaterialsClient({
 
 
                     <Card>
-                         <CardHeader className="space-y-2">
-                             <div className="flex justify-between items-center">
-                                <div>
-                                    <CardTitle>Inventario en Área de Empaque</CardTitle>
-                                    <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
+                         <CardHeader>
+                            <div className='space-y-2'>
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <CardTitle>Inventario en Área de Empaque</CardTitle>
+                                        <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button variant="outline" onClick={handleExportCSV}>
+                                            <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
+                                        </Button>
+                                        <Button variant="outline" size="icon" onClick={handleOpenAdvancedEdit} disabled={selectedMaterials.size !== 1}>
+                                            <Edit className="h-4 w-4" />
+                                        </Button>
+                                        {selectedMaterials.size > 0 && (
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="destructive">
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Eliminar ({selectedMaterials.size})
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                                        <AlertDialogDescriptionComponent>
+                                                            Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
+                                                        </AlertDialogDescriptionComponent>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                     <Button variant="outline" onClick={handleExportCSV}>
-                                        <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
-                                    </Button>
-                                    <Button variant="outline" size="icon" onClick={handleOpenAdvancedEdit} disabled={selectedMaterials.size !== 1}>
-                                        <Edit className="h-4 w-4" />
-                                    </Button>
-                                    {selectedMaterials.size > 0 && (
-                                        <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                                <Button variant="destructive">
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    Eliminar ({selectedMaterials.size})
-                                                </Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                                    <AlertDialogDescriptionComponent>
-                                                        Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
-                                                    </AlertDialogDescriptionComponent>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                        </AlertDialog>
-                                    )}
+                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-2">
+                                    <Input
+                                        placeholder="Buscar por código, lote..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="lg:col-span-1"
+                                    />
+                                    <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos los Estados</SelectItem>
+                                            <SelectItem value="recibido">Recibido</SelectItem>
+                                            <SelectItem value="en_uso">En Uso</SelectItem>
+                                            <SelectItem value="por_pesar_tara">Por Pesar Tara</SelectItem>
+                                            <SelectItem value="consumido">Consumido</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos los Tipos</SelectItem>
+                                            {Object.entries(materialTypeLabels).map(([key, label]) => (
+                                                <SelectItem key={key} value={key}>{label}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todos los Proveedores</SelectItem>
+                                            {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select value={machineFilter} onValueChange={setMachineFilter}>
+                                        <SelectTrigger><SelectValue/></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">Todas las Máquinas</SelectItem>
+                                            <SelectItem value="unassigned">Sin Asignar</SelectItem>
+                                            <SelectItem value="machine_1">Máquina 1</SelectItem>
+                                            <SelectItem value="machine_2">Máquina 2</SelectItem>
+                                            <SelectItem value="machine_3">Máquina 3</SelectItem>
+                                            <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
+                                            <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
-                            </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-2">
-                                <Input
-                                    placeholder="Buscar por código, lote..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="lg:col-span-1"
-                                />
-                                <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-                                    <SelectTrigger><SelectValue/></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Todos los Estados</SelectItem>
-                                        <SelectItem value="recibido">Recibido</SelectItem>
-                                        <SelectItem value="en_uso">En Uso</SelectItem>
-                                        <SelectItem value="por_pesar_tara">Por Pesar Tara</SelectItem>
-                                        <SelectItem value="consumido">Consumido</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
-                                    <SelectTrigger><SelectValue/></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Todos los Tipos</SelectItem>
-                                        {Object.entries(materialTypeLabels).map(([key, label]) => (
-                                            <SelectItem key={key} value={key}>{label}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-                                    <SelectTrigger><SelectValue/></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Todos los Proveedores</SelectItem>
-                                        {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                                <Select value={machineFilter} onValueChange={setMachineFilter}>
-                                    <SelectTrigger><SelectValue/></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">Todas las Máquinas</SelectItem>
-                                        <SelectItem value="unassigned">Sin Asignar</SelectItem>
-                                        <SelectItem value="machine_1">Máquina 1</SelectItem>
-                                        <SelectItem value="machine_2">Máquina 2</SelectItem>
-                                        <SelectItem value="machine_3">Máquina 3</SelectItem>
-                                        <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
-                                        <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
-                                    </SelectContent>
-                                </Select>
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -1754,6 +1753,7 @@ export default function MaterialsClient({
         </>
     );
 }
+
 
 
 
