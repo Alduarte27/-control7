@@ -139,7 +139,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
         </div>
         
         {/* Desktop & Tablet Navigation */}
-        <div className="hidden md:flex items-center gap-1 md:gap-2">
+        <div className="hidden md:flex items-center flex-wrap justify-end gap-1 md:gap-2">
             <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger asChild>
