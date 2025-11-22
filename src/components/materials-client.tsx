@@ -108,7 +108,6 @@ function EditMaterialDialog({
     const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>({});
 
     React.useEffect(() => {
-        // Initialize with material data, but keep it editable
         setEditedMaterial({
             code: material.code,
             presentation: material.presentation,
@@ -1382,6 +1381,8 @@ export default function MaterialsClient({
     };
     
     const enUsoMaterials = materials.filter(material => {
+        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
+        if (material.status !== 'en_uso') return false;
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
         const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
         const machineMatch = machineFilter === 'all' ||
@@ -1390,10 +1391,12 @@ export default function MaterialsClient({
         const searchMatch = !searchQuery ||
             material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-        return material.status === 'en_uso' && typeMatch && supplierMatch && machineMatch && searchMatch;
+        return typeMatch && supplierMatch && machineMatch && searchMatch;
     });
     
     const recibidoMaterials = materials.filter(material => {
+        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
+        if (material.status !== 'recibido') return false;
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
         const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
         const machineMatch = machineFilter === 'all' ||
@@ -1402,10 +1405,12 @@ export default function MaterialsClient({
         const searchMatch = !searchQuery ||
             material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-        return material.status === 'recibido' && typeMatch && supplierMatch && machineMatch && searchMatch;
+        return typeMatch && supplierMatch && machineMatch && searchMatch;
     });
 
     const porPesarTaraMaterials = materials.filter(material => {
+        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
+        if (material.status !== 'por_pesar_tara') return false;
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
         const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
         const machineMatch = machineFilter === 'all' ||
@@ -1414,10 +1419,12 @@ export default function MaterialsClient({
         const searchMatch = !searchQuery ||
             material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-        return material.status === 'por_pesar_tara' && typeMatch && supplierMatch && machineMatch && searchMatch;
+        return typeMatch && supplierMatch && machineMatch && searchMatch;
     });
 
     const consumidoMaterials = materials.filter(material => {
+        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
+        if (material.status !== 'consumido') return false;
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
         const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
         const machineMatch = machineFilter === 'all' ||
@@ -1426,7 +1433,7 @@ export default function MaterialsClient({
         const searchMatch = !searchQuery ||
             material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-        return material.status === 'consumido' && typeMatch && supplierMatch && machineMatch && searchMatch;
+        return typeMatch && supplierMatch && machineMatch && searchMatch;
     });
 
 
@@ -1483,6 +1490,10 @@ export default function MaterialsClient({
                         <Button variant="outline" onClick={handleExportCSV}>
                             <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
                         </Button>
+                         <Button variant="outline" onClick={() => setConfigOpen(true)}>
+                            <Settings className="mr-2 h-4 w-4" />
+                            Configuración
+                        </Button>
                         <Link href="/">
                             <Button variant="outline">
                                 <ChevronLeft className="mr-2 h-4 w-4" />
@@ -1501,10 +1512,6 @@ export default function MaterialsClient({
                                     <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                     <Button variant="outline" onClick={() => setConfigOpen(true)}>
-                                        <Settings className="mr-2 h-4 w-4" />
-                                        Configuración
-                                    </Button>
                                     <CollapsibleTrigger asChild>
                                         <Button variant="ghost" size="icon">
                                             <ChevronDown className={cn("h-5 w-5 transition-transform", !isAddMaterialOpen && "-rotate-90")}/>
@@ -1725,7 +1732,7 @@ export default function MaterialsClient({
                             </div>
                         </CardHeader>
                         <CardContent>
-                             <Tabs defaultValue="en_uso" value={statusFilter} onValueChange={(v) => setStatusFilter(v as MaterialStatus)}>
+                             <Tabs defaultValue="en_uso" value={statusFilter} onValueChange={(v) => setStatusFilter(v as MaterialStatus | 'all')}>
                                 <TabsList className="grid w-full grid-cols-4">
                                     <TabsTrigger value="en_uso">En Uso ({enUsoMaterials.length})</TabsTrigger>
                                     <TabsTrigger value="recibido">Recibido ({recibidoMaterials.length})</TabsTrigger>
