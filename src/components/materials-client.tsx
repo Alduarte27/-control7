@@ -1381,25 +1381,53 @@ export default function MaterialsClient({
         }
     };
     
-    const baseFilteredMaterials = React.useMemo(() => {
-        return materials.filter(material => {
-            const typeMatch = typeFilter === 'all' || material.type === typeFilter;
-            const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
-            const machineMatch = machineFilter === 'all' ||
-                (machineFilter === 'unassigned' && !material.assignedMachine) ||
-                material.assignedMachine === machineFilter;
-            const searchMatch = !searchQuery ||
-                material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-            return typeMatch && supplierMatch && machineMatch && searchMatch;
-        });
-    }, [materials, typeFilter, supplierFilter, machineFilter, searchQuery, suppliers]);
+    const enUsoMaterials = materials.filter(material => {
+        const typeMatch = typeFilter === 'all' || material.type === typeFilter;
+        const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
+        const machineMatch = machineFilter === 'all' ||
+            (machineFilter === 'unassigned' && !material.assignedMachine) ||
+            material.assignedMachine === machineFilter;
+        const searchMatch = !searchQuery ||
+            material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
+        return material.status === 'en_uso' && typeMatch && supplierMatch && machineMatch && searchMatch;
+    });
+    
+    const recibidoMaterials = materials.filter(material => {
+        const typeMatch = typeFilter === 'all' || material.type === typeFilter;
+        const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
+        const machineMatch = machineFilter === 'all' ||
+            (machineFilter === 'unassigned' && !material.assignedMachine) ||
+            material.assignedMachine === machineFilter;
+        const searchMatch = !searchQuery ||
+            material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
+        return material.status === 'recibido' && typeMatch && supplierMatch && machineMatch && searchMatch;
+    });
 
+    const porPesarTaraMaterials = materials.filter(material => {
+        const typeMatch = typeFilter === 'all' || material.type === typeFilter;
+        const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
+        const machineMatch = machineFilter === 'all' ||
+            (machineFilter === 'unassigned' && !material.assignedMachine) ||
+            material.assignedMachine === machineFilter;
+        const searchMatch = !searchQuery ||
+            material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
+        return material.status === 'por_pesar_tara' && typeMatch && supplierMatch && machineMatch && searchMatch;
+    });
 
-    const enUsoMaterials = baseFilteredMaterials.filter(m => m.status === 'en_uso');
-    const recibidoMaterials = baseFilteredMaterials.filter(m => m.status === 'recibido');
-    const porPesarTaraMaterials = baseFilteredMaterials.filter(m => m.status === 'por_pesar_tara');
-    const consumidoMaterials = baseFilteredMaterials.filter(m => m.status === 'consumido');
+    const consumidoMaterials = materials.filter(material => {
+        const typeMatch = typeFilter === 'all' || material.type === typeFilter;
+        const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
+        const machineMatch = machineFilter === 'all' ||
+            (machineFilter === 'unassigned' && !material.assignedMachine) ||
+            material.assignedMachine === machineFilter;
+        const searchMatch = !searchQuery ||
+            material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
+        return material.status === 'consumido' && typeMatch && supplierMatch && machineMatch && searchMatch;
+    });
 
 
     const renderGrid = (mats: PackagingMaterial[]) => {
@@ -1660,12 +1688,11 @@ export default function MaterialsClient({
                                     )}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 pt-4">
                                 <Input
                                     placeholder="Buscar por código, lote..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="lg:col-span-1"
                                 />
                                 <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
                                     <SelectTrigger><SelectValue/></SelectTrigger>
