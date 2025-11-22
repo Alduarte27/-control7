@@ -902,11 +902,12 @@ export default function MaterialsClient({
     }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen]);
 
     const handleScanSuccess = async (code: string) => {
-        setIsScannerOpen(false); // Close scanner immediately
+        // Always close scanner on success. It will be re-opened if needed.
+        setIsScannerOpen(false);
         
-        // If this is the mobile device
+        // Mobile device logic
         if (isMobileDevice) {
-            // And it's scanning a sync QR code
+            // Case 1: Mobile is connecting to a PC session
             if (code.startsWith('sync_')) {
                 try {
                     await updateDoc(doc(db, 'sessions', code), { status: 'connected', deviceName: navigator.userAgent });
@@ -917,8 +918,9 @@ export default function MaterialsClient({
                 } catch (error) {
                     toast({title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive"});
                 }
+                return;
             } 
-            // And it's scanning a material code while in a session
+            // Case 2: Mobile is already in a session and scans a material code
             else if (syncSessionId) {
                 try {
                     await updateDoc(doc(db, 'sessions', syncSessionId), { scannedCode: code, timestamp: Date.now() });
@@ -929,11 +931,11 @@ export default function MaterialsClient({
                     toast({title: "Error de Envío", description: "No se pudo enviar el código. Vuelve a conectar.", variant: "destructive"});
                     setSyncSessionId(null); // Reset session
                 }
+                return;
             }
-            return;
         }
-
-        // Standard scanning behavior on Desktop
+    
+        // Standard scanning behavior on Desktop (or mobile without sync)
         setNewMaterialCode(code);
     
         if (code.includes('|')) {
@@ -1672,4 +1674,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
