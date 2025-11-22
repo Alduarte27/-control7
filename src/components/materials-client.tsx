@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -369,7 +369,7 @@ function TraceabilityDialog({ material, onClose }: { material: PackagingMaterial
             status: 'Consumido y Verificado',
             timestamp: material.tareWeightedAt,
             icon: PackageCheck,
-            details: `Tara pesada. Peso Neto Real: ${material.actualNetWeight?.toFixed(2) || 'N/A'} kg.`
+            details: `Tara pesada. Peso Neto Real: ${material.actualNetWeight?.toFixed(2) || 'N_A'} kg.`
         }
     ].filter(item => item.timestamp);
 
@@ -750,7 +750,7 @@ function MaterialCard({
                 </div>
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
-                <div className="space-y-4 text-sm">
+                 <div className="space-y-4 text-sm">
                     {isSacosType ? (
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
@@ -768,7 +768,7 @@ function MaterialCard({
                         </div>
                     ) : (
                          <div className="space-y-3">
-                            <div className="grid grid-cols-3 gap-2 text-center">
+                             <div className="grid grid-cols-3 gap-2 text-center">
                                  <div className="space-y-1">
                                     <p className="text-muted-foreground">P. Bruto (Etiqueta)</p>
                                     <p className="font-semibold">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
@@ -796,7 +796,7 @@ function MaterialCard({
                                 </div>
                                 <div className="space-y-1">
                                     <p className="text-muted-foreground">Tara (Real)</p>
-                                    <p className="font-semibold">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
+                                    <p className="font-semibold text-destructive">{material.tareWeight?.toFixed(2) ?? 'N/A'} kg</p>
                                 </div>
                             </div>
                         </div>
@@ -1489,6 +1489,11 @@ export default function MaterialsClient({
                         <Button variant="outline" onClick={handleExportCSV}>
                             <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
                         </Button>
+                        <Link href="/materials-kpi">
+                            <Button variant="outline">
+                                <BarChart className="mr-2 h-4 w-4" /> Dashboard
+                            </Button>
+                        </Link>
                          <Button variant="outline" onClick={() => setConfigOpen(true)}>
                             <Settings className="mr-2 h-4 w-4" />
                             Configuración
