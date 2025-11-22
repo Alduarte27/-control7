@@ -705,7 +705,7 @@ function MaterialCard({
         if (referenceNetWeight === 0) return null;
 
         const discrepancy = referenceNetWeight - material.actualNetWeight;
-        const color = Math.abs(discrepancy) > 0.1 ? 'text-red-600' : 'text-green-600';
+        const color = discrepancy > 0 ? 'text-red-600' : 'text-green-600';
         
         return (
             <div className="space-y-1">
@@ -1423,7 +1423,6 @@ export default function MaterialsClient({
     });
 
     const consumidoMaterials = materials.filter(material => {
-        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
         if (material.status !== 'consumido') return false;
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
         const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
@@ -1695,7 +1694,7 @@ export default function MaterialsClient({
                                     )}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 pt-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
                                 <Input
                                     placeholder="Buscar por código, lote..."
                                     value={searchQuery}
