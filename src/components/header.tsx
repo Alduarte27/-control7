@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -123,6 +124,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
       { id: 'ia', href: '/ia', icon: Sparkles, label: 'Operaciones', tooltip: 'Operaciones y Simulación' },
       { id: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', tooltip: 'Dashboard General' },
       { id: 'stops', href: '/stops', icon: HardHat, label: 'Bitácora', tooltip: 'Bitácora de Producción' },
+      { id: 'log-history', href: '/log-history', icon: CalendarCheck2, label: 'Historial Bitácoras', tooltip: 'Historial de Bitácoras' },
       { id: 'materials', href: '/materials', icon: Boxes, label: 'Materiales', tooltip: 'Control de Materiales' },
       { id: 'history', href: '/history', icon: History, label: 'Historial Planes', tooltip: 'Historial de Planes' },
       { id: 'access', href: '/access', icon: Shield, label: 'Acceso', tooltip: 'Gestión de Acceso' },

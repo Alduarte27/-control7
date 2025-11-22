@@ -19,6 +19,7 @@ const availableModules = [
     { id: 'ia', label: 'Operaciones (IA)' },
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'stops', label: 'Bitácora' },
+    { id: 'log-history', label: 'Historial Bitácoras' },
     { id: 'materials', label: 'Materiales' },
     { id: 'admin', label: 'Admin' }
 ];
