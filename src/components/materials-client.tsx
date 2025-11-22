@@ -950,15 +950,15 @@ export default function MaterialsClient({
     }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen]);
 
     const handleScanSuccess = (code: string, isRemoteScan = false) => {
-        // Stop processing remote sync codes
-        if (code.startsWith('sync_')) {
-            // Mobile connecting to a PC session
-            if (isMobileDevice) {
+        if (code.startsWith('sync_') || code.startsWith('http')) {
+            const url = new URL(code);
+            const sessionId = url.searchParams.get('sessionId');
+            
+            if (isMobileDevice && sessionId) {
                 try {
-                    updateDoc(doc(db, 'sessions', code), { status: 'connected', deviceName: navigator.userAgent });
-                    setSyncSessionId(code); // Store session ID on mobile
+                    updateDoc(doc(db, 'sessions', sessionId), { status: 'connected', deviceName: navigator.userAgent });
+                    setSyncSessionId(sessionId); // Store session ID on mobile
                     toast({ title: "Dispositivo Conectado", description: "Ahora puedes escanear códigos de materiales." });
-                    // Re-open scanner to scan materials
                     setTimeout(() => setIsScannerOpen(true), 500);
                 } catch (error) {
                     toast({ title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive" });
@@ -967,12 +967,10 @@ export default function MaterialsClient({
             return;
         }
 
-        // Mobile sending a material code to PC
         if (isMobileDevice && syncSessionId) {
             try {
                 updateDoc(doc(db, 'sessions', syncSessionId), { scannedCode: code, timestamp: Date.now() });
                 toast({ title: "Código Enviado", description: `Se envió el código al computador.` });
-                 // Re-open scanner to allow continuous scanning
                 setTimeout(() => setIsScannerOpen(true), 500);
             } catch (error) {
                 toast({ title: "Error de Envío", description: "No se pudo enviar el código. Vuelve a conectar.", variant: "destructive" });
@@ -981,7 +979,6 @@ export default function MaterialsClient({
             return;
         }
 
-        // This part now only runs on the PC (or on mobile in standalone mode)
         if (!isRemoteScan) {
             setIsScannerOpen(false);
         }
