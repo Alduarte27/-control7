@@ -1,21 +1,29 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, Activity, CalendarCheck2, Boxes } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, Activity, CalendarCheck2, Boxes, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import ExportDialog from './export-dialog';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Skeleton } from './ui/skeleton';
 
-type HeaderProps = {
-  onSave: () => void;
-  hasUnsavedChanges: boolean;
-  setIsInfoDialogOpen: (open: boolean) => void;
+type NavButtonProps = { 
+  href: string; 
+  icon: React.ElementType; 
+  label: string; 
+  tooltipText: string; 
+  isVisible: boolean;
 };
 
-const NavButton = ({ href, icon: Icon, label, tooltipText }: { href: string; icon: React.ElementType; label: string; tooltipText: string; }) => (
+const NavButton = ({ href, icon: Icon, label, tooltipText, isVisible }: NavButtonProps) => {
+  if (!isVisible) return null;
+  return (
     <TooltipProvider>
         <Tooltip>
             <TooltipTrigger asChild>
@@ -31,11 +39,95 @@ const NavButton = ({ href, icon: Icon, label, tooltipText }: { href: string; ico
             </TooltipContent>
         </Tooltip>
     </TooltipProvider>
-);
+  );
+};
 
-export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen }: HeaderProps) {
+const MobileNavItem = ({ href, icon: Icon, label, isVisible }: { href: string; icon: React.ElementType; label: string; isVisible: boolean }) => {
+    if (!isVisible) return null;
+    return (
+        <DropdownMenuItem asChild>
+            <Link href={href} className="flex items-center">
+                <Icon className="mr-2 h-4 w-4" />{label}
+            </Link>
+        </DropdownMenuItem>
+    );
+};
+
+
+type UserPermissions = {
+    [key: string]: boolean;
+};
+
+export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen }: {
+  onSave: () => void;
+  hasUnsavedChanges: boolean;
+  setIsInfoDialogOpen: (open: boolean) => void;
+}) {
   const { theme, setTheme } = useTheme();
   const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const [permissions, setPermissions] = useState<UserPermissions | null>(null);
+  const [loadingPermissions, setLoadingPermissions] = useState(true);
+
+  useEffect(() => {
+    const profileIdFromUrl = searchParams.get('profileId');
+    let profileId: string | null = null;
+
+    if (profileIdFromUrl) {
+        localStorage.setItem('userProfileId', profileIdFromUrl);
+        profileId = profileIdFromUrl;
+
+        // Clean the URL
+        const newParams = new URLSearchParams(window.location.search);
+        newParams.delete('profileId');
+        const newUrl = window.location.pathname + (newParams.toString() ? `?${newParams.toString()}` : '');
+        router.replace(newUrl, { scroll: false });
+    } else {
+        profileId = localStorage.getItem('userProfileId');
+    }
+
+    if (profileId) {
+        const fetchPermissions = async () => {
+            setLoadingPermissions(true);
+            try {
+                const profileDoc = await getDoc(doc(db, 'accessProfiles', profileId!));
+                if (profileDoc.exists()) {
+                    setPermissions(profileDoc.data().permissions || {});
+                } else {
+                    // Profile not found, remove from local storage and grant full access
+                    localStorage.removeItem('userProfileId');
+                    setPermissions({});
+                }
+            } catch (error) {
+                console.error("Error fetching permissions:", error);
+                setPermissions({}); // Default to full access on error
+            }
+            setLoadingPermissions(false);
+        };
+        fetchPermissions();
+    } else {
+        // No profile, grant full access
+        setPermissions({});
+        setLoadingPermissions(false);
+    }
+  }, [searchParams, router]);
+  
+  const hasPermission = (moduleId: string) => {
+      // If permissions object is null (loading) or empty (full access), grant permission
+      return permissions === null || Object.keys(permissions).length === 0 || permissions[moduleId];
+  };
+
+  const navModules = [
+      { id: 'ia', href: '/ia', icon: Sparkles, label: 'Operaciones', tooltip: 'Operaciones y Simulación' },
+      { id: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', tooltip: 'Dashboard General' },
+      { id: 'stops', href: '/stops', icon: HardHat, label: 'Bitácora', tooltip: 'Bitácora de Producción' },
+      { id: 'materials', href: '/materials', icon: Boxes, label: 'Materiales', tooltip: 'Control de Materiales' },
+      { id: 'history', href: '/history', icon: History, label: 'Historial Planes', tooltip: 'Historial de Planes' },
+      { id: 'access', href: '/access', icon: Shield, label: 'Acceso', tooltip: 'Gestión de Acceso' },
+      { id: 'admin', href: '/admin', icon: Settings, label: 'Admin', tooltip: 'Administración' },
+  ];
 
   return (
     <>
@@ -47,78 +139,90 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
         
         {/* Desktop & Tablet Navigation */}
         <div className="hidden md:flex items-center gap-1 md:gap-2">
-          <TooltipProvider>
-              <Tooltip>
-                  <TooltipTrigger asChild>
-                      <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                      >
-                          <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                          <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                          <span className="sr-only">Toggle theme</span>
-                      </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                      <p>Cambiar tema</p>
-                  </TooltipContent>
-              </Tooltip>
-          </TooltipProvider>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                        >
+                            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                            <span className="sr-only">Toggle theme</span>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Cambiar tema</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+            
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setIsInfoDialogOpen(true)}
+                        >
+                            <Info className="h-[1.2rem] w-[1.2rem]" />
+                            <span className="sr-only">Información de la App</span>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Información</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
           
-          <TooltipProvider>
-              <Tooltip>
-                  <TooltipTrigger asChild>
-                      <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => setIsInfoDialogOpen(true)}
-                      >
-                          <Info className="h-[1.2rem] w-[1.2rem]" />
-                          <span className="sr-only">Información de la App</span>
-                      </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                      <p>Información</p>
-                  </TooltipContent>
-              </Tooltip>
-          </TooltipProvider>
+            {loadingPermissions ? (
+              <>
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-10 w-24" />
+                <Skeleton className="h-10 w-24" />
+              </>
+            ) : (
+                navModules.map(mod => (
+                    <NavButton
+                        key={mod.id}
+                        href={mod.href}
+                        icon={mod.icon}
+                        label={mod.label}
+                        tooltipText={mod.tooltip}
+                        isVisible={hasPermission(mod.id)}
+                    />
+                ))
+            )}
           
-          <NavButton href="/ia" icon={Sparkles} label="Operaciones" tooltipText="Operaciones y Simulación" />
-          <NavButton href="/dashboard" icon={LayoutDashboard} label="Dashboard" tooltipText="Dashboard General" />
-          <NavButton href="/stops" icon={HardHat} label="Bitácora" tooltipText="Bitácora de Producción" />
-          <NavButton href="/materials" icon={Boxes} label="Materiales" tooltipText="Control de Materiales" />
-          <NavButton href="/history" icon={History} label="Historial Planes" tooltipText="Historial de Planes" />
-          <NavButton href="/admin" icon={Settings} label="Admin" tooltipText="Administración" />
-          
-          <TooltipProvider>
-              <Tooltip>
-                  <TooltipTrigger asChild>
-                      <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-10 h-10 p-0 lg:w-auto lg:px-4">
-                          <Download className="h-4 w-4 lg:mr-2" />
-                          <span className="hidden lg:inline">Exportar / Reportes</span>
-                      </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                      <p>Exportar / Reportes</p>
-                  </TooltipContent>
-              </Tooltip>
-          </TooltipProvider>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-10 h-10 p-0 lg:w-auto lg:px-4">
+                            <Download className="h-4 w-4 lg:mr-2" />
+                            <span className="hidden lg:inline">Exportar / Reportes</span>
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Exportar / Reportes</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
 
-          <TooltipProvider>
-              <Tooltip>
-                  <TooltipTrigger asChild>
-                      <Button onClick={onSave} className="w-10 h-10 p-0 lg:w-auto lg:px-4 relative">
-                          <Save className="h-4 w-4 lg:mr-2" />
-                          <span className="hidden lg-inline">Guardar</span>
-                          {hasUnsavedChanges && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-500"></span>}
-                      </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                      <p>Guardar Plan</p>
-                  </TooltipContent>
-              </Tooltip>
-          </TooltipProvider>
+            <TooltipProvider>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button onClick={onSave} className="w-10 h-10 p-0 lg:w-auto lg:px-4 relative">
+                            <Save className="h-4 w-4 lg:mr-2" />
+                            <span className="hidden lg-inline">Guardar</span>
+                            {hasUnsavedChanges && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-500"></span>}
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                        <p>Guardar Plan</p>
+                    </TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
         </div>
 
         {/* Mobile Navigation */}
@@ -134,12 +238,15 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                     </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                    <DropdownMenuItem asChild><Link href="/ia" className="flex items-center"><Sparkles className="mr-2 h-4 w-4" />Operaciones</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link href="/dashboard" className="flex items-center"><LayoutDashboard className="mr-2 h-4 w-4" />Dashboard</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link href="/stops" className="flex items-center"><HardHat className="mr-2 h-4 w-4" />Bitácora</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link href="/materials" className="flex items-center"><Boxes className="mr-2 h-4 w-4" />Materiales</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link href="/history" className="flex items-center"><History className="mr-2 h-4 w-4" />Historial Planes</Link></DropdownMenuItem>
-                    <DropdownMenuItem asChild><Link href="/admin" className="flex items-center"><Settings className="mr-2 h-4 w-4" />Admin</Link></DropdownMenuItem>
+                    {loadingPermissions ? <DropdownMenuItem>Cargando...</DropdownMenuItem> : navModules.map(mod => (
+                       <MobileNavItem
+                          key={mod.id}
+                          href={mod.href}
+                          icon={mod.icon}
+                          label={mod.label}
+                          isVisible={hasPermission(mod.id)}
+                        />
+                    ))}
                     <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setIsInfoDialogOpen(true)}><Info className="mr-2 h-4 w-4" />Información</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>

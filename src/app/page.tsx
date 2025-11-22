@@ -1,11 +1,12 @@
 import Control7Client from '@/components/control-7-client';
 import { getCachedCategories, getCachedProducts } from '@/services/data-service';
+import { redirect } from 'next/navigation';
 
+// This is a server component, so we can check for permissions here.
+// However, the actual permission logic is handled client-side for dynamic UI updates.
+// A more robust solution might involve server-side session management.
 export default async function Home({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
-  // NOTA: No pasamos el planId a propósito.
-  // Esto fuerza a que la página de inicio SIEMPRE cargue la semana actual,
-  // rompiendo el caché de la URL para los usuarios que tenían un planId antiguo guardado.
-  // La navegación desde el historial seguirá funcionando porque el cliente leerá los searchParams.
+  
   const planId = typeof searchParams?.planId === 'string' ? searchParams.planId : undefined;
   
   // Pre-fetch data on the server. This will be cached.
