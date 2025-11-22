@@ -1,10 +1,12 @@
+
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Search, Copy } from 'lucide-react';
+import { CalendarDays, Search, Copy, History } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek, isValid } from 'date-fns';
@@ -51,7 +53,7 @@ export default function FilterBar({
 
   return (
     <div className="p-4 bg-card rounded-lg shadow-sm border">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
         <div className="flex flex-col gap-1.5">
             <Label htmlFor="productSearch">Búsqueda de Producto</Label>
             <div className="relative">
@@ -107,6 +109,14 @@ export default function FilterBar({
             <Button onClick={onCopyLastWeek} variant="outline">
                 <Copy className="mr-2 h-4 w-4" />
                 Copiar Plan Anterior
+            </Button>
+        </div>
+        <div className="flex flex-col gap-1.5">
+            <Button asChild variant="outline">
+              <Link href="/history">
+                <History className="mr-2 h-4 w-4" />
+                Historial de Planes
+              </Link>
             </Button>
         </div>
       </div>
