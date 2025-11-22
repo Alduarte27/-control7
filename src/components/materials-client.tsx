@@ -1344,6 +1344,9 @@ export default function MaterialsClient({
                         <h1 className="text-2xl font-bold text-foreground">Control de Materiales de Empaque</h1>
                     </div>
                     <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={handleSyncClick}>
+                            <Smartphone className="mr-2 h-4 w-4" /> Sincronizar Escáner
+                        </Button>
                         <Link href="/">
                             <Button variant="outline">
                                 <ChevronLeft className="mr-2 h-4 w-4" />
@@ -1484,9 +1487,6 @@ export default function MaterialsClient({
                                         </>
                                     )}
                                     <div className="flex items-end gap-2 lg:col-start-5">
-                                         <Button variant="outline" onClick={handleSyncClick} disabled={!newMaterialSupplier}>
-                                            <Smartphone className="mr-2 h-4 w-4" /> Sincronizar Escáner
-                                        </Button>
                                          <div className='flex gap-2'>
                                             <Button onClick={() => setIsScannerOpen(true)} variant="outline" size="icon" disabled={!newMaterialSupplier}>
                                                 <Camera className="h-4 w-4" />
@@ -1674,4 +1674,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
