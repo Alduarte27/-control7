@@ -105,7 +105,7 @@ function EditMaterialDialog({
   onClose: () => void;
   onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
 }) {
-  const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>({});
+  const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
 
   React.useEffect(() => {
     setEditedMaterial(material);
@@ -269,8 +269,18 @@ function AdvancedEditDialog({
                         <Label htmlFor="adv-actual-weight">P. Bruto (Balanza)</Label>
                         <Input id="adv-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
                     </div>
+                </div>
+                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                     <div className="space-y-1.5">
+                        <Label htmlFor="adv-plastic-weight">P. Envoltura (kg)</Label>
+                        <Input id="adv-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
+                    </div>
                     <div className="space-y-1.5">
-                        <Label htmlFor="adv-tare-weight">Tara Real</Label>
+                        <Label htmlFor="adv-core-weight">P. Canuto (kg)</Label>
+                        <Input id="adv-core-weight" type="number" value={editedMaterial.coreWeight || ''} onChange={(e) => handleChange('coreWeight', Number(e.target.value))} />
+                    </div>
+                     <div className="space-y-1.5">
+                        <Label htmlFor="adv-tare-weight">Tara Real (Total)</Label>
                         <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight || ''} onChange={(e) => handleChange('tareWeight', Number(e.target.value))} />
                     </div>
                 </div>
@@ -904,27 +914,14 @@ export default function MaterialsClient({
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
+    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     
     React.useEffect(() => {
         setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
     }, []);
     
-    const handleSyncClick = React.useCallback(async () => {
-        if (isMobileDevice) {
-            // On mobile, just open the scanner. It will handle the connection flow.
-            setIsScannerOpen(true);
-        } else {
-            // On desktop, generate the session and show the QR code.
-            const newSessionId = `sync_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-            const sessionDocRef = doc(db, 'sessions', newSessionId);
-            await setDoc(sessionDocRef, { createdAt: Date.now(), status: 'pending' });
-            setSyncSessionId(newSessionId);
-            setIsSyncModalOpen(true);
-        }
-    }, [isMobileDevice]);
-    
-     const handleScanSuccess = React.useCallback((code: string) => {
+    const handleScanSuccess = React.useCallback((code: string) => {
         if (isMobileDevice && syncSessionId) {
              try {
                 // When on mobile in sync mode, send the code to the session document
@@ -996,6 +993,20 @@ export default function MaterialsClient({
         }
     }, [isMobileDevice, syncSessionId, newMaterialType, toast]);
 
+    const handleSyncClick = React.useCallback(async () => {
+        if (isMobileDevice) {
+            // On mobile, just open the scanner. It will handle the connection flow.
+            setIsScannerOpen(true);
+        } else {
+            // On desktop, generate the session and show the QR code.
+            const newSessionId = `sync_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            const sessionDocRef = doc(db, 'sessions', newSessionId);
+            await setDoc(sessionDocRef, { createdAt: Date.now(), status: 'pending' });
+            setSyncSessionId(newSessionId);
+            setIsSyncModalOpen(true);
+        }
+    }, [isMobileDevice]);
+    
     // Listener for desktop
     React.useEffect(() => {
         let unsub: (() => void) | undefined;
@@ -1059,6 +1070,7 @@ export default function MaterialsClient({
 
     const filteredMaterials = React.useMemo(() => {
         return materials.filter(material => {
+            const statusMatch = statusFilter === 'all' || material.status === statusFilter;
             const typeMatch = typeFilter === 'all' || material.type === typeFilter;
             const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
 
@@ -1070,9 +1082,9 @@ export default function MaterialsClient({
                 material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
 
-            return typeMatch && supplierMatch && machineMatch && searchMatch;
+            return statusMatch && typeMatch && supplierMatch && machineMatch && searchMatch;
         });
-    }, [materials, typeFilter, supplierFilter, machineFilter, searchQuery, suppliers]);
+    }, [materials, statusFilter, typeFilter, supplierFilter, machineFilter, searchQuery, suppliers]);
 
 
     const handleConfigSave = async (type: 'supplier', data: any, action: 'add' | 'delete') => {
@@ -1223,6 +1235,8 @@ export default function MaterialsClient({
                  const updateData: Partial<PackagingMaterial> = {
                     status: 'consumido',
                     tareWeight: tareWeight,
+                    plasticWeight: data.plasticWeight,
+                    coreWeight: data.coreWeight || 0,
                     actualNetWeight: actualNetWeight,
                     tareWeightedAt: Date.now(),
                 };
@@ -1250,6 +1264,19 @@ export default function MaterialsClient({
                 if (grossWeight > 0 && netWeight > 0) {
                     finalUpdates.labelTare = grossWeight - netWeight;
                 }
+            }
+
+            const plasticWeight = finalUpdates.plasticWeight ?? currentMaterial?.plasticWeight ?? 0;
+            const coreWeight = finalUpdates.coreWeight ?? currentMaterial?.coreWeight ?? 0;
+            const newTareWeight = plasticWeight + coreWeight;
+
+            if (newTareWeight > 0 && (newTareWeight !== (currentMaterial?.tareWeight ?? 0))) {
+                 finalUpdates.tareWeight = newTareWeight;
+                 const referenceWeight = finalUpdates.actualWeight || currentMaterial?.actualWeight || currentMaterial?.totalWeight || 0;
+                 finalUpdates.actualNetWeight = referenceWeight - newTareWeight;
+            } else if (finalUpdates.tareWeight !== undefined && finalUpdates.tareWeight !== (currentMaterial?.tareWeight ?? 0)) {
+                const referenceWeight = finalUpdates.actualWeight || currentMaterial?.actualWeight || currentMaterial?.totalWeight || 0;
+                finalUpdates.actualNetWeight = referenceWeight - finalUpdates.tareWeight;
             }
 
             await updateDoc(doc(db, 'packagingMaterials', id), finalUpdates);
@@ -1631,7 +1658,7 @@ export default function MaterialsClient({
                                     )}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 pt-4">
                                 <Input
                                     placeholder="Buscar por código, lote..."
                                     value={searchQuery}

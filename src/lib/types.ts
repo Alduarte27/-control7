@@ -176,6 +176,8 @@ export type PackagingMaterial = {
     consumedAt?: number;
     assignedMachine?: string;
     tareWeight?: number; // Peso de la tara (plastico + canuto)
+    plasticWeight?: number; // Peso de la envoltura
+    coreWeight?: number; // Peso del canuto
     actualNetWeight?: number; // Peso neto real (Peso Real - Tara)
     tareWeightedAt?: number; // Timestamp de cuando se pesó la tara
 };
