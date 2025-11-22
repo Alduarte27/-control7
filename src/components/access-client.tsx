@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -10,7 +11,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription }
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, ChevronLeft, Shield, QrCode, X } from 'lucide-react';
+import { PlusCircle, Trash2, ChevronLeft, Shield, QrCode, X, Share2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { QRCodeSVG } from 'qrcode.react';
 
@@ -89,6 +90,13 @@ const AccessClient = () => {
             toast({ title: 'Error', description: 'No se pudo eliminar el perfil.', variant: 'destructive' });
         }
     };
+
+    const handleShare = (profileName: string, profileId: string) => {
+        const url = `${window.location.origin}/?profileId=${profileId}`;
+        const message = encodeURIComponent(`Hola, aquí tienes tu enlace de acceso para Control 7 con el perfil "${profileName}":\n\n${url}`);
+        window.open(`https://api.whatsapp.com/send?text=${message}`, '_blank');
+    };
+
 
     return (
         <div className="bg-background min-h-screen text-foreground">
@@ -176,11 +184,21 @@ const AccessClient = () => {
                                                 />
                                             </div>
                                         </div>
-                                        <DialogClose asChild>
-                                            <Button type="button" variant="secondary" className="mt-2">
-                                                Cerrar
+                                        <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                                            <Button
+                                                variant="outline"
+                                                className="w-full flex items-center gap-2"
+                                                onClick={() => handleShare(profile.name, profile.id)}
+                                            >
+                                                <Share2 className="h-4 w-4" />
+                                                Compartir por WhatsApp
                                             </Button>
-                                        </DialogClose>
+                                            <DialogClose asChild>
+                                                <Button type="button" variant="secondary" className="w-full">
+                                                    Cerrar
+                                                </Button>
+                                            </DialogClose>
+                                        </div>
                                     </DialogContent>
                                 </Dialog>
                             </CardFooter>
