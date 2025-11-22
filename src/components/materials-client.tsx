@@ -408,8 +408,8 @@ function TareWeightDialog({
     onClose: () => void;
     onConfirm: (tareData: { plasticWeight: number; coreWeight: number }) => void;
 }) {
-    const [plasticWeight, setPlasticWeight] = React.useState('');
-    const [coreWeight, setCoreWeight] = React.useState('');
+    const [plasticWeight, setPlasticWeight] = React.useState(material.plasticWeight?.toString() || '');
+    const [coreWeight, setCoreWeight] = React.useState(material.coreWeight?.toString() || '');
     const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
 
     const totalTare = (parseFloat(plasticWeight) || 0) + (parseFloat(coreWeight) || 0);
@@ -759,13 +759,13 @@ function MaterialCard({
                     ) : (
                         <div className="space-y-3">
                             <div className="grid grid-cols-3 gap-2 text-center">
+                                 <div className="space-y-1">
+                                    <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
+                                    <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
+                                </div>
                                 <div className="space-y-1">
                                     <p className="text-muted-foreground">Peso Neto (Etiqueta)</p>
                                     <p className="font-semibold text-lg">{material.netWeight} kg</p>
-                                </div>
-                                <div className="space-y-1">
-                                    <p className="text-muted-foreground">Peso Bruto (Etiqueta)</p>
-                                    <p className="font-semibold text-lg">{material.grossWeight ? `${material.grossWeight} kg` : 'N/A'}</p>
                                 </div>
                                  <div className="space-y-1">
                                     <p className="text-muted-foreground">Tara (Etiqueta)</p>
@@ -917,10 +917,6 @@ export default function MaterialsClient({
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     
-    React.useEffect(() => {
-        setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
-    }, []);
-    
     const handleScanSuccess = React.useCallback((code: string) => {
         if (isMobileDevice && syncSessionId) {
              try {
@@ -992,7 +988,7 @@ export default function MaterialsClient({
             }
         }
     }, [isMobileDevice, syncSessionId, newMaterialType, toast]);
-
+    
     const handleSyncClick = React.useCallback(async () => {
         if (isMobileDevice) {
             // On mobile, just open the scanner. It will handle the connection flow.
@@ -1029,6 +1025,10 @@ export default function MaterialsClient({
             if (unsub) unsub();
         };
     }, [syncSessionId, isMobileDevice, isSyncModalOpen, toast, handleScanSuccess]);
+    
+    React.useEffect(() => {
+        setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+    }, []);
 
     const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
@@ -1623,7 +1623,7 @@ export default function MaterialsClient({
 
                     <Card>
                         <CardHeader>
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                                 <div className="space-y-1">
                                     <CardTitle>Inventario en Área de Empaque</CardTitle>
                                     <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
@@ -1658,12 +1658,12 @@ export default function MaterialsClient({
                                     )}
                                 </div>
                             </div>
-                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 pt-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 pt-4">
                                 <Input
                                     placeholder="Buscar por código, lote..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="lg:col-span-2"
+                                    className="lg:col-span-1"
                                 />
                                 <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
                                     <SelectTrigger><SelectValue/></SelectTrigger>
@@ -1696,7 +1696,7 @@ export default function MaterialsClient({
                             </div>
                         </CardHeader>
                         <CardContent>
-                             <Tabs defaultValue="en_uso" className="w-full">
+                             <Tabs defaultValue="en_uso" value={statusFilter} onValueChange={(v) => setStatusFilter(v as MaterialStatus)}>
                                 <TabsList className="grid w-full grid-cols-4">
                                     <TabsTrigger value="en_uso">En Uso ({enUsoMaterials.length})</TabsTrigger>
                                     <TabsTrigger value="recibido">Recibido ({recibidoMaterials.length})</TabsTrigger>
