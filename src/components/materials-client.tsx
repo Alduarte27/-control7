@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,7 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Calendar } from './ui/calendar';
 import { Progress } from './ui/progress';
 import { QRCodeSVG } from 'qrcode.react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 
 
 function ConfigModal({ 
@@ -888,6 +889,8 @@ export default function MaterialsClient({
     const [configOpen, setConfigOpen] = React.useState(false);
     const netWeightInputRef = React.useRef<HTMLInputElement>(null);
     const unitWeightInputRef = React.useRef<HTMLInputElement>(null);
+    const [isAddMaterialOpen, setIsAddMaterialOpen] = React.useState(true);
+
 
     const [actionState, setActionState] = React.useState<{ material: PackagingMaterial; action: 'weigh' | 'consume' | 'weigh_tare' } | null>(null);
     
@@ -946,37 +949,38 @@ export default function MaterialsClient({
 
     }, [syncSessionId, isMobileDevice, toast, isSyncModalOpen]);
 
-    const handleScanSuccess = async (code: string, isRemoteScan = false) => {
-        // Mobile device logic
-        if (isMobileDevice) {
-            // Case 1: Mobile is connecting to a PC session
-            if (code.startsWith('sync_')) {
+    const handleScanSuccess = (code: string, isRemoteScan = false) => {
+        // Stop processing remote sync codes
+        if (code.startsWith('sync_')) {
+            // Mobile connecting to a PC session
+            if (isMobileDevice) {
                 try {
-                    await updateDoc(doc(db, 'sessions', code), { status: 'connected', deviceName: navigator.userAgent });
+                    updateDoc(doc(db, 'sessions', code), { status: 'connected', deviceName: navigator.userAgent });
                     setSyncSessionId(code); // Store session ID on mobile
-                    toast({ title: "Dispositivo Conectado", description: "Ahora puedes escanear códigos de materiales."});
+                    toast({ title: "Dispositivo Conectado", description: "Ahora puedes escanear códigos de materiales." });
                     // Re-open scanner to scan materials
-                    setTimeout(() => setIsScannerOpen(true), 500); 
-                } catch (error) {
-                    toast({title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive"});
-                }
-                return; // Stop processing here for sync codes
-            } 
-            // Case 2: Mobile is already in a session and scans a material code
-            else if (syncSessionId) {
-                try {
-                    await updateDoc(doc(db, 'sessions', syncSessionId), { scannedCode: code, timestamp: Date.now() });
-                    toast({ title: "Código Enviado", description: `Se envió el código al computador.`});
-                     // Re-open scanner to allow continuous scanning
                     setTimeout(() => setIsScannerOpen(true), 500);
                 } catch (error) {
-                    toast({title: "Error de Envío", description: "No se pudo enviar el código. Vuelve a conectar.", variant: "destructive"});
-                    setSyncSessionId(null); // Reset session
+                    toast({ title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive" });
                 }
-                return; // Stop processing, the PC will handle the code
             }
+            return;
         }
-    
+
+        // Mobile sending a material code to PC
+        if (isMobileDevice && syncSessionId) {
+            try {
+                updateDoc(doc(db, 'sessions', syncSessionId), { scannedCode: code, timestamp: Date.now() });
+                toast({ title: "Código Enviado", description: `Se envió el código al computador.` });
+                 // Re-open scanner to allow continuous scanning
+                setTimeout(() => setIsScannerOpen(true), 500);
+            } catch (error) {
+                toast({ title: "Error de Envío", description: "No se pudo enviar el código. Vuelve a conectar.", variant: "destructive" });
+                setSyncSessionId(null); // Reset session
+            }
+            return;
+        }
+
         // This part now only runs on the PC (or on mobile in standalone mode)
         if (!isRemoteScan) {
             setIsScannerOpen(false);
@@ -1401,151 +1405,163 @@ export default function MaterialsClient({
                 </header>
 
                 <main className="p-4 md:p-8 space-y-6">
-                    <Card>
-                        <CardHeader className="flex flex-row items-start justify-between">
-                            <div>
-                                <CardTitle>Registrar Nuevo Material</CardTitle>
-                                <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
-                            </div>
-                             <Button variant="outline" onClick={() => setConfigOpen(true)}>
-                                <Settings className="mr-2 h-4 w-4" />
-                                Configuración
-                            </Button>
-                        </CardHeader>
-                        <CardContent>
-                             <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="material-supplier">Proveedor</Label>
-                                        <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
-                                            <SelectTrigger id="material-supplier"><SelectValue placeholder="Seleccionar..."/></SelectTrigger>
-                                            <SelectContent>
-                                                {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="material-type">Tipo de Material</Label>
-                                        <Select value={newMaterialType} onValueChange={(v) => setNewMaterialType(v as MaterialType)} disabled={!newMaterialSupplier}>
-                                            <SelectTrigger id="material-type"><SelectValue /></SelectTrigger>
-                                            <SelectContent>
-                                                {availableMaterialTypes.map(key => (
-                                                    <SelectItem key={key} value={key}>{materialTypeLabels[key as MaterialType]}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    {!isPlastiempaques && (
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                            {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || (newMaterialType === 'rollo_laminado' && isMilanplastic)) ? (
-                                                <Select
-                                                    value={newMaterialPresentation}
-                                                    onValueChange={setNewMaterialPresentation}
-                                                    disabled={!newMaterialSupplier}
-                                                >
-                                                    <SelectTrigger id="material-presentation-trigger">
-                                                        <SelectValue placeholder="Seleccionar producto..." />
-                                                    </SelectTrigger>
+                    <Collapsible open={isAddMaterialOpen} onOpenChange={setIsAddMaterialOpen}>
+                        <Card>
+                             <CardHeader className="flex flex-row items-center justify-between">
+                                <div className="flex-1">
+                                    <CardTitle>Registrar Nuevo Material</CardTitle>
+                                    <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                     <Button variant="outline" onClick={() => setConfigOpen(true)}>
+                                        <Settings className="mr-2 h-4 w-4" />
+                                        Configuración
+                                    </Button>
+                                    <CollapsibleTrigger asChild>
+                                        <Button variant="ghost" size="icon">
+                                            <ChevronDown className={cn("h-5 w-5 transition-transform", !isAddMaterialOpen && "-rotate-90")}/>
+                                        </Button>
+                                    </CollapsibleTrigger>
+                                </div>
+                            </CardHeader>
+                            <CollapsibleContent>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-supplier">Proveedor</Label>
+                                                <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
+                                                    <SelectTrigger id="material-supplier"><SelectValue placeholder="Seleccionar..."/></SelectTrigger>
                                                     <SelectContent>
-                                                        {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
-                                                            <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
+                                                        {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-type">Tipo de Material</Label>
+                                                <Select value={newMaterialType} onValueChange={(v) => setNewMaterialType(v as MaterialType)} disabled={!newMaterialSupplier}>
+                                                    <SelectTrigger id="material-type"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>
+                                                        {availableMaterialTypes.map(key => (
+                                                            <SelectItem key={key} value={key}>{materialTypeLabels[key as MaterialType]}</SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
-                                            ) : (
-                                                <Input
-                                                    id="material-presentation-trigger"
-                                                    value={newMaterialPresentation}
-                                                    onChange={(e) => setNewMaterialPresentation(e.target.value)}
-                                                    placeholder="Ej: Azúcar San Juan 1kg"
-                                                    disabled={!newMaterialSupplier}
-                                                />
+                                            </div>
+                                            {!isPlastiempaques && (
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="material-presentation-trigger">Presentación</Label>
+                                                    {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || (newMaterialType === 'rollo_laminado' && isMilanplastic)) ? (
+                                                        <Select
+                                                            value={newMaterialPresentation}
+                                                            onValueChange={setNewMaterialPresentation}
+                                                            disabled={!newMaterialSupplier}
+                                                        >
+                                                            <SelectTrigger id="material-presentation-trigger">
+                                                                <SelectValue placeholder="Seleccionar producto..." />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
+                                                                    <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    ) : (
+                                                        <Input
+                                                            id="material-presentation-trigger"
+                                                            value={newMaterialPresentation}
+                                                            onChange={(e) => setNewMaterialPresentation(e.target.value)}
+                                                            placeholder="Ej: Azúcar San Juan 1kg"
+                                                            disabled={!newMaterialSupplier}
+                                                        />
+                                                    )}
+                                                </div>
                                             )}
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-code">Código</Label>
+                                                <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
+                                            </div>
                                         </div>
-                                    )}
-                                    <div className="space-y-1.5">
-                                        <Label htmlFor="material-code">Código</Label>
-                                        <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
-                                    {isPlasticsacks && (
-                                        <div className="space-y-1.5">
-                                            <Label htmlFor="material-lote">Lote</Label>
-                                            <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
-                                        </div>
-                                    )}
-                                    
-                                    {!isPlastiempaques && (
-                                        <div className="space-y-1.5">
-                                            <Label>Fecha Proveedor</Label>
-                                            <Popover>
-                                                <PopoverTrigger asChild>
-                                                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}>
-                                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                                        {newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
-                                            </Popover>
-                                        </div>
-                                    )}
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
+                                            {isPlasticsacks && (
+                                                <div className="space-y-1.5">
+                                                    <Label htmlFor="material-lote">Lote</Label>
+                                                    <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
+                                                </div>
+                                            )}
+                                            
+                                            {!isPlastiempaques && (
+                                                <div className="space-y-1.5">
+                                                    <Label>Fecha Proveedor</Label>
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}>
+                                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                                {newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
+                                                    </Popover>
+                                                </div>
+                                            )}
 
-                                    {isSacosType ? (
-                                        isPlasticsacks ? (
-                                            <>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="material-quantity-ps">Cantidad</Label>
-                                                    <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
+                                            {isSacosType ? (
+                                                isPlasticsacks ? (
+                                                    <>
+                                                        <div className="space-y-1.5">
+                                                            <Label htmlFor="material-quantity-ps">Cantidad</Label>
+                                                            <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label htmlFor="material-total-weight-ps">Peso Neto (kg)</Label>
+                                                            <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="space-y-1.5">
+                                                            <Label htmlFor="material-quantity-rs">Cantidad</Label>
+                                                            <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
+                                                            <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
+                                                            <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" disabled={!newMaterialSupplier}/>
+                                                        </div>
+                                                    </>
+                                                )
+                                            ) : (
+                                                <>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
+                                                        <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" disabled={!newMaterialSupplier}/>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
+                                                        <Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05" disabled={!newMaterialSupplier}/>
+                                                    </div>
+                                                </>
+                                            )}
+                                            <div className="flex items-end gap-2 lg:col-start-5">
+                                                 <div className='flex gap-2 w-full'>
+                                                    <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
+                                                        <Camera className="mr-2 h-4 w-4" /> Escanear
+                                                    </Button>
+                                                    <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
+                                                        <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                                    </Button>
                                                 </div>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="material-total-weight-ps">Peso Neto (kg)</Label>
-                                                    <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
-                                                </div>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="material-quantity-rs">Cantidad</Label>
-                                                    <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
-                                                    <Input id="material-unit-weight-rs" type="number" ref={unitWeightInputRef} value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
-                                                    <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" disabled={!newMaterialSupplier}/>
-                                                </div>
-                                            </>
-                                        )
-                                    ) : (
-                                        <>
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
-                                                <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" disabled={!newMaterialSupplier}/>
                                             </div>
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
-                                                <Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05" disabled={!newMaterialSupplier}/>
-                                            </div>
-                                        </>
-                                    )}
-                                    <div className="flex items-end gap-2 lg:col-start-5">
-                                         <div className='flex gap-2 w-full'>
-                                            <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
-                                                <Camera className="mr-2 h-4 w-4" /> Escanear
-                                            </Button>
-                                            <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
-                                                <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                            </Button>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                                </CardContent>
+                            </CollapsibleContent>
+                        </Card>
+                    </Collapsible>
+
 
                     <Card>
                          <CardHeader>
