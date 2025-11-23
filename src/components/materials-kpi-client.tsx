@@ -89,17 +89,17 @@ export default function MaterialsKpiClient({
             }
             
             if (m.actualNetWeight !== undefined && referenceNetWeight > 0) {
-                const discrepancy = referenceNetWeight - m.actualNetWeight;
+                const discrepancy = m.actualNetWeight - referenceNetWeight;
                 const performance = (m.actualNetWeight / referenceNetWeight) * 100;
                 
                 totalDiscrepancy += discrepancy;
                 totalPerformanceSum += performance;
                 performanceCount++;
 
-                if (discrepancy > 0) {
-                    totalMissingMaterial += discrepancy;
-                } else {
-                    totalExtraMaterial += Math.abs(discrepancy);
+                if (discrepancy < 0) { // Material faltante
+                    totalMissingMaterial += Math.abs(discrepancy);
+                } else { // Material excedente
+                    totalExtraMaterial += discrepancy;
                 }
             }
         });
@@ -213,10 +213,10 @@ export default function MaterialsKpiClient({
                             <CardTitle className="text-sm font-medium">Discrepancia Neta</CardTitle>
                         </CardHeader>
                         <CardContent>
-                             <div className={cn("text-3xl font-bold", overallKpis.totalDiscrepancy > 0 ? "text-red-600" : "text-green-600")}>
+                             <div className={cn("text-3xl font-bold", overallKpis.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
                                 {overallKpis.totalDiscrepancy.toFixed(2)} kg
                             </div>
-                            <p className="text-xs text-muted-foreground">Negativo es bueno (excedente)</p>
+                            <p className="text-xs text-muted-foreground">Positivo es bueno (excedente)</p>
                         </CardContent>
                     </Card>
                     <Card>
@@ -239,7 +239,7 @@ export default function MaterialsKpiClient({
                                 <TrendingDown className="inline h-7 w-7 mr-2" />
                                 {overallKpis.totalMissingMaterial.toFixed(2)} kg
                             </div>
-                            <p className="text-xs text-muted-foreground">Suma de todas las discrepancias positivas</p>
+                            <p className="text-xs text-muted-foreground">Suma de todas las discrepancias negativas</p>
                         </CardContent>
                     </Card>
                      <Card>
@@ -251,7 +251,7 @@ export default function MaterialsKpiClient({
                                 <TrendingUp className="inline h-7 w-7 mr-2" />
                                 {overallKpis.totalExtraMaterial.toFixed(2)} kg
                             </div>
-                             <p className="text-xs text-muted-foreground">Suma de todas las discrepancias negativas</p>
+                             <p className="text-xs text-muted-foreground">Suma de todas las discrepancias positivas</p>
                         </CardContent>
                     </Card>
                 </div>
@@ -279,7 +279,7 @@ export default function MaterialsKpiClient({
                                             <TableCell className={cn("text-right font-semibold", kpi.averagePerformance >= 99 ? 'text-green-600' : 'text-amber-600')}>
                                                 {kpi.averagePerformance.toFixed(1)}%
                                             </TableCell>
-                                            <TableCell className={cn("text-right font-semibold", kpi.totalDiscrepancy <= 0 ? "text-green-600" : "text-red-600")}>
+                                            <TableCell className={cn("text-right font-semibold", kpi.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
                                                 {kpi.totalDiscrepancy.toFixed(2)} kg
                                             </TableCell>
                                             <TableCell className="text-right text-muted-foreground">{kpi.totalConsumedCount}</TableCell>
