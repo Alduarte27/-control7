@@ -225,20 +225,6 @@ function AdvancedEditDialog({
     setEditedMaterial(material);
   }, [material]);
   
-  React.useEffect(() => {
-    if (isSacosType) {
-        const netWeight = Number(editedMaterial.totalWeight) || 0;
-        const plasticWeight = Number(editedMaterial.plasticWeight) || 0;
-        if (netWeight > 0) {
-            setEditedMaterial(prev => ({
-                ...prev,
-                grossWeight: netWeight + plasticWeight
-            }));
-        }
-    }
-  }, [isSacosType, editedMaterial.totalWeight, editedMaterial.plasticWeight]);
-
-
   const handleChange = (field: keyof PackagingMaterial, value: any) => {
     setEditedMaterial((prev) => ({ ...prev, [field]: value }));
   };
@@ -256,7 +242,32 @@ function AdvancedEditDialog({
   };
 
   const handleSaveChanges = () => {
-    onSave(material.id, editedMaterial);
+    const finalUpdates = { ...editedMaterial };
+    
+    // Recalculate tare for rollos if weights changed
+    if (!isSacosType) {
+        const netWeight = Number(finalUpdates.netWeight ?? material.netWeight ?? 0);
+        const grossWeight = Number(finalUpdates.grossWeight ?? material.grossWeight ?? 0);
+        if (grossWeight > 0 && netWeight > 0) {
+            finalUpdates.labelTare = grossWeight - netWeight;
+        }
+    }
+
+    // Recalculate actual net weight if tare components changed
+    const plasticWeight = Number(finalUpdates.plasticWeight ?? material.plasticWeight ?? 0);
+    const coreWeight = Number(finalUpdates.coreWeight ?? material.coreWeight ?? 0);
+    const newTareWeight = plasticWeight + coreWeight;
+
+    if (newTareWeight > 0 && newTareWeight !== (material.tareWeight ?? 0)) {
+         finalUpdates.tareWeight = newTareWeight;
+         const referenceWeight = finalUpdates.actualWeight || material.actualWeight || material.totalWeight || 0;
+         finalUpdates.actualNetWeight = referenceWeight - newTareWeight;
+    } else if (finalUpdates.tareWeight !== undefined && finalUpdates.tareWeight !== (material.tareWeight ?? 0)) {
+        const referenceWeight = finalUpdates.actualWeight || material.actualWeight || material.totalWeight || 0;
+        finalUpdates.actualNetWeight = referenceWeight - finalUpdates.tareWeight;
+    }
+
+    onSave(material.id, finalUpdates);
     onClose();
   };
   
@@ -269,34 +280,36 @@ function AdvancedEditDialog({
             </DialogHeader>
             <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
                 {isSacosType ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-presentation">Presentación</Label>
-                            <Input id="adv-sacos-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-code">Código</Label>
-                            <Input id="adv-sacos-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
-                        </div>
-                         <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-provider-date">Fecha Proveedor</Label>
-                            <Input id="adv-sacos-provider-date" type="date" value={editedMaterial.providerDate || ''} onChange={(e) => handleChange('providerDate', e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-quantity">Cantidad</Label>
-                            <Input id="adv-sacos-quantity" type="number" value={editedMaterial.quantity || ''} onChange={(e) => handleChange('quantity', Number(e.target.value))} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-unit-weight">Peso/Und (g)</Label>
-                            <Input id="adv-sacos-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={(e) => handleChange('unitWeight', Number(e.target.value))} />
-                        </div>
-                         <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-total-weight">Peso Neto Total (kg)</Label>
-                            <Input id="adv-sacos-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={(e) => handleChange('totalWeight', Number(e.target.value))} />
-                        </div>
-                         <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-gross-weight">Peso Bruto (kg)</Label>
-                            <Input id="adv-sacos-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-sacos-presentation">Presentación</Label>
+                                <Input id="adv-sacos-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-sacos-code">Código</Label>
+                                <Input id="adv-sacos-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
+                            </div>
+                             <div className="space-y-1.5">
+                                <Label htmlFor="adv-sacos-provider-date">Fecha Proveedor</Label>
+                                <Input id="adv-sacos-provider-date" type="date" value={editedMaterial.providerDate || ''} onChange={(e) => handleChange('providerDate', e.target.value)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-sacos-quantity">Cantidad</Label>
+                                <Input id="adv-sacos-quantity" type="number" value={editedMaterial.quantity || ''} onChange={(e) => handleChange('quantity', Number(e.target.value))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-sacos-unit-weight">Peso/Und (g)</Label>
+                                <Input id="adv-sacos-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={(e) => handleChange('unitWeight', Number(e.target.value))} />
+                            </div>
+                             <div className="space-y-1.5">
+                                <Label htmlFor="adv-sacos-total-weight">Peso Neto Total (kg)</Label>
+                                <Input id="adv-sacos-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={(e) => handleChange('totalWeight', Number(e.target.value))} />
+                            </div>
+                             <div className="space-y-1.5">
+                                <Label htmlFor="adv-sacos-gross-weight">Peso Bruto (kg)</Label>
+                                <Input id="adv-sacos-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -1198,7 +1211,8 @@ export default function MaterialsClient({
 
         if (isSacosType) {
             fields.push({ value: newMaterialQuantity, name: "Cantidad" });
-            fields.push({ value: newMaterialTotalWeight, name: "Peso Neto Total" });
+            fields.push({ value: newMaterialTotalWeight, name: "Peso Neto (Etiqueta)" });
+            fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto (Balanza)" });
         } else { // Rollos
             fields.push({ value: newMaterialNetWeight, name: "Peso Neto" });
             fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto" });
@@ -1226,6 +1240,7 @@ export default function MaterialsClient({
             const netWeightNum = isSacosType 
                 ? parseFloat(newMaterialTotalWeight.replace(',', '.')) || 0
                 : parseFloat(newMaterialNetWeight.replace(',', '.')) || 0;
+            const labelTare = grossWeightNum - netWeightNum;
 
             const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
                 type: newMaterialType,
@@ -1236,6 +1251,8 @@ export default function MaterialsClient({
                 status: 'recibido',
                 receivedAt: Date.now(),
                 grossWeight: grossWeightNum,
+                netWeight: netWeightNum,
+                labelTare: labelTare > 0 ? labelTare : 0,
             };
             
             if (isPlasticsacks) {
@@ -1245,12 +1262,6 @@ export default function MaterialsClient({
             if (isSacosType) {
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
                 newMaterialData.totalWeight = netWeightNum; 
-                newMaterialData.netWeight = netWeightNum; 
-                newMaterialData.plasticWeight = 0; // Se registrará en la tara
-                newMaterialData.labelTare = 0;
-            } else { // Rollos
-                newMaterialData.netWeight = netWeightNum;
-                newMaterialData.labelTare = grossWeightNum - netWeightNum;
             }
             
             if (!isPlastiempaques && newMaterialProviderDate) {
@@ -1333,30 +1344,12 @@ export default function MaterialsClient({
         try {
             const finalUpdates = { ...updates };
             const currentMaterial = materials.find(m => m.id === id);
-            const isRollType = currentMaterial?.type.startsWith('rollo');
-            const isSacosType = currentMaterial?.type.startsWith('sacos');
-
-            if (isRollType) {
-                const netWeight = finalUpdates.netWeight ?? currentMaterial?.netWeight ?? 0;
-                const grossWeight = finalUpdates.grossWeight ?? currentMaterial?.grossWeight ?? 0;
-                if (grossWeight > 0 && netWeight > 0) {
-                    finalUpdates.labelTare = grossWeight - netWeight;
-                }
-            }
             
-            if (isSacosType) {
-                const grossWeight = finalUpdates.grossWeight ?? currentMaterial?.grossWeight ?? 0;
-                const netWeight = finalUpdates.totalWeight ?? currentMaterial?.totalWeight ?? 0;
-                if (grossWeight > 0 && netWeight > 0) {
-                    finalUpdates.plasticWeight = grossWeight - netWeight;
-                }
-            }
-
-            const plasticWeight = finalUpdates.plasticWeight ?? currentMaterial?.plasticWeight ?? 0;
-            const coreWeight = finalUpdates.coreWeight ?? currentMaterial?.coreWeight ?? 0;
+            const plasticWeight = Number(finalUpdates.plasticWeight ?? currentMaterial?.plasticWeight ?? 0);
+            const coreWeight = Number(finalUpdates.coreWeight ?? currentMaterial?.coreWeight ?? 0);
             const newTareWeight = plasticWeight + coreWeight;
 
-            if (newTareWeight > 0 && (newTareWeight !== (currentMaterial?.tareWeight ?? 0))) {
+            if (newTareWeight > 0 && newTareWeight !== (currentMaterial?.tareWeight ?? 0)) {
                  finalUpdates.tareWeight = newTareWeight;
                  const referenceWeight = finalUpdates.actualWeight || currentMaterial?.actualWeight || currentMaterial?.totalWeight || 0;
                  finalUpdates.actualNetWeight = referenceWeight - newTareWeight;
@@ -1752,15 +1745,13 @@ export default function MaterialsClient({
                                                         <Label htmlFor="material-quantity-ps">Cantidad</Label>
                                                         <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
                                                     </div>
-                                                    {!isPlasticsacks && (
-                                                        <div className="space-y-1.5">
-                                                            <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
-                                                            <Input id="material-unit-weight-rs" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
-                                                        </div>
-                                                    )}
                                                     <div className="space-y-1.5">
-                                                        <Label htmlFor="material-total-weight-ps">Peso Neto Total (kg)</Label>
+                                                        <Label htmlFor="material-total-weight-ps">Peso Neto (kg)</Label>
                                                         <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label>
+                                                        <Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Peso de balanza" disabled={!newMaterialSupplier}/>
                                                     </div>
                                                 </>
                                             ) : ( // Rollos
