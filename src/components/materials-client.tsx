@@ -912,6 +912,8 @@ export default function MaterialsClient({
     const [newMaterialQuantity, setNewMaterialQuantity] = React.useState('');
     const [newMaterialUnitWeight, setNewMaterialUnitWeight] = React.useState('');
     const [newMaterialTotalWeight, setNewMaterialTotalWeight] = React.useState('');
+    const [newMaterialPlasticWeight, setNewMaterialPlasticWeight] = React.useState('');
+
 
     const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());
     const { toast } = useToast();
@@ -1154,11 +1156,11 @@ export default function MaterialsClient({
 
         if (isSacosType) {
             fields.push({ value: newMaterialQuantity, name: "Cantidad" });
-            fields.push({ value: newMaterialTotalWeight, name: "Peso Total" });
+            fields.push({ value: newMaterialTotalWeight, name: "Peso Neto Total" });
             if (!isPlasticsacks) {
                 fields.push({ value: newMaterialUnitWeight, name: "Peso/Und" });
             }
-        } else {
+        } else { // Rollos
             fields.push({ value: newMaterialNetWeight, name: "Peso Neto" });
             fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto" });
         }
@@ -1180,9 +1182,10 @@ export default function MaterialsClient({
                 toast({ title: "Error de Duplicado", description: "El código de material que intentas registrar ya existe en el sistema.", variant: "destructive" });
                 return;
             }
-
-            const netWeight = parseFloat(newMaterialNetWeight.replace(',', '.'));
-            const grossWeight = parseFloat(newMaterialGrossWeight.replace(',', '.'));
+            
+            const totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
+            const plasticWeight = parseFloat(newMaterialPlasticWeight.replace(',', '.')) || 0;
+            const grossWeight = totalWeight + plasticWeight;
 
             const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
                 type: newMaterialType,
@@ -1200,20 +1203,21 @@ export default function MaterialsClient({
 
             if (isSacosType) {
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
-                const totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                 newMaterialData.totalWeight = totalWeight;
-                newMaterialData.netWeight = totalWeight; // For sacos, label net weight is the total weight
-                if (grossWeight && netWeight) {
-                    newMaterialData.labelTare = grossWeight - netWeight;
-                }
+                newMaterialData.netWeight = totalWeight;
+                newMaterialData.plasticWeight = plasticWeight;
+                newMaterialData.grossWeight = grossWeight;
+                newMaterialData.labelTare = grossWeight - totalWeight;
 
                  if (!isPlasticsacks) { 
                     newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
                  }
             } else { // Rollos
-                newMaterialData.netWeight = netWeight;
-                newMaterialData.grossWeight = grossWeight;
-                newMaterialData.labelTare = grossWeight - netWeight;
+                const netWeightRollos = parseFloat(newMaterialNetWeight.replace(',', '.'));
+                const grossWeightRollos = parseFloat(newMaterialGrossWeight.replace(',', '.'));
+                newMaterialData.netWeight = netWeightRollos;
+                newMaterialData.grossWeight = grossWeightRollos;
+                newMaterialData.labelTare = grossWeightRollos - netWeightRollos;
             }
             
             if (!isPlastiempaques && newMaterialProviderDate) {
@@ -1222,6 +1226,7 @@ export default function MaterialsClient({
 
             await addDoc(collection(db, 'packagingMaterials'), newMaterialData);
             
+            // Reset all form fields
             setNewMaterialCode('');
             setNewMaterialPresentation('');
             setNewMaterialNetWeight('');
@@ -1232,6 +1237,7 @@ export default function MaterialsClient({
             setNewMaterialSupplier('');
             setNewMaterialLote('');
             setNewMaterialProviderDate(undefined);
+            setNewMaterialPlasticWeight('');
             
             toast({ title: 'Material Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
         } catch (error) {
@@ -1492,7 +1498,7 @@ export default function MaterialsClient({
                          if (isCurrentlyDayShift) {
                              shiftStart = set(startOfToday(), { hours: 7 });
                              shiftEnd = set(startOfToday(), { hours: 18, minutes: 59, seconds: 59 });
-                             shiftMatch = date >= shiftStart && date <= shiftEnd;
+                             shiftMatch = isTodayFns(date) && date >= shiftStart && date <= shiftEnd;
                          } else {
                              if (currentHour >= 19) {
                                  shiftStart = set(startOfToday(), { hours: 19 });
@@ -1634,7 +1640,7 @@ export default function MaterialsClient({
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                            {!isPlastiempaques && (
+                                             {!isPlastiempaques && (
                                                 <div className="space-y-1.5">
                                                     <Label htmlFor="material-presentation-trigger">Presentación</Label>
                                                     {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || (newMaterialType === 'rollo_laminado' && isMilanplastic)) ? (
@@ -1692,34 +1698,31 @@ export default function MaterialsClient({
                                             )}
 
                                             {isSacosType ? (
-                                                isPlasticsacks ? (
-                                                    <>
-                                                        <div className="space-y-1.5">
-                                                            <Label htmlFor="material-quantity-ps">Cantidad</Label>
-                                                            <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
-                                                        </div>
-                                                        <div className="space-y-1.5">
-                                                            <Label htmlFor="material-total-weight-ps">Peso Neto (kg)</Label>
-                                                            <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
-                                                        </div>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <div className="space-y-1.5">
-                                                            <Label htmlFor="material-quantity-rs">Cantidad</Label>
-                                                            <Input id="material-quantity-rs" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
-                                                        </div>
+                                                <>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="material-quantity-ps">Cantidad</Label>
+                                                        <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
+                                                    </div>
+                                                    {!isPlasticsacks && (
                                                         <div className="space-y-1.5">
                                                             <Label htmlFor="material-unit-weight-rs">Peso/Und (g)</Label>
                                                             <Input id="material-unit-weight-rs" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
                                                         </div>
-                                                        <div className="space-y-1.5">
-                                                            <Label htmlFor="material-total-weight-rs">Peso Total (kg)</Label>
-                                                            <Input id="material-total-weight-rs" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51,6" disabled={!newMaterialSupplier}/>
-                                                        </div>
-                                                    </>
-                                                )
-                                            ) : (
+                                                    )}
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="material-total-weight-ps">Peso Neto Total (kg)</Label>
+                                                        <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="material-plastic-weight">Peso Envoltura (kg)</Label>
+                                                        <Input id="material-plastic-weight" type="number" value={newMaterialPlasticWeight} onChange={(e) => setNewMaterialPlasticWeight(e.target.value)} placeholder="Ej: 0.15" disabled={!newMaterialSupplier}/>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label>
+                                                        <Input id="material-gross-weight-sacos" type="number" value={((parseFloat(newMaterialTotalWeight) || 0) + (parseFloat(newMaterialPlasticWeight) || 0)).toFixed(2)} disabled />
+                                                    </div>
+                                                </>
+                                            ) : ( // Rollos
                                                 <>
                                                     <div className="space-y-1.5">
                                                         <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
@@ -1923,3 +1926,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
