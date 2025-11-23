@@ -345,7 +345,7 @@ function AdvancedEditDialog({
 function TraceabilityDialog({ material, onClose }: { material: PackagingMaterial; onClose: () => void }) {
     const formatTimestamp = (ts: number | undefined) => {
         if (!ts) return 'N/A';
-        return format(new Date(ts), "PPP p", { locale: es });
+        return format(new Date(ts), "dd/MM/yyyy HH:mm", { locale: es });
     };
 
     const timeline = [
@@ -628,7 +628,7 @@ function MaterialCard({
         const formatDate = (timestamp: number | undefined) => {
             if (!timestamp) return null;
             try {
-                return format(new Date(timestamp), "PPP p", { locale: es });
+                return format(new Date(timestamp), "dd/MM/yyyy HH:mm", { locale: es });
             } catch (e) {
                 return 'Fecha inválida';
             }
@@ -1455,6 +1455,7 @@ export default function MaterialsClient({
                             if (isCurrentShiftDay) {
                                 shiftMatch = hour >= 7 && hour < 19;
                             } else {
+                                // For night shift, it includes evening of today and morning of today
                                 shiftMatch = hour >= 19 || hour < 7;
                             }
                         } else {
