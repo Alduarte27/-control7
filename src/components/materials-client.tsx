@@ -725,7 +725,12 @@ function MaterialCard({
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
             <CardHeader>
                 <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
-                     {isSelected ? (
+                     <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
+                        aria-label={`Seleccionar material ${material.code}`}
+                    />
+                    {isSelected && (
                         <div className="flex items-center gap-1">
                              <AlertDialog>
                                 <AlertDialogTrigger asChild>
@@ -750,12 +755,6 @@ function MaterialCard({
                                 <Edit className="h-3 w-3" />
                             </Button>
                         </div>
-                    ) : (
-                         <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
-                            aria-label={`Seleccionar material ${material.code}`}
-                        />
                     )}
                 </div>
                  <div className="flex flex-col">
@@ -1404,7 +1403,6 @@ export default function MaterialsClient({
     };
     
     const applySharedFilters = (material: PackagingMaterial) => {
-        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
         const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
         const machineMatch = machineFilter === 'all' ||
@@ -1416,8 +1414,16 @@ export default function MaterialsClient({
         return typeMatch && supplierMatch && machineMatch && searchMatch;
     };
     
-    const filteredMaterials = materials.filter(applySharedFilters);
+    const allFilteredMaterials = materials.filter(applySharedFilters);
 
+    const getMaterialsForStatus = (status: MaterialStatus) => {
+        return allFilteredMaterials.filter(m => m.status === status);
+    };
+
+    const recibidoMaterials = getMaterialsForStatus('recibido');
+    const enUsoMaterials = getMaterialsForStatus('en_uso');
+    const porPesarTaraMaterials = getMaterialsForStatus('por_pesar_tara');
+    const consumidoMaterials = getMaterialsForStatus('consumido');
 
     const renderGrid = (mats: PackagingMaterial[]) => {
         if (mats.length === 0) {
@@ -1693,24 +1699,24 @@ export default function MaterialsClient({
                             </div>
                              <Tabs defaultValue="all" value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
                                 <TabsList className="grid w-full grid-cols-5">
-                                    <TabsTrigger value="all">Todos ({filteredMaterials.length})</TabsTrigger>
-                                    <TabsTrigger value="recibido">Recibido ({filteredMaterials.filter(m => m.status === 'recibido').length})</TabsTrigger>
-                                    <TabsTrigger value="en_uso">En Uso ({filteredMaterials.filter(m => m.status === 'en_uso').length})</TabsTrigger>
-                                    <TabsTrigger value="por_pesar_tara">Por Pesar Tara ({filteredMaterials.filter(m => m.status === 'por_pesar_tara').length})</TabsTrigger>
-                                    <TabsTrigger value="consumido">Consumido ({filteredMaterials.filter(m => m.status === 'consumido').length})</TabsTrigger>
+                                    <TabsTrigger value="all">Todos ({allFilteredMaterials.length})</TabsTrigger>
+                                    <TabsTrigger value="recibido">Recibido ({recibidoMaterials.length})</TabsTrigger>
+                                    <TabsTrigger value="en_uso">En Uso ({enUsoMaterials.length})</TabsTrigger>
+                                    <TabsTrigger value="por_pesar_tara">Por Pesar Tara ({porPesarTaraMaterials.length})</TabsTrigger>
+                                    <TabsTrigger value="consumido">Consumido ({consumidoMaterials.length})</TabsTrigger>
                                 </TabsList>
-                                <TabsContent value="all" className="mt-4">{renderGrid(filteredMaterials)}</TabsContent>
-                                <TabsContent value="recibido" className="mt-4">{renderGrid(filteredMaterials.filter(m => m.status === 'recibido'))}</TabsContent>
-                                <TabsContent value="en_uso" className="mt-4">{renderGrid(filteredMaterials.filter(m => m.status === 'en_uso'))}</TabsContent>
-                                <TabsContent value="por_pesar_tara" className="mt-4">{renderGrid(filteredMaterials.filter(m => m.status === 'por_pesar_tara'))}</TabsContent>
-                                <TabsContent value="consumido" className="mt-4">{renderGrid(filteredMaterials.filter(m => m.status === 'consumido'))}</TabsContent>
+                                <TabsContent value="all" className="mt-4">{renderGrid(allFilteredMaterials)}</TabsContent>
+                                <TabsContent value="recibido" className="mt-4">{renderGrid(recibidoMaterials)}</TabsContent>
+                                <TabsContent value="en_uso" className="mt-4">{renderGrid(enUsoMaterials)}</TabsContent>
+                                <TabsContent value="por_pesar_tara" className="mt-4">{renderGrid(porPesarTaraMaterials)}</TabsContent>
+                                <TabsContent value="consumido" className="mt-4">{renderGrid(consumidoMaterials)}</TabsContent>
                             </Tabs>
                         </CardContent>
                     </Card>
                 </main>
             </div>
 
-            {selectedMaterials.size > 0 && (
+            {selectedMaterials.size >= 2 && (
                 <div className="fixed bottom-0 left-0 right-0 z-20 p-4">
                     <Card className="max-w-2xl mx-auto flex items-center justify-between p-4 shadow-lg">
                         <p className="text-sm font-semibold">{selectedMaterials.size} material(es) seleccionado(s)</p>
