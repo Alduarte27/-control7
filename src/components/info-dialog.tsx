@@ -58,40 +58,42 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
         </DialogHeader>
         <ScrollArea className="max-h-[60vh] pr-6 -mr-6">
           <div className="space-y-6 py-4">
-            
+
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Últimas Mejoras</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Planificación y Control</h3>
                 <div className="space-y-4">
                      <FeatureItem 
-                        icon={Wifi}
-                        title="Sincronización en Tiempo Real"
-                        description="Todos los cambios en el inventario de materiales se reflejan instantáneamente en todos los dispositivos, sin necesidad de recargar la página."
-                        isNew={true}
+                        icon={Target}
+                        title="Planificación Semanal"
+                        description="Define tus metas de producción para cada producto en la tabla principal. Simplemente haz clic en la celda 'Plan Semanal' e ingresa el valor."
                     />
                      <FeatureItem 
-                        icon={MousePointerClick}
-                        title="Acciones Contextuales Mejoradas"
-                        description="Al seleccionar un material, los botones de 'Edición Avanzada' y 'Eliminar' aparecen en la tarjeta. La barra flotante para borrado masivo solo se muestra al seleccionar 2 o más items."
-                        isNew={true}
+                        icon={Edit}
+                        title="Registro de Producción y Lotes por Turno"
+                        description="Haz clic en el icono de lápiz (Editar) para registrar la producción por turno y el número de lote de cada día, que se sugiere automáticamente."
                     />
-                    <FeatureItem 
-                        icon={MemoryStick}
-                        title="Memoria de Interfaz"
-                        description="La aplicación ahora recuerda si dejaste el formulario de 'Registrar Nuevo Material' abierto o cerrado, manteniendo tu preferencia en futuras visitas."
-                        isNew={true}
+                     <FeatureItem 
+                        icon={NotebookPen}
+                        title="Registro de Incidencias"
+                        description="Usa el botón de libreta para añadir notas o incidencias por turno. Esto es clave para entender las variaciones y mejorar a futuro."
                     />
-                    <FeatureItem 
-                        icon={CheckCircle2}
-                        title="Cálculo de Discrepancia Exacto"
-                        description="Se corrigió la fórmula para calcular la discrepancia de material, asegurando que un excedente se muestre como un valor positivo (bueno) y un faltante como uno negativo."
-                        isNew={true}
+                     <FeatureItem 
+                        icon={Copy}
+                        title="Copiar Plan de la Semana Anterior"
+                        description="Ahorra tiempo utilizando el botón 'Copiar Plan Anterior'. Esto cargará automáticamente los valores planificados de la semana previa."
                     />
                 </div>
             </div>
-            
+
             <div>
                 <h3 className="text-lg font-semibold mb-3 text-primary">Control de Materiales de Empaque</h3>
                 <div className="space-y-4">
+                     <FeatureItem 
+                        icon={Wifi}
+                        title="Gestión de Inventario en Tiempo Real"
+                        description="Registra la entrada de cada rollo o paca de sacos en el área de empaque. Visualiza al instante qué material está 'Recibido', 'En Uso' o 'Consumido'."
+                        isNew={true}
+                    />
                      <FeatureItem 
                         icon={QrCode}
                         title="Registro Rápido con Código QR"
