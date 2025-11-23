@@ -28,8 +28,12 @@ type Kpi = {
     totalConsumedCount: number;
 };
 
-type SupplierKpi = Kpi & {
+type SupplierKpi = {
     name: string;
+    materialsByType: {
+        [materialType: string]: Kpi & { count: number };
+    }
+    overall: Kpi;
 };
 
 type MaterialTypeKpi = {
@@ -115,19 +119,34 @@ export default function MaterialsKpiClient({
 
     const overallKpis = React.useMemo(() => calculateKpis(filteredMaterials), [filteredMaterials]);
     
-    const supplierKpis = React.useMemo(() => {
-        const bySupplier: { [key: string]: PackagingMaterial[] } = {};
+    const supplierKpis: SupplierKpi[] = React.useMemo(() => {
+        const bySupplier: { [supplierName: string]: { [materialType: string]: PackagingMaterial[] } } = {};
+        
         filteredMaterials.forEach(m => {
             const supplierName = m.supplier || 'Sin Proveedor';
+            const materialTypeName = materialTypeLabels[m.type] || 'Desconocido';
+            
             if (!bySupplier[supplierName]) {
-                bySupplier[supplierName] = [];
+                bySupplier[supplierName] = {};
             }
-            bySupplier[supplierName].push(m);
+            if (!bySupplier[supplierName][materialTypeName]) {
+                bySupplier[supplierName][materialTypeName] = [];
+            }
+            bySupplier[supplierName][materialTypeName].push(m);
         });
 
-        return Object.entries(bySupplier).map(([name, materials]) => {
-            const kpis = calculateKpis(materials);
-            return { name, ...kpis };
+        return Object.entries(bySupplier).map(([name, types]) => {
+            const materialsByType: SupplierKpi['materialsByType'] = {};
+            
+            Object.entries(types).forEach(([typeName, materials]) => {
+                const kpis = calculateKpis(materials);
+                materialsByType[typeName] = { ...kpis, count: materials.length };
+            });
+
+            const allMaterialsForSupplier = Object.values(types).flat();
+            const overallKpis = calculateKpis(allMaterialsForSupplier);
+
+            return { name, materialsByType, overall: overallKpis };
         });
     }, [filteredMaterials]);
     
@@ -266,24 +285,38 @@ export default function MaterialsKpiClient({
                             <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Proveedor</TableHead>
+                                        <TableHead>Proveedor / Tipo de Material</TableHead>
                                         <TableHead className="text-right">Rendimiento</TableHead>
                                         <TableHead className="text-right">Discrepancia</TableHead>
                                         <TableHead className="text-right">Materiales</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {supplierKpis.map(kpi => (
-                                        <TableRow key={kpi.name}>
-                                            <TableCell className="font-medium">{kpi.name}</TableCell>
-                                            <TableCell className={cn("text-right font-semibold", kpi.averagePerformance >= 99 ? 'text-green-600' : 'text-amber-600')}>
-                                                {kpi.averagePerformance.toFixed(1)}%
-                                            </TableCell>
-                                            <TableCell className={cn("text-right font-semibold", kpi.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
-                                                {kpi.totalDiscrepancy.toFixed(2)} kg
-                                            </TableCell>
-                                            <TableCell className="text-right text-muted-foreground">{kpi.totalConsumedCount}</TableCell>
-                                        </TableRow>
+                                    {supplierKpis.map(supplier => (
+                                        <React.Fragment key={supplier.name}>
+                                            <TableRow className="bg-muted/50">
+                                                <TableCell className="font-bold">{supplier.name}</TableCell>
+                                                <TableCell className={cn("text-right font-bold", supplier.overall.averagePerformance >= 99 ? 'text-green-600' : 'text-amber-600')}>
+                                                    {supplier.overall.averagePerformance.toFixed(1)}%
+                                                </TableCell>
+                                                <TableCell className={cn("text-right font-bold", supplier.overall.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
+                                                    {supplier.overall.totalDiscrepancy.toFixed(2)} kg
+                                                </TableCell>
+                                                <TableCell className="text-right font-bold">{supplier.overall.totalConsumedCount}</TableCell>
+                                            </TableRow>
+                                            {Object.entries(supplier.materialsByType).map(([typeName, kpi]) => (
+                                                <TableRow key={typeName}>
+                                                    <TableCell className="pl-8 text-muted-foreground">{typeName}</TableCell>
+                                                     <TableCell className={cn("text-right font-semibold", kpi.averagePerformance >= 99 ? 'text-green-600' : 'text-amber-600')}>
+                                                        {kpi.averagePerformance.toFixed(1)}%
+                                                    </TableCell>
+                                                    <TableCell className={cn("text-right font-semibold", kpi.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
+                                                        {kpi.totalDiscrepancy.toFixed(2)} kg
+                                                    </TableCell>
+                                                    <TableCell className="text-right text-muted-foreground">{kpi.count}</TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </React.Fragment>
                                     ))}
                                 </TableBody>
                             </Table>
