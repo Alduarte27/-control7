@@ -1192,9 +1192,6 @@ export default function MaterialsClient({
             fields.push({ value: newMaterialQuantity, name: "Cantidad" });
             fields.push({ value: newMaterialTotalWeight, name: "Peso Neto Total" });
              fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto" });
-            if (!isPlasticsacks) {
-                fields.push({ value: newMaterialUnitWeight, name: "Peso/Und" });
-            }
         } else { // Rollos
             fields.push({ value: newMaterialNetWeight, name: "Peso Neto" });
             fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto" });
@@ -1241,7 +1238,7 @@ export default function MaterialsClient({
             if (isSacosType) {
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
                 newMaterialData.totalWeight = netWeightNum;
-                newMaterialData.netWeight = netWeightNum; // Also save to netWeight for consistency
+                newMaterialData.netWeight = netWeightNum;
                 const plasticWeight = grossWeightNum - netWeightNum;
                 newMaterialData.plasticWeight = plasticWeight > 0 ? plasticWeight : 0;
                 newMaterialData.labelTare = newMaterialData.plasticWeight;
@@ -1370,6 +1367,11 @@ export default function MaterialsClient({
             toast({ title: 'Material Actualizado', description: `Se guardaron los cambios para el material.` });
             setEditingMaterial(null);
             setAdvancedEditingMaterial(null);
+            setSelectedMaterials(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(id);
+                return newSet;
+            });
         } catch (error) {
             console.error("Error updating material:", error);
             toast({ title: 'Error', description: 'No se pudo actualizar el material.', variant: 'destructive' });
