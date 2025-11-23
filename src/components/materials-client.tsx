@@ -724,39 +724,39 @@ function MaterialCard({
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
             <CardHeader>
-                <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
-                     <Checkbox
+                <div className="absolute top-2 right-2 z-10">
+                    <Checkbox
                         checked={isSelected}
                         onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
                         aria-label={`Seleccionar material ${material.code}`}
                     />
-                    {isSelected && (
-                        <div className="flex items-center gap-1">
-                             <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="icon" className="h-6 w-6">
-                                        <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                        <AlertDialogDescriptionComponent>
-                                            Estás a punto de eliminar permanentemente el material <span className="font-mono font-bold">{material.code}</span>. Esta acción no se puede deshacer.
-                                        </AlertDialogDescriptionComponent>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => onDelete(material)}>Sí, Eliminar</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => onAdvancedEdit(material)}>
-                                <Edit className="h-3 w-3" />
-                            </Button>
-                        </div>
-                    )}
                 </div>
+                {isSelected && (
+                    <div className="absolute top-2 right-10 flex items-center gap-1 z-10">
+                         <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => onAdvancedEdit(material)}>
+                            <Edit className="h-3 w-3" />
+                        </Button>
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="icon" className="h-6 w-6">
+                                    <Trash2 className="h-3 w-3" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                    <AlertDialogDescriptionComponent>
+                                        Estás a punto de eliminar permanentemente el material <span className="font-mono font-bold">{material.code}</span>. Esta acción no se puede deshacer.
+                                    </AlertDialogDescriptionComponent>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => onDelete(material)}>Sí, Eliminar</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
+                )}
                  <div className="flex flex-col">
                     <div>
                         <CardDescription>{materialTypeLabels[material.type]} - {material.presentation || ''}</CardDescription>
@@ -1344,7 +1344,7 @@ export default function MaterialsClient({
             } else if (isSacosType) {
                 referenceNetWeight = m.totalWeight || 0; 
             }
-            const discrepancy = m.actualNetWeight !== undefined && referenceNetWeight > 0 ? referenceNetWeight - m.actualNetWeight : null;
+            const discrepancy = m.actualNetWeight !== undefined && referenceNetWeight > 0 ? m.actualNetWeight - referenceNetWeight : null;
             
             let performance = null;
             if (m.actualNetWeight !== undefined && referenceNetWeight > 0) {
@@ -1718,7 +1718,7 @@ export default function MaterialsClient({
 
             {selectedMaterials.size >= 2 && (
                 <div className="fixed bottom-0 left-0 right-0 z-20 p-4">
-                    <Card className="max-w-2xl mx-auto flex items-center justify-between p-4 shadow-lg">
+                    <Card className="max-w-md mx-auto flex items-center justify-between p-4 shadow-lg">
                         <p className="text-sm font-semibold">{selectedMaterials.size} material(es) seleccionado(s)</p>
                         <div className="flex items-center gap-2">
                              <AlertDialog>
