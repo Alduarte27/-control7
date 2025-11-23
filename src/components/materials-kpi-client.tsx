@@ -42,12 +42,16 @@ export default function MaterialsKpiClient({
 }: { 
     consumedMaterials: PackagingMaterial[],
 }) {
-    const [dateRange, setDateRange] = React.useState<DateRange | undefined>({
-        from: addDays(new Date(), -30),
-        to: new Date(),
-    });
+    const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
     
     const { toast } = useToast();
+
+    React.useEffect(() => {
+        setDateRange({
+            from: addDays(new Date(), -30),
+            to: new Date(),
+        });
+    }, []);
 
     const filteredMaterials = React.useMemo(() => {
         if (!dateRange?.from) return [];
@@ -292,7 +296,7 @@ export default function MaterialsKpiClient({
                         <CardContent>
                              <ResponsiveContainer width="100%" height={300}>
                                 <RechartsBarChart data={materialTypeKpis} layout="vertical">
-                                    <XAxis type="number" domain={[90, 102]} tickFormatter={(val) => `${val}%`} />
+                                    <XAxis type="number" domain={[90, 102]} tickFormatter={(val) => `${'val'}%`} />
                                     <YAxis dataKey="name" type="category" width={120} />
                                     <RechartsTooltip formatter={(value: number) => `${value.toFixed(2)}%`} />
                                     <Bar dataKey="averagePerformance" name="Rendimiento" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
@@ -305,4 +309,3 @@ export default function MaterialsKpiClient({
         </div>
     );
 }
-
