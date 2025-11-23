@@ -16,7 +16,7 @@ import { materialTypeLabels } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs, deleteDoc, onSnapshot, setDoc, orderBy } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
-import { format, parseISO, isToday as isTodayFns } from 'date-fns';
+import { format, parseISO, isToday as isTodayFns, startOfToday, endOfToday, set, startOfDay, endOfDay, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
@@ -1439,9 +1439,6 @@ export default function MaterialsClient({
             } else {
                 const date = new Date(relevantTimestamp);
                 const hour = date.getHours();
-                const isToday = isTodayFns(date);
-                const currentHour = new Date().getHours();
-                const isCurrentShiftDay = currentHour >= 7 && currentHour < 19;
 
                 switch (shiftFilter) {
                     case 'day':
@@ -1451,15 +1448,28 @@ export default function MaterialsClient({
                         shiftMatch = hour >= 19 || hour < 7;
                         break;
                     case 'current':
-                        if (isToday) {
-                            if (isCurrentShiftDay) {
-                                shiftMatch = hour >= 7 && hour < 19;
-                            } else {
-                                // For night shift, it includes evening of today and morning of today
-                                shiftMatch = hour >= 19 || hour < 7;
-                            }
+                        const now = new Date();
+                        const currentHour = now.getHours();
+                        const isCurrentShiftDay = currentHour >= 7 && currentHour < 19;
+                        
+                        if (isCurrentShiftDay) {
+                            // Day shift: 7 AM today to 7 PM today
+                            const startOfShift = set(startOfToday(), { hours: 7 });
+                            const endOfShift = set(startOfToday(), { hours: 19 });
+                            shiftMatch = date >= startOfShift && date < endOfShift;
                         } else {
-                            shiftMatch = false;
+                            // Night shift spans two days
+                            let startOfShift, endOfShift;
+                            if (currentHour >= 19) {
+                                // We are in the evening part of the night shift
+                                startOfShift = set(startOfToday(), { hours: 19 });
+                                endOfShift = set(addDays(startOfToday(), 1), { hours: 7 });
+                            } else {
+                                // We are in the morning part of the night shift
+                                startOfShift = set(subDays(startOfToday(), 1), { hours: 19 });
+                                endOfShift = set(startOfToday(), { hours: 7 });
+                            }
+                            shiftMatch = date >= startOfShift && date < endOfShift;
                         }
                         break;
                 }
