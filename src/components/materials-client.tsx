@@ -750,12 +750,13 @@ function MaterialCard({
                                 <Edit className="h-3 w-3" />
                             </Button>
                         </div>
-                    ) : null}
-                    <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
-                        aria-label={`Seleccionar material ${material.code}`}
-                    />
+                    ) : (
+                         <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
+                            aria-label={`Seleccionar material ${material.code}`}
+                        />
+                    )}
                 </div>
                  <div className="flex flex-col">
                     <div>
@@ -929,7 +930,7 @@ export default function MaterialsClient({
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
-    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'recibido'>('recibido');
+    const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     
     React.useEffect(() => {
@@ -1403,6 +1404,7 @@ export default function MaterialsClient({
     };
     
     const applySharedFilters = (material: PackagingMaterial) => {
+        if (statusFilter !== 'all' && material.status !== statusFilter) return false;
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
         const supplierMatch = supplierFilter === 'all' || material.supplier === suppliers.find(s => s.id === supplierFilter)?.name;
         const machineMatch = machineFilter === 'all' ||
@@ -1413,11 +1415,8 @@ export default function MaterialsClient({
             (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
         return typeMatch && supplierMatch && machineMatch && searchMatch;
     };
-
-    const enUsoMaterials = materials.filter(material => material.status === 'en_uso' && applySharedFilters(material));
-    const recibidoMaterials = materials.filter(material => material.status === 'recibido' && applySharedFilters(material));
-    const porPesarTaraMaterials = materials.filter(material => material.status === 'por_pesar_tara' && applySharedFilters(material));
-    const consumidoMaterials = materials.filter(material => material.status === 'consumido' && applySharedFilters(material));
+    
+    const filteredMaterials = materials.filter(applySharedFilters);
 
 
     const renderGrid = (mats: PackagingMaterial[]) => {
@@ -1501,31 +1500,6 @@ export default function MaterialsClient({
                                     <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                     {selectedMaterials.size > 0 && (
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-semibold text-sm">{selectedMaterials.size} seleccionado(s)</span>
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button variant="destructive" size="sm">
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Eliminar
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                                        <AlertDialogDescriptionComponent>
-                                                            Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
-                                                        </AlertDialogDescriptionComponent>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                        <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
-                                        </div>
-                                    )}
                                     <CollapsibleTrigger asChild>
                                         <Button variant="ghost" size="icon">
                                             <ChevronDown className={cn("h-5 w-5 transition-transform", !isAddMaterialOpen && "-rotate-90")}/>
@@ -1678,30 +1652,6 @@ export default function MaterialsClient({
                                 <CardTitle>Inventario en Área de Empaque</CardTitle>
                                 <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
                             </div>
-                            <div className="flex items-center gap-2">
-                                {selectedMaterials.size > 0 && (
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button variant="destructive">
-                                                <Trash2 className="mr-2 h-4 w-4" />
-                                                Eliminar ({selectedMaterials.size})
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>¿Confirmar Eliminación Masiva?</AlertDialogTitle>
-                                                <AlertDialogDescriptionComponent>
-                                                    Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
-                                                </AlertDialogDescriptionComponent>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar Seleccionados</AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
-                                )}
-                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -1741,22 +1691,55 @@ export default function MaterialsClient({
                                     </SelectContent>
                                 </Select>
                             </div>
-                             <Tabs defaultValue="recibido" value={statusFilter} onValueChange={(v) => setStatusFilter(v as MaterialStatus | 'all')}>
-                                <TabsList className="grid w-full grid-cols-4">
-                                    <TabsTrigger value="en_uso">En Uso ({enUsoMaterials.length})</TabsTrigger>
-                                    <TabsTrigger value="recibido">Recibido ({recibidoMaterials.length})</TabsTrigger>
-                                    <TabsTrigger value="por_pesar_tara">Por Pesar Tara ({porPesarTaraMaterials.length})</TabsTrigger>
-                                    <TabsTrigger value="consumido">Consumido ({consumidoMaterials.length})</TabsTrigger>
+                             <Tabs defaultValue="all" value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                                <TabsList className="grid w-full grid-cols-5">
+                                    <TabsTrigger value="all">Todos ({filteredMaterials.length})</TabsTrigger>
+                                    <TabsTrigger value="recibido">Recibido ({filteredMaterials.filter(m => m.status === 'recibido').length})</TabsTrigger>
+                                    <TabsTrigger value="en_uso">En Uso ({filteredMaterials.filter(m => m.status === 'en_uso').length})</TabsTrigger>
+                                    <TabsTrigger value="por_pesar_tara">Por Pesar Tara ({filteredMaterials.filter(m => m.status === 'por_pesar_tara').length})</TabsTrigger>
+                                    <TabsTrigger value="consumido">Consumido ({filteredMaterials.filter(m => m.status === 'consumido').length})</TabsTrigger>
                                 </TabsList>
-                                <TabsContent value="en_uso" className="mt-4">{renderGrid(enUsoMaterials)}</TabsContent>
-                                <TabsContent value="recibido" className="mt-4">{renderGrid(recibidoMaterials)}</TabsContent>
-                                <TabsContent value="por_pesar_tara" className="mt-4">{renderGrid(porPesarTaraMaterials)}</TabsContent>
-                                <TabsContent value="consumido" className="mt-4">{renderGrid(consumidoMaterials)}</TabsContent>
+                                <TabsContent value="all" className="mt-4">{renderGrid(filteredMaterials)}</TabsContent>
+                                <TabsContent value="recibido" className="mt-4">{renderGrid(filteredMaterials.filter(m => m.status === 'recibido'))}</TabsContent>
+                                <TabsContent value="en_uso" className="mt-4">{renderGrid(filteredMaterials.filter(m => m.status === 'en_uso'))}</TabsContent>
+                                <TabsContent value="por_pesar_tara" className="mt-4">{renderGrid(filteredMaterials.filter(m => m.status === 'por_pesar_tara'))}</TabsContent>
+                                <TabsContent value="consumido" className="mt-4">{renderGrid(filteredMaterials.filter(m => m.status === 'consumido'))}</TabsContent>
                             </Tabs>
                         </CardContent>
                     </Card>
                 </main>
             </div>
+
+            {selectedMaterials.size > 0 && (
+                <div className="fixed bottom-0 left-0 right-0 z-20 p-4">
+                    <Card className="max-w-2xl mx-auto flex items-center justify-between p-4 shadow-lg">
+                        <p className="text-sm font-semibold">{selectedMaterials.size} material(es) seleccionado(s)</p>
+                        <div className="flex items-center gap-2">
+                             <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive">
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Eliminar Seleccionados
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>¿Confirmar Eliminación Masiva?</AlertDialogTitle>
+                                        <AlertDialogDescriptionComponent>
+                                            Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
+                                        </AlertDialogDescriptionComponent>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </div>
+                    </Card>
+                </div>
+            )}
+
             {isSyncModalOpen && !isMobileDevice && syncSessionId && (
                 <Dialog open={isSyncModalOpen} onOpenChange={setIsSyncModalOpen}>
                     <DialogContent>
