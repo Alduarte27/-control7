@@ -584,6 +584,8 @@ function MaterialCard({
     isSelected,
     onEditClick,
     onTraceClick,
+    onDelete,
+    onAdvancedEdit,
 }: { 
     material: PackagingMaterial, 
     onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume' | 'weigh_tare') => void, 
@@ -591,6 +593,8 @@ function MaterialCard({
     isSelected: boolean,
     onEditClick: (material: PackagingMaterial) => void,
     onTraceClick: (material: PackagingMaterial) => void,
+    onDelete: (material: PackagingMaterial) => void,
+    onAdvancedEdit: (material: PackagingMaterial) => void,
 }) {
     const statusConfig: { [key in MaterialStatus]: { label: string; color: string; icon: React.ElementType } } = {
         recibido: { label: 'Recibido', color: 'bg-blue-500', icon: Inbox },
@@ -723,10 +727,37 @@ function MaterialCard({
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
             <CardHeader>
                 <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
-                    {material.status === 'recibido' && (
-                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditClick(material)}>
-                            <Edit className="h-4 w-4" />
-                        </Button>
+                     {isSelected ? (
+                        <div className="flex items-center gap-1">
+                             <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="icon" className="h-6 w-6">
+                                        <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                        <AlertDialogDescriptionComponent>
+                                            Estás a punto de eliminar permanentemente el material <span className="font-mono font-bold">{material.code}</span>. Esta acción no se puede deshacer.
+                                        </AlertDialogDescriptionComponent>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => onDelete(material)}>Sí, Eliminar</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => onAdvancedEdit(material)}>
+                                <Edit className="h-3 w-3" />
+                            </Button>
+                        </div>
+                    ) : (
+                        material.status === 'recibido' && (
+                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditClick(material)}>
+                                <Edit className="h-4 w-4" />
+                            </Button>
+                        )
                     )}
                     <Checkbox
                         checked={isSelected}
@@ -754,7 +785,7 @@ function MaterialCard({
                 </div>
             </CardHeader>
             <CardContent className="flex-grow space-y-4">
-                 <div className="space-y-4 text-sm">
+                 <div className="space-y-2 text-sm">
                     <div className="grid grid-cols-3 gap-2 text-center">
                          <div className="space-y-1">
                             <p className="text-muted-foreground">P. Bruto (Etiqueta)</p>
@@ -1366,13 +1397,17 @@ export default function MaterialsClient({
         document.body.removeChild(link);
     };
 
-    const handleOpenAdvancedEdit = () => {
-        if (selectedMaterials.size !== 1) return;
-        const selectedId = selectedMaterials.values().next().value;
-        const materialToEdit = materials.find(m => m.id === selectedId);
+    const handleOpenAdvancedEdit = (material?: PackagingMaterial) => {
+        const materialToEdit = material || (selectedMaterials.size === 1 ? materials.find(m => m.id === selectedMaterials.values().next().value) : null);
         if (materialToEdit) {
             setAdvancedEditingMaterial(materialToEdit);
         }
+    };
+
+     const handleDelete = (material: PackagingMaterial) => {
+        const tempSet = new Set([material.id]);
+        setSelectedMaterials(tempSet);
+        // The AlertDialog will trigger handleDeleteSelected after confirmation
     };
     
     const applySharedFilters = (material: PackagingMaterial) => {
@@ -1413,6 +1448,8 @@ export default function MaterialsClient({
                         isSelected={selectedMaterials.has(material.id)}
                         onEditClick={setEditingMaterial}
                         onTraceClick={setTraceMaterial}
+                        onDelete={handleDelete}
+                        onAdvancedEdit={handleOpenAdvancedEdit}
                     />
                 ))}
             </div>
@@ -1473,6 +1510,31 @@ export default function MaterialsClient({
                                     <CardDescription>Añade una nueva paca de sacos o rollo que ha llegado al área de empaque desde la bodega.</CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                     {selectedMaterials.size > 0 && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-sm">{selectedMaterials.size} seleccionado(s)</span>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="destructive" size="sm">
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Eliminar
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                                        <AlertDialogDescriptionComponent>
+                                                            Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
+                                                        </AlertDialogDescriptionComponent>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter>
+                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </div>
+                                    )}
                                     <CollapsibleTrigger asChild>
                                         <Button variant="ghost" size="icon">
                                             <ChevronDown className={cn("h-5 w-5 transition-transform", !isAddMaterialOpen && "-rotate-90")}/>
@@ -1682,43 +1744,6 @@ export default function MaterialsClient({
                     </Card>
                 </main>
             </div>
-            {selectedMaterials.size > 0 && (
-                 <div className="fixed bottom-0 left-0 right-0 z-20 p-4 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg">
-                    <div className="max-w-7xl mx-auto flex items-center justify-between">
-                         <div className="flex items-center gap-4">
-                            <Button variant="ghost" size="icon" onClick={() => setSelectedMaterials(new Set())}>
-                                <X className="h-5 w-5" />
-                            </Button>
-                            <span className="font-semibold">{selectedMaterials.size} seleccionado(s)</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                             <Button variant="outline" size="sm" onClick={handleOpenAdvancedEdit} disabled={selectedMaterials.size !== 1}>
-                                <Edit className="mr-2 h-4 w-4" /> Edición Avanzada
-                            </Button>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="sm">
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Eliminar ({selectedMaterials.size})
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                        <AlertDialogDescriptionComponent>
-                                            Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
-                                        </AlertDialogDescriptionComponent>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        </div>
-                    </div>
-                </div>
-            )}
             {isSyncModalOpen && !isMobileDevice && syncSessionId && (
                 <Dialog open={isSyncModalOpen} onOpenChange={setIsSyncModalOpen}>
                     <DialogContent>
@@ -1792,4 +1817,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
