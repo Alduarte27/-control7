@@ -219,6 +219,7 @@ function AdvancedEditDialog({
   onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
 }) {
   const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
+  const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
 
   React.useEffect(() => {
     setEditedMaterial(material);
@@ -267,14 +268,18 @@ function AdvancedEditDialog({
                 <Separator />
                 <h4 className="font-semibold text-sm text-muted-foreground">Datos de Peso</h4>
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                     <div className="space-y-1.5">
-                        <Label htmlFor="adv-net-weight">P. Neto (Etiqueta)</Label>
-                        <Input id="adv-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={(e) => handleChange('netWeight', Number(e.target.value))} />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="adv-gross-weight">P. Bruto (Etiqueta)</Label>
-                        <Input id="adv-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
-                    </div>
+                     {!isSacosType && (
+                        <>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-net-weight">P. Neto (Etiqueta)</Label>
+                                <Input id="adv-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={(e) => handleChange('netWeight', Number(e.target.value))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-gross-weight">P. Bruto (Etiqueta)</Label>
+                                <Input id="adv-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
+                            </div>
+                        </>
+                     )}
                      <div className="space-y-1.5">
                         <Label htmlFor="adv-actual-weight">P. Bruto (Balanza)</Label>
                         <Input id="adv-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
@@ -285,10 +290,12 @@ function AdvancedEditDialog({
                         <Label htmlFor="adv-plastic-weight">P. Envoltura (kg)</Label>
                         <Input id="adv-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
                     </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="adv-core-weight">P. Canuto (kg)</Label>
-                        <Input id="adv-core-weight" type="number" value={editedMaterial.coreWeight || ''} onChange={(e) => handleChange('coreWeight', Number(e.target.value))} />
-                    </div>
+                    {!isSacosType && (
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-core-weight">P. Canuto (kg)</Label>
+                            <Input id="adv-core-weight" type="number" value={editedMaterial.coreWeight || ''} onChange={(e) => handleChange('coreWeight', Number(e.target.value))} />
+                        </div>
+                    )}
                      <div className="space-y-1.5">
                         <Label htmlFor="adv-tare-weight">Tara Real (Total)</Label>
                         <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight || ''} onChange={(e) => handleChange('tareWeight', Number(e.target.value))} />
@@ -1130,9 +1137,37 @@ export default function MaterialsClient({
 
 
     const handleAddMaterial = async () => {
-        if (!newMaterialSupplier || !newMaterialType || !newMaterialCode.trim() || (!isPlastiempaques && (!newMaterialPresentation.trim() || !newMaterialProviderDate))) {
-            toast({ title: "Campos Obligatorios", description: "Proveedor, tipo, código, presentación y fecha de proveedor son obligatorios.", variant: "destructive" });
-            return;
+        const fields = [
+            { value: newMaterialSupplier, name: "Proveedor" },
+            { value: newMaterialType, name: "Tipo de Material" },
+            { value: newMaterialCode.trim(), name: "Código" },
+        ];
+
+        if (!isPlastiempaques) {
+            fields.push({ value: newMaterialPresentation.trim(), name: "Presentación" });
+            fields.push({ value: newMaterialProviderDate, name: "Fecha de Proveedor" });
+        }
+
+        if (isPlasticsacks) {
+            fields.push({ value: newMaterialLote.trim(), name: "Lote" });
+        }
+
+        if (isSacosType) {
+            fields.push({ value: newMaterialQuantity, name: "Cantidad" });
+            fields.push({ value: newMaterialTotalWeight, name: "Peso Total" });
+            if (!isPlasticsacks) {
+                fields.push({ value: newMaterialUnitWeight, name: "Peso/Und" });
+            }
+        } else {
+            fields.push({ value: newMaterialNetWeight, name: "Peso Neto" });
+            fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto" });
+        }
+        
+        for (const field of fields) {
+            if (!field.value) {
+                toast({ title: "Campo Obligatorio", description: `El campo "${field.name}" es obligatorio.`, variant: "destructive" });
+                return;
+            }
         }
 
         const trimmedCode = newMaterialCode.trim();
@@ -1146,6 +1181,9 @@ export default function MaterialsClient({
                 return;
             }
 
+            const netWeight = parseFloat(newMaterialNetWeight.replace(',', '.'));
+            const grossWeight = parseFloat(newMaterialGrossWeight.replace(',', '.'));
+
             const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
                 type: newMaterialType,
                 code: trimmedCode,
@@ -1157,37 +1195,22 @@ export default function MaterialsClient({
             };
             
             if (isPlasticsacks) {
-                 if (!newMaterialLote.trim()) {
-                    toast({ title: "Campo Obligatorio", description: "El lote es obligatorio para PLASTICSACKS.", variant: "destructive" });
-                    return;
-                }
                  newMaterialData.lote = newMaterialLote.trim();
             }
 
             if (isSacosType) {
-                if (!newMaterialQuantity || !newMaterialTotalWeight) {
-                    toast({ title: "Campo Obligatorio", description: "Cantidad y Peso Total son obligatorios para Sacos.", variant: "destructive" });
-                    return;
-                }
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
                 const totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                 newMaterialData.totalWeight = totalWeight;
                 newMaterialData.netWeight = totalWeight; // For sacos, label net weight is the total weight
+                if (grossWeight && netWeight) {
+                    newMaterialData.labelTare = grossWeight - netWeight;
+                }
 
                  if (!isPlasticsacks) { 
-                    if (!newMaterialUnitWeight) {
-                        toast({ title: "Campo Obligatorio", description: "El Peso/Und es obligatorio para este proveedor de sacos.", variant: "destructive" });
-                        return;
-                    }
                     newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
                  }
             } else { // Rollos
-                if (!newMaterialNetWeight || !newMaterialGrossWeight) {
-                    toast({ title: "Campo Obligatorio", description: "Peso neto y bruto son obligatorios para Rollos.", variant: "destructive" });
-                    return;
-                }
-                const netWeight = parseFloat(newMaterialNetWeight.replace(',', '.'));
-                const grossWeight = parseFloat(newMaterialGrossWeight.replace(',', '.'));
                 newMaterialData.netWeight = netWeight;
                 newMaterialData.grossWeight = grossWeight;
                 newMaterialData.labelTare = grossWeight - netWeight;
@@ -1467,25 +1490,19 @@ export default function MaterialsClient({
                          let shiftEnd: Date;
                          
                          if (isCurrentlyDayShift) {
-                             // Day shift: from 7am today to 7pm today
                              shiftStart = set(startOfToday(), { hours: 7 });
                              shiftEnd = set(startOfToday(), { hours: 18, minutes: 59, seconds: 59 });
+                             shiftMatch = date >= shiftStart && date <= shiftEnd;
                          } else {
-                             // Night shift spans two days
                              if (currentHour >= 19) {
-                                 // We are in the evening part of the night shift (e.g., 10 PM today)
-                                 // Show from 7 PM today to 7 AM tomorrow
                                  shiftStart = set(startOfToday(), { hours: 19 });
-                                 shiftEnd = set(endOfDay(now), { hours: 6, minutes: 59, seconds: 59 });
-                                 shiftEnd.setDate(shiftEnd.getDate() + 1);
+                                 shiftEnd = set(addDays(startOfToday(), 1), { hours: 6, minutes: 59, seconds: 59 });
                              } else {
-                                 // We are in the morning part of the night shift (e.g., 2 AM today)
-                                 // Show from 7 PM yesterday to 7 AM today
                                  shiftStart = set(subDays(startOfToday(), 1), { hours: 19 });
                                  shiftEnd = set(startOfToday(), { hours: 6, minutes: 59, seconds: 59 });
                              }
+                              shiftMatch = date >= shiftStart && date <= shiftEnd;
                          }
-                         shiftMatch = date >= shiftStart && date <= shiftEnd;
                          break;
                 }
             }
