@@ -224,6 +224,20 @@ function AdvancedEditDialog({
   React.useEffect(() => {
     setEditedMaterial(material);
   }, [material]);
+  
+  React.useEffect(() => {
+    if (isSacosType) {
+        const netWeight = Number(editedMaterial.totalWeight) || 0;
+        const plasticWeight = Number(editedMaterial.plasticWeight) || 0;
+        if (netWeight > 0) {
+            setEditedMaterial(prev => ({
+                ...prev,
+                grossWeight: netWeight + plasticWeight
+            }));
+        }
+    }
+  }, [isSacosType, editedMaterial.totalWeight, editedMaterial.plasticWeight]);
+
 
   const handleChange = (field: keyof PackagingMaterial, value: any) => {
     setEditedMaterial((prev) => ({ ...prev, [field]: value }));
@@ -245,9 +259,7 @@ function AdvancedEditDialog({
     onSave(material.id, editedMaterial);
     onClose();
   };
-
-  const calculatedGrossWeight = (Number(editedMaterial.totalWeight) || 0) + (Number(editedMaterial.plasticWeight) || 0);
-
+  
   return (
     <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-2xl">
@@ -283,12 +295,8 @@ function AdvancedEditDialog({
                             <Input id="adv-sacos-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={(e) => handleChange('totalWeight', Number(e.target.value))} />
                         </div>
                          <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-plastic-weight">Peso Envoltura (kg)</Label>
-                            <Input id="adv-sacos-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))}/>
-                        </div>
-                         <div className="space-y-1.5">
                             <Label htmlFor="adv-sacos-gross-weight">Peso Bruto (kg)</Label>
-                            <Input id="adv-sacos-gross-weight" type="number" value={calculatedGrossWeight > 0 ? calculatedGrossWeight.toFixed(2) : '0.00'} disabled />
+                            <Input id="adv-sacos-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
                         </div>
                     </div>
                 ) : (
@@ -1191,7 +1199,6 @@ export default function MaterialsClient({
         if (isSacosType) {
             fields.push({ value: newMaterialQuantity, name: "Cantidad" });
             fields.push({ value: newMaterialTotalWeight, name: "Peso Neto Total" });
-             fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto" });
         } else { // Rollos
             fields.push({ value: newMaterialNetWeight, name: "Peso Neto" });
             fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto" });
@@ -1237,15 +1244,10 @@ export default function MaterialsClient({
 
             if (isSacosType) {
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
-                newMaterialData.totalWeight = netWeightNum;
-                newMaterialData.netWeight = netWeightNum;
-                const plasticWeight = grossWeightNum - netWeightNum;
-                newMaterialData.plasticWeight = plasticWeight > 0 ? plasticWeight : 0;
-                newMaterialData.labelTare = newMaterialData.plasticWeight;
-
-                 if (!isPlasticsacks) { 
-                    newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
-                 }
+                newMaterialData.totalWeight = netWeightNum; 
+                newMaterialData.netWeight = netWeightNum; 
+                newMaterialData.plasticWeight = 0; // Se registrará en la tara
+                newMaterialData.labelTare = 0;
             } else { // Rollos
                 newMaterialData.netWeight = netWeightNum;
                 newMaterialData.labelTare = grossWeightNum - netWeightNum;
@@ -1759,10 +1761,6 @@ export default function MaterialsClient({
                                                     <div className="space-y-1.5">
                                                         <Label htmlFor="material-total-weight-ps">Peso Neto Total (kg)</Label>
                                                         <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
-                                                    </div>
-                                                     <div className="space-y-1.5">
-                                                        <Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label>
-                                                        <Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={e => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 51.75" disabled={!newMaterialSupplier}/>
                                                     </div>
                                                 </>
                                             ) : ( // Rollos
