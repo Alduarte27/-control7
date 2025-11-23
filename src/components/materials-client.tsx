@@ -1130,8 +1130,21 @@ export default function MaterialsClient({
 
 
     const handleAddMaterial = async () => {
+        // Validation checks
+        if (!newMaterialSupplier) {
+            toast({ title: "Campo Obligatorio", description: "Por favor, selecciona un proveedor.", variant: "destructive" });
+            return;
+        }
         if (!newMaterialCode.trim()) {
-            toast({ title: "Error", description: "El código es obligatorio.", variant: "destructive" });
+            toast({ title: "Campo Obligatorio", description: "El código del material es obligatorio.", variant: "destructive" });
+            return;
+        }
+        if (!isPlastiempaques && !newMaterialPresentation.trim()) {
+             toast({ title: "Campo Obligatorio", description: "La presentación es obligatoria.", variant: "destructive" });
+            return;
+        }
+        if (!isPlastiempaques && !newMaterialProviderDate) {
+            toast({ title: "Campo Obligatorio", description: "La fecha del proveedor es obligatoria.", variant: "destructive" });
             return;
         }
 
@@ -1149,8 +1162,6 @@ export default function MaterialsClient({
                 });
                 return;
             }
-            const netWeight = newMaterialNetWeight ? parseFloat(newMaterialNetWeight.replace(',', '.')) : 0;
-            const grossWeight = newMaterialGrossWeight ? parseFloat(newMaterialGrossWeight.replace(',', '.')) : 0;
 
             const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
                 type: newMaterialType,
@@ -1163,35 +1174,52 @@ export default function MaterialsClient({
             };
             
             if (isPlasticsacks) {
+                 if (!newMaterialLote.trim()) {
+                    toast({ title: "Campo Obligatorio", description: "El lote es obligatorio para PLASTICSACKS.", variant: "destructive" });
+                    return;
+                }
                  newMaterialData.lote = newMaterialLote.trim();
             }
 
             if (isSacosType) {
                 if (!newMaterialQuantity) {
-                    toast({ title: "Error", description: "La cantidad es obligatoria para Sacos.", variant: "destructive" });
+                    toast({ title: "Campo Obligatorio", description: "La cantidad es obligatoria para Sacos.", variant: "destructive" });
                     return;
                 }
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
 
                  if (isPlasticsacks) {
                     if (!newMaterialTotalWeight) {
-                        toast({ title: "Error", description: "El peso neto es obligatorio para PLASTICSACKS.", variant: "destructive" });
+                        toast({ title: "Campo Obligatorio", description: "El peso neto es obligatorio para PLASTICSACKS.", variant: "destructive" });
                         return;
                     }
                     newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                  } else { 
-                    if (!newMaterialUnitWeight || !newMaterialTotalWeight) {
-                        toast({ title: "Error", description: "Peso/Und y Peso Total son obligatorios para este proveedor.", variant: "destructive" });
+                    if (!newMaterialUnitWeight) {
+                        toast({ title: "Campo Obligatorio", description: "El Peso/Und es obligatorio para este proveedor de sacos.", variant: "destructive" });
+                        return;
+                    }
+                     if (!newMaterialTotalWeight) {
+                        toast({ title: "Campo Obligatorio", description: "El Peso Total es obligatorio para este proveedor de sacos.", variant: "destructive" });
                         return;
                     }
                     newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
                     newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                  }
             } else { // Rollos
+                if (!newMaterialNetWeight) {
+                    toast({ title: "Campo Obligatorio", description: "El peso neto es obligatorio para Rollos.", variant: "destructive" });
+                    return;
+                }
+                const netWeight = parseFloat(newMaterialNetWeight.replace(',', '.'));
                 newMaterialData.netWeight = netWeight;
-                newMaterialData.grossWeight = grossWeight;
-                if (grossWeight > 0 && netWeight > 0) {
-                    newMaterialData.labelTare = grossWeight - netWeight;
+                
+                if (newMaterialGrossWeight) {
+                    const grossWeight = parseFloat(newMaterialGrossWeight.replace(',', '.'));
+                    newMaterialData.grossWeight = grossWeight;
+                    if (grossWeight > 0 && netWeight > 0) {
+                        newMaterialData.labelTare = grossWeight - netWeight;
+                    }
                 }
             }
             
@@ -1201,6 +1229,7 @@ export default function MaterialsClient({
 
             await addDoc(collection(db, 'packagingMaterials'), newMaterialData);
             
+            // Reset form fields
             setNewMaterialCode('');
             setNewMaterialPresentation('');
             setNewMaterialNetWeight('');
@@ -1439,6 +1468,7 @@ export default function MaterialsClient({
             } else {
                 const date = new Date(relevantTimestamp);
                 const hour = date.getHours();
+                const isToday = isTodayFns(date);
 
                 switch (shiftFilter) {
                     case 'day':
@@ -1448,28 +1478,21 @@ export default function MaterialsClient({
                         shiftMatch = hour >= 19 || hour < 7;
                         break;
                     case 'current':
-                        const now = new Date();
-                        const currentHour = now.getHours();
+                         if (!isToday) {
+                            shiftMatch = false;
+                            break;
+                        }
+                        const currentHour = new Date().getHours();
                         const isCurrentShiftDay = currentHour >= 7 && currentHour < 19;
                         
                         if (isCurrentShiftDay) {
-                            // Day shift: 7 AM today to 7 PM today
-                            const startOfShift = set(startOfToday(), { hours: 7 });
-                            const endOfShift = set(startOfToday(), { hours: 19 });
-                            shiftMatch = date >= startOfShift && date < endOfShift;
+                            shiftMatch = hour >= 7 && hour < 19;
                         } else {
-                            // Night shift spans two days
-                            let startOfShift, endOfShift;
-                            if (currentHour >= 19) {
-                                // We are in the evening part of the night shift
-                                startOfShift = set(startOfToday(), { hours: 19 });
-                                endOfShift = set(addDays(startOfToday(), 1), { hours: 7 });
-                            } else {
-                                // We are in the morning part of the night shift
-                                startOfShift = set(subDays(startOfToday(), 1), { hours: 19 });
-                                endOfShift = set(startOfToday(), { hours: 7 });
+                            if (currentHour >= 19) { // Evening part of night shift
+                                shiftMatch = hour >= 19;
+                            } else { // Morning part of night shift
+                                shiftMatch = hour < 7;
                             }
-                            shiftMatch = date >= startOfShift && date < endOfShift;
                         }
                         break;
                 }
