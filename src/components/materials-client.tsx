@@ -724,39 +724,39 @@ function MaterialCard({
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
             <CardHeader>
-                <div className="absolute top-2 right-2 z-10">
+                <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
+                    {isSelected && (
+                        <>
+                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => onAdvancedEdit(material)}>
+                                <Edit className="h-3 w-3" />
+                            </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="icon" className="h-6 w-6">
+                                        <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                        <AlertDialogDescriptionComponent>
+                                            Estás a punto de eliminar permanentemente el material <span className="font-mono font-bold">{material.code}</span>. Esta acción no se puede deshacer.
+                                        </AlertDialogDescriptionComponent>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction onClick={() => onDelete(material)}>Sí, Eliminar</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                        </>
+                    )}
                     <Checkbox
                         checked={isSelected}
                         onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
                         aria-label={`Seleccionar material ${material.code}`}
                     />
                 </div>
-                {isSelected && (
-                    <div className="absolute top-2 right-10 flex items-center gap-1 z-10">
-                         <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => onAdvancedEdit(material)}>
-                            <Edit className="h-3 w-3" />
-                        </Button>
-                         <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="icon" className="h-6 w-6">
-                                    <Trash2 className="h-3 w-3" />
-                                </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                    <AlertDialogDescriptionComponent>
-                                        Estás a punto de eliminar permanentemente el material <span className="font-mono font-bold">{material.code}</span>. Esta acción no se puede deshacer.
-                                    </AlertDialogDescriptionComponent>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => onDelete(material)}>Sí, Eliminar</AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
-                    </div>
-                )}
                  <div className="flex flex-col">
                     <div>
                         <CardDescription>{materialTypeLabels[material.type]} - {material.presentation || ''}</CardDescription>
@@ -932,6 +932,8 @@ export default function MaterialsClient({
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     
+    const ADD_MATERIAL_COLLAPSIBLE_STATE_KEY = 'addMaterialCollapsibleState';
+
     React.useEffect(() => {
         const q = query(collection(db, "packagingMaterials"), orderBy("receivedAt", "desc"));
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
@@ -946,9 +948,19 @@ export default function MaterialsClient({
             });
         });
 
+        const savedState = localStorage.getItem(ADD_MATERIAL_COLLAPSIBLE_STATE_KEY);
+        if (savedState !== null) {
+            setIsAddMaterialOpen(JSON.parse(savedState));
+        }
+
         // Cleanup subscription on unmount
         return () => unsubscribe();
     }, [toast]);
+
+    const handleCollapsibleChange = (open: boolean) => {
+        setIsAddMaterialOpen(open);
+        localStorage.setItem(ADD_MATERIAL_COLLAPSIBLE_STATE_KEY, JSON.stringify(open));
+    };
 
     const handleScanSuccess = React.useCallback((code: string) => {
         if (isMobileDevice && syncSessionId) {
@@ -1498,7 +1510,7 @@ export default function MaterialsClient({
                 </header>
 
                 <main className="p-4 md:p-8 space-y-6 pb-24">
-                    <Collapsible open={isAddMaterialOpen} onOpenChange={setIsAddMaterialOpen}>
+                    <Collapsible open={isAddMaterialOpen} onOpenChange={handleCollapsibleChange}>
                         <Card>
                              <CardHeader className="flex flex-row items-center justify-between">
                                 <div className="flex-1">
