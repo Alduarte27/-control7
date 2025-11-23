@@ -1,10 +1,11 @@
+
 'use client';
 
 import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database, PlayCircle, Edit, Upload, Activity, AlertTriangle, Clock, Shuffle, PackageCheck, Boxes, QrCode, Smartphone } from 'lucide-react';
+import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database, PlayCircle, Edit, Upload, Activity, AlertTriangle, Clock, Shuffle, PackageCheck, Boxes, QrCode, Smartphone, Wifi, MousePointerClick } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -13,13 +14,16 @@ type InfoDialogProps = {
     onOpenChange: (open: boolean) => void;
 };
 
-const FeatureItem = ({ icon: Icon, title, description }: { icon: React.ElementType, title: string, description: string }) => (
+const FeatureItem = ({ icon: Icon, title, description, isNew = false }: { icon: React.ElementType, title: string, description: string, isNew?: boolean }) => (
     <div className="flex items-start gap-4">
         <div className="p-2 bg-primary/10 rounded-md text-primary mt-1">
             <Icon className="h-5 w-5" />
         </div>
         <div>
-            <h4 className="font-semibold text-foreground">{title}</h4>
+            <h4 className="font-semibold text-foreground flex items-center gap-2">
+                {title}
+                {isNew && <Badge variant="default">Nuevo</Badge>}
+            </h4>
             <p className="text-sm text-muted-foreground">{description}</p>
         </div>
     </div>
@@ -56,38 +60,19 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
           <div className="space-y-6 py-4">
             
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Planificación y Control</h3>
-                <div className="space-y-4">
-                    <FeatureItem 
-                        icon={Target}
-                        title="Planificación Semanal"
-                        description="Define tus metas de producción para cada producto en la tabla principal. Simplemente haz clic en la celda 'Plan Semanal' e ingresa el valor."
-                    />
-                    <FeatureItem 
-                        icon={Hash}
-                        title="Registro de Producción y Lotes por Turno"
-                        description="Haz clic en el icono de lápiz (Editar) para registrar la producción por turno y el número de lote de cada día, que se sugiere automáticamente."
-                    />
-                     <FeatureItem 
-                        icon={NotebookPen}
-                        title="Registro de Incidencias"
-                        description="Usa el botón de libreta para añadir notas o incidencias por turno. Esto es clave para entender las variaciones y mejorar a futuro."
-                    />
-                     <FeatureItem 
-                        icon={Copy}
-                        title="Copiar Plan de la Semana Anterior"
-                        description="Ahorra tiempo utilizando el botón 'Copiar Plan Anterior'. Esto cargará automáticamente los valores planificados de la semana previa."
-                    />
-                </div>
-            </div>
-
-             <div>
                 <h3 className="text-lg font-semibold mb-3 text-primary">Control de Materiales de Empaque</h3>
                 <div className="space-y-4">
                      <FeatureItem 
-                        icon={Boxes}
-                        title="Gestión de Inventario en Tiempo Real"
-                        description="Registra la entrada de cada rollo o paca de sacos en el área de empaque. Visualiza al instante qué material está 'Recibido', 'En Uso' o 'Consumido'."
+                        icon={Wifi}
+                        title="Sincronización en Tiempo Real"
+                        description="Todos los cambios en el inventario (nuevos registros, cambios de estado) se reflejan instantáneamente en todos los dispositivos conectados, sin necesidad de recargar la página."
+                        isNew={true}
+                    />
+                     <FeatureItem 
+                        icon={MousePointerClick}
+                        title="Acciones Contextuales Mejoradas"
+                        description="Al seleccionar un material, los botones para 'Edición Avanzada' y 'Eliminar' aparecen en la misma tarjeta. La barra para eliminación masiva solo se muestra al seleccionar 2 o más items."
+                        isNew={true}
                     />
                      <FeatureItem 
                         icon={QrCode}
@@ -146,7 +131,7 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
                         title="Gestión Centralizada de Catálogos"
                         description="Desde la bitácora ('Configuración') o el módulo de materiales, puedes añadir y administrar motivos de parada, proveedores, operadores y más."
                     />
-                    <FeatureItem 
+                     <FeatureItem 
                         icon={History}
                         title="Historial de Planes y Bitácoras"
                         description="Navega por los planes de producción y las bitácoras de días anteriores de forma rápida y paginada desde sus respectivas secciones de 'Historial'."
