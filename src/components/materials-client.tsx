@@ -1130,21 +1130,8 @@ export default function MaterialsClient({
 
 
     const handleAddMaterial = async () => {
-        // Validation checks
-        if (!newMaterialSupplier) {
-            toast({ title: "Campo Obligatorio", description: "Por favor, selecciona un proveedor.", variant: "destructive" });
-            return;
-        }
-        if (!newMaterialCode.trim()) {
-            toast({ title: "Campo Obligatorio", description: "El código del material es obligatorio.", variant: "destructive" });
-            return;
-        }
-        if (!isPlastiempaques && !newMaterialPresentation.trim()) {
-             toast({ title: "Campo Obligatorio", description: "La presentación es obligatoria.", variant: "destructive" });
-            return;
-        }
-        if (!isPlastiempaques && !newMaterialProviderDate) {
-            toast({ title: "Campo Obligatorio", description: "La fecha del proveedor es obligatoria.", variant: "destructive" });
+        if (!newMaterialSupplier || !newMaterialType || !newMaterialCode.trim() || (!isPlastiempaques && (!newMaterialPresentation.trim() || !newMaterialProviderDate))) {
+            toast({ title: "Campos Obligatorios", description: "Proveedor, tipo, código, presentación y fecha de proveedor son obligatorios.", variant: "destructive" });
             return;
         }
 
@@ -1155,11 +1142,7 @@ export default function MaterialsClient({
             const querySnapshot = await getDocs(q);
 
             if (!querySnapshot.empty) {
-                toast({
-                    title: "Error de Duplicado",
-                    description: "El código de material que intentas registrar ya existe en el sistema.",
-                    variant: "destructive",
-                });
+                toast({ title: "Error de Duplicado", description: "El código de material que intentas registrar ya existe en el sistema.", variant: "destructive" });
                 return;
             }
 
@@ -1182,45 +1165,32 @@ export default function MaterialsClient({
             }
 
             if (isSacosType) {
-                if (!newMaterialQuantity) {
-                    toast({ title: "Campo Obligatorio", description: "La cantidad es obligatoria para Sacos.", variant: "destructive" });
+                if (!newMaterialQuantity || !newMaterialTotalWeight) {
+                    toast({ title: "Campo Obligatorio", description: "Cantidad y Peso Total son obligatorios para Sacos.", variant: "destructive" });
                     return;
                 }
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
+                const totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
+                newMaterialData.totalWeight = totalWeight;
+                newMaterialData.netWeight = totalWeight; // For sacos, label net weight is the total weight
 
-                 if (isPlasticsacks) {
-                    if (!newMaterialTotalWeight) {
-                        toast({ title: "Campo Obligatorio", description: "El peso neto es obligatorio para PLASTICSACKS.", variant: "destructive" });
-                        return;
-                    }
-                    newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
-                 } else { 
+                 if (!isPlasticsacks) { 
                     if (!newMaterialUnitWeight) {
                         toast({ title: "Campo Obligatorio", description: "El Peso/Und es obligatorio para este proveedor de sacos.", variant: "destructive" });
                         return;
                     }
-                     if (!newMaterialTotalWeight) {
-                        toast({ title: "Campo Obligatorio", description: "El Peso Total es obligatorio para este proveedor de sacos.", variant: "destructive" });
-                        return;
-                    }
                     newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
-                    newMaterialData.totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                  }
             } else { // Rollos
-                if (!newMaterialNetWeight) {
-                    toast({ title: "Campo Obligatorio", description: "El peso neto es obligatorio para Rollos.", variant: "destructive" });
+                if (!newMaterialNetWeight || !newMaterialGrossWeight) {
+                    toast({ title: "Campo Obligatorio", description: "Peso neto y bruto son obligatorios para Rollos.", variant: "destructive" });
                     return;
                 }
                 const netWeight = parseFloat(newMaterialNetWeight.replace(',', '.'));
+                const grossWeight = parseFloat(newMaterialGrossWeight.replace(',', '.'));
                 newMaterialData.netWeight = netWeight;
-                
-                if (newMaterialGrossWeight) {
-                    const grossWeight = parseFloat(newMaterialGrossWeight.replace(',', '.'));
-                    newMaterialData.grossWeight = grossWeight;
-                    if (grossWeight > 0 && netWeight > 0) {
-                        newMaterialData.labelTare = grossWeight - netWeight;
-                    }
-                }
+                newMaterialData.grossWeight = grossWeight;
+                newMaterialData.labelTare = grossWeight - netWeight;
             }
             
             if (!isPlastiempaques && newMaterialProviderDate) {
@@ -1229,7 +1199,6 @@ export default function MaterialsClient({
 
             await addDoc(collection(db, 'packagingMaterials'), newMaterialData);
             
-            // Reset form fields
             setNewMaterialCode('');
             setNewMaterialPresentation('');
             setNewMaterialNetWeight('');
@@ -1490,33 +1459,34 @@ export default function MaterialsClient({
                         shiftMatch = hourNight >= 19 || hourNight < 7;
                         break;
                     case 'current':
-                        const now = new Date();
-                        const currentHour = now.getHours();
-                        const isDayShift = currentHour >= 7 && currentHour < 19;
+                         const now = new Date();
+                         const currentHour = now.getHours();
+                         const isCurrentlyDayShift = currentHour >= 7 && currentHour < 19;
 
-                        let shiftStart: Date;
-                        let shiftEnd: Date;
-                        
-                        if (isDayShift) {
-                            // Day shift: 7am today to 7pm today
-                            shiftStart = startOfDay(now);
-                            shiftEnd = endOfDay(now);
-                        } else {
-                            // Night shift
-                            if (currentHour >= 19) {
-                                // We are in the evening part of the night shift (e.g., 10 PM today)
-                                // Show from 7 PM today to 7 AM tomorrow
-                                shiftStart = set(now, { hours: 19, minutes: 0, seconds: 0, milliseconds: 0 });
-                                shiftEnd = set(addDays(now, 1), { hours: 6, minutes: 59, seconds: 59, milliseconds: 999 });
-                            } else {
-                                // We are in the morning part of the night shift (e.g., 2 AM today)
-                                // Show from 7 PM yesterday to 7 AM today
-                                shiftStart = set(subDays(now, 1), { hours: 19, minutes: 0, seconds: 0, milliseconds: 0 });
-                                shiftEnd = set(now, { hours: 6, minutes: 59, seconds: 59, milliseconds: 999 });
-                            }
-                        }
-                        shiftMatch = date >= shiftStart && date <= shiftEnd;
-                        break;
+                         let shiftStart: Date;
+                         let shiftEnd: Date;
+                         
+                         if (isCurrentlyDayShift) {
+                             // Day shift: from 7am today to 7pm today
+                             shiftStart = set(startOfToday(), { hours: 7 });
+                             shiftEnd = set(startOfToday(), { hours: 18, minutes: 59, seconds: 59 });
+                         } else {
+                             // Night shift spans two days
+                             if (currentHour >= 19) {
+                                 // We are in the evening part of the night shift (e.g., 10 PM today)
+                                 // Show from 7 PM today to 7 AM tomorrow
+                                 shiftStart = set(startOfToday(), { hours: 19 });
+                                 shiftEnd = set(endOfDay(now), { hours: 6, minutes: 59, seconds: 59 });
+                                 shiftEnd.setDate(shiftEnd.getDate() + 1);
+                             } else {
+                                 // We are in the morning part of the night shift (e.g., 2 AM today)
+                                 // Show from 7 PM yesterday to 7 AM today
+                                 shiftStart = set(subDays(startOfToday(), 1), { hours: 19 });
+                                 shiftEnd = set(startOfToday(), { hours: 6, minutes: 59, seconds: 59 });
+                             }
+                         }
+                         shiftMatch = date >= shiftStart && date <= shiftEnd;
+                         break;
                 }
             }
         }
