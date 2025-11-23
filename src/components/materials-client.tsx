@@ -16,7 +16,7 @@ import { materialTypeLabels } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, addDoc, doc, updateDoc, writeBatch, query, where, getDocs, deleteDoc, onSnapshot, setDoc, orderBy } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isToday as isTodayFns } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from './ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
@@ -723,7 +723,7 @@ function MaterialCard({
 
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
-            <CardHeader>
+             <CardHeader>
                 <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
                      <div className={cn("flex items-center gap-1 transition-opacity", isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
                         <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => onAdvancedEdit(material)}>
@@ -1437,19 +1437,30 @@ export default function MaterialsClient({
             if (!relevantTimestamp) {
                 shiftMatch = false;
             } else {
-                const hour = new Date(relevantTimestamp).getHours();
-                if (shiftFilter === 'day') {
-                    shiftMatch = hour >= 7 && hour < 19;
-                } else if (shiftFilter === 'night') {
-                    shiftMatch = hour >= 19 || hour < 7;
-                } else if (shiftFilter === 'current') {
-                    const currentHour = new Date().getHours();
-                    const isCurrentShiftDay = currentHour >= 7 && currentHour < 19;
-                    if (isCurrentShiftDay) {
+                const date = new Date(relevantTimestamp);
+                const hour = date.getHours();
+                const isToday = isTodayFns(date);
+                const currentHour = new Date().getHours();
+                const isCurrentShiftDay = currentHour >= 7 && currentHour < 19;
+
+                switch (shiftFilter) {
+                    case 'day':
                         shiftMatch = hour >= 7 && hour < 19;
-                    } else {
+                        break;
+                    case 'night':
                         shiftMatch = hour >= 19 || hour < 7;
-                    }
+                        break;
+                    case 'current':
+                        if (isToday) {
+                            if (isCurrentShiftDay) {
+                                shiftMatch = hour >= 7 && hour < 19;
+                            } else {
+                                shiftMatch = hour >= 19 || hour < 7;
+                            }
+                        } else {
+                            shiftMatch = false;
+                        }
+                        break;
                 }
             }
         }
