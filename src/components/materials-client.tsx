@@ -255,8 +255,8 @@ function AdvancedEditDialog({
                 <DialogTitle>Edición Avanzada de Material</DialogTitle>
                 <DialogDescription className="break-all">Editando: <span className="font-mono font-bold">{material.code}</span></DialogDescription>
             </DialogHeader>
-            {isSacosType ? (
-                <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                {isSacosType ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="adv-sacos-presentation">Presentación</Label>
@@ -291,86 +291,86 @@ function AdvancedEditDialog({
                             <Input id="adv-sacos-gross-weight" type="number" value={grossWeightSacos.toFixed(2)} disabled />
                         </div>
                     </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-code">Código</Label>
+                                <Input id="adv-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-presentation">Presentación</Label>
+                                <Input id="adv-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
+                            </div>
+                        </div>
+                        <Separator />
+                        <h4 className="font-semibold text-sm text-muted-foreground">Datos de Peso</h4>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-net-weight">P. Neto (Etiqueta)</Label>
+                                <Input id="adv-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={(e) => handleChange('netWeight', Number(e.target.value))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-gross-weight">P. Bruto (Etiqueta)</Label>
+                                <Input id="adv-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-actual-weight">P. Bruto (Balanza)</Label>
+                                <Input id="adv-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-plastic-weight">P. Envoltura (kg)</Label>
+                                <Input id="adv-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-core-weight">P. Canuto (kg)</Label>
+                                <Input id="adv-core-weight" type="number" value={editedMaterial.coreWeight || ''} onChange={(e) => handleChange('coreWeight', Number(e.target.value))} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="adv-tare-weight">Tara Real (Total)</Label>
+                                <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight || ''} onChange={(e) => handleChange('tareWeight', Number(e.target.value))} />
+                            </div>
+                        </div>
+                    </div>
+                )}
+                 <Separator />
+                <h4 className="font-semibold text-sm text-muted-foreground">Asignación y Fechas</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-assigned-machine">Máquina Asignada</Label>
+                        <Select value={editedMaterial.assignedMachine || ''} onValueChange={(val) => handleChange('assignedMachine', val)}>
+                            <SelectTrigger id="adv-assigned-machine"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="machine_1">Máquina Envasadora 1</SelectItem>
+                                <SelectItem value="machine_2">Máquina Envasadora 2</SelectItem>
+                                <SelectItem value="machine_3">Máquina Envasadora 3</SelectItem>
+                                <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
+                                <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                                <SelectItem value="granelera_1">Granelera #1</SelectItem>
+                                <SelectItem value="granelera_2">Granelera #2</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-received-at">Fecha Recibido</Label>
+                        <Input id="adv-received-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.receivedAt)} onChange={(e) => handleTimestampChange('receivedAt', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-inuse-at">Fecha Puesto en Uso</Label>
+                        <Input id="adv-inuse-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.inUseAt)} onChange={(e) => handleTimestampChange('inUseAt', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-consumed-at">Fecha Consumido</Label>
+                        <Input id="adv-consumed-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.consumedAt)} onChange={(e) => handleTimestampChange('consumedAt', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-tareweighted-at">Fecha Pesaje Tara</Label>
+                        <Input id="adv-tareweighted-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.tareWeightedAt)} onChange={(e) => handleTimestampChange('tareWeightedAt', e.target.value)} />
+                    </div>
                 </div>
-            ) : (
-                <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-code">Código</Label>
-                            <Input id="adv-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-presentation">Presentación</Label>
-                            <Input id="adv-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
-                        </div>
-                    </div>
-                    <Separator />
-                    <h4 className="font-semibold text-sm text-muted-foreground">Datos de Peso</h4>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-net-weight">P. Neto (Etiqueta)</Label>
-                            <Input id="adv-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={(e) => handleChange('netWeight', Number(e.target.value))} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-gross-weight">P. Bruto (Etiqueta)</Label>
-                            <Input id="adv-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-actual-weight">P. Bruto (Balanza)</Label>
-                            <Input id="adv-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-plastic-weight">P. Envoltura (kg)</Label>
-                            <Input id="adv-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-core-weight">P. Canuto (kg)</Label>
-                            <Input id="adv-core-weight" type="number" value={editedMaterial.coreWeight || ''} onChange={(e) => handleChange('coreWeight', Number(e.target.value))} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-tare-weight">Tara Real (Total)</Label>
-                            <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight || ''} onChange={(e) => handleChange('tareWeight', Number(e.target.value))} />
-                        </div>
-                    </div>
-                    <Separator />
-                    <h4 className="font-semibold text-sm text-muted-foreground">Asignación y Fechas</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-assigned-machine">Máquina Asignada</Label>
-                            <Select value={editedMaterial.assignedMachine || ''} onValueChange={(val) => handleChange('assignedMachine', val)}>
-                                <SelectTrigger id="adv-assigned-machine"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="machine_1">Máquina Envasadora 1</SelectItem>
-                                    <SelectItem value="machine_2">Máquina Envasadora 2</SelectItem>
-                                    <SelectItem value="machine_3">Máquina Envasadora 3</SelectItem>
-                                    <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
-                                    <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
-                                    <SelectItem value="granelera_1">Granelera #1</SelectItem>
-                                    <SelectItem value="granelera_2">Granelera #2</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-received-at">Fecha Recibido</Label>
-                            <Input id="adv-received-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.receivedAt)} onChange={(e) => handleTimestampChange('receivedAt', e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-inuse-at">Fecha Puesto en Uso</Label>
-                            <Input id="adv-inuse-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.inUseAt)} onChange={(e) => handleTimestampChange('inUseAt', e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-consumed-at">Fecha Consumido</Label>
-                            <Input id="adv-consumed-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.consumedAt)} onChange={(e) => handleTimestampChange('consumedAt', e.target.value)} />
-                        </div>
-                        <div className="space-y-1.5">
-                            <Label htmlFor="adv-tareweighted-at">Fecha Pesaje Tara</Label>
-                            <Input id="adv-tareweighted-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.tareWeightedAt)} onChange={(e) => handleTimestampChange('tareWeightedAt', e.target.value)} />
-                        </div>
-                    </div>
-                </div>
-            )}
+            </div>
              <DialogFooter>
                  <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
                  <Button onClick={handleSaveChanges}>Guardar Cambios Avanzados</Button>
@@ -483,7 +483,7 @@ function TareWeightDialog({
                     </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                     <div className={cn("grid gap-4", isSacosType ? "grid-cols-1" : "grid-cols-2")}>
+                     <div className="grid grid-cols-1 gap-4">
                         <div className="space-y-1.5">
                             <Label htmlFor="plastic-weight">Peso envoltura (kg)</Label>
                             <Input
@@ -1215,9 +1215,7 @@ export default function MaterialsClient({
                 return;
             }
             
-            const totalWeight = parseFloat(newMaterialTotalWeight.replace(',', '.'));
             const plasticWeight = parseFloat(newMaterialPlasticWeight.replace(',', '.')) || 0;
-            const grossWeight = totalWeight + plasticWeight;
 
             const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
                 type: newMaterialType,
@@ -1227,6 +1225,7 @@ export default function MaterialsClient({
                 presentation: newMaterialPresentation.trim(),
                 status: 'recibido',
                 receivedAt: Date.now(),
+                plasticWeight: plasticWeight,
             };
             
             if (isPlasticsacks) {
@@ -1234,15 +1233,15 @@ export default function MaterialsClient({
             }
 
             if (isSacosType) {
-                const totalWeightNum = parseFloat(newMaterialTotalWeight);
+                const totalWeightNum = parseFloat(newMaterialTotalWeight.replace(',', '.'));
+                const grossWeightNum = totalWeightNum + plasticWeight;
+
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
                 newMaterialData.totalWeight = totalWeightNum;
-                newMaterialData.netWeight = totalWeightNum;
-                newMaterialData.plasticWeight = plasticWeight;
-                newMaterialData.grossWeight = grossWeight;
-                if (grossWeight > 0 && totalWeightNum > 0) {
-                  newMaterialData.labelTare = grossWeight - totalWeightNum;
-                }
+                newMaterialData.netWeight = totalWeightNum; // For sacos, net weight is the total product weight
+                newMaterialData.grossWeight = grossWeightNum;
+                newMaterialData.labelTare = grossWeightNum - totalWeightNum;
+
 
                  if (!isPlasticsacks) { 
                     newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
@@ -1964,3 +1963,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
