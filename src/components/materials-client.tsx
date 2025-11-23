@@ -246,8 +246,8 @@ function AdvancedEditDialog({
     onClose();
   };
 
-  const grossWeightSacos = (Number(editedMaterial.totalWeight) || 0) + (Number(editedMaterial.plasticWeight) || 0);
-  
+  const calculatedPlasticWeight = (Number(editedMaterial.grossWeight) || 0) - (Number(editedMaterial.totalWeight) || 0);
+
   return (
     <Dialog open={true} onOpenChange={onClose}>
         <DialogContent className="max-w-2xl">
@@ -283,12 +283,12 @@ function AdvancedEditDialog({
                             <Input id="adv-sacos-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={(e) => handleChange('totalWeight', Number(e.target.value))} />
                         </div>
                          <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-plastic-weight">Peso Envoltura (kg)</Label>
-                            <Input id="adv-sacos-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
+                            <Label htmlFor="adv-sacos-gross-weight">Peso Bruto (kg)</Label>
+                            <Input id="adv-sacos-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))}/>
                         </div>
                          <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-gross-weight">Peso Bruto (kg)</Label>
-                            <Input id="adv-sacos-gross-weight" type="number" value={grossWeightSacos.toFixed(2)} disabled />
+                            <Label htmlFor="adv-sacos-plastic-weight">Peso Envoltura (kg)</Label>
+                            <Input id="adv-sacos-plastic-weight" type="number" value={calculatedPlasticWeight > 0 ? calculatedPlasticWeight.toFixed(2) : '0.00'} disabled />
                         </div>
                     </div>
                 ) : (
@@ -1035,7 +1035,7 @@ export default function MaterialsClient({
                     toast({ title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive" });
                 }
             }
-            return; // Don't process URL as material code
+            return; // Don't process material code
         }
         
         // This part runs on Desktop, or on Mobile if not in sync mode
@@ -1220,6 +1220,9 @@ export default function MaterialsClient({
             }
             
             const grossWeightNum = parseFloat(newMaterialGrossWeight.replace(',', '.')) || 0;
+            const netWeightNum = isSacosType 
+                ? parseFloat(newMaterialTotalWeight.replace(',', '.')) || 0
+                : parseFloat(newMaterialNetWeight.replace(',', '.')) || 0;
 
             const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
                 type: newMaterialType,
@@ -1230,6 +1233,7 @@ export default function MaterialsClient({
                 status: 'recibido',
                 receivedAt: Date.now(),
                 grossWeight: grossWeightNum,
+                netWeight: netWeightNum,
             };
             
             if (isPlasticsacks) {
@@ -1237,12 +1241,9 @@ export default function MaterialsClient({
             }
 
             if (isSacosType) {
-                const totalWeightNum = parseFloat(newMaterialTotalWeight.replace(',', '.'));
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
-                newMaterialData.totalWeight = totalWeightNum;
-                newMaterialData.netWeight = totalWeightNum;
-                
-                const plasticWeight = grossWeightNum - totalWeightNum;
+                newMaterialData.totalWeight = netWeightNum; // For sacos, totalWeight is the net weight
+                const plasticWeight = grossWeightNum - netWeightNum;
                 newMaterialData.plasticWeight = plasticWeight > 0 ? plasticWeight : 0;
                 newMaterialData.labelTare = newMaterialData.plasticWeight;
 
@@ -1250,9 +1251,7 @@ export default function MaterialsClient({
                     newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
                  }
             } else { // Rollos
-                const netWeightRollos = parseFloat(newMaterialNetWeight.replace(',', '.'));
-                newMaterialData.netWeight = netWeightRollos;
-                newMaterialData.labelTare = grossWeightNum - netWeightRollos;
+                newMaterialData.labelTare = grossWeightNum - netWeightNum;
             }
             
             if (!isPlastiempaques && newMaterialProviderDate) {
@@ -1336,12 +1335,21 @@ export default function MaterialsClient({
             const finalUpdates = { ...updates };
             const currentMaterial = materials.find(m => m.id === id);
             const isRollType = currentMaterial?.type.startsWith('rollo');
+            const isSacosType = currentMaterial?.type.startsWith('sacos');
 
             if (isRollType) {
                 const netWeight = finalUpdates.netWeight ?? currentMaterial?.netWeight ?? 0;
                 const grossWeight = finalUpdates.grossWeight ?? currentMaterial?.grossWeight ?? 0;
                 if (grossWeight > 0 && netWeight > 0) {
                     finalUpdates.labelTare = grossWeight - netWeight;
+                }
+            }
+            
+            if (isSacosType) {
+                const grossWeight = finalUpdates.grossWeight ?? currentMaterial?.grossWeight ?? 0;
+                const netWeight = finalUpdates.totalWeight ?? currentMaterial?.totalWeight ?? 0;
+                if (grossWeight > 0 && netWeight > 0) {
+                    finalUpdates.plasticWeight = grossWeight - netWeight;
                 }
             }
 
