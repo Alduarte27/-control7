@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -212,7 +213,7 @@ export default function MaterialsKpiClient({
                             <CardTitle className="text-sm font-medium">Discrepancia Neta</CardTitle>
                         </CardHeader>
                         <CardContent>
-                             <div className={cn("text-3xl font-bold", overallKpis.totalDiscrepancy <= 0 ? "text-green-600" : "text-red-600")}>
+                             <div className={cn("text-3xl font-bold", overallKpis.totalDiscrepancy > 0 ? "text-red-600" : "text-green-600")}>
                                 {overallKpis.totalDiscrepancy.toFixed(2)} kg
                             </div>
                             <p className="text-xs text-muted-foreground">Negativo es bueno (excedente)</p>
