@@ -245,6 +245,8 @@ function AdvancedEditDialog({
     onSave(material.id, editedMaterial);
     onClose();
   };
+
+  const grossWeightSacos = (Number(editedMaterial.totalWeight) || 0) + (Number(editedMaterial.plasticWeight) || 0);
   
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -253,92 +255,122 @@ function AdvancedEditDialog({
                 <DialogTitle>Edición Avanzada de Material</DialogTitle>
                 <DialogDescription className="break-all">Editando: <span className="font-mono font-bold">{material.code}</span></DialogDescription>
             </DialogHeader>
-             <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="adv-code">Código</Label>
-                        <Input id="adv-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="adv-presentation">Presentación</Label>
-                        <Input id="adv-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
+            {isSacosType ? (
+                <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-presentation">Presentación</Label>
+                            <Input id="adv-sacos-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-code">Código</Label>
+                            <Input id="adv-sacos-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-provider-date">Fecha Proveedor</Label>
+                            <Input id="adv-sacos-provider-date" type="date" value={editedMaterial.providerDate || ''} onChange={(e) => handleChange('providerDate', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-quantity">Cantidad</Label>
+                            <Input id="adv-sacos-quantity" type="number" value={editedMaterial.quantity || ''} onChange={(e) => handleChange('quantity', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-unit-weight">Peso/Und (g)</Label>
+                            <Input id="adv-sacos-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={(e) => handleChange('unitWeight', Number(e.target.value))} />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-total-weight">Peso Neto Total (kg)</Label>
+                            <Input id="adv-sacos-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={(e) => handleChange('totalWeight', Number(e.target.value))} />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-plastic-weight">Peso Envoltura (kg)</Label>
+                            <Input id="adv-sacos-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
+                        </div>
+                         <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-gross-weight">Peso Bruto (kg)</Label>
+                            <Input id="adv-sacos-gross-weight" type="number" value={grossWeightSacos.toFixed(2)} disabled />
+                        </div>
                     </div>
                 </div>
-
-                <Separator />
-                <h4 className="font-semibold text-sm text-muted-foreground">Datos de Peso</h4>
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                     {!isSacosType && (
-                        <>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-net-weight">P. Neto (Etiqueta)</Label>
-                                <Input id="adv-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={(e) => handleChange('netWeight', Number(e.target.value))} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-gross-weight">P. Bruto (Etiqueta)</Label>
-                                <Input id="adv-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
-                            </div>
-                        </>
-                     )}
-                     <div className="space-y-1.5">
-                        <Label htmlFor="adv-actual-weight">P. Bruto (Balanza)</Label>
-                        <Input id="adv-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
+            ) : (
+                <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-code">Código</Label>
+                            <Input id="adv-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-presentation">Presentación</Label>
+                            <Input id="adv-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
+                        </div>
                     </div>
-                </div>
-                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                     <div className="space-y-1.5">
-                        <Label htmlFor="adv-plastic-weight">P. Envoltura (kg)</Label>
-                        <Input id="adv-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
+                    <Separator />
+                    <h4 className="font-semibold text-sm text-muted-foreground">Datos de Peso</h4>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-net-weight">P. Neto (Etiqueta)</Label>
+                            <Input id="adv-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={(e) => handleChange('netWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-gross-weight">P. Bruto (Etiqueta)</Label>
+                            <Input id="adv-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-actual-weight">P. Bruto (Balanza)</Label>
+                            <Input id="adv-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
+                        </div>
                     </div>
-                    {!isSacosType && (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-plastic-weight">P. Envoltura (kg)</Label>
+                            <Input id="adv-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
+                        </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="adv-core-weight">P. Canuto (kg)</Label>
                             <Input id="adv-core-weight" type="number" value={editedMaterial.coreWeight || ''} onChange={(e) => handleChange('coreWeight', Number(e.target.value))} />
                         </div>
-                    )}
-                     <div className="space-y-1.5">
-                        <Label htmlFor="adv-tare-weight">Tara Real (Total)</Label>
-                        <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight || ''} onChange={(e) => handleChange('tareWeight', Number(e.target.value))} />
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-tare-weight">Tara Real (Total)</Label>
+                            <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight || ''} onChange={(e) => handleChange('tareWeight', Number(e.target.value))} />
+                        </div>
+                    </div>
+                    <Separator />
+                    <h4 className="font-semibold text-sm text-muted-foreground">Asignación y Fechas</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-assigned-machine">Máquina Asignada</Label>
+                            <Select value={editedMaterial.assignedMachine || ''} onValueChange={(val) => handleChange('assignedMachine', val)}>
+                                <SelectTrigger id="adv-assigned-machine"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="machine_1">Máquina Envasadora 1</SelectItem>
+                                    <SelectItem value="machine_2">Máquina Envasadora 2</SelectItem>
+                                    <SelectItem value="machine_3">Máquina Envasadora 3</SelectItem>
+                                    <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
+                                    <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
+                                    <SelectItem value="granelera_1">Granelera #1</SelectItem>
+                                    <SelectItem value="granelera_2">Granelera #2</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-received-at">Fecha Recibido</Label>
+                            <Input id="adv-received-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.receivedAt)} onChange={(e) => handleTimestampChange('receivedAt', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-inuse-at">Fecha Puesto en Uso</Label>
+                            <Input id="adv-inuse-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.inUseAt)} onChange={(e) => handleTimestampChange('inUseAt', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-consumed-at">Fecha Consumido</Label>
+                            <Input id="adv-consumed-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.consumedAt)} onChange={(e) => handleTimestampChange('consumedAt', e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-tareweighted-at">Fecha Pesaje Tara</Label>
+                            <Input id="adv-tareweighted-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.tareWeightedAt)} onChange={(e) => handleTimestampChange('tareWeightedAt', e.target.value)} />
+                        </div>
                     </div>
                 </div>
-
-                <Separator />
-                 <h4 className="font-semibold text-sm text-muted-foreground">Asignación y Fechas</h4>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                        <Label htmlFor="adv-assigned-machine">Máquina Asignada</Label>
-                        <Select value={editedMaterial.assignedMachine || ''} onValueChange={(val) => handleChange('assignedMachine', val)}>
-                            <SelectTrigger id="adv-assigned-machine"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="machine_1">Máquina Envasadora 1</SelectItem>
-                                <SelectItem value="machine_2">Máquina Envasadora 2</SelectItem>
-                                <SelectItem value="machine_3">Máquina Envasadora 3</SelectItem>
-                                <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
-                                <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
-                                <SelectItem value="granelera_1">Granelera #1</SelectItem>
-                                <SelectItem value="granelera_2">Granelera #2</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor="adv-received-at">Fecha Recibido</Label>
-                        <Input id="adv-received-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.receivedAt)} onChange={(e) => handleTimestampChange('receivedAt', e.target.value)} />
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor="adv-inuse-at">Fecha Puesto en Uso</Label>
-                        <Input id="adv-inuse-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.inUseAt)} onChange={(e) => handleTimestampChange('inUseAt', e.target.value)} />
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor="adv-consumed-at">Fecha Consumido</Label>
-                        <Input id="adv-consumed-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.consumedAt)} onChange={(e) => handleTimestampChange('consumedAt', e.target.value)} />
-                    </div>
-                     <div className="space-y-1.5">
-                        <Label htmlFor="adv-tareweighted-at">Fecha Pesaje Tara</Label>
-                        <Input id="adv-tareweighted-at" type="datetime-local" value={formatTimestampForInput(editedMaterial.tareWeightedAt)} onChange={(e) => handleTimestampChange('tareWeightedAt', e.target.value)} />
-                    </div>
-                 </div>
-
-             </div>
+            )}
              <DialogFooter>
                  <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
                  <Button onClick={handleSaveChanges}>Guardar Cambios Avanzados</Button>
@@ -1202,12 +1234,15 @@ export default function MaterialsClient({
             }
 
             if (isSacosType) {
+                const totalWeightNum = parseFloat(newMaterialTotalWeight);
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
-                newMaterialData.totalWeight = totalWeight;
-                newMaterialData.netWeight = totalWeight;
+                newMaterialData.totalWeight = totalWeightNum;
+                newMaterialData.netWeight = totalWeightNum;
                 newMaterialData.plasticWeight = plasticWeight;
                 newMaterialData.grossWeight = grossWeight;
-                newMaterialData.labelTare = grossWeight - totalWeight;
+                if (grossWeight > 0 && totalWeightNum > 0) {
+                  newMaterialData.labelTare = grossWeight - totalWeightNum;
+                }
 
                  if (!isPlasticsacks) { 
                     newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
@@ -1487,29 +1522,32 @@ export default function MaterialsClient({
                         const hourNight = date.getHours();
                         shiftMatch = hourNight >= 19 || hourNight < 7;
                         break;
-                    case 'current':
+                    case 'current': {
                          const now = new Date();
                          const currentHour = now.getHours();
                          const isCurrentlyDayShift = currentHour >= 7 && currentHour < 19;
+                         const materialDate = new Date(relevantTimestamp);
 
-                         let shiftStart: Date;
-                         let shiftEnd: Date;
-                         
                          if (isCurrentlyDayShift) {
-                             shiftStart = set(startOfToday(), { hours: 7 });
-                             shiftEnd = set(startOfToday(), { hours: 18, minutes: 59, seconds: 59 });
-                             shiftMatch = isTodayFns(date) && date >= shiftStart && date <= shiftEnd;
+                             // Day shift: 7 AM today to 6:59 PM today
+                             const shiftStart = set(startOfToday(), { hours: 7 });
+                             const shiftEnd = set(startOfToday(), { hours: 18, minutes: 59, seconds: 59 });
+                             shiftMatch = materialDate >= shiftStart && materialDate <= shiftEnd;
                          } else {
-                             if (currentHour >= 19) {
+                             // Night shift: 7 PM yesterday/today to 6:59 AM today/tomorrow
+                             let shiftStart: Date;
+                             let shiftEnd: Date;
+                             if (currentHour >= 19) { // We are in the evening part of the night shift
                                  shiftStart = set(startOfToday(), { hours: 19 });
                                  shiftEnd = set(addDays(startOfToday(), 1), { hours: 6, minutes: 59, seconds: 59 });
-                             } else {
+                             } else { // We are in the morning part of the night shift
                                  shiftStart = set(subDays(startOfToday(), 1), { hours: 19 });
                                  shiftEnd = set(startOfToday(), { hours: 6, minutes: 59, seconds: 59 });
                              }
-                              shiftMatch = date >= shiftStart && date <= shiftEnd;
+                              shiftMatch = materialDate >= shiftStart && materialDate <= shiftEnd;
                          }
                          break;
+                    }
                 }
             }
         }
@@ -1785,9 +1823,9 @@ export default function MaterialsClient({
                                     <SelectContent>
                                         <SelectItem value="all">Todas las Máquinas</SelectItem>
                                         <SelectItem value="unassigned">Sin Asignar</SelectItem>
-                                        <SelectItem value="machine_1">Máquina 1</SelectItem>
-                                        <SelectItem value="machine_2">Máquina 2</SelectItem>
-                                        <SelectItem value="machine_3">Máquina 3</SelectItem>
+                                        <SelectItem value="machine_1">Máquina Envasadora 1</SelectItem>
+                                        <SelectItem value="machine_2">Máquina Envasadora 2</SelectItem>
+                                        <SelectItem value="machine_3">Máquina Envasadora 3</SelectItem>
                                         <SelectItem value="wrapper_1">Enfardadora 1</SelectItem>
                                         <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
                                         <SelectItem value="granelera_1">Granelera #1</SelectItem>
@@ -1926,4 +1964,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
