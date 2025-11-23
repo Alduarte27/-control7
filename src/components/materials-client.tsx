@@ -710,8 +710,8 @@ function MaterialCard({
         
         if (referenceNetWeight === 0) return null;
 
-        const discrepancy = referenceNetWeight - material.actualNetWeight;
-        const color = discrepancy > 0 ? 'text-red-600' : 'text-green-600';
+        const discrepancy = material.actualNetWeight - referenceNetWeight;
+        const color = discrepancy >= 0 ? 'text-green-600' : 'text-red-600';
         
         return (
             <div className="space-y-1">
