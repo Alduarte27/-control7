@@ -246,7 +246,7 @@ function AdvancedEditDialog({
     onClose();
   };
 
-  const calculatedPlasticWeight = (Number(editedMaterial.grossWeight) || 0) - (Number(editedMaterial.totalWeight) || 0);
+  const calculatedGrossWeight = (Number(editedMaterial.totalWeight) || 0) + (Number(editedMaterial.plasticWeight) || 0);
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -283,12 +283,12 @@ function AdvancedEditDialog({
                             <Input id="adv-sacos-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={(e) => handleChange('totalWeight', Number(e.target.value))} />
                         </div>
                          <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-gross-weight">Peso Bruto (kg)</Label>
-                            <Input id="adv-sacos-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))}/>
+                            <Label htmlFor="adv-sacos-plastic-weight">Peso Envoltura (kg)</Label>
+                            <Input id="adv-sacos-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))}/>
                         </div>
                          <div className="space-y-1.5">
-                            <Label htmlFor="adv-sacos-plastic-weight">Peso Envoltura (kg)</Label>
-                            <Input id="adv-sacos-plastic-weight" type="number" value={calculatedPlasticWeight > 0 ? calculatedPlasticWeight.toFixed(2) : '0.00'} disabled />
+                            <Label htmlFor="adv-sacos-gross-weight">Peso Bruto (kg)</Label>
+                            <Input id="adv-sacos-gross-weight" type="number" value={calculatedGrossWeight > 0 ? calculatedGrossWeight.toFixed(2) : '0.00'} disabled />
                         </div>
                     </div>
                 ) : (
@@ -468,7 +468,7 @@ function TareWeightDialog({
     const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
 
     const totalTare = (parseFloat(plasticWeight) || 0) + (parseFloat(coreWeight) || 0);
-    const actualNetWeight = (material.actualWeight || 0) - totalTare;
+    const actualNetWeight = (material.actualWeight || material.totalWeight || 0) - totalTare;
 
     const handleConfirm = () => {
         onConfirm({
@@ -1057,7 +1057,6 @@ export default function MaterialsClient({
                 }
                  if (totalWeightKg && !isNaN(Number(totalWeightKg))) {
                     setNewMaterialTotalWeight(totalWeightKg);
-                    setNewMaterialNetWeight(totalWeightKg); // For plasticsacks
                 }
     
                 toast({
@@ -1233,7 +1232,6 @@ export default function MaterialsClient({
                 status: 'recibido',
                 receivedAt: Date.now(),
                 grossWeight: grossWeightNum,
-                netWeight: netWeightNum,
             };
             
             if (isPlasticsacks) {
@@ -1242,7 +1240,8 @@ export default function MaterialsClient({
 
             if (isSacosType) {
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
-                newMaterialData.totalWeight = netWeightNum; // For sacos, totalWeight is the net weight
+                newMaterialData.totalWeight = netWeightNum;
+                newMaterialData.netWeight = netWeightNum; // Also save to netWeight for consistency
                 const plasticWeight = grossWeightNum - netWeightNum;
                 newMaterialData.plasticWeight = plasticWeight > 0 ? plasticWeight : 0;
                 newMaterialData.labelTare = newMaterialData.plasticWeight;
@@ -1251,6 +1250,7 @@ export default function MaterialsClient({
                     newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight.replace(',', '.'));
                  }
             } else { // Rollos
+                newMaterialData.netWeight = netWeightNum;
                 newMaterialData.labelTare = grossWeightNum - netWeightNum;
             }
             
