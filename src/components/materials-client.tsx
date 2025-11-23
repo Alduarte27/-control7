@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart } from 'lucide-react';
+import { Boxes, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -698,7 +698,7 @@ function MaterialCard({
                 </div>
             );
         }
-
+    
         if (material.status !== 'consumido' || material.actualNetWeight === undefined) return null;
         
         let referenceNetWeight = 0;
@@ -709,7 +709,7 @@ function MaterialCard({
         }
         
         if (referenceNetWeight === 0) return null;
-
+    
         const discrepancy = material.actualNetWeight - referenceNetWeight;
         const color = discrepancy >= 0 ? 'text-green-600' : 'text-red-600';
         
@@ -724,34 +724,32 @@ function MaterialCard({
     return (
         <Card className={cn("flex flex-col relative", isSelected && "ring-2 ring-primary")}>
             <CardHeader>
-                <div className="absolute top-2 right-2 flex items-center gap-2 z-10">
-                    {isSelected && (
-                        <>
-                            <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => onAdvancedEdit(material)}>
-                                <Edit className="h-3 w-3" />
-                            </Button>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="destructive" size="icon" className="h-6 w-6">
-                                        <Trash2 className="h-3 w-3" />
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                        <AlertDialogDescriptionComponent>
-                                            Estás a punto de eliminar permanentemente el material <span className="font-mono font-bold">{material.code}</span>. Esta acción no se puede deshacer.
-                                        </AlertDialogDescriptionComponent>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction onClick={() => onDelete(material)}>Sí, Eliminar</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        </>
-                    )}
-                    <Checkbox
+                <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+                     <div className={cn("flex items-center gap-1 transition-opacity", isSelected ? 'opacity-100' : 'opacity-0 pointer-events-none')}>
+                        <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => onAdvancedEdit(material)}>
+                            <Edit className="h-3 w-3" />
+                        </Button>
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="icon" className="h-6 w-6">
+                                    <Trash2 className="h-3 w-3" />
+                                </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
+                                    <AlertDialogDescriptionComponent>
+                                        Estás a punto de eliminar permanentemente el material <span className="font-mono font-bold">{material.code}</span>. Esta acción no se puede deshacer.
+                                    </AlertDialogDescriptionComponent>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => onDelete(material)}>Sí, Eliminar</AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
+                     <Checkbox
                         checked={isSelected}
                         onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
                         aria-label={`Seleccionar material ${material.code}`}
@@ -926,11 +924,13 @@ export default function MaterialsClient({
     const [isMobileDevice, setIsMobileDevice] = React.useState(false);
     const [isDeviceConnected, setIsDeviceConnected] = React.useState(false);
 
+    // Filter states
     const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
+    const [shiftFilter, setShiftFilter] = React.useState<'all' | 'current' | 'day' | 'night'>('all');
     
     const ADD_MATERIAL_COLLAPSIBLE_STATE_KEY = 'addMaterialCollapsibleState';
 
@@ -1320,7 +1320,7 @@ export default function MaterialsClient({
     };
 
     const handleDeleteSelected = async () => {
-        if (selectedMaterials.size === 0) return;
+        if (selectedMaterials.size < 2) return;
 
         try {
             const batch = writeBatch(db);
@@ -1423,7 +1423,38 @@ export default function MaterialsClient({
         const searchMatch = !searchQuery ||
             material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
-        return typeMatch && supplierMatch && machineMatch && searchMatch;
+
+        let shiftMatch = true;
+        if (shiftFilter !== 'all') {
+            let relevantTimestamp: number | undefined;
+            switch(material.status) {
+                case 'recibido': relevantTimestamp = material.receivedAt; break;
+                case 'en_uso': relevantTimestamp = material.inUseAt; break;
+                case 'por_pesar_tara': relevantTimestamp = material.consumedAt; break;
+                case 'consumido': relevantTimestamp = material.tareWeightedAt; break;
+            }
+
+            if (!relevantTimestamp) {
+                shiftMatch = false;
+            } else {
+                const hour = new Date(relevantTimestamp).getHours();
+                if (shiftFilter === 'day') {
+                    shiftMatch = hour >= 7 && hour < 19;
+                } else if (shiftFilter === 'night') {
+                    shiftMatch = hour >= 19 || hour < 7;
+                } else if (shiftFilter === 'current') {
+                    const currentHour = new Date().getHours();
+                    const isCurrentShiftDay = currentHour >= 7 && currentHour < 19;
+                    if (isCurrentShiftDay) {
+                        shiftMatch = hour >= 7 && hour < 19;
+                    } else {
+                        shiftMatch = hour >= 19 || hour < 7;
+                    }
+                }
+            }
+        }
+        
+        return typeMatch && supplierMatch && machineMatch && searchMatch && shiftMatch;
     };
     
     const allFilteredMaterials = materials.filter(applySharedFilters);
@@ -1665,14 +1696,12 @@ export default function MaterialsClient({
 
 
                     <Card>
-                        <CardHeader className="flex flex-row items-center justify-between">
-                            <div className="flex-1">
-                                <CardTitle>Inventario en Área de Empaque</CardTitle>
-                                <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
-                            </div>
+                        <CardHeader>
+                            <CardTitle>Inventario en Área de Empaque</CardTitle>
+                            <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
                                 <Input
                                     placeholder="Buscar por código, lote..."
                                     value={searchQuery}
@@ -1706,6 +1735,15 @@ export default function MaterialsClient({
                                         <SelectItem value="wrapper_2">Enfardadora 2</SelectItem>
                                         <SelectItem value="granelera_1">Granelera #1</SelectItem>
                                         <SelectItem value="granelera_2">Granelera #2</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <Select value={shiftFilter} onValueChange={(v) => setShiftFilter(v as any)}>
+                                    <SelectTrigger><SelectValue/></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">Todos los Turnos</SelectItem>
+                                        <SelectItem value="current">Turno Actual</SelectItem>
+                                        <SelectItem value="day">Turno Día (07:00-18:59)</SelectItem>
+                                        <SelectItem value="night">Turno Noche (19:00-06:59)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
