@@ -5,7 +5,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from './ui/badge';
-import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database, PlayCircle, Edit, Upload, Activity, AlertTriangle, Clock, Shuffle, PackageCheck, Boxes, QrCode, Smartphone, Wifi, MousePointerClick } from 'lucide-react';
+import { Target, HardHat, Bot, NotebookPen, CheckCircle2, LayoutDashboard, History, Settings, Download, Copy, Factory, BarChart2, TrendingUp, Zap, Hash, FileText, Database, PlayCircle, Edit, Upload, Activity, AlertTriangle, Clock, Shuffle, PackageCheck, Boxes, QrCode, Smartphone, Wifi, MousePointerClick, MemoryStick } from 'lucide-react';
 import { Checkbox } from './ui/checkbox';
 import { Label } from './ui/label';
 
@@ -60,20 +60,38 @@ export default function InfoDialog({ open, onOpenChange }: InfoDialogProps) {
           <div className="space-y-6 py-4">
             
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-primary">Control de Materiales de Empaque</h3>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Últimas Mejoras</h3>
                 <div className="space-y-4">
                      <FeatureItem 
                         icon={Wifi}
                         title="Sincronización en Tiempo Real"
-                        description="Todos los cambios en el inventario (nuevos registros, cambios de estado) se reflejan instantáneamente en todos los dispositivos conectados, sin necesidad de recargar la página."
+                        description="Todos los cambios en el inventario de materiales se reflejan instantáneamente en todos los dispositivos, sin necesidad de recargar la página."
                         isNew={true}
                     />
                      <FeatureItem 
                         icon={MousePointerClick}
                         title="Acciones Contextuales Mejoradas"
-                        description="Al seleccionar un material, los botones para 'Edición Avanzada' y 'Eliminar' aparecen en la misma tarjeta. La barra para eliminación masiva solo se muestra al seleccionar 2 o más items."
+                        description="Al seleccionar un material, los botones de 'Edición Avanzada' y 'Eliminar' aparecen en la tarjeta. La barra flotante para borrado masivo solo se muestra al seleccionar 2 o más items."
                         isNew={true}
                     />
+                    <FeatureItem 
+                        icon={MemoryStick}
+                        title="Memoria de Interfaz"
+                        description="La aplicación ahora recuerda si dejaste el formulario de 'Registrar Nuevo Material' abierto o cerrado, manteniendo tu preferencia en futuras visitas."
+                        isNew={true}
+                    />
+                    <FeatureItem 
+                        icon={CheckCircle2}
+                        title="Cálculo de Discrepancia Exacto"
+                        description="Se corrigió la fórmula para calcular la discrepancia de material, asegurando que un excedente se muestre como un valor positivo (bueno) y un faltante como uno negativo."
+                        isNew={true}
+                    />
+                </div>
+            </div>
+            
+            <div>
+                <h3 className="text-lg font-semibold mb-3 text-primary">Control de Materiales de Empaque</h3>
+                <div className="space-y-4">
                      <FeatureItem 
                         icon={QrCode}
                         title="Registro Rápido con Código QR"
