@@ -738,7 +738,7 @@ function MaterialCard({
                             <AlertDialogContent>
                                 <AlertDialogHeader>
                                     <AlertDialogTitle>¿Confirmar Eliminación?</AlertDialogTitle>
-                                    <AlertDialogDescriptionComponent>
+                                    <AlertDialogDescriptionComponent className="break-all">
                                         Estás a punto de eliminar permanentemente el material <span className="font-mono font-bold">{material.code}</span>. Esta acción no se puede deshacer.
                                     </AlertDialogDescriptionComponent>
                                 </AlertDialogHeader>
@@ -1348,6 +1348,24 @@ export default function MaterialsClient({
         });
     };
 
+    const handleConfirmDelete = async (material: PackagingMaterial) => {
+        try {
+            await deleteDoc(doc(db, 'packagingMaterials', material.id));
+            toast({ title: 'Material Eliminado', description: `Se eliminó el material ${material.code}` });
+            if (selectedMaterials.has(material.id)) {
+                setSelectedMaterials(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(material.id);
+                    return newSet;
+                });
+            }
+        } catch (error) {
+            console.error("Error deleting material:", error);
+            toast({ title: 'Error', description: 'No se pudo eliminar el material.', variant: 'destructive' });
+        }
+    }
+
+
     const handleDeleteSelected = async () => {
         if (selectedMaterials.size < 2) return;
 
@@ -1436,12 +1454,6 @@ export default function MaterialsClient({
             setAdvancedEditingMaterial(materialToEdit);
         }
     };
-
-     const handleDelete = (material: PackagingMaterial) => {
-        const tempSet = new Set([material.id]);
-        setSelectedMaterials(tempSet);
-        // The AlertDialog will trigger handleDeleteSelected after confirmation
-    };
     
     const applySharedFilters = (material: PackagingMaterial) => {
         const typeMatch = typeFilter === 'all' || material.type === typeFilter;
@@ -1466,7 +1478,7 @@ export default function MaterialsClient({
             if (!relevantTimestamp) {
                 shiftMatch = false;
             } else {
-                 const date = new Date(relevantTimestamp);
+                const date = new Date(relevantTimestamp);
                 
                 switch (shiftFilter) {
                     case 'day':
@@ -1481,22 +1493,24 @@ export default function MaterialsClient({
                         const now = new Date();
                         const currentHour = now.getHours();
                         const isDayShift = currentHour >= 7 && currentHour < 19;
-                        
+
                         let shiftStart: Date;
                         let shiftEnd: Date;
                         
                         if (isDayShift) {
                             // Day shift: 7am today to 7pm today
-                            shiftStart = set(now, { hours: 7, minutes: 0, seconds: 0, milliseconds: 0 });
-                            shiftEnd = set(now, { hours: 18, minutes: 59, seconds: 59, milliseconds: 999 });
+                            shiftStart = startOfDay(now);
+                            shiftEnd = endOfDay(now);
                         } else {
-                            // Night shift: 7pm previous/current day to 7am current/next day
+                            // Night shift
                             if (currentHour >= 19) {
-                                // We are in the evening part of the night shift (e.g., 10 PM)
+                                // We are in the evening part of the night shift (e.g., 10 PM today)
+                                // Show from 7 PM today to 7 AM tomorrow
                                 shiftStart = set(now, { hours: 19, minutes: 0, seconds: 0, milliseconds: 0 });
                                 shiftEnd = set(addDays(now, 1), { hours: 6, minutes: 59, seconds: 59, milliseconds: 999 });
                             } else {
-                                // We are in the morning part of the night shift (e.g., 2 AM)
+                                // We are in the morning part of the night shift (e.g., 2 AM today)
+                                // Show from 7 PM yesterday to 7 AM today
                                 shiftStart = set(subDays(now, 1), { hours: 19, minutes: 0, seconds: 0, milliseconds: 0 });
                                 shiftEnd = set(now, { hours: 6, minutes: 59, seconds: 59, milliseconds: 999 });
                             }
@@ -1540,7 +1554,7 @@ export default function MaterialsClient({
                         onSelectionChange={handleSelectionChange}
                         isSelected={selectedMaterials.has(material.id)}
                         onTraceClick={setTraceMaterial}
-                        onDelete={handleDelete}
+                        onDelete={handleConfirmDelete}
                         onAdvancedEdit={handleOpenAdvancedEdit}
                     />
                 ))}
