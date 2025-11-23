@@ -1466,34 +1466,42 @@ export default function MaterialsClient({
             if (!relevantTimestamp) {
                 shiftMatch = false;
             } else {
-                const date = new Date(relevantTimestamp);
-                const hour = date.getHours();
-                const isToday = isTodayFns(date);
-
+                 const date = new Date(relevantTimestamp);
+                
                 switch (shiftFilter) {
                     case 'day':
-                        shiftMatch = hour >= 7 && hour < 19;
+                        const hourDay = date.getHours();
+                        shiftMatch = hourDay >= 7 && hourDay < 19;
                         break;
                     case 'night':
-                        shiftMatch = hour >= 19 || hour < 7;
+                        const hourNight = date.getHours();
+                        shiftMatch = hourNight >= 19 || hourNight < 7;
                         break;
                     case 'current':
-                         if (!isToday) {
-                            shiftMatch = false;
-                            break;
-                        }
-                        const currentHour = new Date().getHours();
-                        const isCurrentShiftDay = currentHour >= 7 && currentHour < 19;
+                        const now = new Date();
+                        const currentHour = now.getHours();
+                        const isDayShift = currentHour >= 7 && currentHour < 19;
                         
-                        if (isCurrentShiftDay) {
-                            shiftMatch = hour >= 7 && hour < 19;
+                        let shiftStart: Date;
+                        let shiftEnd: Date;
+                        
+                        if (isDayShift) {
+                            // Day shift: 7am today to 7pm today
+                            shiftStart = set(now, { hours: 7, minutes: 0, seconds: 0, milliseconds: 0 });
+                            shiftEnd = set(now, { hours: 18, minutes: 59, seconds: 59, milliseconds: 999 });
                         } else {
-                            if (currentHour >= 19) { // Evening part of night shift
-                                shiftMatch = hour >= 19;
-                            } else { // Morning part of night shift
-                                shiftMatch = hour < 7;
+                            // Night shift: 7pm previous/current day to 7am current/next day
+                            if (currentHour >= 19) {
+                                // We are in the evening part of the night shift (e.g., 10 PM)
+                                shiftStart = set(now, { hours: 19, minutes: 0, seconds: 0, milliseconds: 0 });
+                                shiftEnd = set(addDays(now, 1), { hours: 6, minutes: 59, seconds: 59, milliseconds: 999 });
+                            } else {
+                                // We are in the morning part of the night shift (e.g., 2 AM)
+                                shiftStart = set(subDays(now, 1), { hours: 19, minutes: 0, seconds: 0, milliseconds: 0 });
+                                shiftEnd = set(now, { hours: 6, minutes: 59, seconds: 59, milliseconds: 999 });
                             }
                         }
+                        shiftMatch = date >= shiftStart && date <= shiftEnd;
                         break;
                 }
             }
