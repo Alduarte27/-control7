@@ -582,7 +582,6 @@ function MaterialCard({
     onActionClick, 
     onSelectionChange, 
     isSelected,
-    onEditClick,
     onTraceClick,
     onDelete,
     onAdvancedEdit,
@@ -591,7 +590,6 @@ function MaterialCard({
     onActionClick: (material: PackagingMaterial, action: 'weigh' | 'consume' | 'weigh_tare') => void, 
     onSelectionChange: (id: string, checked: boolean) => void, 
     isSelected: boolean,
-    onEditClick: (material: PackagingMaterial) => void,
     onTraceClick: (material: PackagingMaterial) => void,
     onDelete: (material: PackagingMaterial) => void,
     onAdvancedEdit: (material: PackagingMaterial) => void,
@@ -752,13 +750,7 @@ function MaterialCard({
                                 <Edit className="h-3 w-3" />
                             </Button>
                         </div>
-                    ) : (
-                        material.status === 'recibido' && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => onEditClick(material)}>
-                                <Edit className="h-4 w-4" />
-                            </Button>
-                        )
-                    )}
+                    ) : null}
                     <Checkbox
                         checked={isSelected}
                         onCheckedChange={(checked) => onSelectionChange(material.id, !!checked)}
@@ -1446,7 +1438,6 @@ export default function MaterialsClient({
                         onActionClick={(mat, action) => setActionState({ material: mat, action })}
                         onSelectionChange={handleSelectionChange}
                         isSelected={selectedMaterials.has(material.id)}
-                        onEditClick={setEditingMaterial}
                         onTraceClick={setTraceMaterial}
                         onDelete={handleDelete}
                         onAdvancedEdit={handleOpenAdvancedEdit}
@@ -1682,14 +1673,38 @@ export default function MaterialsClient({
 
 
                     <Card>
-                        <CardHeader>
-                             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                <div className="space-y-1">
-                                    <CardTitle>Inventario en Área de Empaque</CardTitle>
-                                    <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
-                                </div>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <div className="flex-1">
+                                <CardTitle>Inventario en Área de Empaque</CardTitle>
+                                <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
+                            <div className="flex items-center gap-2">
+                                {selectedMaterials.size > 0 && (
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="destructive">
+                                                <Trash2 className="mr-2 h-4 w-4" />
+                                                Eliminar ({selectedMaterials.size})
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>¿Confirmar Eliminación Masiva?</AlertDialogTitle>
+                                                <AlertDialogDescriptionComponent>
+                                                    Estás a punto de eliminar permanentemente {selectedMaterials.size} material(es). Esta acción no se puede deshacer.
+                                                </AlertDialogDescriptionComponent>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction onClick={handleDeleteSelected}>Sí, Eliminar Seleccionados</AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                )}
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                                 <Input
                                     placeholder="Buscar por código, lote..."
                                     value={searchQuery}
@@ -1726,8 +1741,6 @@ export default function MaterialsClient({
                                     </SelectContent>
                                 </Select>
                             </div>
-                        </CardHeader>
-                        <CardContent>
                              <Tabs defaultValue="recibido" value={statusFilter} onValueChange={(v) => setStatusFilter(v as MaterialStatus | 'all')}>
                                 <TabsList className="grid w-full grid-cols-4">
                                     <TabsTrigger value="en_uso">En Uso ({enUsoMaterials.length})</TabsTrigger>
