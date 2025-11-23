@@ -244,29 +244,6 @@ function AdvancedEditDialog({
   const handleSaveChanges = () => {
     const finalUpdates = { ...editedMaterial };
     
-    // Recalculate tare for rollos if weights changed
-    if (!isSacosType) {
-        const netWeight = Number(finalUpdates.netWeight ?? material.netWeight ?? 0);
-        const grossWeight = Number(finalUpdates.grossWeight ?? material.grossWeight ?? 0);
-        if (grossWeight > 0 && netWeight > 0) {
-            finalUpdates.labelTare = grossWeight - netWeight;
-        }
-    }
-
-    // Recalculate actual net weight if tare components changed
-    const plasticWeight = Number(finalUpdates.plasticWeight ?? material.plasticWeight ?? 0);
-    const coreWeight = Number(finalUpdates.coreWeight ?? material.coreWeight ?? 0);
-    const newTareWeight = plasticWeight + coreWeight;
-
-    if (newTareWeight > 0 && newTareWeight !== (material.tareWeight ?? 0)) {
-         finalUpdates.tareWeight = newTareWeight;
-         const referenceWeight = finalUpdates.actualWeight || material.actualWeight || material.totalWeight || 0;
-         finalUpdates.actualNetWeight = referenceWeight - newTareWeight;
-    } else if (finalUpdates.tareWeight !== undefined && finalUpdates.tareWeight !== (material.tareWeight ?? 0)) {
-        const referenceWeight = finalUpdates.actualWeight || material.actualWeight || material.totalWeight || 0;
-        finalUpdates.actualNetWeight = referenceWeight - finalUpdates.tareWeight;
-    }
-
     onSave(material.id, finalUpdates);
     onClose();
   };
@@ -1211,8 +1188,9 @@ export default function MaterialsClient({
 
         if (isSacosType) {
             fields.push({ value: newMaterialQuantity, name: "Cantidad" });
-            fields.push({ value: newMaterialTotalWeight, name: "Peso Neto (Etiqueta)" });
-            fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto (Balanza)" });
+            fields.push({ value: newMaterialUnitWeight, name: "Peso/Und (g)"});
+            fields.push({ value: newMaterialTotalWeight, name: "Peso Neto Total (kg)" });
+            fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto (kg)" });
         } else { // Rollos
             fields.push({ value: newMaterialNetWeight, name: "Peso Neto" });
             fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto" });
@@ -1261,6 +1239,7 @@ export default function MaterialsClient({
 
             if (isSacosType) {
                 newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
+                newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight);
                 newMaterialData.totalWeight = netWeightNum; 
             }
             
@@ -1343,21 +1322,7 @@ export default function MaterialsClient({
      const handleEditSave = async (id: string, updates: Partial<PackagingMaterial>) => {
         try {
             const finalUpdates = { ...updates };
-            const currentMaterial = materials.find(m => m.id === id);
             
-            const plasticWeight = Number(finalUpdates.plasticWeight ?? currentMaterial?.plasticWeight ?? 0);
-            const coreWeight = Number(finalUpdates.coreWeight ?? currentMaterial?.coreWeight ?? 0);
-            const newTareWeight = plasticWeight + coreWeight;
-
-            if (newTareWeight > 0 && newTareWeight !== (currentMaterial?.tareWeight ?? 0)) {
-                 finalUpdates.tareWeight = newTareWeight;
-                 const referenceWeight = finalUpdates.actualWeight || currentMaterial?.actualWeight || currentMaterial?.totalWeight || 0;
-                 finalUpdates.actualNetWeight = referenceWeight - newTareWeight;
-            } else if (finalUpdates.tareWeight !== undefined && finalUpdates.tareWeight !== (currentMaterial?.tareWeight ?? 0)) {
-                const referenceWeight = finalUpdates.actualWeight || currentMaterial?.actualWeight || currentMaterial?.totalWeight || 0;
-                finalUpdates.actualNetWeight = referenceWeight - finalUpdates.tareWeight;
-            }
-
             await updateDoc(doc(db, 'packagingMaterials', id), finalUpdates);
             toast({ title: 'Material Actualizado', description: `Se guardaron los cambios para el material.` });
             setEditingMaterial(null);
@@ -1746,7 +1711,11 @@ export default function MaterialsClient({
                                                         <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
                                                     </div>
                                                     <div className="space-y-1.5">
-                                                        <Label htmlFor="material-total-weight-ps">Peso Neto (kg)</Label>
+                                                        <Label htmlFor="material-unit-weight-ps">Peso/Und (g)</Label>
+                                                        <Input id="material-unit-weight-ps" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <Label htmlFor="material-total-weight-ps">Peso Neto Total (kg)</Label>
                                                         <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
                                                     </div>
                                                     <div className="space-y-1.5">
