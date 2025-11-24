@@ -1215,9 +1215,7 @@ export default function MaterialsClient({
             }
             
             const grossWeightNum = parseFloat(newMaterialGrossWeight.replace(',', '.')) || 0;
-            const netWeightNum = isSacosType 
-                ? parseFloat(newMaterialTotalWeight.replace(',', '.')) || 0
-                : parseFloat(newMaterialNetWeight.replace(',', '.')) || 0;
+            const netWeightNum = parseFloat((isSacosType ? newMaterialTotalWeight : newMaterialNetWeight).replace(',', '.')) || 0;
             const labelTare = grossWeightNum - netWeightNum;
 
             const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
@@ -1469,6 +1467,11 @@ export default function MaterialsClient({
 
         let shiftMatch = true;
         if (shiftFilter !== 'all') {
+            // New logic for 'current' shift filter
+            if (shiftFilter === 'current' && (material.status === 'recibido' || material.status === 'en_uso' || material.status === 'por_pesar_tara')) {
+                return typeMatch && supplierMatch && machineMatch && searchMatch; // Always show pending items
+            }
+
             let relevantTimestamp: number | undefined;
             switch(material.status) {
                 case 'recibido': relevantTimestamp = material.receivedAt; break;
@@ -1707,18 +1710,18 @@ export default function MaterialsClient({
                                             {isSacosType ? (
                                                 <>
                                                     <div className="space-y-1.5">
-                                                        <Label htmlFor="material-quantity-ps">Cantidad</Label>
-                                                        <Input id="material-quantity-ps" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
+                                                        <Label htmlFor="material-quantity">Cantidad</Label>
+                                                        <Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
                                                     </div>
                                                     <div className="space-y-1.5">
-                                                        <Label htmlFor="material-unit-weight-ps">Peso/Und (g)</Label>
-                                                        <Input id="material-unit-weight-ps" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
+                                                        <Label htmlFor="material-unit-weight">Peso/Und (g)</Label>
+                                                        <Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103.2" disabled={!newMaterialSupplier}/>
                                                     </div>
                                                     <div className="space-y-1.5">
-                                                        <Label htmlFor="material-total-weight-ps">Peso Neto Total (kg)</Label>
-                                                        <Input id="material-total-weight-ps" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
+                                                        <Label htmlFor="material-total-weight">Peso Neto Total (kg)</Label>
+                                                        <Input id="material-total-weight" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
                                                     </div>
-                                                    <div className="space-y-1.5">
+                                                     <div className="space-y-1.5">
                                                         <Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label>
                                                         <Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Peso de balanza" disabled={!newMaterialSupplier}/>
                                                     </div>
