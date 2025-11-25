@@ -196,6 +196,12 @@ export default function MaterialsKpiClient() {
         });
     }, [filteredMaterials]);
 
+    const getPerformanceColor = (performance: number) => {
+        if (performance >= 99) return 'text-green-600';
+        if (performance >= 98) return 'text-yellow-600';
+        return 'text-red-600';
+    };
+
     return (
         <div className="bg-background min-h-screen text-foreground">
             <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
@@ -289,7 +295,7 @@ export default function MaterialsKpiClient() {
                                 <CardTitle className="text-sm font-medium">Rendimiento Promedio</CardTitle>
                             </CardHeader>
                             <CardContent>
-                                <div className="text-3xl font-bold">
+                                <div className={cn("text-3xl font-bold", getPerformanceColor(overallKpis.averagePerformance))}>
                                     {overallKpis.averagePerformance.toFixed(2)}%
                                 </div>
                                 <p className="text-xs text-muted-foreground">Sobre {overallKpis.totalConsumedCount} materiales</p>
@@ -342,7 +348,7 @@ export default function MaterialsKpiClient() {
                                             <React.Fragment key={supplier.name}>
                                                 <TableRow className="bg-muted/50">
                                                     <TableCell className="font-bold">{supplier.name}</TableCell>
-                                                    <TableCell className={cn("text-right font-bold", supplier.overall.averagePerformance >= 99 ? 'text-green-600' : 'text-amber-600')}>
+                                                    <TableCell className={cn("text-right font-bold", getPerformanceColor(supplier.overall.averagePerformance))}>
                                                         {supplier.overall.averagePerformance.toFixed(2)}%
                                                     </TableCell>
                                                     <TableCell className={cn("text-right font-bold", supplier.overall.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
@@ -353,7 +359,7 @@ export default function MaterialsKpiClient() {
                                                 {Object.entries(supplier.materialsByType).map(([typeName, kpi]) => (
                                                     <TableRow key={typeName}>
                                                         <TableCell className="pl-8 text-muted-foreground">{typeName}</TableCell>
-                                                        <TableCell className={cn("text-right font-semibold", kpi.averagePerformance >= 99 ? 'text-green-600' : 'text-amber-600')}>
+                                                        <TableCell className={cn("text-right font-semibold", getPerformanceColor(kpi.averagePerformance))}>
                                                             {kpi.averagePerformance.toFixed(2)}%
                                                         </TableCell>
                                                         <TableCell className={cn("text-right font-semibold", kpi.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
