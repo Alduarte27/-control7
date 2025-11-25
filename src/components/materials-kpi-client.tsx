@@ -95,10 +95,10 @@ export default function MaterialsKpiClient() {
 
     const calculateKpis = (materials: PackagingMaterial[]): Kpi => {
         let totalDiscrepancy = 0;
-        let totalPerformanceSum = 0;
+        let totalActualNetWeight = 0;
+        let totalReferenceNetWeight = 0;
         let totalMissingMaterial = 0;
         let totalExtraMaterial = 0;
-        let performanceCount = 0;
 
         materials.forEach(m => {
             const isRollosType = m.type === 'rollo_fardo' || m.type === 'rollo_laminado';
@@ -113,11 +113,10 @@ export default function MaterialsKpiClient() {
             
             if (m.actualNetWeight !== undefined && referenceNetWeight > 0) {
                 const discrepancy = m.actualNetWeight - referenceNetWeight;
-                const performance = (m.actualNetWeight / referenceNetWeight) * 100;
                 
                 totalDiscrepancy += discrepancy;
-                totalPerformanceSum += performance;
-                performanceCount++;
+                totalActualNetWeight += m.actualNetWeight;
+                totalReferenceNetWeight += referenceNetWeight;
 
                 if (discrepancy < 0) { // Material faltante
                     totalMissingMaterial += Math.abs(discrepancy);
@@ -126,10 +125,14 @@ export default function MaterialsKpiClient() {
                 }
             }
         });
+        
+        const averagePerformance = totalReferenceNetWeight > 0 
+            ? (totalActualNetWeight / totalReferenceNetWeight) * 100 
+            : 0;
 
         return {
             totalDiscrepancy,
-            averagePerformance: performanceCount > 0 ? totalPerformanceSum / performanceCount : 0,
+            averagePerformance,
             totalMissingMaterial,
             totalExtraMaterial,
             totalConsumedCount: materials.length,
