@@ -270,7 +270,7 @@ export default function MaterialsKpiClient() {
                             </CardHeader>
                             <CardContent>
                                 <div className="text-3xl font-bold">
-                                    {overallKpis.averagePerformance.toFixed(1)}%
+                                    {overallKpis.averagePerformance.toFixed(2)}%
                                 </div>
                                 <p className="text-xs text-muted-foreground">Sobre {overallKpis.totalConsumedCount} materiales</p>
                             </CardContent>
@@ -323,7 +323,7 @@ export default function MaterialsKpiClient() {
                                                 <TableRow className="bg-muted/50">
                                                     <TableCell className="font-bold">{supplier.name}</TableCell>
                                                     <TableCell className={cn("text-right font-bold", supplier.overall.averagePerformance >= 99 ? 'text-green-600' : 'text-amber-600')}>
-                                                        {supplier.overall.averagePerformance.toFixed(1)}%
+                                                        {supplier.overall.averagePerformance.toFixed(2)}%
                                                     </TableCell>
                                                     <TableCell className={cn("text-right font-bold", supplier.overall.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
                                                         {supplier.overall.totalDiscrepancy.toFixed(2)} kg
@@ -334,7 +334,7 @@ export default function MaterialsKpiClient() {
                                                     <TableRow key={typeName}>
                                                         <TableCell className="pl-8 text-muted-foreground">{typeName}</TableCell>
                                                         <TableCell className={cn("text-right font-semibold", kpi.averagePerformance >= 99 ? 'text-green-600' : 'text-amber-600')}>
-                                                            {kpi.averagePerformance.toFixed(1)}%
+                                                            {kpi.averagePerformance.toFixed(2)}%
                                                         </TableCell>
                                                         <TableCell className={cn("text-right font-semibold", kpi.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
                                                             {kpi.totalDiscrepancy.toFixed(2)} kg
