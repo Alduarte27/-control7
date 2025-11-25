@@ -220,14 +220,9 @@ function AdvancedEditDialog({
     setEditedMaterial((prev) => {
       const newMaterial = { ...prev, [field]: value };
       
-      // Auto-calculate tareWeight for rolls if components change
-      if (!isSacosType) {
-        if (field === 'plasticWeight' || field === 'coreWeight') {
-          const plastic = field === 'plasticWeight' ? Number(value) : newMaterial.plasticWeight || 0;
-          const core = field === 'coreWeight' ? Number(value) : newMaterial.coreWeight || 0;
-          newMaterial.tareWeight = plastic + core;
-        }
-      }
+      const plastic = 'plasticWeight' in newMaterial ? Number(newMaterial.plasticWeight) || 0 : 0;
+      const core = 'coreWeight' in newMaterial ? Number(newMaterial.coreWeight) || 0 : 0;
+      newMaterial.tareWeight = plastic + core;
 
       return newMaterial;
     });
@@ -253,19 +248,18 @@ function AdvancedEditDialog({
   
   return (
     <Dialog open={true} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
             <DialogHeader>
                 <DialogTitle>Edición Avanzada de Material</DialogTitle>
                 <DialogDescription className="break-all">Editando: <span className="font-mono font-bold">{material.code}</span></DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
-                {/* Common Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
+            <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-1.5 lg:col-span-2">
                         <Label htmlFor="adv-presentation">Presentación</Label>
                         <Input id="adv-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5 lg:col-span-2">
                         <Label htmlFor="adv-code">Código</Label>
                         <Input id="adv-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
                     </div>
@@ -1936,3 +1930,4 @@ export default function MaterialsClient({
         </>
     );
 }
+
