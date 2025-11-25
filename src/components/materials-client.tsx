@@ -159,33 +159,24 @@ function EditMaterialDialog({
           )}
 
           {isSacosType ? (
-            isPlasticsacks ? (
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-quantity">Cantidad</Label>
-                  <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-total-weight">Peso Neto (kg)</Label>
-                  <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))} />
-                </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-quantity">Cantidad</Label>
+                <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))} />
               </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-quantity">Cantidad</Label>
-                  <Input id="edit-quantity" type="number" value={editedMaterial.quantity || ''} onChange={e => handleChange('quantity', Number(e.target.value))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="edit-unit-weight">Peso/Und (g)</Label>
-                  <Input id="edit-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={e => handleChange('unitWeight', Number(e.target.value))} />
-                </div>
-                <div className="col-span-2 space-y-1.5">
-                  <Label htmlFor="edit-total-weight">Peso Total (kg)</Label>
-                  <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))} />
-                </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-unit-weight">Peso/Und (g)</Label>
+                <Input id="edit-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={e => handleChange('unitWeight', Number(e.target.value))} />
               </div>
-            )
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-total-weight">Peso Neto (kg)</Label>
+                <Input id="edit-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={e => handleChange('totalWeight', Number(e.target.value))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-gross-weight">Peso Bruto (kg)</Label>
+                <Input id="edit-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={e => handleChange('grossWeight', Number(e.target.value))} />
+              </div>
+            </div>
           ) : (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -226,7 +217,20 @@ function AdvancedEditDialog({
   }, [material]);
   
   const handleChange = (field: keyof PackagingMaterial, value: any) => {
-    setEditedMaterial((prev) => ({ ...prev, [field]: value }));
+    setEditedMaterial((prev) => {
+      const newMaterial = { ...prev, [field]: value };
+      
+      // Auto-calculate tareWeight for rolls if components change
+      if (!isSacosType) {
+        if (field === 'plasticWeight' || field === 'coreWeight') {
+          const plastic = field === 'plasticWeight' ? Number(value) : newMaterial.plasticWeight || 0;
+          const core = field === 'coreWeight' ? Number(value) : newMaterial.coreWeight || 0;
+          newMaterial.tareWeight = plastic + core;
+        }
+      }
+
+      return newMaterial;
+    });
   };
   
   const handleTimestampChange = (field: keyof PackagingMaterial, value: string) => {
@@ -243,7 +247,6 @@ function AdvancedEditDialog({
 
   const handleSaveChanges = () => {
     const finalUpdates = { ...editedMaterial };
-    
     onSave(material.id, finalUpdates);
     onClose();
   };
@@ -256,83 +259,89 @@ function AdvancedEditDialog({
                 <DialogDescription className="break-all">Editando: <span className="font-mono font-bold">{material.code}</span></DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto pr-4">
+                {/* Common Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-presentation">Presentación</Label>
+                        <Input id="adv-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-code">Código</Label>
+                        <Input id="adv-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-provider-date">Fecha Proveedor</Label>
+                        <Input id="adv-provider-date" type="date" value={editedMaterial.providerDate || ''} onChange={(e) => handleChange('providerDate', e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-lote">Lote</Label>
+                        <Input id="adv-lote" value={editedMaterial.lote || ''} onChange={(e) => handleChange('lote', e.target.value)} />
+                    </div>
+                </div>
+
+                <Separator />
+                <h4 className="font-semibold text-sm text-muted-foreground">Datos de Peso</h4>
+
                 {isSacosType ? (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-sacos-presentation">Presentación</Label>
-                                <Input id="adv-sacos-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-sacos-code">Código</Label>
-                                <Input id="adv-sacos-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
-                            </div>
-                             <div className="space-y-1.5">
-                                <Label htmlFor="adv-sacos-provider-date">Fecha Proveedor</Label>
-                                <Input id="adv-sacos-provider-date" type="date" value={editedMaterial.providerDate || ''} onChange={(e) => handleChange('providerDate', e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-sacos-quantity">Cantidad</Label>
-                                <Input id="adv-sacos-quantity" type="number" value={editedMaterial.quantity || ''} onChange={(e) => handleChange('quantity', Number(e.target.value))} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-sacos-unit-weight">Peso/Und (g)</Label>
-                                <Input id="adv-sacos-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={(e) => handleChange('unitWeight', Number(e.target.value))} />
-                            </div>
-                             <div className="space-y-1.5">
-                                <Label htmlFor="adv-sacos-total-weight">Peso Neto Total (kg)</Label>
-                                <Input id="adv-sacos-total-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={(e) => handleChange('totalWeight', Number(e.target.value))} />
-                            </div>
-                             <div className="space-y-1.5">
-                                <Label htmlFor="adv-sacos-gross-weight">Peso Bruto (kg)</Label>
-                                <Input id="adv-sacos-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
-                            </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-quantity">Cantidad</Label>
+                            <Input id="adv-sacos-quantity" type="number" value={editedMaterial.quantity || ''} onChange={(e) => handleChange('quantity', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-unit-weight">Peso/Und (g)</Label>
+                            <Input id="adv-sacos-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={(e) => handleChange('unitWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-net-weight">P. Neto (Etiqueta)</Label>
+                            <Input id="adv-sacos-net-weight" type="number" value={editedMaterial.totalWeight || ''} onChange={(e) => handleChange('totalWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-gross-weight">P. Bruto (Etiqueta)</Label>
+                            <Input id="adv-sacos-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-actual-weight">P. Real Bruto (Balanza)</Label>
+                            <Input id="adv-sacos-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-plastic-weight">P. Envoltura (kg)</Label>
+                            <Input id="adv-sacos-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-sacos-tare-weight">Tara Real (Total)</Label>
+                            <Input id="adv-sacos-tare-weight" type="number" value={editedMaterial.plasticWeight || 0} disabled />
                         </div>
                     </div>
                 ) : (
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-code">Código</Label>
-                                <Input id="adv-code" value={editedMaterial.code || ''} onChange={(e) => handleChange('code', e.target.value)} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-presentation">Presentación</Label>
-                                <Input id="adv-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
-                            </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-rollos-net-weight">P. Neto (Etiqueta)</Label>
+                            <Input id="adv-rollos-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={(e) => handleChange('netWeight', Number(e.target.value))} />
                         </div>
-                        <Separator />
-                        <h4 className="font-semibold text-sm text-muted-foreground">Datos de Peso</h4>
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-net-weight">P. Neto (Etiqueta)</Label>
-                                <Input id="adv-net-weight" type="number" value={editedMaterial.netWeight || ''} onChange={(e) => handleChange('netWeight', Number(e.target.value))} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-gross-weight">P. Bruto (Etiqueta)</Label>
-                                <Input id="adv-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-actual-weight">P. Bruto (Balanza)</Label>
-                                <Input id="adv-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
-                            </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-rollos-gross-weight">P. Bruto (Etiqueta)</Label>
+                            <Input id="adv-rollos-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
                         </div>
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-plastic-weight">P. Envoltura (kg)</Label>
-                                <Input id="adv-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-core-weight">P. Canuto (kg)</Label>
-                                <Input id="adv-core-weight" type="number" value={editedMaterial.coreWeight || ''} onChange={(e) => handleChange('coreWeight', Number(e.target.value))} />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label htmlFor="adv-tare-weight">Tara Real (Total)</Label>
-                                <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight || ''} onChange={(e) => handleChange('tareWeight', Number(e.target.value))} />
-                            </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-rollos-actual-weight">P. Real Bruto (Balanza)</Label>
+                            <Input id="adv-rollos-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-rollos-plastic-weight">P. Envoltura (kg)</Label>
+                            <Input id="adv-rollos-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-rollos-core-weight">P. Canuto (kg)</Label>
+                            <Input id="adv-rollos-core-weight" type="number" value={editedMaterial.coreWeight || ''} onChange={(e) => handleChange('coreWeight', Number(e.target.value))} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="adv-rollos-tare-weight">Tara Real (Total)</Label>
+                            <Input id="adv-rollos-tare-weight" type="number" value={editedMaterial.tareWeight || 0} disabled />
                         </div>
                     </div>
                 )}
+
                  <Separator />
                 <h4 className="font-semibold text-sm text-muted-foreground">Asignación y Fechas</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -940,12 +949,12 @@ export default function MaterialsClient({
     
     // States for net/gross weight types (rollos)
     const [newMaterialNetWeight, setNewMaterialNetWeight] = React.useState('');
-    const [newMaterialGrossWeight, setNewMaterialGrossWeight] = React.useState('');
 
     // States for sacos type
     const [newMaterialQuantity, setNewMaterialQuantity] = React.useState('');
     const [newMaterialUnitWeight, setNewMaterialUnitWeight] = React.useState('');
     const [newMaterialTotalWeight, setNewMaterialTotalWeight] = React.useState(''); // This is Net Weight for Sacos
+    const [newMaterialGrossWeight, setNewMaterialGrossWeight] = React.useState('');
 
 
     const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());
@@ -1467,9 +1476,8 @@ export default function MaterialsClient({
 
         let shiftMatch = true;
         if (shiftFilter !== 'all') {
-            // New logic for 'current' shift filter
             if (shiftFilter === 'current' && (material.status === 'recibido' || material.status === 'en_uso' || material.status === 'por_pesar_tara')) {
-                return typeMatch && supplierMatch && machineMatch && searchMatch; // Always show pending items
+                return typeMatch && supplierMatch && machineMatch && searchMatch; 
             }
 
             let relevantTimestamp: number | undefined;
@@ -1501,18 +1509,16 @@ export default function MaterialsClient({
                          const materialDate = new Date(relevantTimestamp);
 
                          if (isCurrentlyDayShift) {
-                             // Day shift: 7 AM today to 6:59 PM today
                              const shiftStart = set(startOfToday(), { hours: 7 });
                              const shiftEnd = set(startOfToday(), { hours: 18, minutes: 59, seconds: 59 });
                              shiftMatch = materialDate >= shiftStart && materialDate <= shiftEnd;
                          } else {
-                             // Night shift: 7 PM yesterday/today to 6:59 AM today/tomorrow
                              let shiftStart: Date;
                              let shiftEnd: Date;
-                             if (currentHour >= 19) { // We are in the evening part of the night shift
+                             if (currentHour >= 19) {
                                  shiftStart = set(startOfToday(), { hours: 19 });
                                  shiftEnd = set(addDays(startOfToday(), 1), { hours: 6, minutes: 59, seconds: 59 });
-                             } else { // We are in the morning part of the night shift
+                             } else { 
                                  shiftStart = set(subDays(startOfToday(), 1), { hours: 19 });
                                  shiftEnd = set(startOfToday(), { hours: 6, minutes: 59, seconds: 59 });
                              }
@@ -1715,7 +1721,7 @@ export default function MaterialsClient({
                                                     </div>
                                                     <div className="space-y-1.5">
                                                         <Label htmlFor="material-unit-weight">Peso/Und (g)</Label>
-                                                        <Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103.2" disabled={!newMaterialSupplier}/>
+                                                        <Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
                                                     </div>
                                                     <div className="space-y-1.5">
                                                         <Label htmlFor="material-total-weight">Peso Neto Total (kg)</Label>
