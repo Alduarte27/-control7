@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { BarChart, ChevronLeft, Calendar as CalendarIcon, TrendingUp, TrendingDown } from 'lucide-react';
+import { BarChart, ChevronLeft, Calendar as CalendarIcon, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -28,6 +28,8 @@ type Kpi = {
     totalMissingMaterial: number;
     totalExtraMaterial: number;
     totalConsumedCount: number;
+    nonConformingRate: number;
+    nonConformingCount: number;
 };
 
 type SupplierKpi = {
@@ -99,6 +101,7 @@ export default function MaterialsKpiClient() {
         let totalReferenceNetWeight = 0;
         let totalMissingMaterial = 0;
         let totalExtraMaterial = 0;
+        let nonConformingCount = 0;
 
         materials.forEach(m => {
             const isRollosType = m.type === 'rollo_fardo' || m.type === 'rollo_laminado';
@@ -120,6 +123,7 @@ export default function MaterialsKpiClient() {
 
                 if (discrepancy < 0) { // Material faltante
                     totalMissingMaterial += Math.abs(discrepancy);
+                    nonConformingCount++;
                 } else { // Material excedente
                     totalExtraMaterial += discrepancy;
                 }
@@ -130,12 +134,16 @@ export default function MaterialsKpiClient() {
             ? (totalActualNetWeight / totalReferenceNetWeight) * 100 
             : 0;
 
+        const nonConformingRate = materials.length > 0 ? (nonConformingCount / materials.length) * 100 : 0;
+
         return {
             totalDiscrepancy,
             averagePerformance,
             totalMissingMaterial,
             totalExtraMaterial,
             totalConsumedCount: materials.length,
+            nonConformingRate,
+            nonConformingCount,
         }
     };
 
@@ -252,7 +260,7 @@ export default function MaterialsKpiClient() {
                     <p className="text-center py-12 text-muted-foreground">Cargando datos del dashboard...</p>
                 ) : (
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Discrepancia Neta</CardTitle>
@@ -262,6 +270,18 @@ export default function MaterialsKpiClient() {
                                     {overallKpis.totalDiscrepancy.toFixed(2)} kg
                                 </div>
                                 <p className="text-xs text-muted-foreground">Positivo es bueno (excedente)</p>
+                            </CardContent>
+                        </Card>
+                        <Card>
+                             <CardHeader>
+                                <CardTitle className="text-sm font-medium">Tasa Unidades No Conformes</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className={cn("text-3xl font-bold", overallKpis.nonConformingRate > 10 ? "text-red-600" : "text-amber-600")}>
+                                    <AlertCircle className="inline h-7 w-7 mr-2" />
+                                    {overallKpis.nonConformingRate.toFixed(1)}%
+                                </div>
+                                <p className="text-xs text-muted-foreground">{overallKpis.nonConformingCount} de {overallKpis.totalConsumedCount} unidades</p>
                             </CardContent>
                         </Card>
                         <Card>
