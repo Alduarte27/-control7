@@ -266,7 +266,7 @@ export default function MaterialsKpiClient() {
                     <p className="text-center py-12 text-muted-foreground">Cargando datos del dashboard...</p>
                 ) : (
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <Card>
                             <CardHeader>
                                 <CardTitle className="text-sm font-medium">Discrepancia Neta</CardTitle>
@@ -275,19 +275,7 @@ export default function MaterialsKpiClient() {
                                 <div className={cn("text-3xl font-bold", overallKpis.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
                                     {overallKpis.totalDiscrepancy.toFixed(2)} kg
                                 </div>
-                                <p className="text-xs text-muted-foreground">Positivo es bueno (excedente)</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                             <CardHeader>
-                                <CardTitle className="text-sm font-medium">Tasa Unidades No Conformes</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className={cn("text-3xl font-bold", overallKpis.nonConformingRate > 10 ? "text-red-600" : "text-amber-600")}>
-                                    <AlertCircle className="inline h-7 w-7 mr-2" />
-                                    {overallKpis.nonConformingRate.toFixed(1)}%
-                                </div>
-                                <p className="text-xs text-muted-foreground">{overallKpis.nonConformingCount} de {overallKpis.totalConsumedCount} unidades</p>
+                                <p className="text-xs text-muted-foreground">({(overallKpis.totalDiscrepancy * 1000).toLocaleString(undefined, {maximumFractionDigits: 0})} g)</p>
                             </CardContent>
                         </Card>
                         <Card>
@@ -310,7 +298,7 @@ export default function MaterialsKpiClient() {
                                     <TrendingDown className="inline h-7 w-7 mr-2" />
                                     {overallKpis.totalMissingMaterial.toFixed(2)} kg
                                 </div>
-                                <p className="text-xs text-muted-foreground">Suma de todas las discrepancias negativas</p>
+                                <p className="text-xs text-muted-foreground">({(overallKpis.totalMissingMaterial * 1000).toLocaleString(undefined, {maximumFractionDigits: 0})} g)</p>
                             </CardContent>
                         </Card>
                         <Card>
@@ -322,7 +310,7 @@ export default function MaterialsKpiClient() {
                                     <TrendingUp className="inline h-7 w-7 mr-2" />
                                     {overallKpis.totalExtraMaterial.toFixed(2)} kg
                                 </div>
-                                <p className="text-xs text-muted-foreground">Suma de todas las discrepancias positivas</p>
+                                <p className="text-xs text-muted-foreground">({(overallKpis.totalExtraMaterial * 1000).toLocaleString(undefined, {maximumFractionDigits: 0})} g)</p>
                             </CardContent>
                         </Card>
                     </div>

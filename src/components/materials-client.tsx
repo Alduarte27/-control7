@@ -210,32 +210,93 @@ function AdvancedEditDialog({
   onSave: (id: string, updates: Partial<PackagingMaterial>) => void;
 }) {
   const [editedMaterial, setEditedMaterial] = React.useState<Partial<PackagingMaterial>>(material);
+
+  // States for unit handling
+  const [coreWeightUnit, setCoreWeightUnit] = React.useState<'kg' | 'g'>('kg');
+  const [plasticWeightUnit, setPlasticWeightUnit] = React.useState<'kg' | 'g'>('kg');
+  const [coreWeightDisplay, setCoreWeightDisplay] = React.useState('');
+  const [plasticWeightDisplay, setPlasticWeightDisplay] = React.useState('');
+
   const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
 
   React.useEffect(() => {
     setEditedMaterial(material);
+    // Initialize display values and units based on stored kg value
+    const initialCoreWeight = material.coreWeight || 0;
+    if (initialCoreWeight > 0 && initialCoreWeight < 1) {
+      setCoreWeightUnit('g');
+      setCoreWeightDisplay((initialCoreWeight * 1000).toString());
+    } else {
+      setCoreWeightUnit('kg');
+      setCoreWeightDisplay(initialCoreWeight.toString());
+    }
+
+    const initialPlasticWeight = material.plasticWeight || 0;
+    if (initialPlasticWeight > 0 && initialPlasticWeight < 1) {
+      setPlasticWeightUnit('g');
+      setPlasticWeightDisplay((initialPlasticWeight * 1000).toString());
+    } else {
+      setPlasticWeightUnit('kg');
+      setPlasticWeightDisplay(initialPlasticWeight.toString());
+    }
   }, [material]);
   
+  const updateCalculatedFields = (mat: Partial<PackagingMaterial>): Partial<PackagingMaterial> => {
+    const newMat = { ...mat };
+    const grossWeight = Number(newMat.grossWeight) || 0;
+    const netWeight = Number(isSacosType ? newMat.totalWeight : newMat.netWeight) || 0;
+    newMat.labelTare = grossWeight > 0 && netWeight > 0 ? grossWeight - netWeight : 0;
+    
+    const plastic = Number(newMat.plasticWeight) || 0;
+    const core = Number(newMat.coreWeight) || 0;
+    const actualTare = plastic + core;
+    newMat.tareWeight = actualTare;
+
+    const actualGross = Number(newMat.actualWeight) || 0;
+    if (actualGross > 0) {
+        newMat.actualNetWeight = actualGross - actualTare;
+    }
+    return newMat;
+  };
+
   const handleChange = (field: keyof PackagingMaterial, value: any) => {
-    setEditedMaterial((prev) => {
-        const newMaterial = { ...prev, [field]: value };
-        
-        const grossWeight = Number(newMaterial.grossWeight) || 0;
-        const netWeight = Number(isSacosType ? newMaterial.totalWeight : newMaterial.netWeight) || 0;
-        newMaterial.labelTare = grossWeight > 0 && netWeight > 0 ? grossWeight - netWeight : 0;
-        
-        const plastic = Number(newMaterial.plasticWeight) || 0;
-        const core = Number(newMaterial.coreWeight) || 0;
-        const actualTare = plastic + core;
-        newMaterial.tareWeight = actualTare;
+    setEditedMaterial((prev) => updateCalculatedFields({ ...prev, [field]: value }));
+  };
 
-        const actualGross = Number(newMaterial.actualWeight) || 0;
-        if (actualGross > 0) {
-            newMaterial.actualNetWeight = actualGross - actualTare;
+  const handleWeightInputChange = (type: 'core' | 'plastic', displayValue: string) => {
+    if (type === 'core') {
+      setCoreWeightDisplay(displayValue);
+      const val = parseFloat(displayValue);
+      const kgValue = coreWeightUnit === 'g' ? (val / 1000) : val;
+      handleChange('coreWeight', isNaN(kgValue) ? 0 : kgValue);
+    } else {
+      setPlasticWeightDisplay(displayValue);
+      const val = parseFloat(displayValue);
+      const kgValue = plasticWeightUnit === 'g' ? (val / 1000) : val;
+      handleChange('plasticWeight', isNaN(kgValue) ? 0 : kgValue);
+    }
+  };
+
+  const handleUnitChange = (type: 'core' | 'plastic', newUnit: 'kg' | 'g') => {
+    if (type === 'core') {
+      if (coreWeightUnit !== newUnit) {
+        const currentVal = parseFloat(coreWeightDisplay);
+        if (!isNaN(currentVal)) {
+          const newDisplayVal = newUnit === 'g' ? currentVal * 1000 : currentVal / 1000;
+          setCoreWeightDisplay(newDisplayVal.toString());
         }
-
-        return newMaterial;
-    });
+        setCoreWeightUnit(newUnit);
+      }
+    } else {
+      if (plasticWeightUnit !== newUnit) {
+        const currentVal = parseFloat(plasticWeightDisplay);
+        if (!isNaN(currentVal)) {
+          const newDisplayVal = newUnit === 'g' ? currentVal * 1000 : currentVal / 1000;
+          setPlasticWeightDisplay(newDisplayVal.toString());
+        }
+        setPlasticWeightUnit(newUnit);
+      }
+    }
   };
   
   const handleTimestampChange = (field: keyof PackagingMaterial, value: string) => {
@@ -264,7 +325,6 @@ function AdvancedEditDialog({
                 <DialogDescription className="break-all">Editando: <span className="font-mono font-bold">{material.code}</span></DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
-                {/* --- DATOS GENERALES --- */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="space-y-1.5 lg:col-span-2">
                         <Label htmlFor="adv-presentation">Presentación</Label>
@@ -299,8 +359,8 @@ function AdvancedEditDialog({
                 <Separator />
                 <h4 className="font-semibold text-sm text-muted-foreground">Datos de Peso</h4>
                 
-                {/* --- PESOS DE ETIQUETA --- */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4 border rounded-md">
+                    <h5 className="lg:col-span-3 font-medium">Pesos de Etiqueta</h5>
                     <div className="space-y-1.5">
                         <Label htmlFor="adv-gross-weight">P. Bruto (Etiqueta)</Label>
                         <Input id="adv-gross-weight" type="number" value={editedMaterial.grossWeight || ''} onChange={(e) => handleChange('grossWeight', Number(e.target.value))} />
@@ -311,33 +371,51 @@ function AdvancedEditDialog({
                     </div>
                     <div className="space-y-1.5">
                         <Label htmlFor="adv-label-tare">Tara (Etiqueta)</Label>
-                        <Input id="adv-label-tare" type="number" value={editedMaterial.labelTare?.toFixed(2) || '0.00'} disabled className="font-mono" />
+                        <Input id="adv-label-tare" type="number" value={editedMaterial.labelTare?.toFixed(3) || '0.000'} disabled className="font-mono" />
                     </div>
                 </div>
                 
-                {/* --- PESOS REALES --- */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4 border rounded-md">
+                    <h5 className="lg:col-span-3 font-medium">Pesos Reales (Balanza)</h5>
                     <div className="space-y-1.5">
                         <Label htmlFor="adv-actual-weight">P. Bruto (Balanza)</Label>
                         <Input id="adv-actual-weight" type="number" value={editedMaterial.actualWeight || ''} onChange={(e) => handleChange('actualWeight', Number(e.target.value))} />
                     </div>
                     {!isSacosType && (
                         <div className="space-y-1.5">
-                            <Label htmlFor="adv-core-weight">P. Canuto (kg)</Label>
-                            <Input id="adv-core-weight" type="number" value={editedMaterial.coreWeight || ''} onChange={(e) => handleChange('coreWeight', Number(e.target.value))} />
+                            <Label htmlFor="adv-core-weight">P. Canuto</Label>
+                             <div className="flex items-center">
+                                <Input id="adv-core-weight" type="number" value={coreWeightDisplay} onChange={(e) => handleWeightInputChange('core', e.target.value)} />
+                                <Select value={coreWeightUnit} onValueChange={(v) => handleUnitChange('core', v as 'kg' | 'g')}>
+                                    <SelectTrigger className="w-[80px] ml-2"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="kg">kg</SelectItem>
+                                        <SelectItem value="g">g</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                     )}
                      <div className="space-y-1.5">
-                        <Label htmlFor="adv-plastic-weight">P. Envoltura (kg)</Label>
-                        <Input id="adv-plastic-weight" type="number" value={editedMaterial.plasticWeight || ''} onChange={(e) => handleChange('plasticWeight', Number(e.target.value))} />
+                        <Label htmlFor="adv-plastic-weight">P. Envoltura</Label>
+                         <div className="flex items-center">
+                            <Input id="adv-plastic-weight" type="number" value={plasticWeightDisplay} onChange={(e) => handleWeightInputChange('plastic', e.target.value)} />
+                             <Select value={plasticWeightUnit} onValueChange={(v) => handleUnitChange('plastic', v as 'kg' | 'g')}>
+                                <SelectTrigger className="w-[80px] ml-2"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="kg">kg</SelectItem>
+                                    <SelectItem value="g">g</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
-                    <div className="space-y-1.5">
+                     <div className="space-y-1.5">
                         <Label htmlFor="adv-tare-weight">Tara Real (Total)</Label>
-                        <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight?.toFixed(2) || 0} disabled />
+                        <Input id="adv-tare-weight" type="number" value={editedMaterial.tareWeight?.toFixed(3) || 0} disabled />
                     </div>
                      <div className="space-y-1.5">
                         <Label htmlFor="adv-actual-net-weight">P. Neto Real</Label>
-                        <Input id="adv-actual-net-weight" type="number" value={editedMaterial.actualNetWeight?.toFixed(2) || '0.00'} disabled className="font-bold text-green-600"/>
+                        <Input id="adv-actual-net-weight" type="number" value={editedMaterial.actualNetWeight?.toFixed(3) || '0.000'} disabled className="font-bold text-green-600"/>
                     </div>
                 </div>
 
@@ -1937,5 +2015,6 @@ export default function MaterialsClient({
         </>
     );
 }
+
 
 
