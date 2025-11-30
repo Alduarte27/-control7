@@ -547,20 +547,26 @@ function TareWeightDialog({
     onClose: () => void;
     onConfirm: (tareData: { plasticWeight: number; coreWeight: number }) => void;
 }) {
-    const [plasticWeight, setPlasticWeight] = React.useState(material.plasticWeight?.toString() || '');
-    const [coreWeight, setCoreWeight] = React.useState(material.coreWeight?.toString() || '');
+    const [plasticWeightDisplay, setPlasticWeightDisplay] = React.useState('');
+    const [coreWeightDisplay, setCoreWeightDisplay] = React.useState('');
+    const [plasticWeightUnit, setPlasticWeightUnit] = React.useState<'kg' | 'g'>('kg');
+    const [coreWeightUnit, setCoreWeightUnit] = React.useState<'kg' | 'g'>('kg');
+
     const isSacosType = material.type === 'sacos_familiar' || material.type === 'sacos_granel';
 
-    const totalTare = (parseFloat(plasticWeight) || 0) + (parseFloat(coreWeight) || 0);
+    const plasticWeightKg = plasticWeightUnit === 'g' ? (parseFloat(plasticWeightDisplay) || 0) / 1000 : (parseFloat(plasticWeightDisplay) || 0);
+    const coreWeightKg = coreWeightUnit === 'g' ? (parseFloat(coreWeightDisplay) || 0) / 1000 : (parseFloat(coreWeightDisplay) || 0);
+    
+    const totalTare = plasticWeightKg + coreWeightKg;
     const actualNetWeight = (material.actualWeight || material.grossWeight || 0) - totalTare;
 
     const handleConfirm = () => {
         onConfirm({
-            plasticWeight: parseFloat(plasticWeight) || 0,
-            coreWeight: parseFloat(coreWeight) || 0,
+            plasticWeight: plasticWeightKg,
+            coreWeight: coreWeightKg,
         });
     };
-
+    
     return (
         <Dialog open={true} onOpenChange={onClose}>
             <DialogContent>
@@ -573,25 +579,43 @@ function TareWeightDialog({
                 <div className="space-y-4 py-4">
                      <div className="grid grid-cols-1 gap-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="plastic-weight">Peso envoltura (kg)</Label>
-                            <Input
-                                id="plastic-weight"
-                                type="number"
-                                value={plasticWeight}
-                                onChange={(e) => setPlasticWeight(e.target.value)}
-                                placeholder="0.00"
-                            />
+                            <Label htmlFor="plastic-weight">Peso envoltura</Label>
+                            <div className="flex items-center">
+                                <Input
+                                    id="plastic-weight"
+                                    type="number"
+                                    value={plasticWeightDisplay}
+                                    onChange={(e) => setPlasticWeightDisplay(e.target.value)}
+                                    placeholder="0.00"
+                                />
+                                <Select value={plasticWeightUnit} onValueChange={(v) => setPlasticWeightUnit(v as 'kg' | 'g')}>
+                                    <SelectTrigger className="w-[80px] ml-2"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="kg">kg</SelectItem>
+                                        <SelectItem value="g">g</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                         </div>
                         {!isSacosType && (
                             <div className="space-y-1.5">
-                                <Label htmlFor="core-weight">Peso del Canuto (kg)</Label>
-                                <Input
-                                    id="core-weight"
-                                    type="number"
-                                    value={coreWeight}
-                                    onChange={(e) => setCoreWeight(e.target.value)}
-                                    placeholder="0.00"
-                                />
+                                <Label htmlFor="core-weight">Peso del Canuto</Label>
+                                <div className="flex items-center">
+                                    <Input
+                                        id="core-weight"
+                                        type="number"
+                                        value={coreWeightDisplay}
+                                        onChange={(e) => setCoreWeightDisplay(e.target.value)}
+                                        placeholder="0.00"
+                                    />
+                                    <Select value={coreWeightUnit} onValueChange={(v) => setCoreWeightUnit(v as 'kg' | 'g')}>
+                                        <SelectTrigger className="w-[80px] ml-2"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="kg">kg</SelectItem>
+                                            <SelectItem value="g">g</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -603,18 +627,18 @@ function TareWeightDialog({
                         </div>
                         <div className="flex justify-between text-sm">
                             <span className="text-muted-foreground">Peso Total de Tara:</span>
-                            <span className="font-medium text-red-600">-{totalTare.toFixed(2)} kg</span>
+                            <span className="font-medium text-red-600">-{totalTare.toFixed(3)} kg</span>
                         </div>
                         <Separator />
                         <div className="flex justify-between text-lg font-bold">
                             <span>Peso Neto Real:</span>
-                            <span className="text-green-600">{actualNetWeight.toFixed(2)} kg</span>
+                            <span className="text-green-600">{actualNetWeight.toFixed(3)} kg</span>
                         </div>
                     </div>
                 </div>
                 <DialogFooter>
                     <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
-                    <Button onClick={handleConfirm} disabled={!plasticWeight}>Confirmar y Guardar Tara</Button>
+                    <Button onClick={handleConfirm} disabled={!plasticWeightDisplay}>Confirmar y Guardar Tara</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -2015,6 +2039,7 @@ export default function MaterialsClient({
         </>
     );
 }
+
 
 
 

@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Bar, BarChart as RechartsBarChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip } from 'recharts';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 
 
 type Kpi = {
@@ -150,33 +151,35 @@ export default function MaterialsKpiClient() {
     const overallKpis = React.useMemo(() => calculateKpis(filteredMaterials), [filteredMaterials]);
     
     const supplierKpis: SupplierKpi[] = React.useMemo(() => {
-        const bySupplier: { [supplierName: string]: { [materialType: string]: PackagingMaterial[] } } = {};
+        const bySupplier: { [supplierName: string]: PackagingMaterial[] } = {};
         
         filteredMaterials.forEach(m => {
             const supplierName = m.supplier || 'Sin Proveedor';
-            const materialTypeName = materialTypeLabels[m.type] || 'Desconocido';
-            
             if (!bySupplier[supplierName]) {
-                bySupplier[supplierName] = {};
+                bySupplier[supplierName] = [];
             }
-            if (!bySupplier[supplierName][materialTypeName]) {
-                bySupplier[supplierName][materialTypeName] = [];
-            }
-            bySupplier[supplierName][materialTypeName].push(m);
+            bySupplier[supplierName].push(m);
         });
 
-        return Object.entries(bySupplier).map(([name, types]) => {
-            const materialsByType: SupplierKpi['materialsByType'] = {};
+        return Object.entries(bySupplier).map(([name, materials]) => {
+             const materialsByType: SupplierKpi['materialsByType'] = {};
+            const byType: { [key: string]: PackagingMaterial[] } = {};
+            materials.forEach(m => {
+                const typeName = materialTypeLabels[m.type];
+                if(!byType[typeName]) byType[typeName] = [];
+                byType[typeName].push(m);
+            });
             
-            Object.entries(types).forEach(([typeName, materials]) => {
-                const kpis = calculateKpis(materials);
-                materialsByType[typeName] = { ...kpis, count: materials.length };
+            Object.entries(byType).forEach(([typeName, typeMaterials]) => {
+                const kpis = calculateKpis(typeMaterials);
+                materialsByType[typeName] = { ...kpis, count: typeMaterials.length };
             });
 
-            const allMaterialsForSupplier = Object.values(types).flat();
-            const overallKpis = calculateKpis(allMaterialsForSupplier);
-
-            return { name, materialsByType, overall: overallKpis };
+            return {
+                name,
+                materialsByType,
+                overall: calculateKpis(materials),
+            };
         });
     }, [filteredMaterials]);
     
@@ -267,52 +270,84 @@ export default function MaterialsKpiClient() {
                 ) : (
                 <>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium">Discrepancia Neta</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className={cn("text-3xl font-bold", overallKpis.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
-                                    {overallKpis.totalDiscrepancy.toFixed(2)} kg
-                                </div>
-                                <p className="text-xs text-muted-foreground">({(overallKpis.totalDiscrepancy * 1000).toLocaleString(undefined, {maximumFractionDigits: 0})} g)</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium">Rendimiento Promedio</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className={cn("text-3xl font-bold", getPerformanceColor(overallKpis.averagePerformance))}>
-                                    {overallKpis.averagePerformance.toFixed(2)}%
-                                </div>
-                                <p className="text-xs text-muted-foreground">Sobre {overallKpis.totalConsumedCount} materiales</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium">Total Material Faltante</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-3xl font-bold text-red-600">
-                                    <TrendingDown className="inline h-7 w-7 mr-2" />
-                                    {overallKpis.totalMissingMaterial.toFixed(2)} kg
-                                </div>
-                                <p className="text-xs text-muted-foreground">({(overallKpis.totalMissingMaterial * 1000).toLocaleString(undefined, {maximumFractionDigits: 0})} g)</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-sm font-medium">Total Material Excedente</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-3xl font-bold text-green-600">
-                                    <TrendingUp className="inline h-7 w-7 mr-2" />
-                                    {overallKpis.totalExtraMaterial.toFixed(2)} kg
-                                </div>
-                                <p className="text-xs text-muted-foreground">({(overallKpis.totalExtraMaterial * 1000).toLocaleString(undefined, {maximumFractionDigits: 0})} g)</p>
-                            </CardContent>
-                        </Card>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="text-sm font-medium">Discrepancia Neta</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className={cn("text-3xl font-bold", overallKpis.totalDiscrepancy >= 0 ? "text-green-600" : "text-red-600")}>
+                                                {overallKpis.totalDiscrepancy.toFixed(2)} kg
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">({(overallKpis.totalDiscrepancy * 1000).toLocaleString(undefined, {maximumFractionDigits: 0})} g)</p>
+                                        </CardContent>
+                                    </Card>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Diferencia total entre el peso neto real y el de etiqueta. Positivo = excedente, Negativo = faltante.</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+
+                         <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="text-sm font-medium">Rendimiento Promedio</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className={cn("text-3xl font-bold", getPerformanceColor(overallKpis.averagePerformance))}>
+                                                {overallKpis.averagePerformance.toFixed(2)}%
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">Sobre {overallKpis.totalConsumedCount} materiales</p>
+                                        </CardContent>
+                                    </Card>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Rendimiento promedio ponderado por peso (Peso Real Total / Peso Etiqueta Total).</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+
+
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="text-sm font-medium">Total Material Faltante</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-3xl font-bold text-red-600">
+                                                <TrendingDown className="inline h-7 w-7 mr-2" />
+                                                {overallKpis.totalMissingMaterial.toFixed(2)} kg
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">({(overallKpis.totalMissingMaterial * 1000).toLocaleString(undefined, {maximumFractionDigits: 0})} g)</p>
+                                        </CardContent>
+                                    </Card>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Suma total de todo el material faltante (en kg) en las unidades no conformes.</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="text-sm font-medium">Total Material Excedente</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-3xl font-bold text-green-600">
+                                                <TrendingUp className="inline h-7 w-7 mr-2" />
+                                                {overallKpis.totalExtraMaterial.toFixed(2)} kg
+                                            </div>
+                                            <p className="text-xs text-muted-foreground">({(overallKpis.totalExtraMaterial * 1000).toLocaleString(undefined, {maximumFractionDigits: 0})} g)</p>
+                                        </CardContent>
+                                    </Card>
+                                </TooltipTrigger>
+                                <TooltipContent><p>Suma total de todo el material excedente (en kg) en las unidades con sobrepeso.</p></TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
                     </div>
                     
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
