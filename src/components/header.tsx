@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import ExportDialog from './export-dialog';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -65,7 +64,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
   setIsInfoDialogOpen: (open: boolean) => void;
 }) {
   const { theme, setTheme } = useTheme();
-  const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -195,22 +193,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                 ))
             )}
           
-            {hasPermission('export') && (
-              <TooltipProvider>
-                  <Tooltip>
-                      <TooltipTrigger asChild>
-                          <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-10 h-10 p-0 lg:w-auto lg:px-4">
-                              <Download className="h-4 w-4 lg:mr-2" />
-                              <span className="hidden lg:inline">Exportar / Reportes</span>
-                          </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                          <p>Exportar / Reportes</p>
-                      </TooltipContent>
-                  </Tooltip>
-              </TooltipProvider>
-            )}
-
             <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger asChild>
@@ -250,7 +232,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                         />
                     ))}
                     {hasPermission('export') && (
-                      <DropdownMenuItem onClick={() => setIsExportDialogOpen(true)}><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
+                      <DropdownMenuItem><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
                     )}
                     <DropdownMenuItem onClick={() => setIsInfoDialogOpen(true)}><Info className="mr-2 h-4 w-4" />Información</DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
@@ -261,7 +243,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
             </DropdownMenu>
         </div>
       </header>
-      <ExportDialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen} />
     </>
   );
 }

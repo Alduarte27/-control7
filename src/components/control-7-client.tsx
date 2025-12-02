@@ -75,6 +75,7 @@ export default function Control7Client({
   const [loading, setLoading] = React.useState(true);
   const [isDirty, setIsDirty] = React.useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false);
   const [showReloadNotification, setShowReloadNotification] = React.useState(false);
   const { toast } = useToast();
 
@@ -564,6 +565,8 @@ export default function Control7Client({
             date={date}
             onDateChange={handleDateChange}
             onCopyLastWeek={handleCopyLastWeek}
+            isExportDialogOpen={isExportDialogOpen}
+            setIsExportDialogOpen={setIsExportDialogOpen}
         />
         {loading || !date ? (
             <p>Cargando datos...</p>

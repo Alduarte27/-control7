@@ -6,12 +6,13 @@ import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Search, Copy, History } from 'lucide-react';
+import { CalendarDays, Search, Copy, History, Download } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Label } from '@/components/ui/label';
+import ExportDialog from './export-dialog';
 
 type FilterBarProps = {
   productSearch: string;
@@ -19,6 +20,8 @@ type FilterBarProps = {
   date: Date | undefined;
   onDateChange: (date: Date | undefined) => void;
   onCopyLastWeek: () => void;
+  isExportDialogOpen: boolean;
+  setIsExportDialogOpen: (open: boolean) => void;
 };
 
 export default function FilterBar({ 
@@ -27,6 +30,8 @@ export default function FilterBar({
     date, 
     onDateChange, 
     onCopyLastWeek,
+    isExportDialogOpen,
+    setIsExportDialogOpen,
 }: FilterBarProps) {
   const currentWeek = date ? getISOWeek(date) : getISOWeek(new Date());
   const currentYear = date ? date.getFullYear() : new Date().getFullYear();
@@ -52,9 +57,10 @@ export default function FilterBar({
   };
 
   return (
+    <>
     <div className="p-4 bg-card rounded-lg shadow-sm border">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
-        <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+        <div className="flex flex-col gap-1.5 xl:col-span-1">
             <Label htmlFor="productSearch">Búsqueda de Producto</Label>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -111,15 +117,25 @@ export default function FilterBar({
                 Copiar Plan Anterior
             </Button>
         </div>
-        <div className="flex flex-col gap-1.5">
-            <Button asChild variant="outline">
-              <Link href="/history">
-                <History className="mr-2 h-4 w-4" />
-                Historial de Planes
-              </Link>
-            </Button>
+        <div className="flex items-end gap-2">
+            <div className="flex flex-col gap-1.5 w-full">
+                <Button asChild variant="outline">
+                  <Link href="/history">
+                    <History className="mr-2 h-4 w-4" />
+                    Historial de Planes
+                  </Link>
+                </Button>
+            </div>
+             <div className="flex flex-col gap-1.5 w-full">
+                <Button onClick={() => setIsExportDialogOpen(true)} variant="outline">
+                    <Download className="mr-2 h-4 w-4" />
+                    Exportar / Reportes
+                </Button>
+            </div>
         </div>
       </div>
     </div>
+    <ExportDialog open={isExportDialogOpen} onOpenChange={setIsExportDialogOpen} />
+    </>
   );
 }
