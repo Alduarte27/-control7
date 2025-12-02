@@ -1,10 +1,9 @@
 
-
 'use client';
 
 import React from 'react';
 import Link from 'next/link';
-import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, Map } from 'lucide-react';
+import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, MapPin } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -290,7 +289,7 @@ function AdvancedEditDialog({
             <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     <div className="space-y-1.5 lg:col-span-2">
-                        <Label htmlFor="adv-presentation">Presentación</Label>
+                        <Label htmlFor="adv-presentation">Producto Envasado</Label>
                         <Input id="adv-presentation" value={editedMaterial.presentation || ''} onChange={(e) => handleChange('presentation', e.target.value)} />
                     </div>
                     <div className="space-y-1.5 lg:col-span-2">
@@ -312,6 +311,10 @@ function AdvancedEditDialog({
                     <div className="space-y-1.5">
                         <Label htmlFor="adv-sacos-unit-weight">Peso/Und (g)</Label>
                         <Input id="adv-sacos-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={(e) => handleChange('unitWeight', Number(e.target.value))} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-location">Ubicación en Bodega</Label>
+                        <Input id="adv-location" value={editedMaterial.warehouseLocation || ''} onChange={(e) => handleChange('warehouseLocation', e.target.value)} />
                     </div>
                 </div>
 
@@ -413,7 +416,7 @@ function TraceabilityDialog({ material, onClose }: { material: PackagingMaterial
             status: 'Recibido',
             timestamp: material.receivedAt,
             icon: Inbox,
-            details: `Registrado en el sistema.`
+            details: `Registrado en sistema. Ubicación: ${material.warehouseLocation || 'N/A'}.`
         },
         {
             status: 'En Uso',
@@ -795,6 +798,12 @@ function MaterialCard({
                             <currentStatus.icon className="h-3 w-3" />
                             <span>{currentStatus.label}</span>
                         </div>
+                        {material.warehouseLocation && (
+                             <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
+                                <MapPin className="h-3 w-3" />
+                                <span>{material.warehouseLocation}</span>
+                            </div>
+                        )}
                     </div>
                     <div className="text-xs text-muted-foreground pt-1 space-y-0.5">
                         {material.supplier && <p>Proveedor: {material.supplier}</p>}
@@ -912,6 +921,7 @@ export default function MelazaClient({
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
     const [newMaterialProviderDate, setNewMaterialProviderDate] = React.useState<Date | undefined>();
+    const [newMaterialWarehouseLocation, setNewMaterialWarehouseLocation] = React.useState('');
     
     const [newMaterialPresentation, setNewMaterialPresentation] = React.useState('');
     const [newMaterialQuantity, setNewMaterialQuantity] = React.useState('');
@@ -1004,7 +1014,8 @@ export default function MelazaClient({
         const fields = [
             { value: newMaterialSupplier, name: "Proveedor" },
             { value: newMaterialCode.trim(), name: "Código" },
-            { value: newMaterialPresentation.trim(), name: "Presentación" },
+            { value: newMaterialPresentation.trim(), name: "Producto Envasado" },
+            { value: newMaterialWarehouseLocation.trim(), name: "Ubicación en Bodega"},
             { value: newMaterialProviderDate, name: "Fecha de Proveedor" },
             { value: newMaterialQuantity, name: "Cantidad" },
             { value: newMaterialUnitWeight, name: "Peso/Und (g)"},
@@ -1040,6 +1051,7 @@ export default function MelazaClient({
                 supplier: supplierName,
                 lote: '',
                 presentation: newMaterialPresentation.trim(),
+                warehouseLocation: newMaterialWarehouseLocation.trim().toUpperCase(),
                 status: 'recibido',
                 receivedAt: Date.now(),
                 grossWeight: grossWeightNum,
@@ -1061,6 +1073,7 @@ export default function MelazaClient({
             setNewMaterialTotalWeight('');
             setNewMaterialSupplier('');
             setNewMaterialProviderDate(undefined);
+            setNewMaterialWarehouseLocation('');
             
             toast({ title: 'Saco de Melaza Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
         } catch (error) {
@@ -1082,6 +1095,7 @@ export default function MelazaClient({
                     actualWeight: data.actualWeight,
                     assignedMachine: data.assignedMachine,
                     inUseAt: Date.now(),
+                    warehouseLocation: '' // Free up location
                 };
                 if(!updateData.actualWeight && material.totalWeight) {
                     updateData.actualWeight = material.totalWeight;
@@ -1188,8 +1202,8 @@ export default function MelazaClient({
     
     const handleExportCSV = () => {
         const headers = [
-            'Tipo', 'Código', 'Proveedor', 'Lote', 'Presentación', 'Fecha Proveedor', 'Estado',
-            'Fecha Recibido', 'Fecha En Uso', 'Fecha Consumido', 'Máquina Asignada', 'Cantidad', 
+            'Tipo', 'Código', 'Proveedor', 'Producto Envasado', 'Fecha Proveedor', 'Estado',
+            'Fecha Recibido', 'Fecha En Uso', 'Fecha Consumido', 'Área Asignada', 'Ubicación Bodega', 'Cantidad', 
             'Peso/Und (g)', 'Peso Total (kg)', 'Peso Neto Etiqueta (kg)', 'Peso Bruto Etiqueta (kg)', 'Tara Etiqueta (kg)',
             'Peso Real Bruto (kg)', 'Tara Real (kg)', 'Peso Neto Real (kg)', 'Fecha Pesaje Tara',
             'Discrepancia (kg)', 'Rendimiento (%)'
@@ -1210,7 +1224,6 @@ export default function MelazaClient({
                 materialTypeLabels[m.type],
                 `"${m.code.replace(/"/g, '""')}"`,
                 m.supplier || '',
-                m.lote || '',
                 m.presentation || '',
                 m.providerDate || '',
                 m.status,
@@ -1218,6 +1231,7 @@ export default function MelazaClient({
                 m.inUseAt ? format(new Date(m.inUseAt), 'yyyy-MM-dd HH:mm:ss') : '',
                 m.consumedAt ? format(new Date(m.consumedAt), 'yyyy-MM-dd HH:mm:ss') : '',
                 m.assignedMachine || '',
+                m.warehouseLocation || '',
                 m.quantity || '',
                 m.unitWeight || '',
                 m.totalWeight || '',
@@ -1386,6 +1400,11 @@ export default function MelazaClient({
                         <h1 className="text-2xl font-bold text-foreground">Material Melaza</h1>
                     </div>
                     <div className="flex items-center gap-2">
+                        <Link href="/bodega-melaza">
+                            <Button variant="outline">
+                                <MapPin className="mr-2 h-4 w-4" /> Mapa de Bodega
+                            </Button>
+                        </Link>
                         <Button variant="outline" onClick={handleExportCSV}>
                             <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
                         </Button>
@@ -1437,12 +1456,12 @@ export default function MelazaClient({
                                                 </Select>
                                             </div>
                                             <div className="space-y-1.5">
-                                                <Label htmlFor="material-presentation-trigger">Presentación</Label>
+                                                <Label htmlFor="material-presentation-trigger">Producto Envasado</Label>
                                                 <Input
                                                     id="material-presentation-trigger"
                                                     value={newMaterialPresentation}
                                                     onChange={(e) => setNewMaterialPresentation(e.target.value)}
-                                                    placeholder="Ej: Sacos PP Blancos"
+                                                    placeholder="Ej: Azúcar con Melaza 50kg"
                                                     disabled={!newMaterialSupplier}
                                                 />
                                             </div>
@@ -1480,15 +1499,19 @@ export default function MelazaClient({
                                                 <Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label>
                                                 <Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Balanza" disabled={!newMaterialSupplier}/>
                                             </div>
-                                            <div className="flex items-end gap-2 lg:col-start-5">
-                                                 <div className='flex gap-2 w-full'>
-                                                    <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
-                                                        <Camera className="mr-2 h-4 w-4" /> Escanear
-                                                    </Button>
-                                                    <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
-                                                        <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                                    </Button>
-                                                </div>
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-warehouse-location">Ubicación Bodega</Label>
+                                                <Input id="material-warehouse-location" value={newMaterialWarehouseLocation} onChange={(e) => setNewMaterialWarehouseLocation(e.target.value)} placeholder="Ej: A1-1" disabled={!newMaterialSupplier}/>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-end pt-4">
+                                             <div className='flex gap-2'>
+                                                <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
+                                                    <Camera className="mr-2 h-4 w-4" /> Escanear
+                                                </Button>
+                                                <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
+                                                    <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -1670,3 +1693,4 @@ export default function MelazaClient({
         </>
     );
 }
+

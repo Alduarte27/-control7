@@ -1,5 +1,4 @@
 
-
 'use client';
 
 export type ShiftProduction = {
@@ -163,7 +162,7 @@ export type PackagingMaterial = {
     supplier?: string;
     lote?: string;
     providerDate?: string; // Fecha de la etiqueta del proveedor
-    presentation?: string;
+    presentation?: string; // Nombre del producto envasado
     netWeight?: number; 
     grossWeight?: number;
     labelTare?: number;
@@ -181,6 +180,7 @@ export type PackagingMaterial = {
     coreWeight?: number; // Peso del canuto
     actualNetWeight?: number; // Peso neto real (Peso Real - Tara)
     tareWeightedAt?: number; // Timestamp de cuando se pesó la tara
+    warehouseLocation?: string; // Ubicación en bodega
 };
 
 declare module 'jsqr';
