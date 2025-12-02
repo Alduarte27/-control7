@@ -17,7 +17,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 const generateAlaLocations = (ala: 'A' | 'B') => {
     const locations = [];
     for (let row = 1; row <= 11; row++) {
-        for (let col = 1; col <= 44; col++) {
+        for (let col = 1; col <= 4; col++) {
             locations.push(`${ala}${row}-${col}`);
         }
     }
@@ -74,7 +74,7 @@ export default function BodegaMelazaClient({ initialMaterials }: BodegaMelazaCli
 
     const renderAla = (ala: 'A' | 'B', locations: string[]) => {
         const rows = Array.from({ length: 11 }, (_, i) => i + 1);
-        const cols = Array.from({ length: 44 }, (_, i) => i + 1);
+        const cols = Array.from({ length: 4 }, (_, i) => i + 1);
 
         return (
             <Card className="flex-1">
@@ -95,10 +95,10 @@ export default function BodegaMelazaClient({ initialMaterials }: BodegaMelazaCli
                                             <Tooltip>
                                                 <TooltipTrigger asChild>
                                                     <div className={cn(
-                                                        "h-8 w-8 flex-shrink-0 rounded-sm border flex items-center justify-center text-xs font-mono transition-colors",
+                                                        "h-8 w-full rounded-sm border flex items-center justify-center text-xs font-mono transition-colors",
                                                         isOccupied ? "bg-primary/10 border-primary/50 text-primary font-semibold" : "bg-muted/50 border-dashed"
                                                     )}>
-                                                        {colNum}
+                                                        {loc}
                                                     </div>
                                                 </TooltipTrigger>
                                                 {isOccupied && material && (
