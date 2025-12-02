@@ -11,7 +11,7 @@ import type { PackagingMaterial, Supplier } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, onSnapshot, query, collection, orderBy } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose, DialogDescription } from './ui/dialog';
@@ -129,7 +129,7 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
             await updateDoc(materialDocRef, {
                 status: 'en_uso',
                 inUseAt: Date.now(),
-                // warehouseLocation is kept for historical tracking, but it won't show on the map
+                warehouseLocation: '', // Free up the location
             });
             toast({
                 title: "Lote Despachado",
@@ -172,9 +172,6 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
 
         const handleDoubleClick = () => {
              if (material) {
-                 // Open an edit modal - for now we will re-use the assign logic for simplicity
-                 // A dedicated edit modal would be better in a real app.
-                 // This part is left for future enhancement.
                  toast({ title: "Función no implementada", description: "La edición con doble clic aún no está disponible."})
              }
         }
@@ -223,9 +220,9 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                                     <AlertDialogContent>
                                         <AlertDialogHeader>
                                             <AlertDialogTitle>¿Confirmar Despacho?</AlertDialogTitle>
-                                            <AlertDialogDescriptionComponent>
+                                            <AlertDialogDescription>
                                                 Estás a punto de despachar el lote de <strong>{material.presentation}</strong> de la ubicación <strong>{material.warehouseLocation}</strong>. Esta acción moverá el material a "En Uso" y liberará la ubicación.
-                                            </AlertDialogDescriptionComponent>
+                                            </AlertDialogDescription>
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
                                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -280,7 +277,7 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                     <CardHeader>
                         <CardTitle>Estado Actual de la Bodega</CardTitle>
                         <CardDescription>
-                            Haz clic en una celda vacía para asignar un material existente. Haz doble clic en una celda ocupada para editar. Pasa el ratón para ver detalles y despachar.
+                            Haz clic en una celda vacía para asignar un material. Pasa el ratón para ver detalles y despachar.
                         </CardDescription>
                     </CardHeader>
                 </Card>
@@ -353,3 +350,4 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
         </>
     );
 }
+
