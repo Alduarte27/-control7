@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock } from 'lucide-react';
+import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, MapPin } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { DateRange } from 'react-day-picker';
+import WarehouseMap from './warehouse-map';
 
 
 function ConfigModal({ 
@@ -797,9 +798,17 @@ function MaterialCard({
                         </CardTitle>
                         <p className="text-xs text-muted-foreground font-mono break-all">{material.code}</p>
                     </div>
-                     <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full self-start mt-2", currentStatus.color)}>
-                        <currentStatus.icon className="h-3 w-3" />
-                        <span>{currentStatus.label}</span>
+                     <div className="flex justify-between items-center mt-2">
+                        <div className={cn("flex items-center gap-2 text-xs font-bold text-white px-2 py-1 rounded-full self-start", currentStatus.color)}>
+                            <currentStatus.icon className="h-3 w-3" />
+                            <span>{currentStatus.label}</span>
+                        </div>
+                        {material.warehouseLocation && (
+                             <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
+                                <MapPin className="h-3 w-3" />
+                                <span>{material.warehouseLocation}</span>
+                            </div>
+                        )}
                     </div>
                     <div className="text-xs text-muted-foreground pt-1 space-y-0.5">
                         {material.supplier && <p>Proveedor: {material.supplier}</p>}
@@ -925,6 +934,7 @@ export default function MelazaClient({
     const [newMaterialUnitWeight, setNewMaterialUnitWeight] = React.useState('');
     const [newMaterialTotalWeight, setNewMaterialTotalWeight] = React.useState('');
     const [newMaterialGrossWeight, setNewMaterialGrossWeight] = React.useState('');
+    const [newMaterialLocation, setNewMaterialLocation] = React.useState('');
 
 
     const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());
@@ -939,17 +949,15 @@ export default function MelazaClient({
     const [editingMaterial, setEditingMaterial] = React.useState<PackagingMaterial | null>(null);
     const [advancedEditingMaterial, setAdvancedEditingMaterial] = React.useState<PackagingMaterial | null>(null);
     const [traceMaterial, setTraceMaterial] = React.useState<PackagingMaterial | null>(null);
-    const [isSyncModalOpen, setIsSyncModalOpen] = React.useState(false);
-    const [syncSessionId, setSyncSessionId] = React.useState<string | null>(null);
-    const [isMobileDevice, setIsMobileDevice] = React.useState(false);
-    const [isDeviceConnected, setIsDeviceConnected] = React.useState(false);
-
+    
+    // Filter states
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     const [shiftFilter, setShiftFilter] = React.useState<'all' | 'current' | 'day' | 'night'>('all');
     const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
+    const [locationFilter, setLocationFilter] = React.useState<string | null>(null);
     
     const ADD_MATERIAL_COLLAPSIBLE_STATE_KEY = 'addMelazaSackCollapsibleState';
 
@@ -1019,6 +1027,7 @@ export default function MelazaClient({
             { value: newMaterialUnitWeight, name: "Peso/Und (g)"},
             { value: newMaterialTotalWeight, name: "Peso Neto Total (kg)" },
             { value: newMaterialGrossWeight, name: "Peso Bruto (kg)" },
+            { value: newMaterialLocation, name: "Ubicación en Bodega"},
         ];
         
         for (const field of fields) {
@@ -1058,6 +1067,7 @@ export default function MelazaClient({
                 totalWeight: netWeightNum, 
                 netWeight: netWeightNum,
                 providerDate: newMaterialProviderDate ? format(newMaterialProviderDate, 'yyyy-MM-dd') : undefined,
+                warehouseLocation: newMaterialLocation,
             };
 
             await addDoc(collection(db, 'melazaSacks'), newMaterialData);
@@ -1071,6 +1081,7 @@ export default function MelazaClient({
             setNewMaterialSupplier('');
             setNewMaterialLote('');
             setNewMaterialProviderDate(undefined);
+            setNewMaterialLocation('');
             
             toast({ title: 'Saco de Melaza Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
         } catch (error) {
@@ -1269,11 +1280,13 @@ export default function MelazaClient({
         const searchMatch = !searchQuery ||
             material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
+        
+        const locationMatch = !locationFilter || material.warehouseLocation === locationFilter;
 
         let shiftMatch = true;
         if (shiftFilter !== 'all') {
             if (shiftFilter === 'current' && (material.status === 'recibido' || material.status === 'en_uso' || material.status === 'por_pesar_tara')) {
-                return supplierMatch && machineMatch && searchMatch; 
+                return supplierMatch && machineMatch && searchMatch && locationMatch; 
             }
 
             let relevantTimestamp: number | undefined;
@@ -1345,7 +1358,7 @@ export default function MelazaClient({
             }
         }
 
-        return supplierMatch && machineMatch && searchMatch && shiftMatch && dateMatch;
+        return supplierMatch && machineMatch && searchMatch && shiftMatch && dateMatch && locationMatch;
     };
     
     const allFilteredMaterials = materials.filter(applySharedFilters);
@@ -1385,6 +1398,12 @@ export default function MelazaClient({
             </div>
         );
     };
+    
+    const occupiedLocations = React.useMemo(() => {
+        return materials
+            .filter(m => m.status === 'recibido' && m.warehouseLocation)
+            .map(m => ({ location: m.warehouseLocation!, code: m.code, supplier: m.supplier || 'N/A' }));
+    }, [materials]);
 
     return (
         <>
@@ -1417,7 +1436,7 @@ export default function MelazaClient({
                 </header>
 
                 <main className="p-4 md:p-8 space-y-6 pb-24">
-                    <Collapsible open={isAddMaterialOpen} onOpenChange={handleCollapsibleChange}>
+                     <Collapsible open={isAddMaterialOpen} onOpenChange={handleCollapsibleChange}>
                         <Card>
                              <CardHeader className="flex flex-row items-center justify-between">
                                 <div className="flex-1">
@@ -1433,8 +1452,8 @@ export default function MelazaClient({
                                 </div>
                             </CardHeader>
                             <CollapsibleContent>
-                                <CardContent>
-                                    <div className="space-y-4">
+                                <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <div className="lg:col-span-2 space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-supplier">Proveedor</Label>
@@ -1500,6 +1519,16 @@ export default function MelazaClient({
                                                 </div>
                                             </div>
                                         </div>
+                                    </div>
+                                    <div className="lg:col-span-1">
+                                        <Label htmlFor="warehouse-map">Ubicación en Bodega</Label>
+                                        <WarehouseMap
+                                            id="warehouse-map"
+                                            occupiedLocations={occupiedLocations.map(o => o.location)}
+                                            selectedLocation={newMaterialLocation}
+                                            onLocationSelect={setNewMaterialLocation}
+                                            disabled={!newMaterialSupplier}
+                                        />
                                     </div>
                                 </CardContent>
                             </CollapsibleContent>
@@ -1574,20 +1603,34 @@ export default function MelazaClient({
                                     </SelectContent>
                                 </Select>
                             </div>
-                             <Tabs defaultValue="all" value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-                                <TabsList className="grid w-full grid-cols-5">
-                                    <TabsTrigger value="all">Todos ({allFilteredMaterials.length})</TabsTrigger>
-                                    <TabsTrigger value="recibido">Recibido ({recibidoMaterials.length})</TabsTrigger>
-                                    <TabsTrigger value="en_uso">En Uso ({enUsoMaterials.length})</TabsTrigger>
-                                    <TabsTrigger value="por_pesar_tara">Por Pesar Tara ({porPesarTaraMaterials.length})</TabsTrigger>
-                                    <TabsTrigger value="consumido">Consumido ({consumidoMaterials.length})</TabsTrigger>
-                                </TabsList>
-                                <TabsContent value="all" className="mt-4">{renderGrid(allFilteredMaterials)}</TabsContent>
-                                <TabsContent value="recibido" className="mt-4">{renderGrid(recibidoMaterials)}</TabsContent>
-                                <TabsContent value="en_uso" className="mt-4">{renderGrid(enUsoMaterials)}</TabsContent>
-                                <TabsContent value="por_pesar_tara" className="mt-4">{renderGrid(porPesarTaraMaterials)}</TabsContent>
-                                <TabsContent value="consumido" className="mt-4">{renderGrid(consumidoMaterials)}</TabsContent>
-                            </Tabs>
+                            <div className="flex gap-4">
+                                <div className="hidden lg:block w-1/4">
+                                    <Label>Filtro por Ubicación</Label>
+                                     <WarehouseMap 
+                                        occupiedLocations={occupiedLocations.map(o => o.location)}
+                                        selectedLocation={locationFilter}
+                                        onLocationSelect={(loc) => setLocationFilter(prev => prev === loc ? null : loc)}
+                                        interactive
+                                        details={occupiedLocations}
+                                     />
+                                </div>
+                                <div className="flex-1">
+                                     <Tabs defaultValue="all" value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
+                                        <TabsList className="grid w-full grid-cols-5">
+                                            <TabsTrigger value="all">Todos ({allFilteredMaterials.length})</TabsTrigger>
+                                            <TabsTrigger value="recibido">Recibido ({recibidoMaterials.length})</TabsTrigger>
+                                            <TabsTrigger value="en_uso">En Uso ({enUsoMaterials.length})</TabsTrigger>
+                                            <TabsTrigger value="por_pesar_tara">Por Pesar Tara ({porPesarTaraMaterials.length})</TabsTrigger>
+                                            <TabsTrigger value="consumido">Consumido ({consumidoMaterials.length})</TabsTrigger>
+                                        </TabsList>
+                                        <TabsContent value="all" className="mt-4">{renderGrid(allFilteredMaterials)}</TabsContent>
+                                        <TabsContent value="recibido" className="mt-4">{renderGrid(recibidoMaterials)}</TabsContent>
+                                        <TabsContent value="en_uso" className="mt-4">{renderGrid(enUsoMaterials)}</TabsContent>
+                                        <TabsContent value="por_pesar_tara" className="mt-4">{renderGrid(porPesarTaraMaterials)}</TabsContent>
+                                        <TabsContent value="consumido" className="mt-4">{renderGrid(consumidoMaterials)}</TabsContent>
+                                    </Tabs>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </main>
@@ -1675,4 +1718,5 @@ export default function MelazaClient({
         </>
     );
 }
+
 
