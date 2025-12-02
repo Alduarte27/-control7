@@ -59,7 +59,7 @@ export default function FilterBar({
   return (
     <>
     <div className="p-4 bg-card rounded-lg shadow-sm border">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
         <div className="flex flex-col gap-1.5 xl:col-span-1">
             <Label htmlFor="productSearch">Búsqueda de Producto</Label>
             <div className="relative">
@@ -111,23 +111,21 @@ export default function FilterBar({
             </SelectContent>
           </Select>
         </div>
-        <div className="xl:col-span-2">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
-                <Button onClick={onCopyLastWeek} variant="outline" className="w-full">
-                    <Copy className="mr-2 h-4 w-4" />
-                    Copiar Plan Anterior
-                </Button>
-                <Button asChild variant="outline" className="w-full">
-                  <Link href="/history">
-                    <History className="mr-2 h-4 w-4" />
-                    Historial de Planes
-                  </Link>
-                </Button>
-                <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-full">
-                    <Download className="mr-2 h-4 w-4" />
-                    Exportar / Reportes
-                </Button>
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end xl:col-span-2">
+            <Button onClick={onCopyLastWeek} variant="outline" className="w-full">
+                <Copy className="mr-2 h-4 w-4" />
+                Copiar Plan Anterior
+            </Button>
+            <Button asChild variant="outline" className="w-full">
+              <Link href="/history">
+                <History className="mr-2 h-4 w-4" />
+                Historial de Planes
+              </Link>
+            </Button>
+            <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-full">
+                <Download className="mr-2 h-4 w-4" />
+                Exportar / Reportes
+            </Button>
         </div>
       </div>
     </div>
