@@ -16,7 +16,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogC
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { format, getDayOfYear } from 'date-fns';
 
 function AssignLotModal({
     location,
@@ -170,55 +169,70 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
         return (
             <div className="border rounded-lg p-4 bg-card">
                 <h3 className="font-bold text-center text-lg mb-2">BLOQUE {block}</h3>
-                <div className="grid grid-cols-5 gap-2 items-center">
+                <div className="grid grid-cols-6 gap-2 items-center">
                     <div></div>
                     {COLS.map(col => <div key={`header-${block}-${col}`} className="font-bold text-center text-muted-foreground">Col {col}</div>)}
-                    
-                    {ROWS.map(rowNum => (
-                        <React.Fragment key={`row-${block}-${rowNum}`}>
-                            <div className="font-bold text-center text-muted-foreground">Fila {rowNum}</div>
-                            {COLS.map(colNum => {
-                                const location = `${block}${rowNum}-${colNum}`;
-                                const material = assignedMaterials.find(m => m.warehouseLocation === location);
-                                
-                                return (
-                                    <div 
-                                        key={location}
-                                        className={cn(
-                                            "aspect-[4/5] border rounded-md flex flex-col items-center justify-center text-center p-2 relative group",
-                                            material ? 'bg-primary/10 border-primary/20' : 'bg-muted/30 hover:bg-primary/5 cursor-pointer',
-                                        )}
-                                        onClick={() => !material && setModalState({ location })}
-                                        onDoubleClick={() => handleCellDoubleClick(material)}
-                                    >
-                                        {material ? (
-                                            <>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <button className="absolute top-1 right-1 h-5 w-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <X size={12}/>
-                                                        </button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader><AlertDialogTitle>¿Despachar Lote?</AlertDialogTitle></AlertDialogHeader>
-                                                        <AlertDialogDescription>Se marcará como 'En Uso' y se liberará la ubicación.</AlertDialogDescription>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDispatchLot(material)}>Despachar</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                                <span className="font-bold text-2xl text-primary">{material.quantity || 0}</span>
-                                                <span className="text-sm text-primary/80">{material.totalWeight || 0}</span>
-                                            </>
-                                        ) : (
-                                            <span className="text-muted-foreground text-sm">Vacío</span>
-                                        )}
-                                    </div>
-                                )
-                            })}
-                        </React.Fragment>
-                    ))}
+                    <div className="font-bold text-center text-muted-foreground">TOTAL</div>
+
+                    {ROWS.map(rowNum => {
+                        const materialsInRow = COLS.map(colNum => {
+                            const location = `${block}${rowNum}-${colNum}`;
+                            return assignedMaterials.find(m => m.warehouseLocation === location);
+                        }).filter(Boolean) as PackagingMaterial[];
+
+                        const totalBins = materialsInRow.reduce((sum, m) => sum + (m.quantity || 0), 0);
+                        const totalSacks = materialsInRow.reduce((sum, m) => sum + (m.totalWeight || 0), 0);
+
+                        return (
+                            <React.Fragment key={`row-${block}-${rowNum}`}>
+                                <div className="font-bold text-center text-muted-foreground">Fila {rowNum}</div>
+                                {COLS.map(colNum => {
+                                    const location = `${block}${rowNum}-${colNum}`;
+                                    const material = assignedMaterials.find(m => m.warehouseLocation === location);
+                                    
+                                    return (
+                                        <div 
+                                            key={location}
+                                            className={cn(
+                                                "aspect-[4/5] border rounded-md flex flex-col items-center justify-center text-center p-2 relative group",
+                                                material ? 'bg-primary/10 border-primary/20' : 'bg-muted/30 hover:bg-primary/5 cursor-pointer',
+                                            )}
+                                            onClick={() => !material && setModalState({ location })}
+                                            onDoubleClick={() => handleCellDoubleClick(material)}
+                                        >
+                                            {material ? (
+                                                <>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <button className="absolute top-1 right-1 h-5 w-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <X size={12}/>
+                                                            </button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader><AlertDialogTitle>¿Despachar Lote?</AlertDialogTitle></AlertDialogHeader>
+                                                            <AlertDialogDescription>Se marcará como 'En Uso' y se liberará la ubicación.</AlertDialogDescription>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                <AlertDialogAction onClick={() => handleDispatchLot(material)}>Despachar</AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                    <span className="font-bold text-2xl text-primary">{material.quantity || 0}</span>
+                                                    <span className="text-sm text-primary/80">{material.totalWeight || 0}</span>
+                                                </>
+                                            ) : (
+                                                <span className="text-muted-foreground text-sm">Vacío</span>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                                <div className="aspect-[4/5] border rounded-md flex flex-col items-center justify-center text-center p-2 bg-green-100 dark:bg-green-900/50">
+                                    <span className="font-bold text-2xl text-green-700 dark:text-green-300">{totalBins}</span>
+                                    <span className="text-sm text-green-600 dark:text-green-400">{totalSacks}</span>
+                                </div>
+                            </React.Fragment>
+                        );
+                    })}
                 </div>
             </div>
         );
