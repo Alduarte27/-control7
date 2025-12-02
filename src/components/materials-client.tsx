@@ -1084,7 +1084,7 @@ export default function MaterialsClient({
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     const [shiftFilter, setShiftFilter] = React.useState<'all' | 'current' | 'day' | 'night'>('all');
-    const [dateRange, setDateRange] = React.useState<DateRange | undefined>();
+    const [dateRange, setDateRange] = React.useState<DateRange | undefined>(undefined);
     
     const ADD_MATERIAL_COLLAPSIBLE_STATE_KEY = 'addMaterialCollapsibleState';
 
@@ -1701,10 +1701,10 @@ export default function MaterialsClient({
     return (
         <>
             <div className="bg-background min-h-screen text-foreground">
-                <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
+                <header className="flex items-center justify-between p-4 border-b bg-card z-20 sticky top-0">
                     <div className="flex items-center gap-3">
                         <Boxes className="h-8 w-8 text-primary" />
-                        <h1 className="text-2xl font-bold text-foreground">Control de Materiales de Empaque</h1>
+                        <h1 className="text-2xl font-bold text-foreground">Control de materiales Emp Azucar</h1>
                     </div>
                     <div className="flex items-center gap-2">
                          <Button 
