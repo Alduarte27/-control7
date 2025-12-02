@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, Activity, CalendarCheck2, Boxes, Shield } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, Activity, CalendarCheck2, Boxes, Shield, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -122,7 +122,8 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
       { id: 'ia', href: '/ia', icon: Sparkles, label: 'Operaciones', tooltip: 'Operaciones y Simulación' },
       { id: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', tooltip: 'Dashboard General' },
       { id: 'stops', href: '/stops', icon: HardHat, label: 'Bitácora', tooltip: 'Bitácora de Producción' },
-      { id: 'materials', href: '/materials', icon: Boxes, label: 'Materiales', tooltip: 'Control de Materiales' },
+      { id: 'materials', href: '/materials', icon: Boxes, label: 'Material Empaque', tooltip: 'Control de Materiales de Empaque' },
+      { id: 'melaza', href: '/material-melaza', icon: Package, label: 'Material Melaza', tooltip: 'Control de Sacos de Melaza' },
       { id: 'admin', href: '/admin', icon: Settings, label: 'Admin', tooltip: 'Administración' },
   ];
 

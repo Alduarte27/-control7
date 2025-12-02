@@ -145,7 +145,7 @@ export type Supplier = {
     name: string;
 };
 
-export type MaterialType = 'sacos_familiar' | 'sacos_granel' | 'rollo_laminado' | 'rollo_fardo';
+export type MaterialType = 'sacos_familiar' | 'sacos_granel' | 'rollo_laminado' | 'rollo_fardo' | 'sacos_melaza';
 export type MaterialStatus = 'recibido' | 'en_uso' | 'consumido' | 'por_pesar_tara';
 
 export const materialTypeLabels: { [key in MaterialType]: string } = {
@@ -153,6 +153,7 @@ export const materialTypeLabels: { [key in MaterialType]: string } = {
   sacos_granel: "Sacos de Granel",
   rollo_laminado: "Rollo Laminado",
   rollo_fardo: "Rollo de Fardo",
+  sacos_melaza: "Sacos de Melaza",
 };
 
 export type PackagingMaterial = {
