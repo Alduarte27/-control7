@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogC
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { format, getDayOfYear } from 'date-fns';
 
 function AssignLotModal({
     location,
@@ -109,7 +110,7 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
         const q = query(collection(db, "melazaSacks"), orderBy("receivedAt", "desc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const updatedMaterials = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial));
-            setMaterials(updatedMaterials);
+            setMaterials(updatedMaterials.filter(m => m.status === 'recibido'));
         }, (error) => {
             console.error("Error fetching realtime materials for map:", error);
             toast({ title: "Error de Sincronización", description: "No se pudo actualizar el mapa en tiempo real.", variant: "destructive" });
@@ -185,7 +186,7 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                                         key={location}
                                         className={cn(
                                             "aspect-[4/5] border rounded-md flex flex-col items-center justify-center text-center p-2 relative group",
-                                            material ? 'bg-blue-100 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700' : 'bg-muted/50 hover:bg-accent/50 cursor-pointer',
+                                            material ? 'bg-primary/10 border-primary/20' : 'bg-muted/30 hover:bg-primary/5 cursor-pointer',
                                         )}
                                         onClick={() => !material && setModalState({ location })}
                                         onDoubleClick={() => handleCellDoubleClick(material)}
@@ -207,8 +208,8 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                                                         </AlertDialogFooter>
                                                     </AlertDialogContent>
                                                 </AlertDialog>
-                                                <span className="font-bold text-2xl text-blue-800 dark:text-blue-200">{material.quantity || 0}</span>
-                                                <span className="text-sm text-blue-700 dark:text-blue-300">{material.totalWeight || 0}</span>
+                                                <span className="font-bold text-2xl text-primary">{material.quantity || 0}</span>
+                                                <span className="text-sm text-primary/80">{material.totalWeight || 0}</span>
                                             </>
                                         ) : (
                                             <span className="text-muted-foreground text-sm">Vacío</span>
