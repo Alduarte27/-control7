@@ -38,12 +38,13 @@ export default function BodegaMelazaClient({ initialMaterials }: BodegaMelazaCli
     React.useEffect(() => {
         const q = query(
             collection(db, "melazaSacks"),
-            where("status", "==", "recibido"),
             orderBy("receivedAt", "desc")
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const updatedMaterials = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial));
+            const updatedMaterials = snapshot.docs
+              .map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial))
+              .filter(material => material.status === 'recibido');
             setMaterials(updatedMaterials);
         }, (error) => {
             console.error("Error fetching realtime materials for map:", error);
