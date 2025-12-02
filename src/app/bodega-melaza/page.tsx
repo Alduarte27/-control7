@@ -1,4 +1,5 @@
 
+
 import BodegaMelazaClient from '@/components/bodega-melaza-client';
 import { db } from '@/lib/firebase';
 import type { PackagingMaterial, Supplier } from '@/lib/types';
@@ -13,7 +14,7 @@ async function getStoredMelazaSacks(): Promise<PackagingMaterial[]> {
         const querySnapshot = await getDocs(q);
         const materials = querySnapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial))
-            .filter(material => material.status === 'recibido');
+            .filter(material => material.status === 'recibido'); // We fetch all 'recibido' materials
         return materials;
     } catch (error) {
         console.error("Error fetching stored melaza sacks:", error);
