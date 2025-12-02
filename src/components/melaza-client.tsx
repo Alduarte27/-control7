@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -1206,6 +1207,64 @@ export default function MelazaClient({
         }
     };
     
+    const handleExportCSV = () => {
+        const headers = [
+            'Tipo', 'Código', 'Proveedor', 'Lote', 'Presentación', 'Fecha Proveedor', 'Estado',
+            'Fecha Recibido', 'Fecha En Uso', 'Fecha Consumido', 'Máquina Asignada', 'Cantidad', 
+            'Peso/Und (g)', 'Peso Total (kg)', 'Peso Neto Etiqueta (kg)', 'Peso Bruto Etiqueta (kg)', 'Tara Etiqueta (kg)',
+            'Peso Real Bruto (kg)', 'Tara Real (kg)', 'Peso Neto Real (kg)', 'Fecha Pesaje Tara',
+            'Discrepancia (kg)', 'Rendimiento (%)'
+        ];
+
+        const rows = materials.map(m => {
+            const isSacosType = m.type === 'sacos_melaza';
+            
+            let referenceNetWeight = m.totalWeight || 0;
+            const discrepancy = m.actualNetWeight !== undefined && referenceNetWeight > 0 ? m.actualNetWeight - referenceNetWeight : null;
+            
+            let performance = null;
+            if (m.actualNetWeight !== undefined && referenceNetWeight > 0) {
+                performance = (m.actualNetWeight / referenceNetWeight) * 100;
+            }
+
+            return [
+                materialTypeLabels[m.type],
+                `"${m.code.replace(/"/g, '""')}"`,
+                m.supplier || '',
+                m.lote || '',
+                m.presentation || '',
+                m.providerDate || '',
+                m.status,
+                m.receivedAt ? format(new Date(m.receivedAt), 'yyyy-MM-dd HH:mm:ss') : '',
+                m.inUseAt ? format(new Date(m.inUseAt), 'yyyy-MM-dd HH:mm:ss') : '',
+                m.consumedAt ? format(new Date(m.consumedAt), 'yyyy-MM-dd HH:mm:ss') : '',
+                m.assignedMachine || '',
+                m.quantity || '',
+                m.unitWeight || '',
+                m.totalWeight || '',
+                m.netWeight || '',
+                m.grossWeight || '',
+                m.labelTare?.toFixed(2) || '',
+                m.actualWeight?.toFixed(2) || '',
+                m.tareWeight?.toFixed(2) || '',
+                m.actualNetWeight?.toFixed(2) || '',
+                m.tareWeightedAt ? format(new Date(m.tareWeightedAt), 'yyyy-MM-dd HH:mm:ss') : '',
+                discrepancy?.toFixed(2) || '',
+                performance?.toFixed(1) || ''
+            ].join(',');
+        });
+
+        const csvContent = [headers.join(','), ...rows].join('\n');
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', 'reporte-sacos-melaza.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
     const handleOpenAdvancedEdit = (material?: PackagingMaterial) => {
         const materialToEdit = material || (selectedMaterials.size === 1 ? materials.find(m => m.id === selectedMaterials.values().next().value) : null);
         if (materialToEdit) {
@@ -1347,6 +1406,14 @@ export default function MelazaClient({
                         <h1 className="text-2xl font-bold text-foreground">Material Melaza</h1>
                     </div>
                     <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={handleExportCSV}>
+                            <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
+                        </Button>
+                        <Link href="/materials-kpi">
+                            <Button variant="outline">
+                                <BarChart className="mr-2 h-4 w-4" /> Dashboard
+                            </Button>
+                        </Link>
                          <Button variant="outline" onClick={() => setConfigOpen(true)}>
                             <Settings className="mr-2 h-4 w-4" />
                             Configuración
