@@ -111,23 +111,19 @@ export default function FilterBar({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex flex-col gap-1.5">
-            <Button onClick={onCopyLastWeek} variant="outline">
-                <Copy className="mr-2 h-4 w-4" />
-                Copiar Plan Anterior
-            </Button>
-        </div>
-        <div className="flex items-end gap-2">
-            <div className="flex flex-col gap-1.5 w-full">
-                <Button asChild variant="outline">
+        <div className="xl:col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
+                <Button onClick={onCopyLastWeek} variant="outline" className="w-full">
+                    <Copy className="mr-2 h-4 w-4" />
+                    Copiar Plan Anterior
+                </Button>
+                <Button asChild variant="outline" className="w-full">
                   <Link href="/history">
                     <History className="mr-2 h-4 w-4" />
                     Historial de Planes
                   </Link>
                 </Button>
-            </div>
-             <div className="flex flex-col gap-1.5 w-full">
-                <Button onClick={() => setIsExportDialogOpen(true)} variant="outline">
+                <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-full">
                     <Download className="mr-2 h-4 w-4" />
                     Exportar / Reportes
                 </Button>
