@@ -1,8 +1,7 @@
 
-
 import BodegaMelazaClient from '@/components/bodega-melaza-client';
 import { db } from '@/lib/firebase';
-import type { PackagingMaterial } from '@/lib/types';
+import type { PackagingMaterial, Supplier } from '@/lib/types';
 import { collection, query, getDocs, orderBy } from 'firebase/firestore';
 
 async function getStoredMelazaSacks(): Promise<PackagingMaterial[]> {
@@ -12,7 +11,6 @@ async function getStoredMelazaSacks(): Promise<PackagingMaterial[]> {
             orderBy("receivedAt", "desc")
         );
         const querySnapshot = await getDocs(q);
-        // Filter in code to avoid composite index
         const materials = querySnapshot.docs
             .map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial))
             .filter(material => material.status === 'recibido');
@@ -23,9 +21,20 @@ async function getStoredMelazaSacks(): Promise<PackagingMaterial[]> {
     }
 }
 
+async function getMelazaSuppliers(): Promise<Supplier[]> {
+    try {
+        const suppliersSnap = await getDocs(query(collection(db, 'melazaSuppliers'), orderBy('name')));
+        return suppliersSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supplier));
+    } catch (error) {
+        console.error("Error fetching melaza suppliers:", error);
+        return [];
+    }
+}
+
 
 export default async function BodegaMelazaPage() {
   const initialMaterials = await getStoredMelazaSacks();
+  const initialSuppliers = await getMelazaSuppliers();
   
-  return <BodegaMelazaClient initialMaterials={initialMaterials} />;
+  return <BodegaMelazaClient initialMaterials={initialMaterials} initialSuppliers={initialSuppliers} />;
 }
