@@ -181,7 +181,6 @@ export type PackagingMaterial = {
     coreWeight?: number; // Peso del canuto
     actualNetWeight?: number; // Peso neto real (Peso Real - Tara)
     tareWeightedAt?: number; // Timestamp de cuando se pesó la tara
-    warehouseLocation?: string; // e.g., "A1", "B5"
 };
 
 declare module 'jsqr';

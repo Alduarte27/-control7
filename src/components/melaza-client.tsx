@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, Map, MapPin } from 'lucide-react';
+import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, Map } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -112,13 +112,11 @@ function EditMaterialDialog({
         setEditedMaterial({
             code: material.code,
             presentation: material.presentation,
-            lote: material.lote,
             quantity: material.quantity,
             totalWeight: material.totalWeight,
             unitWeight: material.unitWeight,
             netWeight: material.netWeight,
             grossWeight: material.grossWeight,
-            warehouseLocation: material.warehouseLocation,
         });
     }, [material]);
 
@@ -186,10 +184,6 @@ function EditMaterialDialog({
               </div>
             </div>
           )}
-           <div className="space-y-1.5">
-              <Label htmlFor="edit-location">Ubicación en Bodega</Label>
-              <Input id="edit-location" value={editedMaterial.warehouseLocation || ''} onChange={e => handleChange('warehouseLocation', e.target.value)} />
-            </div>
         </div>
         <DialogFooter>
           <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
@@ -318,10 +312,6 @@ function AdvancedEditDialog({
                     <div className="space-y-1.5">
                         <Label htmlFor="adv-sacos-unit-weight">Peso/Und (g)</Label>
                         <Input id="adv-sacos-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={(e) => handleChange('unitWeight', Number(e.target.value))} />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="adv-warehouse-location">Ubicación</Label>
-                        <Input id="adv-warehouse-location" value={editedMaterial.warehouseLocation || ''} onChange={(e) => handleChange('warehouseLocation', e.target.value)} />
                     </div>
                 </div>
 
@@ -805,17 +795,10 @@ function MaterialCard({
                             <currentStatus.icon className="h-3 w-3" />
                             <span>{currentStatus.label}</span>
                         </div>
-                        {material.warehouseLocation && (
-                             <div className="flex items-center gap-1 text-xs font-semibold text-muted-foreground">
-                                <MapPin className="h-3 w-3" />
-                                <span>{material.warehouseLocation}</span>
-                            </div>
-                        )}
                     </div>
                     <div className="text-xs text-muted-foreground pt-1 space-y-0.5">
                         {material.supplier && <p>Proveedor: {material.supplier}</p>}
                         {material.providerDate && <p>Fecha Prov: {material.providerDate}</p>}
-                        {material.lote && <p>Lote: {material.lote}</p>}
                     </div>
                 </div>
             </CardHeader>
@@ -935,7 +918,6 @@ export default function MelazaClient({
     const [newMaterialUnitWeight, setNewMaterialUnitWeight] = React.useState('');
     const [newMaterialTotalWeight, setNewMaterialTotalWeight] = React.useState('');
     const [newMaterialGrossWeight, setNewMaterialGrossWeight] = React.useState('');
-    const [newMaterialLocation, setNewMaterialLocation] = React.useState('');
 
 
     const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());
@@ -1028,7 +1010,6 @@ export default function MelazaClient({
             { value: newMaterialUnitWeight, name: "Peso/Und (g)"},
             { value: newMaterialTotalWeight, name: "Peso Neto Total (kg)" },
             { value: newMaterialGrossWeight, name: "Peso Bruto (kg)" },
-            { value: newMaterialLocation, name: "Ubicación en Bodega"},
         ];
         
         for (const field of fields) {
@@ -1068,7 +1049,6 @@ export default function MelazaClient({
                 totalWeight: netWeightNum, 
                 netWeight: netWeightNum,
                 providerDate: newMaterialProviderDate ? format(newMaterialProviderDate, 'yyyy-MM-dd') : undefined,
-                warehouseLocation: newMaterialLocation,
             };
 
             await addDoc(collection(db, 'melazaSacks'), newMaterialData);
@@ -1081,7 +1061,6 @@ export default function MelazaClient({
             setNewMaterialTotalWeight('');
             setNewMaterialSupplier('');
             setNewMaterialProviderDate(undefined);
-            setNewMaterialLocation('');
             
             toast({ title: 'Saco de Melaza Registrado', description: `Se ha registrado el material con código ${trimmedCode}.` });
         } catch (error) {
@@ -1281,12 +1260,11 @@ export default function MelazaClient({
             material.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (material.lote && material.lote.toLowerCase().includes(searchQuery.toLowerCase()));
         
-        const locationMatch = !locationFilter || material.warehouseLocation === locationFilter;
 
         let shiftMatch = true;
         if (shiftFilter !== 'all') {
             if (shiftFilter === 'current' && (material.status === 'recibido' || material.status === 'en_uso' || material.status === 'por_pesar_tara')) {
-                return supplierMatch && machineMatch && searchMatch && locationMatch; 
+                return supplierMatch && machineMatch && searchMatch; 
             }
 
             let relevantTimestamp: number | undefined;
@@ -1358,7 +1336,7 @@ export default function MelazaClient({
             }
         }
 
-        return supplierMatch && machineMatch && searchMatch && shiftMatch && dateMatch && locationMatch;
+        return supplierMatch && machineMatch && searchMatch && shiftMatch && dateMatch;
     };
     
     const allFilteredMaterials = materials.filter(applySharedFilters);
@@ -1408,11 +1386,6 @@ export default function MelazaClient({
                         <h1 className="text-2xl font-bold text-foreground">Material Melaza</h1>
                     </div>
                     <div className="flex items-center gap-2">
-                         <Link href="/bodega-melaza">
-                            <Button variant="outline">
-                                <Map className="mr-2 h-4 w-4" /> Mapa de Bodega
-                            </Button>
-                        </Link>
                         <Button variant="outline" onClick={handleExportCSV}>
                             <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
                         </Button>
@@ -1506,10 +1479,6 @@ export default function MelazaClient({
                                              <div className="space-y-1.5">
                                                 <Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label>
                                                 <Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Balanza" disabled={!newMaterialSupplier}/>
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="material-location">Ubicación</Label>
-                                                <Input id="material-location" value={newMaterialLocation} onChange={(e) => setNewMaterialLocation(e.target.value)} placeholder="Ej: A1-1" disabled={!newMaterialSupplier}/>
                                             </div>
                                             <div className="flex items-end gap-2 lg:col-start-5">
                                                  <div className='flex gap-2 w-full'>
