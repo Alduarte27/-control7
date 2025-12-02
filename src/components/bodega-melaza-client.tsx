@@ -11,10 +11,10 @@ import type { PackagingMaterial, Supplier } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, onSnapshot, query, collection, orderBy } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDialogDescriptionComponent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose, DialogDescription } from './ui/dialog';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -223,9 +223,9 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                                     <AlertDialogContent>
                                         <AlertDialogHeader>
                                             <AlertDialogTitle>¿Confirmar Despacho?</AlertDialogTitle>
-                                            <AlertDialogDescription>
+                                            <AlertDialogDescriptionComponent>
                                                 Estás a punto de despachar el lote de <strong>{material.presentation}</strong> de la ubicación <strong>{material.warehouseLocation}</strong>. Esta acción moverá el material a "En Uso" y liberará la ubicación.
-                                            </AlertDialogDescription>
+                                            </AlertDialogDescriptionComponent>
                                         </AlertDialogHeader>
                                         <AlertDialogFooter>
                                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
@@ -288,11 +288,12 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                    <Table className="min-w-full table-fixed">
                         <TableHeader>
                             <TableRow className="bg-muted/50">
-                                <TableHead className="w-[80px] text-center font-bold" rowSpan={2}>FILAS</TableHead>
+                                <TableHead className="w-[80px] text-center font-bold">FILAS</TableHead>
                                 <TableHead className="text-center p-2 font-bold" colSpan={5}>BLOQUE A</TableHead>
                                 <TableHead className="text-center p-2 font-bold" colSpan={5}>BLOQUE B</TableHead>
                             </TableRow>
                             <TableRow className="bg-muted/50">
+                                <TableHead className="w-[80px] text-center"></TableHead>
                                 {COLS_A.map(col => <TableHead key={`ha-${col}`} className="w-1/12 text-center border-x">{col}</TableHead>)}
                                 <TableHead className="w-1/12 text-center border-r bg-accent/30 font-semibold">TOTAL</TableHead>
                                 {COLS_B.map(col => <TableHead key={`hb-${col}`} className="w-1/12 text-center border-x">{col}</TableHead>)}
