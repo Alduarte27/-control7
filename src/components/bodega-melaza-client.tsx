@@ -16,8 +16,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 
 const generateAlaLocations = (ala: 'A' | 'B') => {
     const locations = [];
-    for (let row = 1; row <= 4; row++) {
-        for (let col = 1; col <= 10; col++) {
+    for (let row = 1; row <= 11; row++) {
+        for (let col = 1; col <= 44; col++) {
             locations.push(`${ala}${row}-${col}`);
         }
     }
@@ -72,64 +72,75 @@ export default function BodegaMelazaClient({ initialMaterials }: BodegaMelazaCli
         }
     }
 
-    const renderAla = (ala: 'A' | 'B', locations: string[]) => (
-        <Card className="flex-1">
-            <CardHeader>
-                <CardTitle>ALA {ala}</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-10 gap-1">
-                    {locations.map(loc => {
-                        const material = materials.find(m => m.warehouseLocation === loc);
-                        const isOccupied = !!material;
+    const renderAla = (ala: 'A' | 'B', locations: string[]) => {
+        const rows = Array.from({ length: 11 }, (_, i) => i + 1);
+        const cols = Array.from({ length: 44 }, (_, i) => i + 1);
 
-                        return (
-                            <TooltipProvider key={loc}>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <div className={cn(
-                                            "aspect-square rounded-sm border flex items-center justify-center text-xs font-mono transition-colors",
-                                            isOccupied ? "bg-primary/10 border-primary/50 text-primary font-semibold" : "bg-muted/50 border-dashed"
-                                        )}>
-                                            {loc.split('-')[1]}
-                                        </div>
-                                    </TooltipTrigger>
-                                    {isOccupied && material && (
-                                        <TooltipContent className="max-w-xs">
-                                            <div className="space-y-2">
-                                                <p className="font-bold text-base">{material.presentation}</p>
-                                                <p><strong className="text-muted-foreground">Ubicación:</strong> {material.warehouseLocation}</p>
-                                                <p><strong className="text-muted-foreground">Sacos:</strong> {material.quantity?.toLocaleString()}</p>
-                                                <p><strong className="text-muted-foreground">Fecha Ingreso:</strong> {new Date(material.receivedAt).toLocaleDateString('es-ES')}</p>
-                                                <p><strong className="text-muted-foreground">Proveedor:</strong> {material.supplier}</p>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="destructive" size="sm" className="w-full mt-2">Despachar Lote</Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>¿Confirmar Despacho?</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Estás a punto de despachar el lote de <strong>{material.presentation}</strong> de la ubicación <strong>{material.warehouseLocation}</strong>. Esta acción moverá el material a "En Uso" y liberará la ubicación.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={() => handleDispatchLot(material)}>Sí, Despachar</AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </div>
-                                        </TooltipContent>
-                                    )}
-                                </Tooltip>
-                            </TooltipProvider>
-                        )
-                    })}
-                </div>
-            </CardContent>
-        </Card>
-    );
+        return (
+            <Card className="flex-1">
+                <CardHeader>
+                    <CardTitle>ALA {ala}</CardTitle>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                    <div className="flex flex-col gap-1">
+                        {rows.map(rowNum => (
+                            <div key={`row-${ala}-${rowNum}`} className="flex gap-1">
+                                {cols.map(colNum => {
+                                    const loc = `${ala}${rowNum}-${colNum}`;
+                                    const material = materials.find(m => m.warehouseLocation === loc);
+                                    const isOccupied = !!material;
+
+                                    return (
+                                        <TooltipProvider key={loc} delayDuration={300}>
+                                            <Tooltip>
+                                                <TooltipTrigger asChild>
+                                                    <div className={cn(
+                                                        "h-8 w-8 flex-shrink-0 rounded-sm border flex items-center justify-center text-xs font-mono transition-colors",
+                                                        isOccupied ? "bg-primary/10 border-primary/50 text-primary font-semibold" : "bg-muted/50 border-dashed"
+                                                    )}>
+                                                        {colNum}
+                                                    </div>
+                                                </TooltipTrigger>
+                                                {isOccupied && material && (
+                                                    <TooltipContent className="max-w-xs">
+                                                        <div className="space-y-2">
+                                                            <p className="font-bold text-base">{material.presentation}</p>
+                                                            <p><strong className="text-muted-foreground">Ubicación:</strong> {material.warehouseLocation}</p>
+                                                            <p><strong className="text-muted-foreground">Sacos:</strong> {material.quantity?.toLocaleString()}</p>
+                                                            <p><strong className="text-muted-foreground">Fecha Ingreso:</strong> {new Date(material.receivedAt).toLocaleDateString('es-ES')}</p>
+                                                            <p><strong className="text-muted-foreground">Proveedor:</strong> {material.supplier}</p>
+                                                            <AlertDialog>
+                                                                <AlertDialogTrigger asChild>
+                                                                    <Button variant="destructive" size="sm" className="w-full mt-2">Despachar Lote</Button>
+                                                                </AlertDialogTrigger>
+                                                                <AlertDialogContent>
+                                                                    <AlertDialogHeader>
+                                                                        <AlertDialogTitle>¿Confirmar Despacho?</AlertDialogTitle>
+                                                                        <AlertDialogDescription>
+                                                                            Estás a punto de despachar el lote de <strong>{material.presentation}</strong> de la ubicación <strong>{material.warehouseLocation}</strong>. Esta acción moverá el material a "En Uso" y liberará la ubicación.
+                                                                        </AlertDialogDescription>
+                                                                    </AlertDialogHeader>
+                                                                    <AlertDialogFooter>
+                                                                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                                        <AlertDialogAction onClick={() => handleDispatchLot(material)}>Sí, Despachar</AlertDialogAction>
+                                                                    </AlertDialogFooter>
+                                                                </AlertDialogContent>
+                                                            </AlertDialog>
+                                                        </div>
+                                                    </TooltipContent>
+                                                )}
+                                            </Tooltip>
+                                        </TooltipProvider>
+                                    );
+                                })}
+                            </div>
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
+        );
+    };
+
 
     return (
         <div className="bg-background min-h-screen text-foreground">
@@ -154,6 +165,8 @@ export default function BodegaMelazaClient({ initialMaterials }: BodegaMelazaCli
                 </Card>
                  <div className="flex flex-col lg:flex-row gap-6">
                     {renderAla('A', ALA_A_LOCATIONS)}
+                 </div>
+                 <div className="flex flex-col lg:flex-row gap-6">
                     {renderAla('B', ALA_B_LOCATIONS)}
                 </div>
             </main>

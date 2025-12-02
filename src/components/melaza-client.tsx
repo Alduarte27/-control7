@@ -1445,7 +1445,7 @@ export default function MelazaClient({
                             <CollapsibleContent>
                                 <CardContent className="grid grid-cols-1 lg:grid-cols-1 gap-8">
                                     <div className="lg:col-span-1 space-y-4">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-supplier">Proveedor</Label>
                                                 <Select value={newMaterialSupplier} onValueChange={setNewMaterialSupplier}>
@@ -1481,6 +1481,10 @@ export default function MelazaClient({
                                                     <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
                                                 </Popover>
                                             </div>
+                                             <div className="space-y-1.5">
+                                                <Label htmlFor="material-warehouse-location">Ubicación Bodega</Label>
+                                                <Input id="material-warehouse-location" value={newMaterialWarehouseLocation} onChange={(e) => setNewMaterialWarehouseLocation(e.target.value)} placeholder="Ej: A1-1" disabled={!newMaterialSupplier}/>
+                                            </div>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
                                             <div className="space-y-1.5">
@@ -1499,19 +1503,15 @@ export default function MelazaClient({
                                                 <Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label>
                                                 <Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Balanza" disabled={!newMaterialSupplier}/>
                                             </div>
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="material-warehouse-location">Ubicación Bodega</Label>
-                                                <Input id="material-warehouse-location" value={newMaterialWarehouseLocation} onChange={(e) => setNewMaterialWarehouseLocation(e.target.value)} placeholder="Ej: A1-1" disabled={!newMaterialSupplier}/>
-                                            </div>
-                                        </div>
-                                        <div className="flex justify-end pt-4">
-                                             <div className='flex gap-2'>
-                                                <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
-                                                    <Camera className="mr-2 h-4 w-4" /> Escanear
-                                                </Button>
-                                                <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
-                                                    <PlusCircle className="mr-2 h-4 w-4" /> Registrar
-                                                </Button>
+                                            <div className="flex items-end gap-2 lg:col-start-5">
+                                                 <div className='flex gap-2 w-full'>
+                                                    <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
+                                                        <Camera className="mr-2 h-4 w-4" /> Escanear
+                                                    </Button>
+                                                    <Button onClick={handleAddMaterial} className="flex-1" disabled={!newMaterialSupplier}>
+                                                        <PlusCircle className="mr-2 h-4 w-4" /> Registrar
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
