@@ -903,14 +903,6 @@ function MaterialCard({
     );
 }
 
-const supplierMaterialMapping: { [key: string]: MaterialType[] } = {
-    'PLASTICSACKS CIA LTDA.': ['sacos_granel'],
-    'REYSAC': ['sacos_granel', 'sacos_familiar'],
-    'MILANPLASTIC': ['rollo_laminado'],
-    'PLASTIEMPAQUES S.A': ['rollo_fardo'],
-};
-
-
 export default function MelazaClient({ 
     allProducts,
     allCategories,
@@ -952,7 +944,6 @@ export default function MelazaClient({
     const [isMobileDevice, setIsMobileDevice] = React.useState(false);
     const [isDeviceConnected, setIsDeviceConnected] = React.useState(false);
 
-    const [typeFilter, setTypeFilter] = React.useState<MaterialType | 'all'>('all');
     const [supplierFilter, setSupplierFilter] = React.useState<string | 'all'>('all');
     const [machineFilter, setMachineFilter] = React.useState<string>('all');
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
@@ -992,7 +983,6 @@ export default function MelazaClient({
     };
 
     const handleScanSuccess = React.useCallback((code: string) => {
-        // This functionality might be different for melaza sacks, keeping it simple for now
         setIsScannerOpen(false);
         setNewMaterialCode(code);
     }, []);
@@ -1004,11 +994,11 @@ export default function MelazaClient({
 
         try {
             if (action === 'add') {
-                const docRef = await addDoc(collection(db, 'suppliers'), data);
+                const docRef = await addDoc(collection(db, 'melazaSuppliers'), data);
                 setSuppliers(prev => [...prev, {id: docRef.id, ...data}].sort((a,b) => a.name.localeCompare(b.name)));
                 toast({ title: "Proveedor añadido" });
             } else if (action === 'delete') {
-                await deleteDoc(doc(db, 'suppliers', data.id));
+                await deleteDoc(doc(db, 'melazaSuppliers', data.id));
                 setSuppliers(prev => prev.filter(s => s.id !== data.id));
                 toast({ title: "Proveedor eliminado" });
             }
@@ -1074,7 +1064,6 @@ export default function MelazaClient({
             
             setNewMaterialCode('');
             setNewMaterialPresentation('');
-            setNewMaterialNetWeight('');
             setNewMaterialGrossWeight('');
             setNewMaterialQuantity('');
             setNewMaterialUnitWeight('');
@@ -1409,7 +1398,7 @@ export default function MelazaClient({
                         <Button variant="outline" onClick={handleExportCSV}>
                             <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
                         </Button>
-                        <Link href="/materials-kpi">
+                        <Link href="/melaza-kpi">
                             <Button variant="outline">
                                 <BarChart className="mr-2 h-4 w-4" /> Dashboard
                             </Button>
@@ -1686,3 +1675,4 @@ export default function MelazaClient({
         </>
     );
 }
+
