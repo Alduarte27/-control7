@@ -123,7 +123,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
       { id: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', tooltip: 'Dashboard General' },
       { id: 'stops', href: '/stops', icon: HardHat, label: 'Bitácora', tooltip: 'Bitácora de Producción' },
       { id: 'materials', href: '/materials', icon: Boxes, label: 'Materiales', tooltip: 'Control de Materiales' },
-      { id: 'access', href: '/access', icon: Shield, label: 'Acceso', tooltip: 'Gestión de Acceso' },
       { id: 'admin', href: '/admin', icon: Settings, label: 'Admin', tooltip: 'Administración' },
   ];
 
