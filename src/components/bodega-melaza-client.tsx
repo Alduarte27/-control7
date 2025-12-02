@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ChevronLeft, MapPin, Edit, PlusCircle } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -12,9 +12,7 @@ import { db } from '@/lib/firebase';
 import { doc, updateDoc, onSnapshot, query, collection, orderBy } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from './ui/table';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose, DialogDescription } from './ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogClose } from './ui/dialog';
 import { Label } from './ui/label';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -39,7 +37,6 @@ function AssignLotModal({
 
     const handleSave = () => {
         if (!selectedMaterialId) {
-            // Toast can be used here if you have a useToast hook
             alert("Por favor, selecciona un material para asignar.");
             return;
         }
@@ -105,16 +102,13 @@ interface BodegaMelazaClientProps {
 
 export default function BodegaMelazaClient({ initialMaterials, initialSuppliers }: BodegaMelazaClientProps) {
     const [materials, setMaterials] = React.useState(initialMaterials);
-    const [suppliers] = React.useState(initialSuppliers);
     const { toast } = useToast();
     const [modalState, setModalState] = React.useState<{location: string, material?: PackagingMaterial | null} | null>(null);
 
     React.useEffect(() => {
         const q = query(collection(db, "melazaSacks"), orderBy("receivedAt", "desc"));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const updatedMaterials = snapshot.docs
-              .map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial))
-              .filter(material => material.status === 'recibido');
+            const updatedMaterials = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial));
             setMaterials(updatedMaterials);
         }, (error) => {
             console.error("Error fetching realtime materials for map:", error);
@@ -129,7 +123,7 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
             await updateDoc(materialDocRef, {
                 status: 'en_uso',
                 inUseAt: Date.now(),
-                warehouseLocation: '', // Free up the location
+                warehouseLocation: '',
             });
             toast({
                 title: "Lote Despachado",
@@ -147,8 +141,8 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
             const totalSacks = bins * sacksPerBin;
             await updateDoc(docRef, {
                 warehouseLocation: location,
-                quantity: bins, // Storing number of bins
-                totalWeight: totalSacks, // Storing total sacks
+                quantity: bins, 
+                totalWeight: totalSacks,
             });
             toast({ title: "Material Asignado", description: `Se ha asignado el material a la ubicación ${location}.` });
             setModalState(null);
@@ -159,101 +153,74 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
     };
 
     const assignedMaterials = materials.filter(m => m.warehouseLocation);
-    const unassignedMaterials = materials.filter(m => !m.warehouseLocation);
+    const unassignedMaterials = materials.filter(m => m.status === 'recibido' && !m.warehouseLocation);
 
-    const renderCell = (location: string) => {
-        const material = assignedMaterials.find(m => m.warehouseLocation === location);
+    const handleCellDoubleClick = (material?: PackagingMaterial) => {
+        if (material) {
+            // Future edit logic can go here
+             toast({ title: "Función no implementada", description: "La edición con doble clic aún no está disponible."})
+        }
+    };
+
+    const renderBlock = (block: 'A' | 'B') => {
+        const ROWS = Array.from({ length: 11 }, (_, i) => i + 1);
+        const COLS = block === 'A' ? [1, 2, 3, 4] : [4, 3, 2, 1];
         
-        const handleCellClick = () => {
-            if (!material) {
-                setModalState({ location });
-            }
-        };
-
-        const handleDoubleClick = () => {
-             if (material) {
-                 toast({ title: "Función no implementada", description: "La edición con doble clic aún no está disponible."})
-             }
-        }
-
-        if (!material) {
-            return (
-                <div className="h-full p-2 border-b cursor-pointer hover:bg-accent/10" onClick={handleCellClick}>
-                    <p className="text-sm text-muted-foreground">&nbsp;</p>
-                </div>
-            )
-        }
-
-        const CellContent = () => (
-             <div className={cn("h-full p-2 border-b bg-yellow-100 border-yellow-200")}>
-                <p className="font-mono text-xs font-bold text-yellow-800">{material.lote}</p>
-                 <p className="text-xs text-yellow-700">{material.providerDate}</p>
-                <div className="mt-2 text-right">
-                    <p className="text-sm text-yellow-900">{material.quantity || 0} Bins</p>
-                    <p className="font-bold text-yellow-900">{material.totalWeight || 0} Sacos</p>
+        return (
+            <div className="border rounded-lg p-4 bg-card">
+                <h3 className="font-bold text-center text-lg mb-2">BLOQUE {block}</h3>
+                <div className="grid grid-cols-5 gap-2 items-center">
+                    <div></div>
+                    {COLS.map(col => <div key={`header-${block}-${col}`} className="font-bold text-center text-muted-foreground">Col {col}</div>)}
+                    
+                    {ROWS.map(rowNum => (
+                        <React.Fragment key={`row-${block}-${rowNum}`}>
+                            <div className="font-bold text-center text-muted-foreground">Fila {rowNum}</div>
+                            {COLS.map(colNum => {
+                                const location = `${block}${rowNum}-${colNum}`;
+                                const material = assignedMaterials.find(m => m.warehouseLocation === location);
+                                
+                                return (
+                                    <div 
+                                        key={location}
+                                        className={cn(
+                                            "aspect-[4/5] border rounded-md flex flex-col items-center justify-center text-center p-2 relative group",
+                                            material ? 'bg-blue-100 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700' : 'bg-muted/50 hover:bg-accent/50 cursor-pointer',
+                                        )}
+                                        onClick={() => !material && setModalState({ location })}
+                                        onDoubleClick={() => handleCellDoubleClick(material)}
+                                    >
+                                        {material ? (
+                                            <>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <button className="absolute top-1 right-1 h-5 w-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <X size={12}/>
+                                                        </button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader><AlertDialogTitle>¿Despachar Lote?</AlertDialogTitle></AlertDialogHeader>
+                                                        <AlertDialogDescription>Se marcará como 'En Uso' y se liberará la ubicación.</AlertDialogDescription>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDispatchLot(material)}>Despachar</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                                <span className="font-bold text-2xl text-blue-800 dark:text-blue-200">{material.quantity || 0}</span>
+                                                <span className="text-sm text-blue-700 dark:text-blue-300">{material.totalWeight || 0}</span>
+                                            </>
+                                        ) : (
+                                            <span className="text-muted-foreground text-sm">Vacío</span>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </React.Fragment>
+                    ))}
                 </div>
             </div>
         );
-
-        return (
-            <TooltipProvider delayDuration={100}>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                       <div className="h-full cursor-pointer hover:bg-accent/20" onDoubleClick={handleDoubleClick}>
-                          <CellContent />
-                       </div>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs">
-                        <div className="space-y-2">
-                            <p className="font-bold text-base">{material.presentation}</p>
-                            <p><strong className="text-muted-foreground">Proveedor:</strong> {material.supplier}</p>
-                            <p><strong className="text-muted-foreground">Ubicación:</strong> {material.warehouseLocation}</p>
-                            <p><strong className="text-muted-foreground">Lote:</strong> {material.lote || 'N/A'}</p>
-                            <p><strong className="text-muted-foreground">Bins:</strong> {material.quantity?.toLocaleString()}</p>
-                            <p><strong className="text-muted-foreground">Sacos:</strong> {material.totalWeight?.toLocaleString()}</p>
-                            <p><strong className="text-muted-foreground">Fecha Ingreso:</strong> {new Date(material.receivedAt).toLocaleDateString('es-ES')}</p>
-                            <div className="flex gap-2 pt-2">
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="destructive" size="sm" className="flex-1">Despachar Lote</Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>¿Confirmar Despacho?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Estás a punto de despachar el lote de <strong>{material.presentation}</strong> de la ubicación <strong>{material.warehouseLocation}</strong>. Esta acción moverá el material a "En Uso" y liberará la ubicación.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => handleDispatchLot(material)}>Sí, Despachar</AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
-                            </div>
-                        </div>
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
-        )
-    };
-    
-    const ROWS = Array.from({ length: 11 }, (_, i) => i + 1);
-    const COLS_A = Array.from({ length: 4 }, (_, i) => i + 1);
-    const COLS_B = Array.from({ length: 4 }, (_, i) => i + 1).reverse();
-
-    const getTotalsForRow = (row: number, block: 'A' | 'B') => {
-        const cols = block === 'A' ? COLS_A : COLS_B;
-        let totalBins = 0;
-        let totalSacos = 0;
-        cols.forEach(col => {
-             const material = assignedMaterials.find(m => m.warehouseLocation === `${block}${row}-${col}`);
-             if (material) {
-                 totalBins += material.quantity || 0;
-                 totalSacos += material.totalWeight || 0;
-             }
-        });
-        return { totalBins, totalSacos };
     };
 
 
@@ -262,13 +229,12 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
         <div className="bg-background min-h-screen text-foreground">
             <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-20">
                 <div className="flex items-center gap-3">
-                    <MapPin className="h-8 w-8 text-primary" />
                     <h1 className="text-2xl font-bold text-foreground">Mapa de Bodega - Melaza</h1>
                 </div>
                 <Link href="/material-melaza">
                     <Button variant="outline">
                         <ChevronLeft className="mr-2 h-4 w-4" />
-                        Volver a Material Melaza
+                        Volver
                     </Button>
                 </Link>
             </header>
@@ -277,65 +243,13 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                     <CardHeader>
                         <CardTitle>Estado Actual de la Bodega</CardTitle>
                         <CardDescription>
-                            Haz clic en una celda vacía para asignar un material. Pasa el ratón para ver detalles y despachar.
+                            Haz clic en una celda vacía para asignar un material. Haz doble clic en una ocupada para editar.
                         </CardDescription>
                     </CardHeader>
                 </Card>
-                <div className="overflow-x-auto border rounded-lg">
-                   <Table className="min-w-full table-fixed">
-                        <TableHeader>
-                            <TableRow className="bg-muted/50">
-                                <TableHead className="w-[80px] text-center font-bold">FILAS</TableHead>
-                                <TableHead className="text-center p-2 font-bold" colSpan={5}>BLOQUE A</TableHead>
-                                <TableHead className="text-center p-2 font-bold" colSpan={5}>BLOQUE B</TableHead>
-                            </TableRow>
-                            <TableRow className="bg-muted/50">
-                                <TableHead className="w-[80px] text-center"></TableHead>
-                                {COLS_A.map(col => <TableHead key={`ha-${col}`} className="w-1/12 text-center border-x">{col}</TableHead>)}
-                                <TableHead className="w-1/12 text-center border-r bg-accent/30 font-semibold">TOTAL</TableHead>
-                                {COLS_B.map(col => <TableHead key={`hb-${col}`} className="w-1/12 text-center border-x">{col}</TableHead>)}
-                                <TableHead className="w-1/12 text-center border-r bg-accent/30 font-semibold">TOTAL</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {ROWS.map(rowNum => {
-                                 const totalsA = getTotalsForRow(rowNum, 'A');
-                                 const totalsB = getTotalsForRow(rowNum, 'B');
-                                return (
-                                    <TableRow key={`row-${rowNum}`}>
-                                        <TableCell className="border-r font-bold text-center text-lg p-0 align-middle">
-                                            <span>#{rowNum}</span>
-                                        </TableCell>
-                                        
-                                        {COLS_A.map(colNum => (
-                                            <TableCell key={`cell-A-${rowNum}-${colNum}`} className="p-0 align-top border-r">
-                                               {renderCell(`A${rowNum}-${colNum}`)}
-                                            </TableCell>
-                                        ))}
-
-                                        <TableCell className="p-2 border-r bg-green-50 align-middle">
-                                             <div className="text-right">
-                                                <p className="text-sm">{totalsA.totalBins}</p>
-                                                <p className="font-bold">{totalsA.totalSacos}</p>
-                                            </div>
-                                        </TableCell>
-                                        
-                                        {COLS_B.map(colNum => (
-                                            <TableCell key={`cell-B-${rowNum}-${colNum}`} className="p-0 align-top border-r">
-                                                {renderCell(`B${rowNum}-${colNum}`)}
-                                            </TableCell>
-                                        ))}
-                                        <TableCell className="p-2 border-r bg-green-50 align-middle">
-                                            <div className="text-right">
-                                                <p className="text-sm">{totalsB.totalBins}</p>
-                                                <p className="font-bold">{totalsB.totalSacos}</p>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                )
-                            })}
-                        </TableBody>
-                   </Table>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                    {renderBlock('A')}
+                    {renderBlock('B')}
                 </div>
             </main>
         </div>
@@ -350,4 +264,3 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
         </>
     );
 }
-
