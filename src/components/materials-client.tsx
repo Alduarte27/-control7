@@ -29,6 +29,7 @@ import { Progress } from './ui/progress';
 import { QRCodeSVG } from 'qrcode.react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { DateRange } from 'react-day-picker';
 
 
 function ConfigModal({ 
@@ -1083,6 +1084,7 @@ export default function MaterialsClient({
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     const [shiftFilter, setShiftFilter] = React.useState<'all' | 'current' | 'day' | 'night'>('all');
+    const [dateRange, setDateRange] = React.useState<DateRange | undefined>({ from: subDays(new Date(), 30), to: new Date() });
     
     const ADD_MATERIAL_COLLAPSIBLE_STATE_KEY = 'addMaterialCollapsibleState';
 
@@ -1633,7 +1635,26 @@ export default function MaterialsClient({
             }
         }
         
-        return typeMatch && supplierMatch && machineMatch && searchMatch && shiftMatch;
+        let dateMatch = true;
+        if (dateRange?.from) {
+            let relevantTimestamp: number | undefined;
+            switch (material.status) {
+                case 'recibido': relevantTimestamp = material.receivedAt; break;
+                case 'en_uso': relevantTimestamp = material.inUseAt; break;
+                case 'por_pesar_tara': relevantTimestamp = material.consumedAt; break;
+                case 'consumido': relevantTimestamp = material.tareWeightedAt; break;
+            }
+            if (!relevantTimestamp) {
+                dateMatch = false;
+            } else {
+                const materialDate = new Date(relevantTimestamp);
+                const fromDate = startOfDay(dateRange.from);
+                const toDate = dateRange.to ? endOfDay(dateRange.to) : endOfDay(dateRange.from);
+                dateMatch = materialDate >= fromDate && materialDate <= toDate;
+            }
+        }
+
+        return typeMatch && supplierMatch && machineMatch && searchMatch && shiftMatch && dateMatch;
     };
     
     const allFilteredMaterials = materials.filter(applySharedFilters);
@@ -1871,12 +1892,45 @@ export default function MaterialsClient({
                             <CardDescription>Visualiza y gestiona los materiales recibidos, en uso y consumidos.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 mb-4">
                                 <Input
                                     placeholder="Buscar por código, lote..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
                                 />
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant={"outline"}
+                                            className={cn("w-full justify-start text-left font-normal", !dateRange && "text-muted-foreground")}
+                                        >
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {dateRange?.from ? (
+                                                dateRange.to ? (
+                                                    <>
+                                                        {format(dateRange.from, "LLL dd, y", { locale: es })} -{' '}
+                                                        {format(dateRange.to, "LLL dd, y", { locale: es })}
+                                                    </>
+                                                ) : (
+                                                    format(dateRange.from, "LLL dd, y", { locale: es })
+                                                )
+                                            ) : (
+                                                <span>Elige un rango</span>
+                                            )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="start">
+                                        <Calendar
+                                            initialFocus
+                                            mode="range"
+                                            defaultMonth={dateRange?.from}
+                                            selected={dateRange}
+                                            onSelect={setDateRange}
+                                            numberOfMonths={2}
+                                            locale={es}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
                                 <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as any)}>
                                     <SelectTrigger><SelectValue/></SelectTrigger>
                                     <SelectContent>
@@ -2039,6 +2093,7 @@ export default function MaterialsClient({
         </>
     );
 }
+
 
 
 
