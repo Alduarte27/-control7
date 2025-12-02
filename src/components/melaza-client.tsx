@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, MapPin } from 'lucide-react';
+import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, Map } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,10 +65,10 @@ function ConfigModal({
         <Dialog open={isOpen} onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Configurar Catálogos</DialogTitle>
+                    <DialogTitle>Configurar Catálogos de Melaza</DialogTitle>
                 </DialogHeader>
                 <div className="py-4 space-y-4">
-                     <h3 className="font-semibold text-lg">Proveedores</h3>
+                     <h3 className="font-semibold text-lg">Proveedores de Sacos para Melaza</h3>
                       <div className="flex items-end gap-2">
                           <div className="flex-grow space-y-1.5">
                               <Label htmlFor="new-supplier-name">Nombre del Proveedor</Label>
@@ -119,6 +119,7 @@ function EditMaterialDialog({
             unitWeight: material.unitWeight,
             netWeight: material.netWeight,
             grossWeight: material.grossWeight,
+            warehouseLocation: material.warehouseLocation,
         });
     }, [material]);
 
@@ -153,12 +154,10 @@ function EditMaterialDialog({
             <Label htmlFor="edit-presentation">Presentación</Label>
             <Input id="edit-presentation" value={editedMaterial.presentation || ''} onChange={e => handleChange('presentation', e.target.value)} />
           </div>
-          {isPlasticsacks && (
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-lote">Lote</Label>
-              <Input id="edit-lote" value={editedMaterial.lote || ''} onChange={e => handleChange('lote', e.target.value)} />
+           <div className="space-y-1.5">
+                <Label htmlFor="edit-lote">Lote</Label>
+                <Input id="edit-lote" value={editedMaterial.lote || ''} onChange={e => handleChange('lote', e.target.value)} />
             </div>
-          )}
 
           {isSacosType ? (
             <div className="grid grid-cols-2 gap-2">
@@ -192,6 +191,10 @@ function EditMaterialDialog({
               </div>
             </div>
           )}
+           <div className="space-y-1.5">
+              <Label htmlFor="edit-location">Ubicación en Bodega</Label>
+              <Input id="edit-location" value={editedMaterial.warehouseLocation || ''} onChange={e => handleChange('warehouseLocation', e.target.value)} />
+            </div>
         </div>
         <DialogFooter>
           <DialogClose asChild><Button variant="secondary">Cancelar</Button></DialogClose>
@@ -320,6 +323,10 @@ function AdvancedEditDialog({
                     <div className="space-y-1.5">
                         <Label htmlFor="adv-sacos-unit-weight">Peso/Und (g)</Label>
                         <Input id="adv-sacos-unit-weight" type="number" value={editedMaterial.unitWeight || ''} onChange={(e) => handleChange('unitWeight', Number(e.target.value))} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label htmlFor="adv-warehouse-location">Ubicación</Label>
+                        <Input id="adv-warehouse-location" value={editedMaterial.warehouseLocation || ''} onChange={(e) => handleChange('warehouseLocation', e.target.value)} />
                     </div>
                 </div>
 
@@ -1399,12 +1406,6 @@ export default function MelazaClient({
         );
     };
     
-    const occupiedLocations = React.useMemo(() => {
-        return materials
-            .filter(m => m.status === 'recibido' && m.warehouseLocation)
-            .map(m => ({ location: m.warehouseLocation!, code: m.code, supplier: m.supplier || 'N/A' }));
-    }, [materials]);
-
     return (
         <>
             <div className="bg-background min-h-screen text-foreground">
@@ -1414,6 +1415,11 @@ export default function MelazaClient({
                         <h1 className="text-2xl font-bold text-foreground">Material Melaza</h1>
                     </div>
                     <div className="flex items-center gap-2">
+                         <Link href="/bodega-melaza">
+                            <Button variant="outline">
+                                <Map className="mr-2 h-4 w-4" /> Mapa de Bodega
+                            </Button>
+                        </Link>
                         <Button variant="outline" onClick={handleExportCSV}>
                             <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
                         </Button>
@@ -1452,8 +1458,8 @@ export default function MelazaClient({
                                 </div>
                             </CardHeader>
                             <CollapsibleContent>
-                                <CardContent className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                                    <div className="lg:col-span-2 space-y-4">
+                                <CardContent className="grid grid-cols-1 lg:grid-cols-1 gap-8">
+                                    <div className="lg:col-span-1 space-y-4">
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-end gap-4">
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-supplier">Proveedor</Label>
@@ -1491,7 +1497,11 @@ export default function MelazaClient({
                                                 </Popover>
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 items-end gap-4 pt-4">
+                                             <div className="space-y-1.5">
+                                                <Label htmlFor="material-lote">Lote</Label>
+                                                <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote" disabled={!newMaterialSupplier}/>
+                                            </div>
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-quantity">Cantidad</Label>
                                                 <Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
@@ -1501,14 +1511,18 @@ export default function MelazaClient({
                                                 <Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
                                             </div>
                                             <div className="space-y-1.5">
-                                                <Label htmlFor="material-total-weight">Peso Neto Total (kg)</Label>
+                                                <Label htmlFor="material-total-weight">Peso Neto (kg)</Label>
                                                 <Input id="material-total-weight" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
                                             </div>
                                              <div className="space-y-1.5">
                                                 <Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label>
-                                                <Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Peso de balanza" disabled={!newMaterialSupplier}/>
+                                                <Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Balanza" disabled={!newMaterialSupplier}/>
                                             </div>
-                                            <div className="flex items-end gap-2 lg:col-start-5">
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-location">Ubicación</Label>
+                                                <Input id="material-location" value={newMaterialLocation} onChange={(e) => setNewMaterialLocation(e.target.value)} placeholder="Ej: A1-1" disabled={!newMaterialSupplier}/>
+                                            </div>
+                                            <div className="flex items-end gap-2 lg:col-start-6">
                                                  <div className='flex gap-2 w-full'>
                                                     <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
                                                         <Camera className="mr-2 h-4 w-4" /> Escanear
@@ -1519,16 +1533,6 @@ export default function MelazaClient({
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="lg:col-span-1">
-                                        <Label htmlFor="warehouse-map">Ubicación en Bodega</Label>
-                                        <WarehouseMap
-                                            id="warehouse-map"
-                                            occupiedLocations={occupiedLocations.map(o => o.location)}
-                                            selectedLocation={newMaterialLocation}
-                                            onLocationSelect={setNewMaterialLocation}
-                                            disabled={!newMaterialSupplier}
-                                        />
                                     </div>
                                 </CardContent>
                             </CollapsibleContent>
@@ -1604,16 +1608,6 @@ export default function MelazaClient({
                                 </Select>
                             </div>
                             <div className="flex gap-4">
-                                <div className="hidden lg:block w-1/4">
-                                    <Label>Filtro por Ubicación</Label>
-                                     <WarehouseMap 
-                                        occupiedLocations={occupiedLocations.map(o => o.location)}
-                                        selectedLocation={locationFilter}
-                                        onLocationSelect={(loc) => setLocationFilter(prev => prev === loc ? null : loc)}
-                                        interactive
-                                        details={occupiedLocations}
-                                     />
-                                </div>
                                 <div className="flex-1">
                                      <Tabs defaultValue="all" value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
                                         <TabsList className="grid w-full grid-cols-5">
@@ -1718,5 +1712,6 @@ export default function MelazaClient({
         </>
     );
 }
+
 
 
