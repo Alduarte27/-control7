@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, Map } from 'lucide-react';
+import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, Map, MapPin } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,7 +30,6 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { DateRange } from 'react-day-picker';
-import WarehouseMap from './warehouse-map';
 
 
 function ConfigModal({ 
@@ -154,10 +153,6 @@ function EditMaterialDialog({
             <Label htmlFor="edit-presentation">Presentación</Label>
             <Input id="edit-presentation" value={editedMaterial.presentation || ''} onChange={e => handleChange('presentation', e.target.value)} />
           </div>
-           <div className="space-y-1.5">
-                <Label htmlFor="edit-lote">Lote</Label>
-                <Input id="edit-lote" value={editedMaterial.lote || ''} onChange={e => handleChange('lote', e.target.value)} />
-            </div>
 
           {isSacosType ? (
             <div className="grid grid-cols-2 gap-2">
@@ -933,7 +928,6 @@ export default function MelazaClient({
     const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos_melaza');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
-    const [newMaterialLote, setNewMaterialLote] = React.useState('');
     const [newMaterialProviderDate, setNewMaterialProviderDate] = React.useState<Date | undefined>();
     
     const [newMaterialPresentation, setNewMaterialPresentation] = React.useState('');
@@ -1063,7 +1057,7 @@ export default function MelazaClient({
                 type: 'sacos_melaza',
                 code: trimmedCode,
                 supplier: supplierName,
-                lote: newMaterialLote.trim(),
+                lote: '',
                 presentation: newMaterialPresentation.trim(),
                 status: 'recibido',
                 receivedAt: Date.now(),
@@ -1086,7 +1080,6 @@ export default function MelazaClient({
             setNewMaterialUnitWeight('');
             setNewMaterialTotalWeight('');
             setNewMaterialSupplier('');
-            setNewMaterialLote('');
             setNewMaterialProviderDate(undefined);
             setNewMaterialLocation('');
             
@@ -1497,11 +1490,7 @@ export default function MelazaClient({
                                                 </Popover>
                                             </div>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 items-end gap-4 pt-4">
-                                             <div className="space-y-1.5">
-                                                <Label htmlFor="material-lote">Lote</Label>
-                                                <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote" disabled={!newMaterialSupplier}/>
-                                            </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
                                             <div className="space-y-1.5">
                                                 <Label htmlFor="material-quantity">Cantidad</Label>
                                                 <Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
@@ -1522,7 +1511,7 @@ export default function MelazaClient({
                                                 <Label htmlFor="material-location">Ubicación</Label>
                                                 <Input id="material-location" value={newMaterialLocation} onChange={(e) => setNewMaterialLocation(e.target.value)} placeholder="Ej: A1-1" disabled={!newMaterialSupplier}/>
                                             </div>
-                                            <div className="flex items-end gap-2 lg:col-start-6">
+                                            <div className="flex items-end gap-2 lg:col-start-5">
                                                  <div className='flex gap-2 w-full'>
                                                     <Button onClick={() => setIsScannerOpen(true)} variant="outline" className="flex-1" disabled={!newMaterialSupplier}>
                                                         <Camera className="mr-2 h-4 w-4" /> Escanear
@@ -1712,6 +1701,3 @@ export default function MelazaClient({
         </>
     );
 }
-
-
-
