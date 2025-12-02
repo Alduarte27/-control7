@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { getDayOfYear, format } from 'date-fns';
 
 const ROWS = Array.from({ length: 11 }, (_, i) => i + 1);
-const COLS_A = [1, 2, 3];
+const COLS_A = [1, 2, 3, 4];
 const COLS_B = [4, 3, 2, 1];
 
 
@@ -42,7 +42,7 @@ function AssignLotModal({
 }) {
     const [supplier, setSupplier] = React.useState(materialToEdit?.supplier || '');
     const [presentation, setPresentation] = React.useState(materialToEdit?.presentation || '');
-    const [bins, setBins] = React.useState(materialToEdit?.quantity ? String(materialToEdit.quantity / 15) : '4');
+    const [bins, setBins] = React.useState(materialToEdit?.quantity ? String(materialToEdit.quantity) : '4');
     const [sacksPerBin, setSacksPerBin] = React.useState('15');
     const [lote, setLote] = React.useState(materialToEdit?.lote || String(getDayOfYear(new Date())));
     const [elaborationDate, setElaborationDate] = React.useState(materialToEdit?.providerDate || format(new Date(), 'yyyy-MM-dd'));
@@ -187,7 +187,7 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
 
         if (!material) {
             return (
-                <div className="h-full p-2 border-b cursor-pointer hover:bg-accent" onClick={handleCellClick}>
+                <div className="h-full p-2 border-b cursor-pointer hover:bg-accent/10" onClick={handleCellClick}>
                     <p className="text-sm text-muted-foreground">&nbsp;</p>
                     <p className="text-sm text-muted-foreground">&nbsp;</p>
                 </div>
@@ -195,16 +195,16 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
         }
 
         const CellContent = () => (
-             <div className={cn("h-full p-2 border-b", material.lote && "bg-primary/10 border-primary/50")}>
+             <div className={cn("h-full p-2 border-b bg-yellow-100 border-yellow-200")}>
                 {material.lote && (
-                    <p className="font-mono text-xs font-bold text-primary">{material.lote}</p>
+                    <p className="font-mono text-xs font-bold text-yellow-800">{material.lote}</p>
                 )}
                  {material.providerDate && (
-                    <p className="text-xs text-primary/80">{material.providerDate}</p>
+                    <p className="text-xs text-yellow-700">{material.providerDate}</p>
                 )}
                 <div className="mt-2 text-right">
-                    <p className="text-sm">{material.quantity || 0} Bins</p>
-                    <p className="font-bold">{material.totalWeight || 0} Sacos</p>
+                    <p className="text-sm text-yellow-900">{material.quantity || 0} Bins</p>
+                    <p className="font-bold text-yellow-900">{material.totalWeight || 0} Sacos</p>
                 </div>
             </div>
         );
@@ -213,19 +213,19 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
             <TooltipProvider delayDuration={100}>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                       <div className="h-full cursor-pointer hover:bg-accent" onClick={handleCellClick}>
+                       <div className="h-full cursor-pointer hover:bg-accent/20" onClick={handleCellClick}>
                           <CellContent />
                        </div>
                     </TooltipTrigger>
                     <TooltipContent className="max-w-xs">
                         <div className="space-y-2">
                             <p className="font-bold text-base">{material.presentation}</p>
+                            <p><strong className="text-muted-foreground">Proveedor:</strong> {material.supplier}</p>
                             <p><strong className="text-muted-foreground">Ubicación:</strong> {material.warehouseLocation}</p>
                             <p><strong className="text-muted-foreground">Lote:</strong> {material.lote || 'N/A'}</p>
                             <p><strong className="text-muted-foreground">Bins:</strong> {material.quantity?.toLocaleString()}</p>
                             <p><strong className="text-muted-foreground">Sacos:</strong> {material.totalWeight?.toLocaleString()}</p>
                             <p><strong className="text-muted-foreground">Fecha Ingreso:</strong> {new Date(material.receivedAt).toLocaleDateString('es-ES')}</p>
-                            <p><strong className="text-muted-foreground">Proveedor:</strong> {material.supplier}</p>
                             <div className="flex gap-2 pt-2">
                                 <Button variant="outline" size="sm" className="flex-1" onClick={() => setModalState({ location, material })}>
                                     <Edit className="h-3 w-3 mr-1"/> Editar Lote
@@ -297,13 +297,14 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                         <TableHeader>
                             <TableRow className="bg-muted/50">
                                 <TableHead className="w-[100px] text-center border-r" rowSpan={2}>FILAS</TableHead>
-                                <TableHead className="text-center" colSpan={4}>BLOQUE A</TableHead>
+                                <TableHead className="text-center" colSpan={5}>BLOQUE A</TableHead>
                                 <TableHead className="text-center" colSpan={5}>BLOQUE B</TableHead>
                             </TableRow>
                              <TableRow className="bg-muted/50">
                                 <TableHead className="w-1/12 text-center border-x">1</TableHead>
                                 <TableHead className="w-1/12 text-center border-r">2</TableHead>
                                 <TableHead className="w-1/12 text-center border-r">3</TableHead>
+                                <TableHead className="w-1/12 text-center border-r">4</TableHead>
                                 <TableHead className="w-1/12 text-center border-r bg-accent/30">TOTAL</TableHead>
 
                                 <TableHead className="w-1/12 text-center border-r bg-accent/30">TOTAL</TableHead>
@@ -319,16 +320,8 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                                  const totalsB = getTotalsForRow(rowNum, 'B');
                                 return (
                                     <TableRow key={`row-${rowNum}`}>
-                                        <TableCell className="border-r font-bold text-center text-lg p-2 align-top">
-                                            <div className="h-full flex items-start justify-between">
-                                                <span>#{rowNum}</span>
-                                                <div className="text-xs text-left font-normal text-muted-foreground mt-1 space-y-2">
-                                                    <p>LOTE:</p>
-                                                    <p>FECHA ELAB:</p>
-                                                    <p>BINS:</p>
-                                                    <p>SACOS:</p>
-                                                </div>
-                                            </div>
+                                        <TableCell className="border-r font-bold text-center text-lg p-2 align-middle">
+                                            <span>#{rowNum}</span>
                                         </TableCell>
                                         
                                         {COLS_A.map(colNum => (
