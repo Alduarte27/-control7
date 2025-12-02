@@ -296,22 +296,15 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                    <Table className="min-w-full table-fixed">
                         <TableHeader>
                             <TableRow className="bg-muted/50">
-                                <TableHead className="w-[100px] text-center border-r" rowSpan={2}>FILAS</TableHead>
-                                <TableHead className="text-center" colSpan={5}>BLOQUE A</TableHead>
-                                <TableHead className="text-center" colSpan={5}>BLOQUE B</TableHead>
+                                <TableHead className="w-[80px] text-center font-bold" rowSpan={2}>FILAS</TableHead>
+                                <TableHead className="text-center p-2 font-bold" colSpan={5}>BLOQUE A</TableHead>
+                                <TableHead className="text-center p-2 font-bold" colSpan={5}>BLOQUE B</TableHead>
                             </TableRow>
-                             <TableRow className="bg-muted/50">
-                                <TableHead className="w-1/12 text-center border-x">1</TableHead>
-                                <TableHead className="w-1/12 text-center border-r">2</TableHead>
-                                <TableHead className="w-1/12 text-center border-r">3</TableHead>
-                                <TableHead className="w-1/12 text-center border-r">4</TableHead>
-                                <TableHead className="w-1/12 text-center border-r bg-accent/30">TOTAL</TableHead>
-
-                                <TableHead className="w-1/12 text-center border-r bg-accent/30">TOTAL</TableHead>
-                                <TableHead className="w-1/12 text-center border-r">4</TableHead>
-                                <TableHead className="w-1/12 text-center border-r">3</TableHead>
-                                <TableHead className="w-1/12 text-center border-r">2</TableHead>
-                                <TableHead className="w-1/12 text-center border-r">1</TableHead>
+                            <TableRow className="bg-muted/50">
+                                {COLS_A.map(col => <TableHead key={`ha-${col}`} className="w-1/12 text-center border-x">{col}</TableHead>)}
+                                <TableHead className="w-1/12 text-center border-r bg-accent/30 font-semibold">TOTAL</TableHead>
+                                <TableHead className="w-1/12 text-center border-r bg-accent/30 font-semibold">TOTAL</TableHead>
+                                {COLS_B.map(col => <TableHead key={`hb-${col}`} className="w-1/12 text-center border-r">{col}</TableHead>)}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -320,7 +313,7 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                                  const totalsB = getTotalsForRow(rowNum, 'B');
                                 return (
                                     <TableRow key={`row-${rowNum}`}>
-                                        <TableCell className="border-r font-bold text-center text-lg p-2 align-middle">
+                                        <TableCell className="border-r font-bold text-center text-lg p-0 align-middle">
                                             <span>#{rowNum}</span>
                                         </TableCell>
                                         
