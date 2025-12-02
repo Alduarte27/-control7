@@ -1084,11 +1084,14 @@ export default function MaterialsClient({
     const [statusFilter, setStatusFilter] = React.useState<MaterialStatus | 'all'>('all');
     const [searchQuery, setSearchQuery] = React.useState('');
     const [shiftFilter, setShiftFilter] = React.useState<'all' | 'current' | 'day' | 'night'>('all');
-    const [dateRange, setDateRange] = React.useState<DateRange | undefined>({ from: subDays(new Date(), 30), to: new Date() });
+    const [dateRange, setDateRange] = React.useState<DateRange | undefined>();
     
     const ADD_MATERIAL_COLLAPSIBLE_STATE_KEY = 'addMaterialCollapsibleState';
 
     React.useEffect(() => {
+        // Set initial date range only on the client to avoid hydration errors
+        setDateRange({ from: subDays(new Date(), 30), to: new Date() });
+
         const q = query(collection(db, "packagingMaterials"), orderBy("receivedAt", "desc"));
         const unsubscribe = onSnapshot(q, (querySnapshot) => {
             const materialsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial));
@@ -2099,3 +2102,6 @@ export default function MaterialsClient({
 
 
 
+
+
+    
