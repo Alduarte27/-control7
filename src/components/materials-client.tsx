@@ -1384,7 +1384,7 @@ export default function MaterialsClient({
             { id: 'type', value: newMaterialType, name: 'Tipo de Material' },
             { id: 'code', value: newMaterialCode.trim(), name: 'Código' },
         ];
-
+    
         // Dynamically add fields to validate based on supplier config
         if (requiredFields.includes('presentation')) fieldsToValidate.push({ id: 'presentation', value: newMaterialPresentation.trim(), name: 'Presentación' });
         if (requiredFields.includes('providerDate')) fieldsToValidate.push({ id: 'providerDate', value: newMaterialProviderDate, name: 'Fecha de Proveedor' });
@@ -1397,7 +1397,7 @@ export default function MaterialsClient({
             if (requiredFields.includes('unitWeight')) fieldsToValidate.push({ id: 'unitWeight', value: newMaterialUnitWeight, name: 'Peso/Und (g)' });
             if (requiredFields.includes('totalWeight')) fieldsToValidate.push({ id: 'totalWeight', value: newMaterialTotalWeight, name: 'Peso Neto Total (kg)' });
         } else { // It's a roll type
-            if (requiredFields.includes('netWeight')) fieldsToValidate.push({ id: 'netWeight', value: newMaterialNetWeight, name: 'Peso Neto (rollos)' });
+            if (requiredFields.includes('netWeight')) fieldsToValidate.push({ id: 'netWeight', value: newMaterialNetWeight, name: 'Peso Neto' });
         }
         
         for (const field of fieldsToValidate) {
@@ -1905,7 +1905,7 @@ export default function MaterialsClient({
                                                         <PopoverTrigger asChild>
                                                             <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}><CalendarIcon className="mr-2 h-4 w-4" />{newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}</Button>
                                                         </PopoverTrigger>
-                                                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
+                                                        <PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
                                                     </Popover>
                                                 </div>
                                             )}
@@ -1980,7 +1980,7 @@ export default function MaterialsClient({
                                             defaultMonth={dateRange?.from}
                                             selected={dateRange}
                                             onSelect={setDateRange}
-                                            numberOfMonths={2}
+                                            numberOfMonths={1}
                                             locale={es}
                                         />
                                     </PopoverContent>
