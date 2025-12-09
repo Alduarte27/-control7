@@ -1093,14 +1093,27 @@ export default function MaterialsClient({
         setDateRange({ from: subDays(new Date(), 30), to: new Date() });
 
         const q = query(collection(db, "packagingMaterials"), orderBy("receivedAt", "desc"));
-        const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        const unsubscribeMaterials = onSnapshot(q, (querySnapshot) => {
             const materialsData = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PackagingMaterial));
             setMaterials(materialsData);
         }, (error) => {
             console.error("Error fetching materials in real-time:", error);
             toast({
                 title: "Error de Sincronización",
-                description: "No se pudieron obtener los datos en tiempo real. Intenta recargar la página.",
+                description: "No se pudieron obtener los datos de materiales en tiempo real. Intenta recargar la página.",
+                variant: "destructive"
+            });
+        });
+
+        const qSuppliers = query(collection(db, 'suppliers'), orderBy('name'));
+        const unsubscribeSuppliers = onSnapshot(qSuppliers, (snapshot) => {
+            const suppliersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supplier));
+            setSuppliers(suppliersData);
+        }, (error) => {
+            console.error("Error fetching suppliers in real-time:", error);
+            toast({
+                title: "Error de Sincronización",
+                description: "No se pudieron obtener los proveedores en tiempo real.",
                 variant: "destructive"
             });
         });
@@ -1110,8 +1123,11 @@ export default function MaterialsClient({
             setIsAddMaterialOpen(JSON.parse(savedState));
         }
 
-        // Cleanup subscription on unmount
-        return () => unsubscribe();
+        // Cleanup subscriptions on unmount
+        return () => {
+            unsubscribeMaterials();
+            unsubscribeSuppliers();
+        }
     }, [toast]);
 
     const handleCollapsibleChange = (open: boolean) => {
@@ -1270,12 +1286,10 @@ export default function MaterialsClient({
 
         try {
             if (action === 'add') {
-                const docRef = await addDoc(collection(db, 'suppliers'), data);
-                setSuppliers(prev => [...prev, {id: docRef.id, ...data}].sort((a,b) => a.name.localeCompare(b.name)));
+                await addDoc(collection(db, 'suppliers'), data);
                 toast({ title: "Proveedor añadido" });
             } else if (action === 'delete') {
                 await deleteDoc(doc(db, 'suppliers', data.id));
-                setSuppliers(prev => prev.filter(s => s.id !== data.id));
                 toast({ title: "Proveedor eliminado" });
             }
         } catch (e) {
