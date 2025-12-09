@@ -31,66 +31,144 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './ui/collap
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { DateRange } from 'react-day-picker';
 
+const ALL_FIELDS_OPTIONS = [
+    { id: 'presentation', label: 'Presentación' },
+    { id: 'providerDate', label: 'Fecha Proveedor' },
+    { id: 'lote', label: 'Lote' },
+    { id: 'quantity', label: 'Cantidad (sacos)' },
+    { id: 'unitWeight', label: 'Peso/Unidad (sacos)' },
+    { id: 'totalWeight', label: 'Peso Neto Total (sacos)' },
+    { id: 'netWeight', label: 'Peso Neto (rollos)' },
+    { id: 'grossWeight', label: 'Peso Bruto' },
+];
 
-function ConfigModal({ 
-    isOpen, 
-    onClose, 
+
+function ConfigModal({
+    isOpen,
+    onClose,
     suppliers,
     onConfigSave,
-}: { 
-    isOpen: boolean; 
-    onClose: () => void; 
+}: {
+    isOpen: boolean;
+    onClose: () => void;
     suppliers: Supplier[];
-    onConfigSave: (type: 'supplier', data: any, action: 'add' | 'delete') => Promise<void>;
+    onConfigSave: (type: 'supplier', data: Partial<Supplier>, action: 'add' | 'update' | 'delete') => Promise<void>;
 }) {
+    const [selectedSupplier, setSelectedSupplier] = React.useState<Supplier | null>(null);
     const [newSupplierName, setNewSupplierName] = React.useState('');
+    const [requiredFields, setRequiredFields] = React.useState<Set<string>>(new Set());
     const { toast } = useToast();
 
-    const handleAdd = async () => {
-        const name = newSupplierName.trim();
-        if (!name) {
-            toast({ title: 'Error', description: 'El nombre del proveedor es obligatorio.', variant: 'destructive'});
-            return;
+    React.useEffect(() => {
+        if (selectedSupplier) {
+            setRequiredFields(new Set(selectedSupplier.requiredFields || []));
+        } else {
+            setRequiredFields(new Set());
         }
-        await onConfigSave('supplier', { name }, 'add');
-        setNewSupplierName('');
-    }
+    }, [selectedSupplier]);
+
+    const handleSave = async () => {
+        if (selectedSupplier) { // Update existing
+            await onConfigSave('supplier', { id: selectedSupplier.id, requiredFields: Array.from(requiredFields) }, 'update');
+            toast({ title: "Proveedor Actualizado", description: `Se guardaron los campos para ${selectedSupplier.name}.` });
+        } else { // Add new
+            const name = newSupplierName.trim();
+            if (!name) {
+                toast({ title: 'Error', description: 'El nombre del proveedor es obligatorio.', variant: 'destructive' });
+                return;
+            }
+            await onConfigSave('supplier', { name, requiredFields: Array.from(requiredFields) }, 'add');
+            setNewSupplierName('');
+            setRequiredFields(new Set());
+        }
+    };
 
     const handleDelete = async (id: string) => {
         await onConfigSave('supplier', { id }, 'delete');
-    }
+        if (selectedSupplier?.id === id) {
+            setSelectedSupplier(null);
+        }
+    };
+
+    const handleFieldChange = (fieldId: string, checked: boolean) => {
+        setRequiredFields(prev => {
+            const newSet = new Set(prev);
+            if (checked) {
+                newSet.add(fieldId);
+            } else {
+                newSet.delete(fieldId);
+            }
+            return newSet;
+        });
+    };
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent>
+            <DialogContent className="max-w-3xl">
                 <DialogHeader>
-                    <DialogTitle>Configurar Catálogos</DialogTitle>
+                    <DialogTitle>Configurar Proveedores y sus Campos</DialogTitle>
+                    <DialogDescription>Añade nuevos proveedores o selecciona uno existente para configurar los campos de entrada requeridos.</DialogDescription>
                 </DialogHeader>
-                <div className="py-4 space-y-4">
-                     <h3 className="font-semibold text-lg">Proveedores</h3>
-                      <div className="flex items-end gap-2">
-                          <div className="flex-grow space-y-1.5">
-                              <Label htmlFor="new-supplier-name">Nombre del Proveedor</Label>
-                              <Input id="new-supplier-name" value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)} />
-                          </div>
-                          <Button onClick={handleAdd}><PlusCircle className="h-4 w-4" /></Button>
-                      </div>
-                      <Separator />
-                      <ul className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 py-4">
+                    {/* Supplier List */}
+                    <div className="space-y-4 p-4 border rounded-lg">
+                         <h3 className="font-semibold text-lg">Proveedores</h3>
+                         <div className="flex items-end gap-2">
+                            <div className="flex-grow space-y-1.5">
+                                <Label htmlFor="new-supplier-name">Nuevo Proveedor</Label>
+                                <Input id="new-supplier-name" value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)} placeholder="Nombre del proveedor"/>
+                            </div>
+                            <Button onClick={() => { setSelectedSupplier(null); setNewSupplierName(''); setRequiredFields(new Set()); }}>
+                                <PlusCircle className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        <Separator/>
+                         <ul className="space-y-1 max-h-60 overflow-y-auto pr-2">
                           {suppliers.map(sup => (
                               <li key={sup.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
-                                  <span>{sup.name}</span>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete(sup.id)}>
-                                      <X className="h-4 w-4 text-destructive" />
-                                  </Button>
+                                  <button className="flex-1 text-left" onClick={() => { setSelectedSupplier(sup); setNewSupplierName(''); }}>
+                                      {sup.name}
+                                  </button>
+                                  <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                           <Button variant="ghost" size="icon" className="h-6 w-6"><X className="h-4 w-4 text-destructive" /></Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                          <AlertDialogHeader><AlertDialogTitle>¿Eliminar Proveedor?</AlertDialogTitle></AlertDialogHeader>
+                                          <AlertDialogDescription>Esta acción no se puede deshacer. Se eliminará {sup.name}.</AlertDialogDescription>
+                                          <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                              <AlertDialogAction onClick={() => handleDelete(sup.id)}>Eliminar</AlertDialogAction>
+                                          </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                  </AlertDialog>
                               </li>
                           ))}
                       </ul>
+                    </div>
+                    {/* Fields Configuration */}
+                     <div className="space-y-4 p-4 border rounded-lg">
+                        <h3 className="font-semibold text-lg">{selectedSupplier ? `Campos para ${selectedSupplier.name}` : "Campos para Nuevo Proveedor"}</h3>
+                        <p className="text-sm text-muted-foreground">Selecciona los campos que se deben mostrar al registrar material de este proveedor.</p>
+                        <div className="space-y-3">
+                            {ALL_FIELDS_OPTIONS.map(field => (
+                                <div key={field.id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`field-${field.id}`}
+                                        checked={requiredFields.has(field.id)}
+                                        onCheckedChange={checked => handleFieldChange(field.id, !!checked)}
+                                    />
+                                    <Label htmlFor={`field-${field.id}`} className="text-sm font-normal">
+                                        {field.label}
+                                    </Label>
+                                </div>
+                            ))}
+                        </div>
+                     </div>
                 </div>
                  <DialogFooter>
-                    <DialogClose asChild>
-                        <Button variant="secondary">Cerrar</Button>
-                    </DialogClose>
+                    <DialogClose asChild><Button variant="secondary">Cerrar</Button></DialogClose>
+                    <Button onClick={handleSave}>{selectedSupplier ? 'Guardar Cambios' : 'Añadir Proveedor'}</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -1243,13 +1321,10 @@ export default function MaterialsClient({
         };
     }, [syncSessionId, isMobileDevice, isSyncModalOpen, handleScanSuccess, toast]);
 
-    const supplierName = suppliers.find(s => s.id === newMaterialSupplier)?.name || '';
+    const selectedSupplier = React.useMemo(() => suppliers.find(s => s.id === newMaterialSupplier), [suppliers, newMaterialSupplier]);
+
     const isSacosType = newMaterialType === 'sacos_granel' || newMaterialType === 'sacos_familiar';
-    const isPlasticsacks = supplierName.toUpperCase().startsWith('PLASTICSACKS');
-    const isPlastiempaques = supplierName.toUpperCase().startsWith('PLASTIEMPAQUES S.A');
-    const isMilanplastic = supplierName.toUpperCase().startsWith('MILANPLASTIC');
-
-
+    
     const familiarCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'familiar')?.id, [allCategories]);
     const granelCategoryId = React.useMemo(() => allCategories.find(c => c.name.toLowerCase() === 'granel')?.id, [allCategories]);
 
@@ -1266,29 +1341,32 @@ export default function MaterialsClient({
     }, [allProducts, granelCategoryId]);
 
     const availableMaterialTypes = React.useMemo(() => {
-        const upperCaseSupplierName = supplierName.trim().toUpperCase();
+        const upperCaseSupplierName = selectedSupplier?.name.trim().toUpperCase() || '';
         const mappedTypesKey = Object.keys(supplierMaterialMapping).find(key => upperCaseSupplierName.startsWith(key));
         
         if (mappedTypesKey) {
             return supplierMaterialMapping[mappedTypesKey];
         }
         return Object.keys(materialTypeLabels) as MaterialType[];
-    }, [supplierName]);
+    }, [selectedSupplier]);
     
     React.useEffect(() => {
-        if (!availableMaterialTypes.includes(newMaterialType)) {
+        if (selectedSupplier && !availableMaterialTypes.includes(newMaterialType)) {
             setNewMaterialType(availableMaterialTypes[0] || 'sacos_familiar');
         }
-    }, [availableMaterialTypes, newMaterialType]);
+    }, [availableMaterialTypes, newMaterialType, selectedSupplier]);
 
-    const handleConfigSave = async (type: 'supplier', data: any, action: 'add' | 'delete') => {
+    const handleConfigSave = async (type: 'supplier', data: Partial<Supplier>, action: 'add' | 'update' | 'delete') => {
         if (type !== 'supplier') return;
 
         try {
             if (action === 'add') {
                 await addDoc(collection(db, 'suppliers'), data);
                 toast({ title: "Proveedor añadido" });
-            } else if (action === 'delete') {
+            } else if (action === 'update' && data.id) {
+                const { id, ...updateData } = data;
+                await updateDoc(doc(db, 'suppliers', id), updateData);
+            } else if (action === 'delete' && data.id) {
                 await deleteDoc(doc(db, 'suppliers', data.id));
                 toast({ title: "Proveedor eliminado" });
             }
@@ -1300,38 +1378,30 @@ export default function MaterialsClient({
 
 
     const handleAddMaterial = async () => {
-        const fields = [
-            { value: newMaterialSupplier, name: "Proveedor" },
-            { value: newMaterialType, name: "Tipo de Material" },
-            { value: newMaterialCode.trim(), name: "Código" },
+        const requiredFields = selectedSupplier?.requiredFields || [];
+        const fieldsToValidate = [
+            { id: 'supplier', value: newMaterialSupplier, name: "Proveedor" },
+            { id: 'type', value: newMaterialType, name: "Tipo de Material" },
+            { id: 'code', value: newMaterialCode.trim(), name: "Código" },
         ];
 
-        if (!isPlastiempaques) {
-            fields.push({ value: newMaterialPresentation.trim(), name: "Presentación" });
-            fields.push({ value: newMaterialProviderDate, name: "Fecha de Proveedor" });
-        }
-
-        if (isPlasticsacks) {
-            fields.push({ value: newMaterialLote.trim(), name: "Lote" });
-        }
-
-        if (isSacosType) {
-            fields.push({ value: newMaterialQuantity, name: "Cantidad" });
-            fields.push({ value: newMaterialUnitWeight, name: "Peso/Und (g)"});
-            fields.push({ value: newMaterialTotalWeight, name: "Peso Neto Total (kg)" });
-            fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto (kg)" });
-        } else { // Rollos
-            fields.push({ value: newMaterialNetWeight, name: "Peso Neto" });
-            fields.push({ value: newMaterialGrossWeight, name: "Peso Bruto" });
-        }
+        // Dynamically add fields to validate based on supplier config
+        if (requiredFields.includes('presentation')) fieldsToValidate.push({ id: 'presentation', value: newMaterialPresentation.trim(), name: 'Presentación' });
+        if (requiredFields.includes('providerDate')) fieldsToValidate.push({ id: 'providerDate', value: newMaterialProviderDate, name: 'Fecha de Proveedor' });
+        if (requiredFields.includes('lote')) fieldsToValidate.push({ id: 'lote', value: newMaterialLote.trim(), name: 'Lote' });
+        if (requiredFields.includes('quantity')) fieldsToValidate.push({ id: 'quantity', value: newMaterialQuantity, name: 'Cantidad' });
+        if (requiredFields.includes('unitWeight')) fieldsToValidate.push({ id: 'unitWeight', value: newMaterialUnitWeight, name: 'Peso/Und (g)' });
+        if (requiredFields.includes('totalWeight')) fieldsToValidate.push({ id: 'totalWeight', value: newMaterialTotalWeight, name: 'Peso Neto Total (kg)' });
+        if (requiredFields.includes('netWeight')) fieldsToValidate.push({ id: 'netWeight', value: newMaterialNetWeight, name: 'Peso Neto' });
+        if (requiredFields.includes('grossWeight')) fieldsToValidate.push({ id: 'grossWeight', value: newMaterialGrossWeight, name: 'Peso Bruto' });
         
-        for (const field of fields) {
+        for (const field of fieldsToValidate) {
             if (!field.value) {
-                toast({ title: "Campo Obligatorio", description: `El campo "${field.name}" es obligatorio.`, variant: "destructive" });
+                toast({ title: "Campo Obligatorio", description: `El campo "${field.name}" es requerido para este proveedor.`, variant: "destructive" });
                 return;
             }
         }
-
+        
         const trimmedCode = newMaterialCode.trim();
         
         try {
@@ -1350,31 +1420,25 @@ export default function MaterialsClient({
             const newMaterialData: Partial<Omit<PackagingMaterial, 'id'>> = {
                 type: newMaterialType,
                 code: trimmedCode,
-                supplier: supplierName,
-                lote: '',
-                presentation: newMaterialPresentation.trim(),
+                supplier: selectedSupplier?.name,
                 status: 'recibido',
                 receivedAt: Date.now(),
                 grossWeight: grossWeightNum,
                 labelTare: labelTare,
             };
             
-            if (isPlasticsacks) {
-                 newMaterialData.lote = newMaterialLote.trim();
+            if (requiredFields.includes('lote')) newMaterialData.lote = newMaterialLote.trim();
+            if (requiredFields.includes('presentation')) newMaterialData.presentation = newMaterialPresentation.trim();
+            if (requiredFields.includes('providerDate') && newMaterialProviderDate) newMaterialData.providerDate = format(newMaterialProviderDate, 'yyyy-MM-dd');
+            if (isSacosType) {
+                if (requiredFields.includes('quantity')) newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
+                if (requiredFields.includes('unitWeight')) newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight);
+                if (requiredFields.includes('totalWeight')) newMaterialData.totalWeight = netWeightNum;
+                newMaterialData.netWeight = netWeightNum; // Always set netWeight for sacos
+            } else { // Rollos
+                if (requiredFields.includes('netWeight')) newMaterialData.netWeight = netWeightNum;
             }
 
-            if (isSacosType) {
-                newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
-                newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight);
-                newMaterialData.totalWeight = netWeightNum; 
-                newMaterialData.netWeight = netWeightNum;
-            } else {
-                 newMaterialData.netWeight = netWeightNum;
-            }
-            
-            if (!isPlastiempaques && newMaterialProviderDate) {
-                newMaterialData.providerDate = format(newMaterialProviderDate, 'yyyy-MM-dd');
-            }
 
             await addDoc(collection(db, 'packagingMaterials'), newMaterialData);
             
@@ -1797,18 +1861,20 @@ export default function MaterialsClient({
                                                     </SelectContent>
                                                 </Select>
                                             </div>
-                                             {!isPlastiempaques && (
+                                             
+                                            <div className="space-y-1.5">
+                                                <Label htmlFor="material-code">Código</Label>
+                                                <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
+                                            {selectedSupplier?.requiredFields?.includes('presentation') && (
                                                 <div className="space-y-1.5">
                                                     <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                                    {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || (newMaterialType === 'rollo_laminado' && isMilanplastic)) ? (
-                                                        <Select
-                                                            value={newMaterialPresentation}
-                                                            onValueChange={setNewMaterialPresentation}
-                                                            disabled={!newMaterialSupplier}
-                                                        >
-                                                            <SelectTrigger id="material-presentation-trigger">
-                                                                <SelectValue placeholder="Seleccionar producto..." />
-                                                            </SelectTrigger>
+                                                    {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel') ? (
+                                                        <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
+                                                            <SelectTrigger id="material-presentation-trigger"><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
                                                             <SelectContent>
                                                                 {(newMaterialType === 'sacos_granel' ? granelProducts : familiarProducts).map(p => (
                                                                     <SelectItem key={p.id} value={p.productName}>{p.productName}</SelectItem>
@@ -1816,73 +1882,38 @@ export default function MaterialsClient({
                                                             </SelectContent>
                                                         </Select>
                                                     ) : (
-                                                        <Input
-                                                            id="material-presentation-trigger"
-                                                            value={newMaterialPresentation}
-                                                            onChange={(e) => setNewMaterialPresentation(e.target.value)}
-                                                            placeholder="Ej: Azúcar San Juan 1kg"
-                                                            disabled={!newMaterialSupplier}
-                                                        />
+                                                        <Input id="material-presentation-trigger" value={newMaterialPresentation} onChange={(e) => setNewMaterialPresentation(e.target.value)} placeholder="Ej: Azúcar San Juan 1kg" />
                                                     )}
                                                 </div>
                                             )}
-                                            <div className="space-y-1.5">
-                                                <Label htmlFor="material-code">Código</Label>
-                                                <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
-                                            </div>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 items-end gap-4 pt-4">
-                                            {isPlasticsacks && (
+                                            {selectedSupplier?.requiredFields?.includes('lote') && (
                                                 <div className="space-y-1.5">
                                                     <Label htmlFor="material-lote">Lote</Label>
-                                                    <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" disabled={!newMaterialSupplier}/>
+                                                    <Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" />
                                                 </div>
                                             )}
-                                            
-                                            {!isPlastiempaques && (
+                                            {selectedSupplier?.requiredFields?.includes('providerDate') && (
                                                 <div className="space-y-1.5">
                                                     <Label>Fecha Proveedor</Label>
                                                     <Popover>
                                                         <PopoverTrigger asChild>
-                                                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}>
-                                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                                {newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}
-                                                            </Button>
+                                                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}</Button>
                                                         </PopoverTrigger>
                                                         <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent>
                                                     </Popover>
                                                 </div>
                                             )}
-
                                             {isSacosType ? (
                                                 <>
-                                                    <div className="space-y-1.5">
-                                                        <Label htmlFor="material-quantity">Cantidad</Label>
-                                                        <Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/>
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <Label htmlFor="material-unit-weight">Peso/Und (g)</Label>
-                                                        <Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/>
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <Label htmlFor="material-total-weight">Peso Neto Total (kg)</Label>
-                                                        <Input id="material-total-weight" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6" disabled={!newMaterialSupplier}/>
-                                                    </div>
-                                                     <div className="space-y-1.5">
-                                                        <Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label>
-                                                        <Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Peso de balanza" disabled={!newMaterialSupplier}/>
-                                                    </div>
+                                                    {selectedSupplier?.requiredFields?.includes('quantity') && <div className="space-y-1.5"><Label htmlFor="material-quantity">Cantidad</Label><Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500"/></div>}
+                                                    {selectedSupplier?.requiredFields?.includes('unitWeight') && <div className="space-y-1.5"><Label htmlFor="material-unit-weight">Peso/Und (g)</Label><Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2"/></div>}
+                                                    {selectedSupplier?.requiredFields?.includes('totalWeight') && <div className="space-y-1.5"><Label htmlFor="material-total-weight">Peso Neto Total (kg)</Label><Input id="material-total-weight" type="number" value={newMaterialTotalWeight} onChange={(e) => setNewMaterialTotalWeight(e.target.value)} placeholder="Ej: 51.6"/></div>}
+                                                    {selectedSupplier?.requiredFields?.includes('grossWeight') && <div className="space-y-1.5"><Label htmlFor="material-gross-weight-sacos">Peso Bruto (kg)</Label><Input id="material-gross-weight-sacos" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Peso de balanza"/></div>}
                                                 </>
                                             ) : ( // Rollos
                                                 <>
-                                                    <div className="space-y-1.5">
-                                                        <Label htmlFor="material-net-weight">Peso Neto (kg)</Label>
-                                                        <Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85" disabled={!newMaterialSupplier}/>
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label>
-                                                        <Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05" disabled={!newMaterialSupplier}/>
-                                                    </div>
+                                                    {selectedSupplier?.requiredFields?.includes('netWeight') && <div className="space-y-1.5"><Label htmlFor="material-net-weight">Peso Neto (kg)</Label><Input id="material-net-weight" ref={netWeightInputRef} type="number" value={newMaterialNetWeight} onChange={(e) => setNewMaterialNetWeight(e.target.value)} placeholder="Ej: 72.85"/></div>}
+                                                    {selectedSupplier?.requiredFields?.includes('grossWeight') && <div className="space-y-1.5"><Label htmlFor="material-gross-weight">Peso Bruto (kg)</Label><Input id="material-gross-weight" type="number" value={newMaterialGrossWeight} onChange={(e) => setNewMaterialGrossWeight(e.target.value)} placeholder="Ej: 74.05"/></div>}
                                                 </>
                                             )}
                                             <div className="flex items-end gap-2 lg:col-start-5">

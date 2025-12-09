@@ -1,4 +1,5 @@
 
+
 'use client';
 
 export type ShiftProduction = {
@@ -142,6 +143,7 @@ export type MachineOEE = {
 export type Supplier = {
     id: string;
     name: string;
+    requiredFields?: string[];
 };
 
 export type MaterialType = 'sacos_familiar' | 'sacos_granel' | 'rollo_laminado' | 'rollo_fardo' | 'sacos_melaza';
