@@ -1872,7 +1872,7 @@ export default function MaterialsClient({
                                             {selectedSupplier?.requiredFields?.includes('presentation') && (
                                                 <div className="space-y-1.5">
                                                     <Label htmlFor="material-presentation-trigger">Presentación</Label>
-                                                    {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel') ? (
+                                                    {(newMaterialType === 'sacos_familiar' || newMaterialType === 'sacos_granel' || newMaterialType === 'rollo_laminado') ? (
                                                         <Select value={newMaterialPresentation} onValueChange={setNewMaterialPresentation}>
                                                             <SelectTrigger id="material-presentation-trigger"><SelectValue placeholder="Seleccionar producto..." /></SelectTrigger>
                                                             <SelectContent>
