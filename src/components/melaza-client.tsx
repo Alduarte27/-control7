@@ -993,7 +993,7 @@ export default function MelazaClient({
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
-    const [newMaterialProviderDate, setNewMaterialProviderDate] = React.useState<Date | undefined>();
+    const [newMaterialProviderDate, setNewMaterialProviderDate] = React.useState('');
     const [newMaterialWarehouseLocation, setNewMaterialWarehouseLocation] = React.useState('');
     
     const [newMaterialPresentation, setNewMaterialPresentation] = React.useState('');
@@ -1151,7 +1151,7 @@ export default function MelazaClient({
             
             if (requiredFields.includes('lote')) newMaterialData.lote = newMaterialLote.trim();
             if (requiredFields.includes('presentation')) newMaterialData.presentation = newMaterialPresentation.trim();
-            if (requiredFields.includes('providerDate') && newMaterialProviderDate) newMaterialData.providerDate = format(newMaterialProviderDate, 'yyyy-MM-dd');
+            if (requiredFields.includes('providerDate') && newMaterialProviderDate) newMaterialData.providerDate = newMaterialProviderDate;
             if (requiredFields.includes('quantity')) newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
             if (requiredFields.includes('unitWeight')) newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight);
             if (requiredFields.includes('totalWeight')) newMaterialData.totalWeight = netWeightNum;
@@ -1165,7 +1165,7 @@ export default function MelazaClient({
             setNewMaterialUnitWeight('');
             setNewMaterialTotalWeight('');
             setNewMaterialSupplier('');
-            setNewMaterialProviderDate(undefined);
+            setNewMaterialProviderDate('');
             setNewMaterialLote('');
             setNewMaterialWarehouseLocation('');
             
@@ -1554,7 +1554,12 @@ export default function MelazaClient({
                                                 <Label htmlFor="material-code">Código</Label>
                                                 <Input id="material-code" value={newMaterialCode} onChange={(e) => setNewMaterialCode(e.target.value)} placeholder="Escribir o escanear..." disabled={!newMaterialSupplier} />
                                             </div>
-                                            {selectedSupplier?.requiredFields?.includes('providerDate') && <div className="space-y-1.5"><Label>Fecha Proveedor</Label><Popover><PopoverTrigger asChild><Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newMaterialProviderDate && "text-muted-foreground")} disabled={!newMaterialSupplier}><CalendarIcon className="mr-2 h-4 w-4" />{newMaterialProviderDate ? format(newMaterialProviderDate, 'PPP', {locale: es}) : <span>Elige una fecha</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar locale={es} mode="single" numberOfMonths={1} selected={newMaterialProviderDate} onSelect={setNewMaterialProviderDate} initialFocus /></PopoverContent></Popover></div>}
+                                            {selectedSupplier?.requiredFields?.includes('providerDate') && (
+                                                <div className="space-y-1.5">
+                                                    <Label>Fecha Proveedor</Label>
+                                                    <Input type="date" value={newMaterialProviderDate} onChange={e => setNewMaterialProviderDate(e.target.value)} />
+                                                </div>
+                                            )}
                                             {selectedSupplier?.requiredFields?.includes('lote') && <div className="space-y-1.5"><Label htmlFor="material-lote">Lote</Label><Input id="material-lote" value={newMaterialLote} onChange={(e) => setNewMaterialLote(e.target.value)} placeholder="Lote del proveedor" /></div>}
                                             {selectedSupplier?.requiredFields?.includes('quantity') && <div className="space-y-1.5"><Label htmlFor="material-quantity">Cantidad</Label><Input id="material-quantity" type="number" value={newMaterialQuantity} onChange={(e) => setNewMaterialQuantity(e.target.value)} placeholder="Ej: 500" disabled={!newMaterialSupplier}/></div>}
                                             {selectedSupplier?.requiredFields?.includes('unitWeight') && <div className="space-y-1.5"><Label htmlFor="material-unit-weight">Peso/Und (g)</Label><Input id="material-unit-weight" type="number" value={newMaterialUnitWeight} onChange={(e) => setNewMaterialUnitWeight(e.target.value)} placeholder="Ej: 103,2" disabled={!newMaterialSupplier}/></div>}
@@ -1750,3 +1755,4 @@ export default function MelazaClient({
         </>
     );
 }
+
