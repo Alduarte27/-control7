@@ -1,0 +1,14 @@
+diff --git a/node_modules/qrcode.react/package.json b/node_modules/qrcode.react/package.json
+index 1083984..3133968 100644
+--- a/node_modules/qrcode.react/package.json
++++ b/node_modules/qrcode.react/package.json
+@@ -37,6 +37,6 @@
+   "funding": {
+     "url": "https://github.com/sponsors/zpao"
+   },
+-  "peerDependencies": {
+-    "react": "^16.8.0 || ^17.0.0 || ^18.0.0"
++  "peerDependencies": {    
++    "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+   }
+ }
