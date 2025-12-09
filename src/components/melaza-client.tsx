@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import React from 'react';
@@ -79,9 +80,19 @@ function ConfigModal({
                           {suppliers.map(sup => (
                               <li key={sup.id} className="flex items-center justify-between text-sm p-1 hover:bg-muted/50 rounded-md">
                                   <span>{sup.name}</span>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDelete(sup.id)}>
-                                      <X className="h-4 w-4 text-destructive" />
-                                  </Button>
+                                  <AlertDialog>
+                                      <AlertDialogTrigger asChild>
+                                           <Button variant="ghost" size="icon" className="h-6 w-6"><X className="h-4 w-4 text-destructive" /></Button>
+                                      </AlertDialogTrigger>
+                                      <AlertDialogContent>
+                                          <AlertDialogHeader><AlertDialogTitle>¿Eliminar Proveedor?</AlertDialogTitle></AlertDialogHeader>
+                                          <AlertDialogDescriptionComponent>Esta acción no se puede deshacer. Se eliminará {sup.name}.</AlertDialogDescriptionComponent>
+                                          <AlertDialogFooter>
+                                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                              <AlertDialogAction onClick={() => handleDelete(sup.id)}>Eliminar</AlertDialogAction>
+                                          </AlertDialogFooter>
+                                      </AlertDialogContent>
+                                  </AlertDialog>
                               </li>
                           ))}
                       </ul>
@@ -909,14 +920,12 @@ function MaterialCard({
 export default function MelazaClient({ 
     allProducts,
     allCategories,
-    initialSuppliers,
 }: { 
     allProducts: ProductDefinition[],
     allCategories: CategoryDefinition[],
-    initialSuppliers: Supplier[],
 }) {
     const [materials, setMaterials] = React.useState<PackagingMaterial[]>([]);
-    const [suppliers, setSuppliers] = React.useState<Supplier[]>(initialSuppliers);
+    const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
     const [newMaterialType, setNewMaterialType] = React.useState<MaterialType>('sacos_melaza');
     const [newMaterialCode, setNewMaterialCode] = React.useState('');
     const [newMaterialSupplier, setNewMaterialSupplier] = React.useState('');
@@ -969,13 +978,30 @@ export default function MelazaClient({
                 variant: "destructive"
             });
         });
+        
+        const qSuppliers = query(collection(db, 'melazaSuppliers'), orderBy('name'));
+        const unsubscribeSuppliers = onSnapshot(qSuppliers, (snapshot) => {
+            const suppliersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Supplier));
+            setSuppliers(suppliersData);
+        }, (error) => {
+            console.error("Error fetching melaza suppliers in real-time:", error);
+            toast({
+                title: "Error de Sincronización",
+                description: "No se pudieron obtener los proveedores en tiempo real.",
+                variant: "destructive"
+            });
+        });
+
 
         const savedState = localStorage.getItem(ADD_MATERIAL_COLLAPSIBLE_STATE_KEY);
         if (savedState !== null) {
             setIsAddMaterialOpen(JSON.parse(savedState));
         }
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            unsubscribeSuppliers();
+        }
     }, [toast]);
 
     const handleCollapsibleChange = (open: boolean) => {
@@ -995,12 +1021,10 @@ export default function MelazaClient({
 
         try {
             if (action === 'add') {
-                const docRef = await addDoc(collection(db, 'melazaSuppliers'), data);
-                setSuppliers(prev => [...prev, {id: docRef.id, ...data}].sort((a,b) => a.name.localeCompare(b.name)));
+                await addDoc(collection(db, 'melazaSuppliers'), data);
                 toast({ title: "Proveedor añadido" });
             } else if (action === 'delete') {
                 await deleteDoc(doc(db, 'melazaSuppliers', data.id));
-                setSuppliers(prev => prev.filter(s => s.id !== data.id));
                 toast({ title: "Proveedor eliminado" });
             }
         } catch (e) {
@@ -1693,4 +1717,3 @@ export default function MelazaClient({
         </>
     );
 }
-
