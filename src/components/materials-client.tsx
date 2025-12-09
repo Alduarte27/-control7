@@ -1379,21 +1379,26 @@ export default function MaterialsClient({
 
     const handleAddMaterial = async () => {
         const requiredFields = selectedSupplier?.requiredFields || [];
-        const fieldsToValidate = [
-            { id: 'supplier', value: newMaterialSupplier, name: "Proveedor" },
-            { id: 'type', value: newMaterialType, name: "Tipo de Material" },
-            { id: 'code', value: newMaterialCode.trim(), name: "Código" },
+        const fieldsToValidate: { id: string; value: any; name: string }[] = [
+            { id: 'supplier', value: newMaterialSupplier, name: 'Proveedor' },
+            { id: 'type', value: newMaterialType, name: 'Tipo de Material' },
+            { id: 'code', value: newMaterialCode.trim(), name: 'Código' },
         ];
 
         // Dynamically add fields to validate based on supplier config
         if (requiredFields.includes('presentation')) fieldsToValidate.push({ id: 'presentation', value: newMaterialPresentation.trim(), name: 'Presentación' });
         if (requiredFields.includes('providerDate')) fieldsToValidate.push({ id: 'providerDate', value: newMaterialProviderDate, name: 'Fecha de Proveedor' });
         if (requiredFields.includes('lote')) fieldsToValidate.push({ id: 'lote', value: newMaterialLote.trim(), name: 'Lote' });
-        if (requiredFields.includes('quantity')) fieldsToValidate.push({ id: 'quantity', value: newMaterialQuantity, name: 'Cantidad' });
-        if (requiredFields.includes('unitWeight')) fieldsToValidate.push({ id: 'unitWeight', value: newMaterialUnitWeight, name: 'Peso/Und (g)' });
-        if (requiredFields.includes('totalWeight')) fieldsToValidate.push({ id: 'totalWeight', value: newMaterialTotalWeight, name: 'Peso Neto Total (kg)' });
-        if (requiredFields.includes('netWeight')) fieldsToValidate.push({ id: 'netWeight', value: newMaterialNetWeight, name: 'Peso Neto' });
         if (requiredFields.includes('grossWeight')) fieldsToValidate.push({ id: 'grossWeight', value: newMaterialGrossWeight, name: 'Peso Bruto' });
+        
+        // Context-aware validation based on material type
+        if (isSacosType) {
+            if (requiredFields.includes('quantity')) fieldsToValidate.push({ id: 'quantity', value: newMaterialQuantity, name: 'Cantidad' });
+            if (requiredFields.includes('unitWeight')) fieldsToValidate.push({ id: 'unitWeight', value: newMaterialUnitWeight, name: 'Peso/Und (g)' });
+            if (requiredFields.includes('totalWeight')) fieldsToValidate.push({ id: 'totalWeight', value: newMaterialTotalWeight, name: 'Peso Neto Total (kg)' });
+        } else { // It's a roll type
+            if (requiredFields.includes('netWeight')) fieldsToValidate.push({ id: 'netWeight', value: newMaterialNetWeight, name: 'Peso Neto (rollos)' });
+        }
         
         for (const field of fieldsToValidate) {
             if (!field.value) {
@@ -1430,13 +1435,14 @@ export default function MaterialsClient({
             if (requiredFields.includes('lote')) newMaterialData.lote = newMaterialLote.trim();
             if (requiredFields.includes('presentation')) newMaterialData.presentation = newMaterialPresentation.trim();
             if (requiredFields.includes('providerDate') && newMaterialProviderDate) newMaterialData.providerDate = format(newMaterialProviderDate, 'yyyy-MM-dd');
+            
             if (isSacosType) {
-                if (requiredFields.includes('quantity')) newMaterialData.quantity = parseInt(newMaterialQuantity, 10);
-                if (requiredFields.includes('unitWeight')) newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight);
-                if (requiredFields.includes('totalWeight')) newMaterialData.totalWeight = netWeightNum;
+                newMaterialData.quantity = parseInt(newMaterialQuantity, 10) || 0;
+                newMaterialData.unitWeight = parseFloat(newMaterialUnitWeight) || 0;
+                newMaterialData.totalWeight = netWeightNum;
                 newMaterialData.netWeight = netWeightNum; // Always set netWeight for sacos
             } else { // Rollos
-                if (requiredFields.includes('netWeight')) newMaterialData.netWeight = netWeightNum;
+                newMaterialData.netWeight = netWeightNum;
             }
 
 
