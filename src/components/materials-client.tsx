@@ -39,7 +39,7 @@ const ALL_FIELDS_OPTIONS = [
     { id: 'unitWeight', label: 'Peso/Unidad (sacos)' },
     { id: 'totalWeight', label: 'Peso Neto Total (sacos)' },
     { id: 'netWeight', label: 'Peso Neto (rollos)' },
-    { id: 'grossWeight', label: 'Peso Bruto' },
+    { id: 'grossWeight', label: 'Peso Bruto (kg)' },
 ];
 
 
@@ -135,7 +135,7 @@ function ConfigModal({
                                       </AlertDialogTrigger>
                                       <AlertDialogContent>
                                           <AlertDialogHeader><AlertDialogTitle>¿Eliminar Proveedor?</AlertDialogTitle></AlertDialogHeader>
-                                          <AlertDialogDescription>Esta acción no se puede deshacer. Se eliminará {sup.name}.</AlertDialogDescription>
+                                          <AlertDialogDescriptionComponent>Esta acción no se puede deshacer. Se eliminará {sup.name}.</AlertDialogDescriptionComponent>
                                           <AlertDialogFooter>
                                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
                                               <AlertDialogAction onClick={() => handleDelete(sup.id)}>Eliminar</AlertDialogAction>
@@ -2141,12 +2141,3 @@ export default function MaterialsClient({
         </>
     );
 }
-
-
-
-
-
-
-
-
-    
