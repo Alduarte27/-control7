@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -317,8 +318,8 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
     const selected = themes.find(t => t.name === themeName);
     if (!selected) return;
 
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    const colors = isDarkMode ? selected.dark : selected.light;
+    // Use the current mode from useTheme, which is reliable.
+    const colors = mode === 'dark' ? selected.dark : selected.light;
     
     applyTheme({ colors });
     setActiveTheme(themeName);
@@ -346,13 +347,15 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
   }
 
   useEffect(() => {
+    // This effect runs once on mount to load the stored preferences
     const preset = localStorage.getItem('control7-theme-preset') || 'Violeta Profundo';
     const radius = localStorage.getItem('control7-radius');
     const font = localStorage.getItem('control7-font') || 'Inter';
 
     const selectedTheme = themes.find(t => t.name === preset);
     if (selectedTheme) {
-        const isDarkMode = document.documentElement.classList.contains('dark');
+        // Determine mode based on system preference or stored next-themes value
+        const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches && mode === 'system' || mode === 'dark';
         applyTheme({ colors: isDarkMode ? selectedTheme.dark : selectedTheme.light });
         setActiveTheme(preset);
     }
@@ -364,6 +367,19 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
     if (font) {
         applyTheme({ font });
         setActiveFont(font);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    // This effect specifically handles changes between light/dark mode
+    const preset = localStorage.getItem('control7-theme-preset') || 'Violeta Profundo';
+    const selectedTheme = themes.find(t => t.name === preset);
+    
+    if (selectedTheme) {
+        // When `mode` changes, apply the correct palette (light or dark)
+        const colors = mode === 'dark' ? selectedTheme.dark : selectedTheme.light;
+        applyTheme({ colors });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
