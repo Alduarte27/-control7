@@ -28,7 +28,8 @@ const availableModules = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'stops', label: 'Bitácora' },
     { id: 'log-history', label: 'Historial Bitácoras' },
-    { id: 'materials', label: 'Materiales' },
+    { id: 'materials', label: 'Material Empaque' },
+    { id: 'melaza', label: 'Material Melaza' },
     { id: 'history', label: 'Historial Planes' },
     { id: 'admin', label: 'Admin' },
     { id: 'export', label: 'Exportar / Reportes' }
