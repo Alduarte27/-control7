@@ -1,9 +1,8 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, Activity, CalendarCheck2, Boxes, Shield, Package } from 'lucide-react';
+import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, Activity, CalendarCheck2, Boxes, Shield, Package, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -12,6 +11,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from './ui/skeleton';
+import ThemeCustomizer from './theme-customizer';
 
 type NavButtonProps = { 
   href: string; 
@@ -69,6 +69,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
 
   const [permissions, setPermissions] = useState<UserPermissions | null>(null);
   const [loadingPermissions, setLoadingPermissions] = useState(true);
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
 
   useEffect(() => {
     const profileIdFromUrl = searchParams.get('profileId');
@@ -78,7 +79,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
         localStorage.setItem('userProfileId', profileIdFromUrl);
         profileId = profileIdFromUrl;
 
-        // Clean the URL
         const newParams = new URLSearchParams(window.location.search);
         newParams.delete('profileId');
         const newUrl = window.location.pathname + (newParams.toString() ? `?${newParams.toString()}` : '');
@@ -95,26 +95,23 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                 if (profileDoc.exists()) {
                     setPermissions(profileDoc.data().permissions || {});
                 } else {
-                    // Profile not found, remove from local storage and grant full access
                     localStorage.removeItem('userProfileId');
                     setPermissions({});
                 }
             } catch (error) {
                 console.error("Error fetching permissions:", error);
-                setPermissions({}); // Default to full access on error
+                setPermissions({}); 
             }
             setLoadingPermissions(false);
         };
         fetchPermissions();
     } else {
-        // No profile, grant full access
         setPermissions({});
         setLoadingPermissions(false);
     }
   }, [searchParams, router]);
   
   const hasPermission = (moduleId: string) => {
-      // If permissions object is null (loading) or empty (full access), grant permission
       return permissions === null || Object.keys(permissions).length === 0 || permissions[moduleId];
   };
 
@@ -135,7 +132,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
           <h1 className="text-lg md:text-2xl font-bold text-foreground">Control 7</h1>
         </div>
         
-        {/* Desktop & Tablet Navigation */}
         <div className="hidden md:flex items-center flex-wrap justify-end gap-1 md:gap-2">
             <TooltipProvider>
                 <Tooltip>
@@ -143,15 +139,14 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                         <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                            onClick={() => setIsCustomizerOpen(true)}
                         >
-                            <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                            <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                            <span className="sr-only">Toggle theme</span>
+                            <Palette className="h-[1.2rem] w-[1.2rem]" />
+                            <span className="sr-only">Personalizar Apariencia</span>
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                        <p>Cambiar tema</p>
+                        <p>Personalizar Apariencia</p>
                     </TooltipContent>
                 </Tooltip>
             </TooltipProvider>
@@ -209,7 +204,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
             </TooltipProvider>
         </div>
 
-        {/* Mobile Navigation */}
         <div className="flex md:hidden items-center gap-1">
             <Button onClick={onSave} size="icon" className="relative">
                 <Save className="h-4 w-4" />
@@ -231,18 +225,16 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                           isVisible={hasPermission(mod.id)}
                         />
                     ))}
+                    <DropdownMenuItem onClick={() => setIsCustomizerOpen(true)}><Palette className="mr-2 h-4 w-4" />Apariencia</DropdownMenuItem>
                     {hasPermission('export') && (
                       <DropdownMenuItem><Download className="mr-2 h-4 w-4" />Exportar / Reportes</DropdownMenuItem>
                     )}
                     <DropdownMenuItem onClick={() => setIsInfoDialogOpen(true)}><Info className="mr-2 h-4 w-4" />Información</DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
-                          {theme === 'dark' ? <Sun className="mr-2 h-4 w-4" /> : <Moon className="mr-2 h-4 w-4" />}
-                          <span>Cambiar Tema</span>
-                      </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>
         </div>
       </header>
+      <ThemeCustomizer open={isCustomizerOpen} onOpenChange={setIsCustomizerOpen} />
     </>
   );
 }
