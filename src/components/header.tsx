@@ -2,9 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Factory, Save, History, LayoutDashboard, Settings, Download, Sun, Moon, Info, Sparkles, MoreVertical, HardHat, Activity, CalendarCheck2, Boxes, Shield, Package, Palette } from 'lucide-react';
+import { Factory, Save, LayoutDashboard, Settings, Download, Info, Sparkles, MoreVertical, HardHat, Package, Shield, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useTheme } from '@/components/theme-provider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -63,7 +62,6 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
   hasUnsavedChanges: boolean;
   setIsInfoDialogOpen: (open: boolean) => void;
 }) {
-  const { theme, setTheme } = useTheme();
   const searchParams = useSearchParams();
   const router = useRouter();
 
@@ -119,7 +117,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
       { id: 'ia', href: '/ia', icon: Sparkles, label: 'Operaciones', tooltip: 'Operaciones y Simulación' },
       { id: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', tooltip: 'Dashboard General' },
       { id: 'stops', href: '/stops', icon: HardHat, label: 'Bitácora', tooltip: 'Bitácora de Producción' },
-      { id: 'materials', href: '/materials', icon: Boxes, label: 'Material Empaque', tooltip: 'Control de Materiales de Empaque' },
+      { id: 'materials', href: '/materials', icon: Package, label: 'Material Empaque', tooltip: 'Control de Materiales de Empaque' },
       { id: 'melaza', href: '/material-melaza', icon: Package, label: 'Material Melaza', tooltip: 'Control de Sacos de Melaza' },
       { id: 'admin', href: '/admin', icon: Settings, label: 'Admin', tooltip: 'Administración' },
   ];
@@ -193,7 +191,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                     <TooltipTrigger asChild>
                         <Button onClick={onSave} className="w-10 h-10 p-0 lg:w-auto lg:px-4 relative">
                             <Save className="h-4 w-4 lg:mr-2" />
-                            <span className="hidden lg-inline">Guardar</span>
+                            <span className="hidden lg:inline">Guardar</span>
                             {hasUnsavedChanges && <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-blue-500"></span>}
                         </Button>
                     </TooltipTrigger>

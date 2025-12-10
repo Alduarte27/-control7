@@ -4,97 +4,235 @@ import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { useTheme } from 'next-themes';
-import { Check, Moon, Palette, Sun, Undo2 } from 'lucide-react';
+import { Check, Moon, Palette, Sun, Undo2, Type } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from './ui/label';
 import { Slider } from './ui/slider';
 import { Card } from './ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+
+
+type ThemeColors = {
+  background: string;
+  foreground: string;
+  card: string;
+  primary: string;
+  'primary-foreground': string;
+  secondary: string;
+  'secondary-foreground': string;
+  muted: string;
+  'muted-foreground': string;
+  accent: string;
+  'accent-foreground': string;
+  destructive: string;
+  'destructive-foreground': string;
+  border: string;
+  input: string;
+  ring: string;
+};
 
 type Theme = {
   name: string;
-  primary: { light: string; dark: string };
-  background: { light: string; dark: string };
-  accent: { light: string; dark: string };
+  light: ThemeColors;
+  dark: ThemeColors;
 };
+
 
 const themes: Theme[] = [
   {
     name: 'Violeta Profundo',
-    primary: { light: '261 39% 48%', dark: '261 39% 68%' },
-    background: { light: '270 44% 95%', dark: '261 39% 10%' },
-    accent: { light: '211 29% 79%', dark: '211 29% 40%' },
+    light: {
+      background: '270 44% 95%',
+      foreground: '261 39% 15%',
+      card: '0 0% 100%',
+      primary: '261 39% 48%',
+      'primary-foreground': '0 0% 98%',
+      secondary: '270 44% 90%',
+      'secondary-foreground': '261 39% 48%',
+      muted: '270 44% 90%',
+      'muted-foreground': '261 39% 40%',
+      accent: '211 29% 79%',
+      'accent-foreground': '211 29% 25%',
+      destructive: '0 84.2% 60.2%',
+      'destructive-foreground': '0 0% 98%',
+      border: '270 44% 88%',
+      input: '270 44% 80%',
+      ring: '261 39% 48%',
+    },
+    dark: {
+      background: '261 39% 10%',
+      foreground: '0 0% 98%',
+      card: '261 39% 10%',
+      primary: '261 39% 68%',
+      'primary-foreground': '261 39% 15%',
+      secondary: '270 44% 20%',
+      'secondary-foreground': '0 0% 98%',
+      muted: '270 44% 20%',
+      'muted-foreground': '0 0% 63.9%',
+      accent: '211 29% 40%',
+      'accent-foreground': '0 0% 98%',
+      destructive: '0 62.8% 30.6%',
+      'destructive-foreground': '0 0% 98%',
+      border: '270 44% 25%',
+      input: '270 44% 25%',
+      ring: '261 39% 68%',
+    },
   },
   {
     name: 'Océano Nocturno',
-    primary: { light: '221 83% 53%', dark: '217 91% 60%' },
-    background: { light: '216 33% 97%', dark: '224 71% 4%' },
-    accent: { light: '210 40% 96%', dark: '215 28% 17%' },
+    light: {
+      background: '216 33% 97%',
+      foreground: '222 47% 11%',
+      card: '0 0% 100%',
+      primary: '221 83% 53%',
+      'primary-foreground': '210 40% 98%',
+      secondary: '210 40% 96.1%',
+      'secondary-foreground': '222 47% 11.2%',
+      muted: '210 40% 96.1%',
+      'muted-foreground': '215.4 16.3% 46.9%',
+      accent: '210 40% 98%',
+      'accent-foreground': '222.2 47.4% 11.2%',
+      destructive: '0 84.2% 60.2%',
+      'destructive-foreground': '210 40% 98%',
+      border: '214.3 31.8% 91.4%',
+      input: '214.3 31.8% 91.4%',
+      ring: '222.2 84% 4.9%',
+    },
+    dark: {
+      background: '224 71% 4%',
+      foreground: '213 31% 91%',
+      card: '224 71% 4%',
+      primary: '217 91% 60%',
+      'primary-foreground': '221 83% 53%',
+      secondary: '215 28% 17%',
+      'secondary-foreground': '213 31% 91%',
+      muted: '215 28% 17%',
+      'muted-foreground': '218 11% 65%',
+      accent: '218 11% 65%',
+      'accent-foreground': '213 31% 91%',
+      destructive: '0 63% 31%',
+      'destructive-foreground': '213 31% 91%',
+      border: '215 28% 17%',
+      input: '215 28% 17%',
+      ring: '217 91% 60%',
+    },
   },
   {
     name: 'Bosque Esmeralda',
-    primary: { light: '142 76% 36%', dark: '143 71% 45%' },
-    background: { light: '120 60% 97%', dark: '150 14% 10%' },
-    accent: { light: '140 40% 96%', dark: '147 13% 17%' },
+    light: {
+      background: '120 60% 97%',
+      foreground: '148 14% 10%',
+      card: '0 0% 100%',
+      primary: '142 76% 36%',
+      'primary-foreground': '143 71% 95%',
+      secondary: '140 40% 96%',
+      'secondary-foreground': '148 14% 10%',
+      muted: '140 40% 96%',
+      'muted-foreground': '148 10% 45%',
+      accent: '140 40% 98%',
+      'accent-foreground': '148 14% 10%',
+      destructive: '0 84% 60%',
+      'destructive-foreground': '0 0% 98%',
+      border: '140 30% 90%',
+      input: '140 30% 90%',
+      ring: '142 76% 36%',
+    },
+    dark: {
+      background: '150 14% 10%',
+      foreground: '143 13% 90%',
+      card: '150 14% 10%',
+      primary: '143 71% 45%',
+      'primary-foreground': '143 71% 95%',
+      secondary: '147 13% 17%',
+      'secondary-foreground': '143 13% 90%',
+      muted: '147 13% 17%',
+      'muted-foreground': '147 9% 55%',
+      accent: '147 9% 55%',
+      'accent-foreground': '143 13% 90%',
+      destructive: '0 63% 31%',
+      'destructive-foreground': '0 0% 98%',
+      border: '147 13% 17%',
+      input: '147 13% 17%',
+      ring: '143 71% 45%',
+    },
   },
   {
     name: 'Industrial',
-    primary: { light: '240 6% 10%', dark: '0 0% 98%' },
-    background: { light: '0 0% 94%', dark: '240 10% 4%' },
-    accent: { light: '240 5% 96%', dark: '240 4% 16%' },
+    light: {
+      background: '0 0% 94%',
+      foreground: '240 10% 3.9%',
+      card: '0 0% 100%',
+      primary: '240 5.9% 10%',
+      'primary-foreground': '0 0% 98%',
+      secondary: '0 0% 96.1%',
+      'secondary-foreground': '240 5.9% 10%',
+      muted: '0 0% 96.1%',
+      'muted-foreground': '240 3.8% 46.1%',
+      accent: '0 0% 98%',
+      'accent-foreground': '240 5.9% 10%',
+      destructive: '0 84.2% 60.2%',
+      'destructive-foreground': '0 0% 98%',
+      border: '0 0% 89.8%',
+      input: '0 0% 89.8%',
+      ring: '240 5.9% 10%',
+    },
+    dark: {
+      background: '240 10% 3.9%',
+      foreground: '0 0% 98%',
+      card: '240 10% 3.9%',
+      primary: '0 0% 98%',
+      'primary-foreground': '240 5.9% 10%',
+      secondary: '240 3.7% 15.9%',
+      'secondary-foreground': '0 0% 98%',
+      muted: '240 3.7% 15.9%',
+      'muted-foreground': '240 5% 64.9%',
+      accent: '240 3.7% 15.9%',
+      'accent-foreground': '0 0% 98%',
+      destructive: '0 62.8% 30.6%',
+      'destructive-foreground': '0 0% 98%',
+      border: '240 3.7% 15.9%',
+      input: '240 3.7% 15.9%',
+      ring: '0 0% 98%',
+    },
   },
 ];
 
+const fonts = [
+  { name: 'Inter', variable: 'var(--font-inter)' },
+  { name: 'Poppins', variable: 'var(--font-poppins)' },
+  { name: 'Roboto', variable: 'var(--font-roboto)' },
+  { name: 'Lato', variable: 'var(--font-lato)' },
+  { name: 'Montserrat', variable: 'var(--font-montserrat)' },
+];
+
 type CustomThemeConfig = {
-  primary: string;
-  background: string;
-  accent: string;
+  colors: Partial<ThemeColors>;
   radius: number;
+  font: string;
 };
-
-const defaultHSL = {
-    primary: '261 39% 48%',
-    background: '270 44% 95%',
-    accent: '211 29% 79%',
-};
-
-function hexToHsl(hex: string): string | null {
-    if (!hex) return null;
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    if (!result) return null;
-
-    let r = parseInt(result[1], 16) / 255;
-    let g = parseInt(result[2], 16) / 255;
-    let b = parseInt(result[3], 16) / 255;
-
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h = 0, s = 0, l = (max + min) / 2;
-
-    if (max !== min) {
-        const d = max - min;
-        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-        switch (max) {
-            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-            case g: h = (b - r) / d + 2; break;
-            case b: h = (r - g) / d + 4; break;
-        }
-        h /= 6;
-    }
-    h = Math.round(h * 360);
-    s = Math.round(s * 100);
-    l = Math.round(l * 100);
-    return `${h} ${s}% ${l}%`;
-}
 
 export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean, onOpenChange: (open: boolean) => void }) {
-  const { theme, setTheme } = useTheme();
+  const { theme: mode, setTheme } = useTheme();
   const [activeTheme, setActiveTheme] = useState('Violeta Profundo');
+  const [activeFont, setActiveFont] = useState('Inter');
+  const [activeRadius, setActiveRadius] = useState(0.5);
 
-  const applyTheme = (config: Partial<CustomThemeConfig>, isDarkMode: boolean) => {
+  const applyTheme = (config: Partial<CustomThemeConfig>) => {
     const root = document.documentElement;
-    if (config.primary) root.style.setProperty('--primary', config.primary);
-    if (config.background) root.style.setProperty('--background', config.background);
-    if (config.accent) root.style.setProperty('--accent', config.accent);
-    if (config.radius !== undefined) root.style.setProperty('--radius', `${config.radius}rem`);
+    if (config.colors) {
+      for (const [key, value] of Object.entries(config.colors)) {
+        root.style.setProperty(`--${key}`, value);
+      }
+    }
+    if (config.radius !== undefined) {
+      root.style.setProperty('--radius', `${config.radius}rem`);
+    }
+     if (config.font) {
+      const fontVariable = fonts.find(f => f.name === config.font)?.variable;
+      if (fontVariable) {
+          root.style.setProperty('--font-sans', fontVariable);
+      }
+    }
   };
 
   const handlePresetSelect = (themeName: string) => {
@@ -102,46 +240,55 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
     if (!selected) return;
 
     const isDarkMode = document.documentElement.classList.contains('dark');
-    const newConfig = {
-      primary: isDarkMode ? selected.primary.dark : selected.primary.light,
-      background: isDarkMode ? selected.background.dark : selected.background.light,
-      accent: isDarkMode ? selected.accent.dark : selected.accent.light,
-    };
+    const colors = isDarkMode ? selected.dark : selected.light;
     
-    applyTheme(newConfig, isDarkMode);
+    applyTheme({ colors });
     setActiveTheme(themeName);
     localStorage.setItem('control7-theme-preset', themeName);
-    localStorage.removeItem('control7-custom-theme');
   };
   
   const handleRadiusChange = (value: number[]) => {
       const newRadius = value[0];
-      applyTheme({ radius: newRadius }, theme === 'dark');
+      applyTheme({ radius: newRadius });
+      setActiveRadius(newRadius);
       localStorage.setItem('control7-radius', String(newRadius));
   };
+  
+  const handleFontChange = (fontName: string) => {
+    applyTheme({ font: fontName });
+    setActiveFont(fontName);
+    localStorage.setItem('control7-font', fontName);
+  }
 
   const handleReset = () => {
     localStorage.removeItem('control7-theme-preset');
-    localStorage.removeItem('control7-custom-theme');
     localStorage.removeItem('control7-radius');
+    localStorage.removeItem('control7-font');
     window.location.reload();
   }
 
   useEffect(() => {
-    const preset = localStorage.getItem('control7-theme-preset');
+    const preset = localStorage.getItem('control7-theme-preset') || 'Violeta Profundo';
     const radius = localStorage.getItem('control7-radius');
+    const font = localStorage.getItem('control7-font') || 'Inter';
 
-    if (preset) {
-        const selected = themes.find(t => t.name === preset);
-        if (selected) {
-            handlePresetSelect(preset);
-        }
+    const selectedTheme = themes.find(t => t.name === preset);
+    if (selectedTheme) {
+        const isDarkMode = document.documentElement.classList.contains('dark');
+        applyTheme({ colors: isDarkMode ? selectedTheme.dark : selectedTheme.light });
+        setActiveTheme(preset);
     }
     if (radius) {
-        applyTheme({ radius: Number(radius) }, document.documentElement.classList.contains('dark'));
+        const numRadius = Number(radius);
+        applyTheme({ radius: numRadius });
+        setActiveRadius(numRadius);
+    }
+    if (font) {
+        applyTheme({ font });
+        setActiveFont(font);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [theme]); // Re-apply preset when light/dark mode changes
+  }, [mode]);
 
 
   return (
@@ -150,11 +297,11 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Palette/> Personalizar Apariencia</DialogTitle>
           <DialogDescription>
-            Elige un tema o personaliza los colores y estilos a tu gusto.
+            Elige un tema, tipografía y estilos para adaptar la aplicación a tu gusto.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="py-4 space-y-6">
+        <div className="py-4 space-y-8">
             <div className="space-y-3">
                  <h3 className="font-semibold">Temas Recomendados</h3>
                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -162,9 +309,9 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
                         <Card key={t.name} className="overflow-hidden cursor-pointer" onClick={() => handlePresetSelect(t.name)}>
                            <div className="p-4 space-y-2 relative">
                                 <div className="flex -space-x-2">
-                                    <div className="w-6 h-6 rounded-full" style={{ background: `hsl(${t.primary.light})`}}></div>
-                                    <div className="w-6 h-6 rounded-full" style={{ background: `hsl(${t.background.light})`}}></div>
-                                    <div className="w-6 h-6 rounded-full" style={{ background: `hsl(${t.accent.light})`}}></div>
+                                    <div className="w-6 h-6 rounded-full border-2 border-white dark:border-black" style={{ background: `hsl(${t.light.primary})`}}></div>
+                                    <div className="w-6 h-6 rounded-full border-2 border-white dark:border-black" style={{ background: `hsl(${t.light.background})`}}></div>
+                                    <div className="w-6 h-6 rounded-full border-2 border-white dark:border-black" style={{ background: `hsl(${t.light.accent})`}}></div>
                                 </div>
                                 <p className="text-sm font-medium">{t.name}</p>
                                 {activeTheme === t.name && (
@@ -178,13 +325,32 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
                  </div>
             </div>
 
+            <div className="space-y-4">
+                <h3 className="font-semibold">Tipografía</h3>
+                 <Select value={activeFont} onValueChange={handleFontChange}>
+                    <SelectTrigger>
+                        <div className="flex items-center gap-2">
+                            <Type className="h-4 w-4" />
+                            <SelectValue />
+                        </div>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {fonts.map(font => (
+                            <SelectItem key={font.name} value={font.name} style={{ fontFamily: font.variable }}>
+                                {font.name}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
              <div className="space-y-4">
-                <h3 className="font-semibold">Modo de Apariencia</h3>
+                <h3 className="font-semibold">Apariencia</h3>
                 <div className="flex gap-2">
-                    <Button variant={theme === 'light' ? 'default' : 'outline'} onClick={() => setTheme('light')} className="flex-1">
+                    <Button variant={mode === 'light' ? 'default' : 'outline'} onClick={() => setTheme('light')} className="flex-1">
                         <Sun className="mr-2 h-4 w-4"/> Claro
                     </Button>
-                    <Button variant={theme === 'dark' ? 'default' : 'outline'} onClick={() => setTheme('dark')} className="flex-1">
+                    <Button variant={mode === 'dark' ? 'default' : 'outline'} onClick={() => setTheme('dark')} className="flex-1">
                         <Moon className="mr-2 h-4 w-4"/> Oscuro
                     </Button>
                 </div>
@@ -194,7 +360,7 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
                  <h3 className="font-semibold">Bordes</h3>
                  <div className="space-y-2">
                     <Label>Radio del Borde</Label>
-                    <Slider defaultValue={[0.5]} max={2} min={0} step={0.1} onValueChange={handleRadiusChange} />
+                    <Slider value={[activeRadius]} max={2} min={0} step={0.1} onValueChange={handleRadiusChange} />
                  </div>
             </div>
 
