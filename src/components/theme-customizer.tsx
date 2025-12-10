@@ -11,6 +11,7 @@ import { Label } from './ui/label';
 import { Slider } from './ui/slider';
 import { Card } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { ScrollArea } from './ui/scroll-area';
 
 
 type ThemeColors = {
@@ -430,7 +431,203 @@ const themes: Theme[] = [
       ring: '160 90% 65%',
     },
   },
+   {
+    name: 'Grafito',
+    light: {
+      background: '220 14% 96%',
+      foreground: '220 14% 10%',
+      card: '0 0% 100%',
+      primary: '220 14% 25%',
+      'primary-foreground': '0 0% 98%',
+      secondary: '220 14% 94%',
+      'secondary-foreground': '220 14% 10%',
+      muted: '220 14% 94%',
+      'muted-foreground': '220 14% 45%',
+      accent: '220 14% 88%',
+      'accent-foreground': '220 14% 10%',
+      destructive: '0 84% 60%',
+      'destructive-foreground': '0 0% 98%',
+      border: '220 14% 90%',
+      input: '220 14% 88%',
+      ring: '220 14% 25%',
+    },
+    dark: {
+      background: '220 14% 5%',
+      foreground: '220 14% 90%',
+      card: '220 14% 8%',
+      primary: '210 90% 70%',
+      'primary-foreground': '220 14% 5%',
+      secondary: '220 14% 15%',
+      'secondary-foreground': '220 14% 90%',
+      muted: '220 14% 15%',
+      'muted-foreground': '220 14% 60%',
+      accent: '220 14% 25%',
+      'accent-foreground': '220 14% 90%',
+      destructive: '0 70% 40%',
+      'destructive-foreground': '0 0% 98%',
+      border: '220 14% 15%',
+      input: '220 14% 15%',
+      ring: '210 90% 70%',
+    },
+  },
+  {
+    name: 'Tierra',
+    light: {
+      background: '30 25% 96%',
+      foreground: '30 25% 10%',
+      card: '0 0% 100%',
+      primary: '30 65% 40%',
+      'primary-foreground': '0 0% 98%',
+      secondary: '30 30% 94%',
+      'secondary-foreground': '30 25% 10%',
+      muted: '30 30% 94%',
+      'muted-foreground': '30 25% 45%',
+      accent: '30 30% 88%',
+      'accent-foreground': '30 25% 10%',
+      destructive: '0 84% 60%',
+      'destructive-foreground': '0 0% 98%',
+      border: '30 30% 90%',
+      input: '30 30% 88%',
+      ring: '30 65% 40%',
+    },
+    dark: {
+      background: '30 15% 8%',
+      foreground: '30 15% 90%',
+      card: '30 15% 11%',
+      primary: '35 80% 60%',
+      'primary-foreground': '30 15% 8%',
+      secondary: '30 10% 15%',
+      'secondary-foreground': '30 15% 90%',
+      muted: '30 10% 15%',
+      'muted-foreground': '30 10% 60%',
+      accent: '30 10% 25%',
+      'accent-foreground': '30 15% 90%',
+      destructive: '0 70% 40%',
+      'destructive-foreground': '0 0% 98%',
+      border: '30 10% 15%',
+      input: '30 10% 15%',
+      ring: '35 80% 60%',
+    },
+  },
+  {
+    name: 'Lavanda',
+    light: {
+      background: '250 60% 97%',
+      foreground: '250 25% 15%',
+      card: '0 0% 100%',
+      primary: '250 65% 55%',
+      'primary-foreground': '0 0% 98%',
+      secondary: '250 60% 94%',
+      'secondary-foreground': '250 25% 15%',
+      muted: '250 60% 94%',
+      'muted-foreground': '250 25% 45%',
+      accent: '250 60% 88%',
+      'accent-foreground': '250 25% 15%',
+      destructive: '0 84% 60%',
+      'destructive-foreground': '0 0% 98%',
+      border: '250 60% 90%',
+      input: '250 60% 88%',
+      ring: '250 65% 55%',
+    },
+    dark: {
+      background: '250 20% 10%',
+      foreground: '250 15% 90%',
+      card: '250 20% 13%',
+      primary: '250 80% 75%',
+      'primary-foreground': '250 20% 10%',
+      secondary: '250 15% 18%',
+      'secondary-foreground': '250 15% 90%',
+      muted: '250 15% 18%',
+      'muted-foreground': '250 10% 60%',
+      accent: '250 15% 25%',
+      'accent-foreground': '250 15% 90%',
+      destructive: '0 70% 40%',
+      'destructive-foreground': '0 0% 98%',
+      border: '250 15% 18%',
+      input: '250 15% 18%',
+      ring: '250 80% 75%',
+    },
+  },
+  {
+    name: 'Cítrico',
+    light: {
+      background: '50 100% 96%',
+      foreground: '45 50% 15%',
+      card: '0 0% 100%',
+      primary: '40 90% 50%',
+      'primary-foreground': '45 50% 10%',
+      secondary: '50 80% 94%',
+      'secondary-foreground': '45 50% 15%',
+      muted: '50 80% 94%',
+      'muted-foreground': '45 40% 45%',
+      accent: '50 80% 88%',
+      'accent-foreground': '45 50% 15%',
+      destructive: '0 84% 60%',
+      'destructive-foreground': '0 0% 98%',
+      border: '50 70% 90%',
+      input: '50 70% 88%',
+      ring: '40 90% 50%',
+    },
+    dark: {
+      background: '40 20% 8%',
+      foreground: '45 30% 90%',
+      card: '40 20% 11%',
+      primary: '45 90% 60%',
+      'primary-foreground': '40 20% 8%',
+      secondary: '40 15% 15%',
+      'secondary-foreground': '45 30% 90%',
+      muted: '40 15% 15%',
+      'muted-foreground': '45 20% 60%',
+      accent: '40 15% 25%',
+      'accent-foreground': '45 30% 90%',
+      destructive: '0 70% 40%',
+      'destructive-foreground': '0 0% 98%',
+      border: '40 15% 15%',
+      input: '40 15% 15%',
+      ring: '45 90% 60%',
+    },
+  },
+  {
+    name: 'Galaxia',
+    light: {
+      background: '240 20% 96%',
+      foreground: '240 20% 10%',
+      card: '0 0% 100%',
+      primary: '260 80% 55%',
+      'primary-foreground': '0 0% 98%',
+      secondary: '240 20% 94%',
+      'secondary-foreground': '240 20% 10%',
+      muted: '240 20% 94%',
+      'muted-foreground': '240 20% 45%',
+      accent: '260 50% 90%',
+      'accent-foreground': '240 20% 10%',
+      destructive: '0 84% 60%',
+      'destructive-foreground': '0 0% 98%',
+      border: '240 20% 90%',
+      input: '240 20% 88%',
+      ring: '260 80% 55%',
+    },
+    dark: {
+      background: '240 20% 5%',
+      foreground: '240 10% 90%',
+      card: '260 30% 8%',
+      primary: '260 90% 75%',
+      'primary-foreground': '240 20% 5%',
+      secondary: '260 20% 15%',
+      'secondary-foreground': '240 10% 90%',
+      muted: '260 20% 15%',
+      'muted-foreground': '240 10% 60%',
+      accent: '260 20% 25%',
+      'accent-foreground': '240 10% 90%',
+      destructive: '0 70% 40%',
+      'destructive-foreground': '0 0% 98%',
+      border: '260 20% 15%',
+      input: '260 20% 15%',
+      ring: '260 90% 75%',
+    },
+  },
 ];
+
 
 const fonts = [
   { name: 'Inter', variable: 'var(--font-inter)' },
@@ -511,7 +708,7 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
     const selectedTheme = themes.find(t => t.name === preset);
     if (selectedTheme) {
         // Determine mode based on system preference or stored next-themes value
-        const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches && mode === 'system' || mode === 'dark';
+        const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches && (mode === 'system' || !mode) || mode === 'dark';
         applyTheme({ colors: isDarkMode ? selectedTheme.dark : selectedTheme.light });
         setActiveTheme(preset);
     }
@@ -528,12 +725,10 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
   }, []);
 
   useEffect(() => {
-    // This effect specifically handles changes between light/dark mode
     const preset = localStorage.getItem('control7-theme-preset') || 'Violeta Profundo';
     const selectedTheme = themes.find(t => t.name === preset);
     
     if (selectedTheme) {
-        // When `mode` changes, apply the correct palette (light or dark)
         const colors = mode === 'dark' ? selectedTheme.dark : selectedTheme.light;
         applyTheme({ colors });
     }
@@ -543,7 +738,7 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Palette/> Personalizar Apariencia</DialogTitle>
           <DialogDescription>
@@ -554,10 +749,11 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
         <div className="py-4 space-y-8">
             <div className="space-y-3">
                  <h3 className="font-semibold">Temas Recomendados</h3>
-                 <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
-                    {themes.map((t) => (
-                        <Card key={t.name} className="overflow-hidden cursor-pointer" onClick={() => handlePresetSelect(t.name)}>
-                           <div className="p-4 space-y-2 relative">
+                 <ScrollArea className="h-48">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pr-4">
+                        {themes.map((t) => (
+                            <Card key={t.name} className="overflow-hidden cursor-pointer" onClick={() => handlePresetSelect(t.name)}>
+                            <div className="p-4 space-y-2 relative">
                                 <div className="flex -space-x-2">
                                     <div className="w-6 h-6 rounded-full border-2 border-white dark:border-black" style={{ background: `hsl(${t.light.primary})`}}></div>
                                     <div className="w-6 h-6 rounded-full border-2 border-white dark:border-black" style={{ background: `hsl(${t.light.background})`}}></div>
@@ -569,10 +765,11 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
                                         <Check className="w-3 h-3" />
                                     </div>
                                 )}
-                           </div>
-                        </Card>
-                    ))}
-                 </div>
+                            </div>
+                            </Card>
+                        ))}
+                    </div>
+                 </ScrollArea>
             </div>
 
             <div className="space-y-4">
