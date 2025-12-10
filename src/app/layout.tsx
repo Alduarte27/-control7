@@ -2,7 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from '@/components/theme-provider';
-import { Inter, Poppins, Roboto, Lato, Montserrat } from 'next/font/google';
+import { Inter } from 'next/font/google';
 
 export const metadata: Metadata = {
   title: 'Control 7',
@@ -10,10 +10,6 @@ export const metadata: Metadata = {
 };
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
-const poppins = Poppins({ subsets: ['latin'], weight: ['400', '600', '700'], variable: '--font-poppins' });
-const roboto = Roboto({ subsets: ['latin'], weight: ['400', '700'], variable: '--font-roboto' });
-const lato = Lato({ subsets: ['latin'], weight: ['400', '700'], variable: '--font-lato' });
-const montserrat = Montserrat({ subsets: ['latin'], weight: ['400', '600', '700'], variable: '--font-montserrat' });
 
 export default function RootLayout({
   children,
@@ -23,7 +19,7 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <head />
-      <body className={`${inter.variable} ${poppins.variable} ${roboto.variable} ${lato.variable} ${montserrat.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} font-sans antialiased`}>
         <ThemeProvider
             attribute="class"
             defaultTheme="system"

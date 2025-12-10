@@ -5,12 +5,11 @@ import React, { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { useTheme } from 'next-themes';
-import { Check, Moon, Palette, Sun, Undo2, Type } from 'lucide-react';
+import { Check, Moon, Palette, Sun, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Label } from './ui/label';
 import { Slider } from './ui/slider';
 import { Card } from './ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { ScrollArea } from './ui/scroll-area';
 
 
@@ -629,27 +628,17 @@ const themes: Theme[] = [
 ];
 
 
-const fonts = [
-  { name: 'Inter', variable: 'var(--font-inter)' },
-  { name: 'Poppins', variable: 'var(--font-poppins)' },
-  { name: 'Roboto', variable: 'var(--font-roboto)' },
-  { name: 'Lato', variable: 'var(--font-lato)' },
-  { name: 'Montserrat', variable: 'var(--font-montserrat)' },
-];
-
 type CustomThemeConfig = {
-  colors: Partial<ThemeColors>;
-  radius: number;
-  font: string;
+  colors?: Partial<ThemeColors>;
+  radius?: number;
 };
 
 export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean, onOpenChange: (open: boolean) => void }) {
   const { theme: mode, setTheme } = useTheme();
   const [activeTheme, setActiveTheme] = useState('Violeta Profundo');
-  const [activeFont, setActiveFont] = useState('Inter');
   const [activeRadius, setActiveRadius] = useState(0.5);
 
-  const applyTheme = (config: Partial<CustomThemeConfig>) => {
+  const applyTheme = (config: CustomThemeConfig) => {
     const root = document.documentElement;
     if (config.colors) {
       for (const [key, value] of Object.entries(config.colors)) {
@@ -659,19 +648,12 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
     if (config.radius !== undefined) {
       root.style.setProperty('--radius', `${config.radius}rem`);
     }
-     if (config.font) {
-      const fontVariable = fonts.find(f => f.name === config.font)?.variable;
-      if (fontVariable) {
-          root.style.setProperty('--font-sans', fontVariable);
-      }
-    }
   };
 
   const handlePresetSelect = (themeName: string) => {
     const selected = themes.find(t => t.name === themeName);
     if (!selected) return;
 
-    // Use the current mode from useTheme, which is reliable.
     const colors = mode === 'dark' ? selected.dark : selected.light;
     
     applyTheme({ colors });
@@ -686,29 +668,19 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
       localStorage.setItem('control7-radius', String(newRadius));
   };
   
-  const handleFontChange = (fontName: string) => {
-    applyTheme({ font: fontName });
-    setActiveFont(fontName);
-    localStorage.setItem('control7-font', fontName);
-  }
-
   const handleReset = () => {
     localStorage.removeItem('control7-theme-preset');
     localStorage.removeItem('control7-radius');
-    localStorage.removeItem('control7-font');
     window.location.reload();
   }
 
   useEffect(() => {
-    // This effect runs once on mount to load the stored preferences
     const preset = localStorage.getItem('control7-theme-preset') || 'Violeta Profundo';
     const radius = localStorage.getItem('control7-radius');
-    const font = localStorage.getItem('control7-font') || 'Inter';
 
     const selectedTheme = themes.find(t => t.name === preset);
     if (selectedTheme) {
-        // Determine mode based on system preference or stored next-themes value
-        const isDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches && (mode === 'system' || !mode) || mode === 'dark';
+        const isDarkMode = document.documentElement.classList.contains('dark');
         applyTheme({ colors: isDarkMode ? selectedTheme.dark : selectedTheme.light });
         setActiveTheme(preset);
     }
@@ -717,11 +689,6 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
         applyTheme({ radius: numRadius });
         setActiveRadius(numRadius);
     }
-    if (font) {
-        applyTheme({ font });
-        setActiveFont(font);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -732,7 +699,6 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
         const colors = mode === 'dark' ? selectedTheme.dark : selectedTheme.light;
         applyTheme({ colors });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
 
@@ -742,7 +708,7 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2"><Palette/> Personalizar Apariencia</DialogTitle>
           <DialogDescription>
-            Elige un tema, tipografía y estilos para adaptar la aplicación a tu gusto.
+            Elige un tema y estilos para adaptar la aplicación a tu gusto.
           </DialogDescription>
         </DialogHeader>
 
@@ -773,25 +739,6 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
             </div>
 
             <div className="space-y-4">
-                <h3 className="font-semibold">Tipografía</h3>
-                 <Select value={activeFont} onValueChange={handleFontChange}>
-                    <SelectTrigger>
-                        <div className="flex items-center gap-2">
-                            <Type className="h-4 w-4" />
-                            <SelectValue />
-                        </div>
-                    </SelectTrigger>
-                    <SelectContent>
-                        {fonts.map(font => (
-                            <SelectItem key={font.name} value={font.name} style={{ fontFamily: font.variable }}>
-                                {font.name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-            </div>
-
-             <div className="space-y-4">
                 <h3 className="font-semibold">Apariencia</h3>
                 <div className="flex gap-2">
                     <Button variant={mode === 'light' ? 'default' : 'outline'} onClick={() => setTheme('light')} className="flex-1">
