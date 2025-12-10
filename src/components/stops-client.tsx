@@ -13,10 +13,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, DailyLog, MachineLog, TimeSlot, StopData, StopCause, Operator, Supervisor, MaintenanceType, CategoryDefinition, BitacoraSettings, MachineOEE } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc, collection, query, orderBy, getDocs, addDoc, deleteDoc } from 'firebase/firestore';
-import { format, parse, setMinutes, getMinutes, getHours, isToday } from 'date-fns';
+import { format, parse, setMinutes, getMinutes, getHours, isToday, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
-import { Calendar } from './ui/calendar';
 import StopRegistrationModal from './stop-registration-modal';
 import { Badge } from './ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -632,6 +630,15 @@ export default function StopsClient({
             setDate(newDate);
         }
     };
+    
+     const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const dateValue = e.target.value;
+        const parsedDate = parse(dateValue, 'yyyy-MM-dd', new Date());
+        if (isValid(parsedDate)) {
+            handleDateChange(parsedDate);
+        }
+    };
+
 
     const handleMachineProductChange = (machineId: string, productId: string) => {
         if (!dailyLog) return;
@@ -1156,16 +1163,12 @@ export default function StopsClient({
                             </div>
                                 <div className="space-y-1.5">
                                 <Label>Fecha</Label>
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button variant="outline" className="w-full justify-start font-normal">
-                                            {format(date, "PPP", { locale: es })}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0">
-                                        <Calendar mode="single" selected={date} onSelect={handleDateChange} />
-                                    </PopoverContent>
-                                </Popover>
+                                <Input
+                                    type="date"
+                                    value={date ? format(date, 'yyyy-MM-dd') : ''}
+                                    onChange={handleDateInputChange}
+                                    className="w-full justify-start text-left font-normal"
+                                />
                             </div>
                         </div>
 

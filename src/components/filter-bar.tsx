@@ -4,12 +4,10 @@
 import React from 'react';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { CalendarDays, Search, Copy, History, Download } from 'lucide-react';
-import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek, isValid } from 'date-fns';
+import { getISOWeek, startOfISOWeek, endOfISOWeek, format, setISOWeek, isValid, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Label } from '@/components/ui/label';
 import ExportDialog from './export-dialog';
@@ -39,6 +37,14 @@ export default function FilterBar({
   const handleWeekChange = (weekNumber: string) => {
     const newDate = setISOWeek(new Date(currentYear, 0, 1), parseInt(weekNumber, 10));
     onDateChange(newDate);
+  };
+  
+  const handleDateInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const dateValue = e.target.value;
+    const parsedDate = parse(dateValue, 'yyyy-MM-dd', new Date());
+    if (isValid(parsedDate)) {
+        onDateChange(parsedDate);
+    }
   };
 
   const getWeekOptions = () => {
@@ -75,26 +81,12 @@ export default function FilterBar({
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Fecha</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant={"outline"}
-                className="w-full justify-start text-left font-normal"
-              >
-                <CalendarDays className="mr-2 h-4 w-4" />
-                {date && isValid(date) ? format(date, "PPP", { locale: es }) : <span>Elige una fecha</span>}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={date}
-                onSelect={onDateChange}
-                initialFocus
-                locale={es}
-              />
-            </PopoverContent>
-          </Popover>
+          <Input
+            type="date"
+            value={date ? format(date, 'yyyy-MM-dd') : ''}
+            onChange={handleDateInputChange}
+            className="w-full justify-start text-left font-normal"
+            />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>Semana ISO</Label>
