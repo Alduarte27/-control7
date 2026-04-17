@@ -1,7 +1,7 @@
 import MaterialsClient from '@/components/materials-client';
 import { db } from '@/lib/firebase';
 import type { Supplier } from '@/lib/types';
-import { getCachedCategories, getCachedProducts } from '@/services/data-service';
+import { getCategories, getProducts } from '@/services/data-service';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 
 // Note: We are no longer pre-fetching materials here.
@@ -18,8 +18,8 @@ async function getSuppliers(): Promise<Supplier[]> {
 }
 
 export default async function MaterialsPage() {
-  const products = await getCachedProducts();
-  const categories = await getCachedCategories();
+  const products = await getProducts();
+  const categories = await getCategories();
   const suppliers = await getSuppliers();
   
   return <MaterialsClient 

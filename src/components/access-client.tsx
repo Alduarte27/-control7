@@ -85,9 +85,11 @@ const AccessClient = () => {
     };
 
     const handleShare = (profileName: string, profileId: string) => {
-        const url = `${window.location.origin}/?profileId=${profileId}`;
-        const message = encodeURIComponent(`Hola, aquí tienes tu enlace de acceso para Control 7 con el perfil "${profileName}":\n\n${url}`);
-        window.open(`https://api.whatsapp.com/send?text=${message}`, '_blank');
+        if (typeof window !== 'undefined') {
+            const url = `${window.location.origin}/?profileId=${profileId}`;
+            const message = encodeURIComponent(`Hola, aquí tienes tu enlace de acceso para Control 7 con el perfil "${profileName}":\n\n${url}`);
+            window.open(`https://api.whatsapp.com/send?text=${message}`, '_blank');
+        }
     };
 
 
@@ -171,7 +173,7 @@ const AccessClient = () => {
                                         <div className="flex items-center justify-center p-4">
                                             <div className="bg-white p-4 rounded-lg">
                                                 <QRCodeSVG
-                                                    value={`${window.location.origin}/?profileId=${profile.id}`}
+                                                    value={`${typeof window !== "undefined" ? window.location.origin : ''}/?profileId=${profile.id}`}
                                                     size={256}
                                                     includeMargin={true}
                                                 />

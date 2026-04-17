@@ -1229,17 +1229,19 @@ export default function MaterialsClient({
         }
         
         if (code.startsWith('http')) {
-            const url = new URL(code);
-            const sessionIdFromQr = url.searchParams.get('sessionId');
-            
-            if (isMobileDevice && sessionIdFromQr) {
-                try {
-                    updateDoc(doc(db, 'sessions', sessionIdFromQr), { status: 'connected', deviceName: navigator.userAgent });
-                    setSyncSessionId(sessionIdFromQr);
-                    toast({ title: "Dispositivo Conectado", description: "Ahora puedes escanear códigos de materiales." });
-                    setTimeout(() => setIsScannerOpen(true), 500); // Reopen scanner
-                } catch (error) {
-                    toast({ title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive" });
+            if (typeof window !== 'undefined') {
+                const url = new URL(code);
+                const sessionIdFromQr = url.searchParams.get('sessionId');
+                
+                if (isMobileDevice && sessionIdFromQr) {
+                    try {
+                        updateDoc(doc(db, 'sessions', sessionIdFromQr), { status: 'connected', deviceName: navigator.userAgent });
+                        setSyncSessionId(sessionIdFromQr);
+                        toast({ title: "Dispositivo Conectado", description: "Ahora puedes escanear códigos de materiales." });
+                        setTimeout(() => setIsScannerOpen(true), 500); // Reopen scanner
+                    } catch (error) {
+                        toast({ title: "Error de Conexión", description: "No se pudo conectar a la sesión. Inténtalo de nuevo.", variant: "destructive" });
+                    }
                 }
             }
             return; // Don't process material code
@@ -1299,7 +1301,9 @@ export default function MaterialsClient({
     }, [isMobileDevice]);
     
     React.useEffect(() => {
-        setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+        if (typeof window !== 'undefined') {
+            setIsMobileDevice(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent));
+        }
         
         let unsub: (() => void) | undefined;
         if (syncSessionId && !isMobileDevice) {
@@ -2078,7 +2082,7 @@ export default function MaterialsClient({
                         <div className="flex items-center justify-center p-4">
                              <div className="bg-white p-4 rounded-lg">
                                 <QRCodeSVG
-                                    value={`${window.location.origin}/materials?sessionId=${syncSessionId}`}
+                                    value={`${typeof window !== "undefined" ? window.location.origin : ''}/materials?sessionId=${syncSessionId}`}
                                     size={256}
                                     includeMargin={true}
                                 />
@@ -2139,4 +2143,3 @@ export default function MaterialsClient({
         </>
     );
 }
-

@@ -1,5 +1,5 @@
 import OeeClient from '@/components/oee-client';
-import { getCachedProducts } from '@/services/data-service';
+import { getProducts } from '@/services/data-service';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import type { StopCause } from '@/lib/types';
@@ -16,7 +16,7 @@ async function getStopCauses(): Promise<StopCause[]> {
 }
 
 export default async function OeePage() {
-  const products = await getCachedProducts();
+  const products = await getProducts();
   const stopCauses = await getStopCauses();
   
   return <OeeClient prefetchedProducts={products} prefetchedStopCauses={stopCauses} />;

@@ -1,5 +1,5 @@
 import Control7Client from '@/components/control-7-client';
-import { getCachedCategories, getCachedProducts } from '@/services/data-service';
+import { getCategories, getProducts } from '@/services/data-service';
 import { redirect } from 'next/navigation';
 
 // This is a server component, so we can check for permissions here.
@@ -10,8 +10,8 @@ export default async function Home({ searchParams }: { searchParams?: { [key: st
   const planId = typeof searchParams?.planId === 'string' ? searchParams.planId : undefined;
   
   // Pre-fetch data on the server. This will be cached.
-  const categories = await getCachedCategories();
-  const products = await getCachedProducts();
+  const categories = await getCategories();
+  const products = await getProducts();
 
   return <Control7Client 
     initialPlanId={planId} 

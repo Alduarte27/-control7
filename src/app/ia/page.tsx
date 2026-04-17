@@ -1,11 +1,11 @@
 'use server';
 
 import OperationsClient from '@/components/ia-client';
-import { getCachedCategories, getCachedProducts } from '@/services/data-service';
+import { getCategories, getProducts } from '@/services/data-service';
 
 export default async function OperationsPage() {
-  const categories = await getCachedCategories();
-  const products = await getCachedProducts();
+  const categories = await getCategories();
+  const products = await getProducts();
 
   return <OperationsClient 
     prefetchedCategories={categories}

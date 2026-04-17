@@ -192,11 +192,13 @@ export default function Control7Client({
         return currentData;
     } finally {
         sessionStorage.removeItem('aiSuggestion');
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.has('applySuggestion')) {
-            urlParams.delete('applySuggestion');
-            const newUrl = window.location.pathname + (urlParams.toString() ? `?${urlParams.toString()}` : '');
-            window.history.replaceState({}, document.title, newUrl);
+        if (typeof window !== 'undefined') {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.has('applySuggestion')) {
+                urlParams.delete('applySuggestion');
+                const newUrl = window.location.pathname + (urlParams.toString() ? `?${urlParams.toString()}` : '');
+                window.history.replaceState({}, document.title, newUrl);
+            }
         }
     }
   }, [toast]);
@@ -282,10 +284,14 @@ export default function Control7Client({
                 loadedData = generateInitialData(productDefinitions.filter(p => p.isActive), categories, date);
             }
 
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('applySuggestion') === 'true') {
-                const finalData = applyAISuggestion(loadedData);
-                setData(finalData);
+            if (typeof window !== 'undefined') {
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('applySuggestion') === 'true') {
+                    const finalData = applyAISuggestion(loadedData);
+                    setData(finalData);
+                } else {
+                    setData(loadedData);
+                }
             } else {
                 setData(loadedData);
             }
