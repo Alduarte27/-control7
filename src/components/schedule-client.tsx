@@ -564,7 +564,7 @@ export default function StopsClient({
             if (!slot) return;
             Object.entries(slot).forEach(([machineId, machineData]) => {
                 if (machineData && typeof machineData === 'object' && 'stops' in machineData && machineData.stops) {
-                     machineData.stops.forEach(stop => {
+                     (machineData.stops as StopData[]).forEach(stop => {
                         stops.push({ ...stop, machineId });
                     });
                 }

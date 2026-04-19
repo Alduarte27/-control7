@@ -245,7 +245,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                 
                                 let timeSlotStopTime = 0;
                                 if ('stops' in machineData && Array.isArray(machineData.stops)) {
-                                    machineData.stops.forEach(stop => {
+                                    (machineData.stops as StopData[]).forEach(stop => {
                                         const duration = stop.duration || 0;
                                         weeklyTotalStopTime += duration;
                                         timeSlotStopTime += duration;

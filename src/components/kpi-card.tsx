@@ -13,9 +13,10 @@ export type KpiCardProps = {
   subValue?: string;
   subValueColor?: string;
   fractionDigits?: number;
+  suffix?: string;
 };
 
-export default function KpiCard({ title, value, icon: Icon, description, valueColor, subValue, subValueColor, fractionDigits }: KpiCardProps) {
+export default function KpiCard({ title, value, icon: Icon, description, valueColor, subValue, subValueColor, fractionDigits, suffix }: KpiCardProps) {
   const [isClient, setIsClient] = React.useState(false);
 
   React.useEffect(() => {
@@ -47,7 +48,9 @@ export default function KpiCard({ title, value, icon: Icon, description, valueCo
             <CardContent className="pt-0">
               {isClient ? (
                 <>
-                  <div className={cn("text-2xl font-bold", valueColor)}>{formattedValue}</div>
+                  <div className={cn("text-2xl font-bold", valueColor)}>
+                    {formattedValue}{suffix}
+                  </div>
                   <p className={cn("text-xs font-medium h-[16px]", subValueColor)}>
                     {subValue || <>&nbsp;</>}
                   </p>

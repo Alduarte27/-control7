@@ -444,12 +444,12 @@ export default function StopsClient({
                 const slotData = dailyLog.timeSlots[time]?.[machineId];
                 if (slotData) {
                     if (slotData.stops) {
-                        slotData.stops.forEach(stop => {
+                        (slotData.stops as StopData[]).forEach(stop => {
                             totalStopTime += stop.duration;
                         });
                     }
                     if (slotData.speed && slotData.speed > 0) {
-                        const runtime = 30 - (slotData.stops?.reduce((sum, s) => sum + s.duration, 0) || 0);
+                        const runtime = 30 - ((slotData.stops as StopData[])?.reduce((sum: number, s: StopData) => sum + s.duration, 0) || 0);
                         actualProductionSlots += slotData.speed * runtime;
                         // For simplicity, using a standard theoretical speed if not defined per machine.
                         // This should be improved by storing theoretical speed per product.

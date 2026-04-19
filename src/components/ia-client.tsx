@@ -69,6 +69,7 @@ type ReceiverState = {
     fillProgress: number;
     drainingBy: string[]; // Now an array of centrifuge IDs
     transferRate: number | null;
+    imageUrl?: string | null;
 };
 
 type CentrifugeState = {
@@ -118,7 +119,7 @@ type SimulationParams = {
     machines: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>[];
     wrappers: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>[];
     silos: Omit<SiloState, 'imageUrl' | 'currentQQ'>[];
-    receivers: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress' | 'drainingBy'>[];
+    receivers: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress' | 'drainingBy' | 'transferRate'>[];
     tachosCookTime: number; 
     tachosTransferTime: number;
     tachosGoal: number;
@@ -1200,8 +1201,8 @@ export default function OperationsClient({
                 transferRate: null,
             })));
             setCentrifuges([
-                { id: 'cent1', name: 'CentrÃƒÂ­fuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
-                { id: 'cent2', name: 'CentrÃƒÂ­fuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent1', name: 'Centrifuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0, currentLoadQQ: 0 },
+                { id: 'cent2', name: 'Centrifuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0, currentLoadQQ: 0 },
             ]);
             setTachosImageUrl(imageUrls.tachos);
             
@@ -1232,8 +1233,8 @@ export default function OperationsClient({
             setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null, currentQQ: 0 })));
             setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: [], transferRate: null })));
             setCentrifuges([
-                { id: 'cent1', name: 'CentrÃƒÂ­fuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
-                { id: 'cent2', name: 'CentrÃƒÂ­fuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent1', name: 'Centrifuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0, currentLoadQQ: 0 },
+                { id: 'cent2', name: 'Centrifuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0, currentLoadQQ: 0 },
             ]);
             setTachosImageUrl(images.tachos);
         }
@@ -1404,7 +1405,16 @@ export default function OperationsClient({
         setMasaQQAmount(config.masaQQAmount);
     };
 
-    const handleCentrifugeConfigSave = (config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number, bufferTankCapacityQQ: number }) => {
+    const handleCentrifugeConfigSave = (config: { 
+        isAuto: boolean; 
+        batchSizeQQ: number; 
+        loadTime: number; 
+        washTime: number; 
+        purgeTime: number; 
+        startInterval: number; 
+        bufferTankCapacityQQ: number;
+        bufferTransferTimeMinutes: number;
+    }) => {
         setIsCentrifugesAuto(config.isAuto);
         setCentrifugeBatchSizeQQ(config.batchSizeQQ);
         setCentrifugeLoadTime(config.loadTime);
@@ -2201,11 +2211,18 @@ export default function OperationsClient({
         const processedQQ = simulationState.initialQQInReceivers > 0 ? simulationState.initialQQInReceivers - totalQQinReceivers : 0;
         const processingProgress = simulationState.initialQQInReceivers > 0 ? (processedQQ / simulationState.initialQQInReceivers) * 100 : 0;
 
+        let mainBottleneck: 'tachos' | 'centrifuges' | 'receivers' | 'silos' | 'machines' | 'wrapper' | 'none' = 'none';
+        if (staticSimulationResults.isWrapperBottleneck) mainBottleneck = 'wrapper';
+        else if (simulationState.silosFullAlarm) mainBottleneck = 'silos';
+        else if (qqRateFromCentrifuges < qqRateToPackers * 0.95) mainBottleneck = 'centrifuges';
+        else if (qqRateFromTachos < qqRateFromCentrifuges * 0.9) mainBottleneck = 'tachos';
+
         return {
             totalBundlesProduced: safeNum(Object.values(simulationState.wrappers).reduce((sum, w) => sum + w.totalBundles, 0)),
             timeToEmptyHours: safeNum(timeToEmptySeconds / 3600, Infinity),
             totalUnitsProduced: safeNum(totalUnitsProduced),
             bottleneckStages,
+            bottleneck: mainBottleneck,
             qqRateFromCentrifuges: safeNum(isSimulating && anyMachineActive ? qqRateFromCentrifuges : 0),
             qqRateToPackers: safeNum(isSimulating && anyMachineActive ? qqRateToPackers : 0),
             processingProgress: safeNum(processingProgress),
@@ -2425,7 +2442,7 @@ export default function OperationsClient({
                                         <Label className="text-xs font-semibold">Turno Automatico</Label>
                                         <div className="text-[10px] text-muted-foreground line-clamp-1">Detener por horas</div>
                                     </div>
-                                    <Switch checked={isShiftGoalEnabled} onCheckedChange={setIsShiftGoalEnabled} size="sm" />
+                                    <Switch checked={isShiftGoalEnabled} onCheckedChange={setIsShiftGoalEnabled} />
                                 </div>
                                 <div className="flex items-center justify-between p-2.5 border rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors">
                                      <div className="space-y-0.5">
@@ -2435,7 +2452,7 @@ export default function OperationsClient({
                                          </div>
                                          <div className="text-[10px] text-muted-foreground line-clamp-1">Nivel optimo de inicio</div>
                                      </div>
-                                     <Switch checked={isAutoStartEnabled} onCheckedChange={setIsAutoStartEnabled} size="sm" />
+                                     <Switch checked={isAutoStartEnabled} onCheckedChange={setIsAutoStartEnabled} />
                                  </div>
                                 <div className="flex items-center justify-between p-2.5 border rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors">
                                      <div className="space-y-0.5">
@@ -2445,7 +2462,7 @@ export default function OperationsClient({
                                          </div>
                                          <div className="text-[10px] text-muted-foreground line-clamp-1">Alimentacion dedicada M4</div>
                                      </div>
-                                     <Switch checked={isReserveSiloEnabled} onCheckedChange={setIsReserveSiloEnabled} size="sm" />
+                                     <Switch checked={isReserveSiloEnabled} onCheckedChange={setIsReserveSiloEnabled} />
                                  </div>
                             </div>
                        </div>
