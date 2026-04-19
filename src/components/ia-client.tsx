@@ -28,7 +28,8 @@ import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const KG_PER_QUINTAL = 50;
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
@@ -1311,23 +1312,12 @@ export default function OperationsClient({
     
     const handleImageSave = React.useCallback(async (type: 'machine' | 'silo' | 'wrapper' | 'tachos' | 'receiver' | 'centrifuge', id: string | number, file: File) => {
         setIsUploading(true);
-        const imagePath = `sim-images/${type}`;
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('path', imagePath);
-
         try {
-            const response = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData,
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.details || `Server error: ${response.statusText}`);
-            }
-
-            const { downloadURL } = await response.json();
+            // Upload directly from client using Firebase Storage SDK (no server credentials needed)
+            const imagePath = `sim-images/${type}/${Date.now()}_${file.name}`;
+            const storageRef = ref(storage, imagePath);
+            await uploadBytes(storageRef, file);
+            const downloadURL = await getDownloadURL(storageRef);
             
             const docRef = doc(db, FIRESTORE_ASSETS_PATH, 'images');
             
@@ -1346,12 +1336,8 @@ export default function OperationsClient({
                 setSilos(prev => prev.map(s => s.id === id ? { ...s, imageUrl: downloadURL } : s));
             } else if (type === 'wrapper') {
                 setWrappers(prev => prev.map(w => w.id === id ? { ...w, imageUrl: downloadURL } : w));
-            } else if (type === 'receiver') {
-                // This part is effectively not used anymore as receivers don't show images.
             } else if (type === 'tachos') {
                 setTachosImageUrl(downloadURL);
-            } else if (type === 'centrifuge') {
-                // This part is effectively not used anymore as centrifuges don't show images.
             }
             toast({ title: "Imagen actualizada", description: "La nueva imagen se ha guardado correctamente."});
 
