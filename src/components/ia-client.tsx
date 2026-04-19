@@ -42,6 +42,25 @@ const safeNum = (val: any, fallback = 0): number => {
     return Number.isFinite(num) ? num : fallback;
 };
 
+const getUnitLabel = (product: any): string => {
+    if (!product || !product.productName) return 'Fardo';
+    if (product.primaryPackaging) return product.primaryPackaging === 'fardo' ? 'Fardo' : (product.primaryPackaging === 'saco' ? 'Saco' : 'Saco A Granel');
+    if (product.presentationWeight && product.sackWeight && product.presentationWeight === product.sackWeight) return 'Saco A Granel';
+    return product.bundleWeight ? 'Fardo' : 'Saco';
+};
+
+const getPackagingTypeLabel = (product: any): string => {
+    if (!product || !product.productName) return '';
+    if (product.primaryPackaging) {
+        if (product.primaryPackaging === 'granel') return 'GRANEL -> SACOS';
+        return product.primaryPackaging === 'fardo' ? 'FUNDAS -> FARDO' : 'FUNDAS -> SACOS';
+    }
+    if (product.presentationWeight && product.sackWeight && product.presentationWeight === product.sackWeight) {
+        return 'GRANEL -> SACOS';
+    }
+    return product.bundleWeight ? 'FUNDAS -> FARDO' : 'FUNDAS -> SACOS';
+};
+
 
 type MachineState = {
     id: number;
@@ -296,7 +315,7 @@ function MachineEditDialog({
                             <SelectTrigger id={`product-${machine.id}`}><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="inactive">-- Inactiva --</SelectItem>
-                                {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName}</SelectItem>)}
+                                {products.map(p => <SelectItem key={p.id} value={p.id}>{p.productName} ({getPackagingTypeLabel(p)})</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -1892,10 +1911,16 @@ export default function OperationsClient({
                         } else {
                             // --- Machine WITHOUT Wrapper (Experimental Manual/Direct Estiba) ---
                             // We accumulate until we reach the bundle equivalent size
-                            // Bundle Size = Sack Weight / Presentation Weight
-                            const bundleSize = (product.sackWeight && product.presentationWeight) 
-                                ? Math.floor(product.sackWeight / product.presentationWeight)
-                                : 12; // Fallback to 12 as per Don Antonio example
+                            let bundleSize = 12; // Fallback default
+                            if (product.presentationWeight && product.presentationWeight > 0) {
+                                if (product.primaryPackaging === 'fardo' && product.bundleWeight) {
+                                    bundleSize = Math.round(product.bundleWeight / product.presentationWeight);
+                                } else if (product.primaryPackaging === 'saco' || product.primaryPackaging === 'granel' || !product.bundleWeight) {
+                                      bundleSize = Math.round((product.sackWeight || 50) / product.presentationWeight);
+                                } else {
+                                    bundleSize = Math.round(product.bundleWeight / product.presentationWeight);
+                                }
+                            }
                             
                             nextState.machineUnwrappedProgress[machine.id] = (nextState.machineUnwrappedProgress[machine.id] || 0) + unitsProducedThisTick;
                             
@@ -1907,9 +1932,13 @@ export default function OperationsClient({
                                 const pName = product.productName;
                                 if (!nextState.palletGroups[pName]) {
                                     const getPalletCapacity = (name: string): number => {
+                                        if (product.unitsPerPallet && product.unitsPerPallet > 0) return product.unitsPerPallet;
+                                        
                                         const lower = name.toLowerCase();
-                                        if (lower.includes('don antonio') || lower.includes('12 kg') || lower.includes('12kg')) return 165;
-                                        if (lower.includes('500 g') || lower.includes('500g') || lower.includes('25 kg') || lower.includes('25kg')) return 72;
+                                        if (lower.includes('1 kg -blanca (50 kg) don antonio')) return 165;
+                                        if (lower.includes('1 kg -blanca (12 kg)')) return 165;
+                                        if (lower.includes('12 kg') || lower.includes('12kg')) return 165;
+                                        if (lower.includes('25 kg') || lower.includes('500 g')) return 72;
                                         return 35;
                                     };
 
@@ -1960,25 +1989,45 @@ export default function OperationsClient({
                     wrapperState.buffer -= unitsToTakeFromBuffer;
                     wrapperState.currentBundleProgress += unitsToTakeFromBuffer;
                     
-                    if (wrapperState.currentBundleProgress >= wrapperConfig.unitsPerBundle && wrapperConfig.unitsPerBundle > 0) {
-                        const bundlesCreated = Math.floor(wrapperState.currentBundleProgress / wrapperConfig.unitsPerBundle);
+                    const activeMachineOnWrapper = machinesRef.current.find(m => 
+                        wrapperConfig.machineIds.includes(m.id) && m.isSimulatingActive && m.productId !== 'inactive'
+                    );
+                    
+                    let unitsRequired = wrapperConfig.unitsPerBundle || 12;
+                    if (activeMachineOnWrapper) {
+                        const product = productsRef.current.find(p => p.id === activeMachineOnWrapper.productId);
+                        if (product) {
+                            if (product.presentationWeight && product.presentationWeight > 0) {
+                                if (product.primaryPackaging === 'fardo' && product.bundleWeight) {
+                                    unitsRequired = Math.round(product.bundleWeight / product.presentationWeight);
+                                } else if (product.primaryPackaging === 'saco' || product.primaryPackaging === 'granel' || !product.bundleWeight) {
+                                    unitsRequired = Math.round((product.sackWeight || 50) / product.presentationWeight);
+                                } else {
+                                    unitsRequired = Math.round(product.bundleWeight / product.presentationWeight);
+                                }
+                            }
+                        }
+                    }
+
+                    if (wrapperState.currentBundleProgress >= unitsRequired && unitsRequired > 0) {
+                        const bundlesCreated = Math.floor(wrapperState.currentBundleProgress / unitsRequired);
                         wrapperState.totalBundles += bundlesCreated;
-                        wrapperState.currentBundleProgress %= wrapperConfig.unitsPerBundle;
+                        wrapperState.currentBundleProgress %= unitsRequired;
 
                         // --- Zona de Estiba Logic for Wrapped Production ---
-                        const activeMachineOnWrapper = machinesRef.current.find(m => 
-                            wrapperConfig.machineIds.includes(m.id) && m.isSimulatingActive && m.productId !== 'inactive'
-                        );
-
                         if (activeMachineOnWrapper) {
                             const product = productsRef.current.find(p => p.id === activeMachineOnWrapper.productId);
                             if (product) {
                                 const pName = product.productName;
                                 if (!nextState.palletGroups[pName]) {
                                     const getPalletCapacity = (name: string): number => {
+                                        if (product.unitsPerPallet && product.unitsPerPallet > 0) return product.unitsPerPallet;
+
                                         const lower = name.toLowerCase();
-                                        if (lower.includes('don antonio') || lower.includes('12 kg') || lower.includes('12kg')) return 165;
-                                        if (lower.includes('500 g') || lower.includes('500g') || lower.includes('25 kg') || lower.includes('25kg')) return 72;
+                                        if (lower.includes('1 kg -blanca (50 kg) don antonio')) return 165;
+                                        if (lower.includes('1 kg -blanca (12 kg)')) return 165;
+                                        if (lower.includes('12 kg') || lower.includes('12kg')) return 165;
+                                        if (lower.includes('25 kg') || lower.includes('500 g')) return 72;
                                         return 35;
                                     };
 
@@ -2749,7 +2798,17 @@ export default function OperationsClient({
                                 const product = products.find(p => p.id === machine.productId);
                                 const unitsPerMinuteNeto = machine.speed * (1 - machine.loss / 100);
                                 const wrapper = wrappersRef.current.find(w => w.machineIds.includes(machine.id));
-                                const fardosPerMinuteNeto = wrapper && wrapper.unitsPerBundle > 0 ? unitsPerMinuteNeto / wrapper.unitsPerBundle : 0;
+                                
+                                let dynamicUPB = wrapper?.unitsPerBundle || 12;
+                                if (product) {
+                                    const pNameLower = product.productName.toLowerCase();
+                                    if (pNameLower.includes('1 kg -blanca (50 kg) don antonio')) {
+                                        dynamicUPB = 12;
+                                    } else if (product.presentationWeight && product.presentationWeight > 0) {
+                                        dynamicUPB = Math.round((product.sackWeight || (pNameLower.includes('50 kg') ? 50 : 12)) / product.presentationWeight);
+                                    }
+                                }
+                                const fardosPerMinuteNeto = wrapper && dynamicUPB > 0 ? unitsPerMinuteNeto / dynamicUPB : 0;
                                 const unitsProducedByMachine = simulationState.machineTotals[machine.id] || 0;
                                 
                                 return (
@@ -2801,6 +2860,11 @@ export default function OperationsClient({
                                              <p className="font-semibold truncate" title={product?.productName || 'Inactiva'}>
                                                  {product?.productName || 'Inactiva'}
                                              </p>
+                                             {product && (
+                                                 <Badge variant="outline" className="text-[10px] mt-0.5 bg-muted/50 font-bold border-primary/20 text-primary">
+                                                     {getPackagingTypeLabel(product)}
+                                                 </Badge>
+                                             )}
                                          </div>
 
                                          {machine.productId !== 'inactive' && (
@@ -2826,7 +2890,7 @@ export default function OperationsClient({
                                                          <p className="font-bold text-sm">{(unitsPerMinuteNeto ?? 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
                                                      </div>
                                                      <div className="bg-background p-1 rounded-md border">
-                                                         <p className="text-muted-foreground">Fardos/Min</p>
+                                                         <p className="text-muted-foreground">{getUnitLabel(product)}s/Min</p>
                                                          <p className="font-bold text-sm text-green-600">{(fardosPerMinuteNeto ?? 0).toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
                                                      </div>
                                                  </div>
@@ -2928,11 +2992,35 @@ export default function OperationsClient({
                                              </div>
                                         </div>
                                           <div>
-                                             <Label className="text-xs">Fardo Actual ({Math.floor(wrapperState.currentBundleProgress ?? 0)}/{wrapperConfig.unitsPerBundle} fundas)</Label>
-                                             <Progress value={(wrapperState.currentBundleProgress / (wrapperConfig.unitsPerBundle || 1)) * 100} />
+                                             {(() => {
+                                                 const activeMachine = machines.find(m => wrapperConfig.machineIds.includes(m.id) && m.isSimulatingActive && m.productId !== 'inactive');
+                                                 const prod = activeMachine ? products.find(p => String(p.id) === String(activeMachine.productId)) : null;
+                                                 let dynamicUPB = wrapperConfig.unitsPerBundle || 12;
+                                                 if (prod) {
+                                                     if (prod.presentationWeight && prod.presentationWeight > 0) {
+                                                         if (prod.primaryPackaging === 'fardo' && prod.bundleWeight) {
+                                                             dynamicUPB = Math.round(prod.bundleWeight / prod.presentationWeight);
+                                                         } else if (prod.primaryPackaging === 'saco' || prod.primaryPackaging === 'granel' || !prod.bundleWeight) {
+                                                             dynamicUPB = Math.round((prod.sackWeight || 50) / prod.presentationWeight);
+                                                         } else {
+                                                             dynamicUPB = Math.round(prod.bundleWeight / prod.presentationWeight);
+                                                         }
+                                                     }
+                                                 }
+                                                 return (
+                                                     <>
+                                                         <Label className="text-xs">{getUnitLabel(prod)} Actual ({Math.floor(wrapperState.currentBundleProgress ?? 0)}/{dynamicUPB} fundas)</Label>
+                                                         <Progress value={(wrapperState.currentBundleProgress / (dynamicUPB || 1)) * 100} />
+                                                     </>
+                                                 );
+                                             })()}
                                          </div>
                                          <div className='text-center border bg-background rounded-lg p-2'>
-                                             <p className="text-xs text-muted-foreground">Total Fardos</p>
+                                             {(() => {
+                                                 const activeMachine = machines.find(m => wrapperConfig.machineIds.includes(m.id) && m.isSimulatingActive && m.productId !== 'inactive');
+                                                 const prod = activeMachine ? products.find(p => String(p.id) === String(activeMachine.productId)) : null;
+                                                 return <p className="text-xs text-muted-foreground">Total {getUnitLabel(prod)}s</p>;
+                                             })()}
                                              <p className="font-bold text-lg text-green-600">{(wrapperState.totalBundles ?? 0).toLocaleString()}</p>
                                          </div>
                                     </div>
