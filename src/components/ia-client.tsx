@@ -136,7 +136,7 @@ type WrapperState = {
 };
 
 type SimulationParams = {
-    machines: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>[];
+    machines: Omit<MachineState, 'imageUrl'>[];
     wrappers: Omit<WrapperState, 'buffer' | 'currentBundleProgress' | 'totalBundles' | 'conveyorBelt' | 'imageUrl'>[];
     silos: Omit<SiloState, 'imageUrl' | 'currentQQ'>[];
     receivers: Omit<ReceiverState, 'imageUrl' | 'currentQQ' | 'state' | 'fillProgress' | 'drainingBy' | 'transferRate'>[];
@@ -1089,10 +1089,10 @@ export default function OperationsClient({
     const getDefaultConfig = (): { params: SimulationParams; images: ImageUrlConfig } => ({
         params: {
             machines: [
-                { id: 1, productId: 'inactive', speed: 0, loss: 0 },
-                { id: 2, productId: 'inactive', speed: 0, loss: 0 },
-                { id: 3, productId: 'inactive', speed: 0, loss: 0 },
-                { id: 4, productId: 'inactive', speed: 0, loss: 0 },
+                { id: 1, productId: 'inactive', speed: 0, loss: 0, isSimulatingActive: false },
+                { id: 2, productId: 'inactive', speed: 0, loss: 0, isSimulatingActive: false },
+                { id: 3, productId: 'inactive', speed: 0, loss: 0, isSimulatingActive: false },
+                { id: 4, productId: 'inactive', speed: 0, loss: 0, isSimulatingActive: false },
             ],
             wrappers: [
                 { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, machineIds: [1, 2] },
@@ -1200,7 +1200,7 @@ export default function OperationsClient({
             setMachines(params.machines.map(m => ({ 
                 ...m, 
                 imageUrl: imageUrls.machines[m.id] || null, 
-                isSimulatingActive: false 
+                isSimulatingActive: m.isSimulatingActive ?? false 
             })));
             setWrappers(params.wrappers.map(w => ({ 
                 ...w, 
@@ -1268,7 +1268,7 @@ export default function OperationsClient({
     const saveParamsToLocalStorage = React.useCallback(() => {
         if (!isClient) return;
         const paramsToSave: SimulationParams = {
-            machines: machines.map(({ isSimulatingActive, imageUrl, ...m }) => m),
+            machines: machines.map(({ imageUrl, ...m }) => m),
             wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, imageUrl, ...w }) => w),
             silos: silos.map(({imageUrl, currentQQ, ...s}) => s),
             receivers: receivers.map(({currentQQ, state, fillProgress, drainingBy, transferRate, ...r}) => r),
@@ -1319,16 +1319,15 @@ export default function OperationsClient({
             await uploadBytes(storageRef, file);
             const downloadURL = await getDownloadURL(storageRef);
             
-            const docRef = doc(db, FIRESTORE_ASSETS_PATH, 'images');
-            
-            let fieldToUpdate = '';
+            // Save as nested object so loader (firestoreImages.machines[id]) can read it correctly
+            let updatePayload: Record<string, any>;
             if (type === 'tachos') {
-                fieldToUpdate = 'tachos';
+                updatePayload = { tachos: downloadURL };
             } else {
-                fieldToUpdate = `${type}s.${id}`;
+                updatePayload = { [`${type}s`]: { [id]: downloadURL } };
             }
-            
-            await setDoc(docRef, { [fieldToUpdate]: downloadURL }, { merge: true });
+            const docRef = doc(db, FIRESTORE_ASSETS_PATH, 'images');
+            await setDoc(docRef, updatePayload, { merge: true });
 
             if (type === 'machine') {
                 setMachines(prev => prev.map(m => m.id === id ? { ...m, imageUrl: downloadURL } : m));
