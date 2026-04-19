@@ -16,7 +16,6 @@ import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
 import InfoDialog from './info-dialog';
-import ReportPreviewDialog from './report-preview-dialog';
 import { usePageVisibility } from '@/hooks/use-page-visibility';
 import { Button } from './ui/button';
 
@@ -166,9 +165,9 @@ export default function Control7Client({
     
     try {
         const suggestions = JSON.parse(suggestionRaw);
-        const suggestionsMap = new Map(suggestions.map((s: any) => [s.productId, s.suggestedPlan]));
+        const suggestionsMap = new Map<string, number>(suggestions.map((s: any) => [s.productId, Number(s.suggestedPlan)]));
         
-        const newData = currentData.map(item => {
+        const newData: ProductData[] = currentData.map(item => {
             const suggestedPlan = suggestionsMap.get(item.id);
             if (suggestedPlan !== undefined) {
                 return {

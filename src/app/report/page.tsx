@@ -26,8 +26,9 @@ async function getPlanData(planId: string) {
 }
 
 
-export default async function ReportPage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined } }) {
-  const planId = typeof searchParams?.planId === 'string' ? searchParams.planId : undefined;
+export default async function ReportPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const { planId: rawPlanId } = await searchParams;
+  const planId = typeof rawPlanId === 'string' ? rawPlanId : undefined;
 
   if (!planId) {
     return (

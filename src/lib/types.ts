@@ -84,12 +84,7 @@ export type StopData = {
 
 export type TimeSlot = {
     // Machine specific observations are nested under machine ID
-    [machineId: string]: {
-      stops?: StopData[]; // Now holds an array of structured stop data
-      weight?: string;
-      bundle_weight?: string;
-      speed?: number; // Theoretical speed in bags/min for this specific timeslot
-    };
+    [key: string]: any;
     // Quality Input
     masa?: string;
     flujo?: string;

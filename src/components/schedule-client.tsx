@@ -429,7 +429,7 @@ export default function StopsClient({
             if (!newTimeSlots[timeSlot]) {
                 newTimeSlots[timeSlot] = {};
             }
-            newTimeSlots[timeSlot][field] = value;
+            (newTimeSlots[timeSlot] as any)[field] = value;
             return { ...prev, timeSlots: newTimeSlots };
         });
     };
@@ -563,7 +563,7 @@ export default function StopsClient({
         Object.values(dailyLog.timeSlots).forEach(slot => {
             if (!slot) return;
             Object.entries(slot).forEach(([machineId, machineData]) => {
-                if (machineData && 'stops' in machineData && machineData.stops) {
+                if (machineData && typeof machineData === 'object' && 'stops' in machineData && machineData.stops) {
                      machineData.stops.forEach(stop => {
                         stops.push({ ...stop, machineId });
                     });
@@ -951,7 +951,7 @@ export default function StopsClient({
                 )}
             </main>
 
-            {modalState?.isOpen && (
+            {modalState?.isOpen && dailyLog && (
                 <StopRegistrationModal 
                     isOpen={modalState.isOpen}
                     onClose={() => setModalState(null)}
@@ -961,6 +961,7 @@ export default function StopsClient({
                     stopData={modalState.stopData}
                     stopCauses={stopCauses}
                     maintenanceTypes={maintenanceTypes}
+                    shift={dailyLog.shift}
                 />
             )}
             {configModalOpen && (

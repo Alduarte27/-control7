@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Separator as SeparatorIcon, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, MapPin } from 'lucide-react';
+import { Package, ChevronLeft, PlusCircle, PackageCheck, Inbox, Play, Camera, AlertTriangle, Weight, HardHat, Trash2, Settings, X, Calendar as CalendarIcon, Zap, Edit, Search, Info, FileDown, Smartphone, QrCode, CheckCircle2, Moon, Sun, ChevronDown, BarChart, Clock, MapPin } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1001,6 +1001,7 @@ export default function MelazaClient({
     const [newMaterialUnitWeight, setNewMaterialUnitWeight] = React.useState('');
     const [newMaterialTotalWeight, setNewMaterialTotalWeight] = React.useState('');
     const [newMaterialGrossWeight, setNewMaterialGrossWeight] = React.useState('');
+    const [newMaterialLote, setNewMaterialLote] = React.useState('');
 
 
     const [selectedMaterials, setSelectedMaterials] = React.useState<Set<string>>(new Set());

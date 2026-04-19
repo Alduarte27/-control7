@@ -77,7 +77,7 @@ export default function ScannerModal({ isOpen, onClose, onScanSuccess }: Scanner
     const videoTrack = streamRef.current.getVideoTracks()[0];
     try {
         await videoTrack.applyConstraints({
-            advanced: [{ torch: !isTorchOn }]
+            advanced: [{ torch: !isTorchOn }] as any
         });
         setIsTorchOn(prev => !prev);
     } catch (error) {

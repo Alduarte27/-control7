@@ -4,13 +4,15 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Package2, Image as ImageIcon, ImageOff, RotateCcw } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Package2, Image as ImageIcon, ImageOff, RotateCcw, ArrowDownToLine, RotateCw, Database, Layers, Palette } from 'lucide-react';
+import AppearanceDialog, { AppearanceConfig } from './appearance-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import KpiCard from '@/components/kpi-card';
 import { Separator } from '@/components/ui/separator';
 import { Pie, Cell, ResponsiveContainer, PieChart, Tooltip as RechartsTooltip } from 'recharts';
@@ -33,6 +35,12 @@ const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 const LOCAL_STORAGE_CONFIG_KEY = 'simulationConfig';
 const FIRESTORE_ASSETS_PATH = 'simulation_assets';
 const LOCAL_STORAGE_SHOW_IMAGES_KEY = 'simulationShowImages';
+const LOCAL_STORAGE_APPEARANCE_KEY = 'simulationAppearance';
+
+const safeNum = (val: any, fallback = 0): number => {
+    const num = typeof val === 'number' ? val : parseFloat(val);
+    return Number.isFinite(num) ? num : fallback;
+};
 
 
 type MachineState = {
@@ -60,6 +68,7 @@ type ReceiverState = {
     state: 'idle' | 'filling' | 'ready' | 'draining';
     fillProgress: number;
     drainingBy: string[]; // Now an array of centrifuge IDs
+    transferRate: number | null;
 };
 
 type CentrifugeState = {
@@ -69,6 +78,7 @@ type CentrifugeState = {
     stageTimeRemaining: number;
     stageProgress: number;
     timeIntoCycle: number;
+    currentLoadQQ: number;
 };
 
 type TachosSimState = {
@@ -121,6 +131,12 @@ type SimulationParams = {
     centrifugePurgeTime: number;
     centrifugeStartInterval: number; 
     isCentrifugesAuto: boolean;
+    bufferTankCapacityQQ: number;
+    bufferTransferTimeMinutes: number;
+    targetShiftHours: number;
+    isShiftGoalEnabled: boolean;
+    isAutoStartEnabled: boolean;
+    isReserveSiloEnabled: boolean;
 };
 
 type ImageUrlConfig = {
@@ -132,6 +148,14 @@ type ImageUrlConfig = {
     tachos: string;
 };
 
+
+type PalletGroup = {
+    productName: string;
+    sacks: number;
+    fullPallets: number;
+    currentPalletSacks: number;
+    sacksPerPallet: number;
+};
 
 type SimulationState = {
     elapsedTime: number; // in seconds
@@ -148,6 +172,13 @@ type SimulationState = {
     totalQQPacked: number;
     timeToProcessReceivers: number;
     initialQQInReceivers: number;
+    bufferTankQQ: number;
+    isBufferDraining: boolean; // Flag to ensure complete emptying cycle
+    silosFullAlarm: boolean; // Flag to stop centrifuges when silos are 100% full
+    accumulatedOperationSeconds: number; // Time only when machines are active
+    machineActiveTimes: { [machineId: number]: number }; // Total operating time for each machine
+    palletGroups: { [productName: string]: PalletGroup };
+    machineUnwrappedProgress: { [machineId: number]: number }; // Progress of machines without wrappers towards a "virtual bundle"
 };
 
 const CustomPieTooltip = ({ active, payload, label }: any) => {
@@ -161,13 +192,13 @@ const CustomPieTooltip = ({ active, payload, label }: any) => {
                     <div className="text-right font-medium truncate" title={data.productName}>{data.productName}</div>
                     
                     <div className="font-semibold text-muted-foreground">Fardos:</div>
-                    <div className="text-right font-medium">{data.value.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+                    <div className="text-right font-medium">{(data.value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
 
                     <div className="font-semibold text-muted-foreground">Fundas:</div>
-                    <div className="text-right font-medium">{data.units.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                    <div className="text-right font-medium">{(data.units ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
                     
                     <div className="font-semibold text-muted-foreground">Consumo QQ:</div>
-                    <div className="text-right font-medium">{data.qqConsumed.toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
+                    <div className="text-right font-medium">{(data.qqConsumed ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}</div>
                 </div>
             </div>
         );
@@ -222,11 +253,11 @@ function MachineEditDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Editar Máquina {machine.id}</DialogTitle>
+                    <DialogTitle>Editar Maquina {machine.id}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                      <div className="space-y-2">
-                        <Label>Previsualización de la Imagen</Label>
+                        <Label>Previsualizacion de la Imagen</Label>
                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                            {isUploading ? (
                                <div className="flex flex-col items-center gap-2">
@@ -236,7 +267,7 @@ function MachineEditDialog({
                            ) : (
                                 <Image 
                                     src={editedMachine.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} 
-                                    alt={`Máquina ${editedMachine.id}`}
+                                    alt={`Maquina ${editedMachine.id}`}
                                     width={600}
                                     height={400}
                                     className="object-contain w-full h-full"
@@ -323,7 +354,7 @@ function SiloEditDialog({
         setEditedSilo(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleTachosConfigFieldChange = (field: keyof typeof localTachosConfig, value: any) => {
+    const handleTachosConfigFieldChange = (field: 'isAuto' | 'cookTime' | 'transferTime' | 'isGoalEnabled' | 'goal' | 'masaQQAmount', value: any) => {
         setLocalTachosConfig(prev => (prev ? { ...prev, [field]: value } : undefined));
     };
 
@@ -352,7 +383,7 @@ function SiloEditDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                      <div className="space-y-2">
-                        <Label>Previsualización de la Imagen</Label>
+                        <Label>Previsualizacion de la Imagen</Label>
                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                            {isUploading ? (
                                <div className="flex flex-col items-center gap-2">
@@ -383,14 +414,14 @@ function SiloEditDialog({
                     </div>
                     {silo.id !== 'tachos' && 'capacityQQ' in silo && (
                         <div className="space-y-1.5">
-                            <Label htmlFor={`silo-cap-${silo.id}`}>Capacidad Máx. (QQ)</Label>
+                            <Label htmlFor={`silo-cap-${silo.id}`}>Capacidad Max. (QQ)</Label>
                             <Input id={`silo-cap-${silo.id}`} type="number" value={(editedSilo as SiloState).capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="0" />
                         </div>
                     )}
                     {isTachos && localTachosConfig && (
                         <>
                             <Separator />
-                            <h4 className="font-medium text-sm">Configuración de Tachos</h4>
+                            <h4 className="font-medium text-sm">Configuracion de Tachos</h4>
                              <div className="space-y-1.5">
                                 <Label htmlFor="auto-masa-qq">QQ por Masa</Label>
                                 <Input
@@ -402,9 +433,9 @@ function SiloEditDialog({
                                 />
                             </div>
                             <Separator />
-                            <h4 className="font-medium text-sm">Configuración de Automatización</h4>
+                            <h4 className="font-medium text-sm">Configuracion de Automatizacion</h4>
                             <div className="flex items-center justify-between">
-                                <Label htmlFor="auto-mode-switch" className="text-sm">Modo Automático</Label>
+                                <Label htmlFor="auto-mode-switch" className="text-sm">Modo Automatico</Label>
                                 <Switch
                                     id="auto-mode-switch"
                                     checked={localTachosConfig.isAuto}
@@ -414,7 +445,7 @@ function SiloEditDialog({
                             <div className={cn("space-y-3 transition-opacity", !localTachosConfig.isAuto && "opacity-50")}>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
-                                        <Label htmlFor="auto-cooktime" className="text-xs">Tiempo de Cocción (min)</Label>
+                                        <Label htmlFor="auto-cooktime" className="text-xs">Tiempo de Coccion (min)</Label>
                                         <Input
                                             id="auto-cooktime"
                                             type="number"
@@ -437,7 +468,7 @@ function SiloEditDialog({
                                     </div>
                                 </div>
                                 <div className="flex items-center justify-between">
-                                    <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envío</Label>
+                                    <Label htmlFor="goal-mode-switch" className="text-xs">Establecer Meta de Envio</Label>
                                     <Switch
                                         id="goal-mode-switch"
                                         checked={localTachosConfig.isGoalEnabled}
@@ -512,7 +543,7 @@ function ReceiverEditDialog({
                         <Input id={`rec-name-${receiver.id}`} type="text" value={editedReceiver.name} onChange={(e) => handleFieldChange('name', e.target.value)} />
                     </div>
                      <div className="space-y-1.5">
-                        <Label htmlFor={`rec-cap-${receiver.id}`}>Capacidad Máx. (QQ)</Label>
+                        <Label htmlFor={`rec-cap-${receiver.id}`}>Capacidad Max. (QQ)</Label>
                         <Input id={`rec-cap-${receiver.id}`} type="number" value={editedReceiver.capacityQQ} onChange={(e) => handleFieldChange('capacityQQ', Number(e.target.value))} min="1" />
                     </div>
                 </div>
@@ -535,8 +566,8 @@ function CentrifugeEditDialog({
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    onSave: (config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => void;
-    config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number };
+    onSave: (config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number, bufferTankCapacityQQ: number, bufferTransferTimeMinutes: number }) => void;
+    config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number, bufferTankCapacityQQ: number, bufferTransferTimeMinutes: number };
     isUploading: boolean;
 }) {
     const [localConfig, setLocalConfig] = React.useState(config);
@@ -565,14 +596,14 @@ function CentrifugeEditDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Editar Configuración de Centrífugas</DialogTitle>
+                    <DialogTitle>Editar Configuracion de Centrifugas</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                      <p className="text-sm text-muted-foreground">
-                        Define la cantidad de masa a procesar, los tiempos del ciclo y el modo de operación.
+                        Define la cantidad de masa a procesar, los tiempos del ciclo y el modo de Operacion.
                     </p>
                     <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
-                        <Label htmlFor="cent-auto-switch" className="text-sm font-medium">Modo Automático</Label>
+                        <Label htmlFor="cent-auto-switch" className="text-sm font-medium">Modo Automatico</Label>
                         <Switch
                            id="cent-auto-switch"
                            checked={localConfig.isAuto}
@@ -589,7 +620,7 @@ function CentrifugeEditDialog({
                                 onChange={(e) => handleValueChange('batchSizeQQ', e.target.value)}
                                 min="1"
                             />
-                            <p className="text-xs text-muted-foreground">La cantidad de masa que cada centrífuga tomará del recibidor en cada ciclo de carga.</p>
+                            <p className="text-xs text-muted-foreground">La cantidad de masa que cada centrifuga tomara del recibidor en cada ciclo de carga.</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-1.5">
@@ -633,8 +664,31 @@ function CentrifugeEditDialog({
                                 />
                             </div>
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label htmlFor="buffer-tank-capacity">Capacidad Pulmon (QQ)</Label>
+                                <Input
+                                    id="buffer-tank-capacity"
+                                    type="number"
+                                    value={localConfig.bufferTankCapacityQQ}
+                                    onChange={(e) => handleValueChange('bufferTankCapacityQQ', e.target.value)}
+                                    min="1"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="buffer-transfer-time">Tiempo Vaciado (min)</Label>
+                                <Input
+                                    id="buffer-transfer-time"
+                                    type="number"
+                                    value={localConfig.bufferTransferTimeMinutes}
+                                    onChange={(e) => handleValueChange('bufferTransferTimeMinutes', e.target.value)}
+                                    min="1"
+                                />
+                            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">Define la capacidad del tanque pulmon y el tiempo que tarda el recibidor en vaciarse por completo.</p>
                          <p className="text-xs text-muted-foreground pt-2">
-                            El **Intervalo de Inicio** es el tiempo de espera entre el inicio de la primera y la segunda centrífuga para asegurar el trabajo alternado.
+                            El **Intervalo de Inicio** es el tiempo de espera entre el inicio de la primera y la segunda centrifuga para asegurar el trabajo alternado.
                         </p>
                     </div>
                 </div>
@@ -709,7 +763,7 @@ function WrapperEditDialog({
                 </DialogHeader>
                 <div className="space-y-4 py-4 max-h-[80vh] overflow-y-auto pr-4">
                     <div className="space-y-2">
-                        <Label>Previsualización de la Imagen</Label>
+                        <Label>Previsualizacion de la Imagen</Label>
                         <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                            {isUploading ? (
                                <div className="flex flex-col items-center gap-2">
@@ -774,7 +828,7 @@ function WrapperEditDialog({
                                         htmlFor={`machine-conn-${wrapper.id}-${machine.id}`}
                                         className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                                     >
-                                        Máquina {machine.id}
+                                        Maquina {machine.id}
                                     </label>
                                 </div>
                             ))}
@@ -831,6 +885,20 @@ export default function OperationsClient({
     const [centrifugePurgeTime, setCentrifugePurgeTime] = React.useState(60);
     const [centrifugeStartInterval, setCentrifugeStartInterval] = React.useState(120);
     const [isCentrifugesAuto, setIsCentrifugesAuto] = React.useState(true);
+    
+    // Appearance State
+    const [appearanceConfig, setAppearanceConfig] = React.useState<AppearanceConfig>({
+        theme: 'light',
+        accentColor: '221 83% 53%',
+        radius: 0.5
+    });
+    const [isAppearanceDialogOpen, setIsAppearanceDialogOpen] = React.useState(false);
+    const [bufferTankCapacityQQ, setBufferTankCapacityQQ] = React.useState(380);
+    const [bufferTransferTimeMinutes, setBufferTransferTimeMinutes] = React.useState(5);
+    const [targetShiftHours, setTargetShiftHours] = React.useState(8);
+    const [isShiftGoalEnabled, setIsShiftGoalEnabled] = React.useState(false);
+    const [isAutoStartEnabled, setIsAutoStartEnabled] = React.useState(false);
+    const [isReserveSiloEnabled, setIsReserveSiloEnabled] = React.useState(false);
 
     // --- UI State ---
     const [editingMachine, setEditingMachine] = React.useState<MachineState | null>(null);
@@ -848,6 +916,21 @@ export default function OperationsClient({
     
     const machinesRef = React.useRef(machines);
     React.useEffect(() => { machinesRef.current = machines; }, [machines]);
+
+    const simulationSpeedRef = React.useRef(simulationSpeed);
+    React.useEffect(() => { simulationSpeedRef.current = simulationSpeed; }, [simulationSpeed]);
+
+    const targetShiftHoursRef = React.useRef(targetShiftHours);
+    React.useEffect(() => { targetShiftHoursRef.current = targetShiftHours; }, [targetShiftHours]);
+
+    const isShiftGoalEnabledRef = React.useRef(isShiftGoalEnabled);
+    React.useEffect(() => { isShiftGoalEnabledRef.current = isShiftGoalEnabled; }, [isShiftGoalEnabled]);
+
+    const isAutoStartEnabledRef = React.useRef(isAutoStartEnabled);
+    React.useEffect(() => { isAutoStartEnabledRef.current = isAutoStartEnabled; }, [isAutoStartEnabled]);
+
+    const isReserveSiloEnabledRef = React.useRef(isReserveSiloEnabled);
+    React.useEffect(() => { isReserveSiloEnabledRef.current = isReserveSiloEnabled; }, [isReserveSiloEnabled]);
 
     const productsRef = React.useRef(products);
     React.useEffect(() => { productsRef.current = products; }, [products]);
@@ -867,7 +950,7 @@ export default function OperationsClient({
             isFinished: false,
             silos: silos.map(s => ({...s, currentQQ: 0})),
             receivers: receivers.map(r => ({...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: []})),
-            centrifuges: centrifuges.map(c => ({...c, state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 })),
+            centrifuges: centrifuges.map(c => ({...c, state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0, currentLoadQQ: 0 })),
             tachos: {
                 id: 'tachos',
                 name: 'Tachos',
@@ -885,6 +968,13 @@ export default function OperationsClient({
             totalQQPacked: 0,
             timeToProcessReceivers: 0,
             initialQQInReceivers: initialQQInReceivers,
+            bufferTankQQ: 0,
+            isBufferDraining: false,
+            silosFullAlarm: false,
+            accumulatedOperationSeconds: 0,
+            machineActiveTimes: { 1: 0, 2: 0, 3: 0, 4: 0 },
+            palletGroups: {},
+            machineUnwrappedProgress: { 1: 0, 2: 0, 3: 0, 4: 0 },
         };
     }, [silos, receivers, centrifuges, tachosCookTime, tachosTransferTime, tachosImageUrl]);
     
@@ -912,8 +1002,8 @@ export default function OperationsClient({
                 return prev;
             }
 
-            const newReceivers = prev.receivers.map(r => 
-                r.id === availableReceiver.id ? { ...r, state: 'filling' } : r
+            const newReceivers: ReceiverState[] = prev.receivers.map(r => 
+                r.id === availableReceiver.id ? { ...r, state: 'filling' as const } : r
             );
 
             sent = true;
@@ -922,7 +1012,7 @@ export default function OperationsClient({
                 receivers: newReceivers,
                 tachos: {
                     ...prev.tachos,
-                    state: 'sending',
+                    state: 'sending' as const,
                     targetReceiverId: availableReceiver.id,
                     timeRemaining: prev.tachos.transferTimeSeconds,
                     progress: 0,
@@ -936,9 +1026,9 @@ export default function OperationsClient({
             toast({ title: 'Masa Enviada Manualmente', description: `La masa ha comenzado a transferirse al ${availableReceiver?.name}.` });
         } else {
             if(simulationState.tachos.state !== 'idle') {
-                toast({ title: 'Tachos no está libre', description: 'El tacho está actualmente ocupado.', variant: 'destructive'});
+                toast({ title: 'Tachos no esta libre', description: 'El tacho esta actualmente ocupado.', variant: 'destructive'});
             } else {
-                toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores están ocupados.', variant: 'destructive' });
+                toast({ title: 'Sin Recibidores Libres', description: 'Todos los recibidores estan ocupados.', variant: 'destructive' });
             }
         }
     };
@@ -961,6 +1051,13 @@ export default function OperationsClient({
         return `${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
     };
     
+    const formatSeconds = (seconds: number) => {
+        const h = Math.floor(seconds / 3600);
+        const m = Math.floor((seconds % 3600) / 60);
+        const s = Math.floor(seconds % 60);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    };
+
     const formatTime = (hours: number) => {
         if (!isFinite(hours) || hours <= 0) return '0h 0m';
         const h = Math.floor(hours);
@@ -982,6 +1079,7 @@ export default function OperationsClient({
             ],
             silos: [
                 { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380 },
+                { id: 'reserva', name: 'Silo de Reserva (M4)', capacityQQ: 150 },
                 { id: 'granel', name: 'Silo a Granel', capacityQQ: 700 },
             ],
             receivers: [
@@ -1000,21 +1098,28 @@ export default function OperationsClient({
             centrifugePurgeTime: 60,
             centrifugeStartInterval: 120,
             isCentrifugesAuto: true,
+            bufferTankCapacityQQ: 380,
+            bufferTransferTimeMinutes: 5,
+            targetShiftHours: 8,
+            isShiftGoalEnabled: false,
+            isAutoStartEnabled: false,
+            isReserveSiloEnabled: false,
         },
         images: {
             machines: {
-                1: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media',
-                2: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media',
-                3: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media',
-                4: 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media',
+                1: "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media",
+                2: "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media",
+                3: "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media",
+                4: "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media",
             },
             wrappers: {
                 '1': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media',
                 '2': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/enfardadora.jpeg?alt=media',
             },
             silos: {
-                'familiar': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media',
-                'granel': 'https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.%20Gran.jpeg?alt=media',
+                'familiar': "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media",
+                'granel': "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media",
+                'reserva': "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/S.Fam.jpeg?alt=media",
             },
             receivers: {},
             centrifuges: {},
@@ -1092,10 +1197,11 @@ export default function OperationsClient({
                 state: 'idle',
                 fillProgress: 0,
                 drainingBy: [],
+                transferRate: null,
             })));
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent1', name: 'CentrÃƒÂ­fuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent2', name: 'CentrÃƒÂ­fuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
             ]);
             setTachosImageUrl(imageUrls.tachos);
             
@@ -1111,6 +1217,12 @@ export default function OperationsClient({
             setCentrifugePurgeTime(params.centrifugePurgeTime || 60);
             setCentrifugeStartInterval(params.centrifugeStartInterval ?? 120);
             setIsCentrifugesAuto(params.isCentrifugesAuto ?? true);
+            setBufferTankCapacityQQ(params.bufferTankCapacityQQ || 380);
+            setBufferTransferTimeMinutes(params.bufferTransferTimeMinutes || 5);
+            setTargetShiftHours(params.targetShiftHours ?? 8);
+            setIsShiftGoalEnabled(params.isShiftGoalEnabled ?? false);
+            setIsAutoStartEnabled(params.isAutoStartEnabled ?? false);
+            setIsReserveSiloEnabled(params.isReserveSiloEnabled ?? false);
 
         } catch (error) {
             console.error("Error loading config:", error);
@@ -1118,10 +1230,10 @@ export default function OperationsClient({
             setMachines(params.machines.map(m => ({ ...m, imageUrl: images.machines[m.id] || null, isSimulatingActive: false })));
             setWrappers(params.wrappers.map(w => ({ ...w, imageUrl: images.wrappers[w.id] || null, buffer: 0, currentBundleProgress: 0, totalBundles: 0, conveyorBelt: [] })));
             setSilos(params.silos.map(s => ({ ...s, imageUrl: images.silos[s.id] || null, currentQQ: 0 })));
-            setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: [] })));
+            setReceivers(params.receivers.map(r => ({ ...r, currentQQ: 0, state: 'idle', fillProgress: 0, drainingBy: [], transferRate: null })));
             setCentrifuges([
-                { id: 'cent1', name: 'Centrífuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
-                { id: 'cent2', name: 'Centrífuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent1', name: 'CentrÃƒÂ­fuga 1', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
+                { id: 'cent2', name: 'CentrÃƒÂ­fuga 2', state: 'idle', stageTimeRemaining: 0, stageProgress: 0, timeIntoCycle: 0 },
             ]);
             setTachosImageUrl(images.tachos);
         }
@@ -1138,7 +1250,7 @@ export default function OperationsClient({
             machines: machines.map(({ isSimulatingActive, imageUrl, ...m }) => m),
             wrappers: wrappers.map(({ buffer, currentBundleProgress, totalBundles, conveyorBelt, imageUrl, ...w }) => w),
             silos: silos.map(({imageUrl, currentQQ, ...s}) => s),
-            receivers: receivers.map(({currentQQ, state, fillProgress, drainingBy, ...r}) => r),
+            receivers: receivers.map(({currentQQ, state, fillProgress, drainingBy, transferRate, ...r}) => r),
             tachosCookTime: tachosCookTime,
             tachosTransferTime: tachosTransferTime,
             tachosGoal: tachosGoal,
@@ -1151,13 +1263,19 @@ export default function OperationsClient({
             centrifugePurgeTime: centrifugePurgeTime,
             centrifugeStartInterval: centrifugeStartInterval,
             isCentrifugesAuto: isCentrifugesAuto,
+            bufferTankCapacityQQ: bufferTankCapacityQQ,
+            bufferTransferTimeMinutes: bufferTransferTimeMinutes,
+            targetShiftHours: targetShiftHours,
+            isShiftGoalEnabled: isShiftGoalEnabled,
+            isAutoStartEnabled: isAutoStartEnabled,
+            isReserveSiloEnabled: isReserveSiloEnabled,
         };
         try {
             window.localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(paramsToSave));
         } catch (error) {
             console.error("Error saving params to localStorage", error);
         }
-    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosTransferTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, masaQQAmount, centrifugeBatchSizeQQ, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeStartInterval, isCentrifugesAuto]);
+    }, [isClient, machines, wrappers, silos, receivers, tachosCookTime, tachosTransferTime, tachosGoal, isTachosAuto, isTachosGoalEnabled, masaQQAmount, centrifugeBatchSizeQQ, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeStartInterval, isCentrifugesAuto, bufferTankCapacityQQ, bufferTransferTimeMinutes, targetShiftHours, isShiftGoalEnabled, isAutoStartEnabled, isReserveSiloEnabled]);
 
     React.useEffect(() => {
         saveParamsToLocalStorage();
@@ -1227,7 +1345,39 @@ export default function OperationsClient({
         } finally {
             setIsUploading(false);
         }
+        
+        // Load appearance
+        const savedAppearance = localStorage.getItem(LOCAL_STORAGE_APPEARANCE_KEY);
+        if (savedAppearance) {
+            try {
+                setAppearanceConfig(JSON.parse(savedAppearance));
+            } catch (e) {
+                console.error("Error loading appearance", e);
+            }
+        }
     }, [toast]);
+
+    // Apply Appearance
+    React.useEffect(() => {
+        // Save to localStorage
+        localStorage.setItem(LOCAL_STORAGE_APPEARANCE_KEY, JSON.stringify(appearanceConfig));
+
+        // Apply Dark Mode
+        const root = window.document.documentElement;
+        const isDark = appearanceConfig.theme === 'dark' || 
+                      (appearanceConfig.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        
+        if (isDark) {
+            root.classList.add('dark');
+        } else {
+            root.classList.remove('dark');
+        }
+
+        // Apply Accent Color & Radius
+        root.style.setProperty('--primary', appearanceConfig.accentColor);
+        root.style.setProperty('--ring', appearanceConfig.accentColor);
+        root.style.setProperty('--radius', `${appearanceConfig.radius}rem`);
+    }, [appearanceConfig]);
 
     const handleMachineSave = (updatedMachine: Omit<MachineState, 'isSimulatingActive' | 'imageUrl'>) => {
         setMachines(prev => prev.map(m => m.id === updatedMachine.id ? { ...m, ...updatedMachine } : m));
@@ -1254,15 +1404,44 @@ export default function OperationsClient({
         setMasaQQAmount(config.masaQQAmount);
     };
 
-    const handleCentrifugeConfigSave = (config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number }) => {
+    const handleCentrifugeConfigSave = (config: { isAuto: boolean; batchSizeQQ: number, loadTime: number, washTime: number, purgeTime: number, startInterval: number, bufferTankCapacityQQ: number }) => {
         setIsCentrifugesAuto(config.isAuto);
         setCentrifugeBatchSizeQQ(config.batchSizeQQ);
         setCentrifugeLoadTime(config.loadTime);
         setCentrifugeWashTime(config.washTime);
         setCentrifugePurgeTime(config.purgeTime);
         setCentrifugeStartInterval(config.startInterval);
-        toast({ title: 'Configuración de Centrífugas Guardada' });
+        setBufferTankCapacityQQ(config.bufferTankCapacityQQ);
+        setBufferTransferTimeMinutes(config.bufferTransferTimeMinutes);
+        toast({ title: 'Configuracion de Centrifugas Guardada' });
     };
+
+    // Inicio manual de una centrifuga especifica (solo en modo manual)
+    const handleManualStartCentrifuge = (centrifugeId: string) => {
+        if (!isSimulating) return;
+        setSimulationState(prev => {
+            const nextState = JSON.parse(JSON.stringify(prev)) as SimulationState;
+            const cent = nextState.centrifuges.find(c => c.id === centrifugeId);
+            
+            if (nextState.silosFullAlarm) {
+                toast({ 
+                    title: "AcciÃƒÂ³n Bloqueada", 
+                    description: "No se puede iniciar la centrifuga: Los silos estan llenos.",
+                    variant: "destructive"
+                });
+                return prev;
+            }
+
+            if (cent && cent.state === 'idle' && nextState.bufferTankQQ > 0.1) {
+                cent.state = 'loading';
+                cent.stageTimeRemaining = centrifugeLoadTime;
+                cent.timeIntoCycle = 0;
+                cent.currentLoadQQ = 0;
+            }
+            return nextState;
+        });
+    };
+
 
     const handleRestoreDefaults = async () => {
         const { params, images } = getDefaultConfig();
@@ -1275,7 +1454,7 @@ export default function OperationsClient({
         }
         
         await loadConfig();
-        toast({ title: 'Configuración Restaurada', description: 'Todos los parámetros de la simulación han vuelto a sus valores por defecto.' });
+        toast({ title: 'Configuracion Restaurada', description: 'Todos los parametros de la simulacion han vuelto a sus valores por defecto.' });
     };
     
     const pauseClock = React.useCallback(() => {
@@ -1311,8 +1490,11 @@ export default function OperationsClient({
                 }
                 
                 let nextState: SimulationState = JSON.parse(JSON.stringify(prev));
-                const elapsedIncrement = (tickRateMs / 1000) * simulationSpeed;
+                const elapsedIncrement = (tickRateMs / 1000) * simulationSpeedRef.current;
                 nextState.elapsedTime += elapsedIncrement;
+                
+                // Track accumulated operation time (only when machines are active and producing)
+                // 'canProduce' is calculated further down, so we'll move the shift logic after line 1700
                 
                 // Update config-dependent times
                 nextState.tachos.cookTimeSeconds = tachosCookTime * 60;
@@ -1344,6 +1526,9 @@ export default function OperationsClient({
                         if (receiver) {
                             receiver.state = 'ready';
                             receiver.fillProgress = 100;
+                            // transferRate = null: el recibidor espera su turno.
+                            // El tanque pulmon debe estar vacio antes de que empiece a drenar.
+                            receiver.transferRate = null;
                         }
                         nextState.tachos.state = 'idle';
                         nextState.tachos.progress = 0;
@@ -1371,6 +1556,58 @@ export default function OperationsClient({
                     setIsTachosAuto(false);
                 }
 
+                // 1.5 Buffer Tank Logic (Receiver -> Buffer Tank)
+                //
+                // REGLA PRINCIPAL:
+                // - El tanque pulmon solo acepta masa cuando esta COMPLETAMENTE VACÃƒÂO.
+                // - Un recibidor que YA esta drenando (transferRate != null) continua
+                //   hasta vaciarse, sin importar el nivel del tanque.
+                // - Cuando no hay drenado activo, el siguiente recibidor espera a que
+                //   el tanque este en 0 para empezar.
+
+                // 1. Continuar drenado activo
+                const activeDraining = nextState.receivers.find(
+                    r => r.state === 'ready' && r.transferRate !== null && r.currentQQ > 0.01
+                );
+
+                if (activeDraining) {
+                    // Sigue transfiriendo hasta vaciarse (pausa si tank llega a 100%)
+                    const spaceInTank = bufferTankCapacityQQ - nextState.bufferTankQQ;
+                    if (spaceInTank > 0.01) {
+                        const rate = activeDraining.transferRate!;
+                        const amountToTransfer = Math.min(activeDraining.currentQQ, rate * elapsedIncrement, spaceInTank);
+                        if (amountToTransfer > 0) {
+                            activeDraining.currentQQ -= amountToTransfer;
+                            nextState.bufferTankQQ = Math.min(bufferTankCapacityQQ, nextState.bufferTankQQ + amountToTransfer);
+                        }
+                    }
+                    // Recibidor vaciado → liberar (idle) para que pueda recibir nueva masa del tacho
+                    if (activeDraining.currentQQ <= 0.01) {
+                        activeDraining.currentQQ = 0;
+                        activeDraining.transferRate = null;
+                        activeDraining.state = 'idle';
+                    }
+                } else {
+                    // 2. No hay drenado activo Ã¢â€ â€™ iniciar SOLO si el tanque esta VACÃƒÂO
+                    const tankIsEmpty = nextState.bufferTankQQ <= 0.01;
+                    if (tankIsEmpty) {
+                        const nextReceiver = nextState.receivers.find(
+                            r => r.state === 'ready' && r.currentQQ > 0.01
+                        );
+                        if (nextReceiver) {
+                            // Calcular tasa ahora (primer tick del drenado)
+                            nextReceiver.transferRate = nextReceiver.currentQQ / (bufferTransferTimeMinutes * 60);
+                            const rate = nextReceiver.transferRate;
+                            const amountToTransfer = Math.min(nextReceiver.currentQQ, rate * elapsedIncrement, bufferTankCapacityQQ);
+                            if (amountToTransfer > 0) {
+                                nextReceiver.currentQQ -= amountToTransfer;
+                                nextState.bufferTankQQ = Math.min(bufferTankCapacityQQ, nextState.bufferTankQQ + amountToTransfer);
+                            }
+                        }
+                    }
+                    // Tank aun tiene masa Ã¢â€ â€™ recibidores esperan en 'ready' sin drenar
+                }
+
                 // 2. Centrifuges Logic
                 let qqPurgedThisTick = 0;
 
@@ -1388,19 +1625,14 @@ export default function OperationsClient({
                         case 'loading': {
                             const stageDuration = centrifugeLoadTime;
                             const consumption = (centrifugeBatchSizeQQ / stageDuration) * elapsedIncrement;
-                            const drainingReceiver = nextState.receivers.find(r => r.drainingBy.includes(cent.id));
-
-                            if (drainingReceiver) {
-                                const amountToDrain = Math.min(consumption, drainingReceiver.currentQQ);
-                                drainingReceiver.currentQQ -= amountToDrain;
-                            }
+                            
+                            const amountToDrain = Math.min(consumption, nextState.bufferTankQQ);
+                            nextState.bufferTankQQ -= amountToDrain;
+                            cent.currentLoadQQ += amountToDrain;
                             
                             cent.stageProgress = Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration);
 
                             if (cent.stageTimeRemaining <= 0) {
-                                if (drainingReceiver) {
-                                    drainingReceiver.drainingBy = drainingReceiver.drainingBy.filter(id => id !== cent.id);
-                                }
                                 cent.state = 'washing_centrifuging';
                                 cent.stageTimeRemaining = centrifugeWashTime; 
                             }
@@ -1419,7 +1651,7 @@ export default function OperationsClient({
                         case 'purging': {
                             const stageDuration = centrifugePurgeTime;
                              if (stageDuration > 0) {
-                                const qqPerSecond = centrifugeBatchSizeQQ / stageDuration;
+                                const qqPerSecond = cent.currentLoadQQ / stageDuration;
                                 qqPurgedThisTick += qqPerSecond * elapsedIncrement;
                                 cent.stageProgress = Math.min(100, 100 * (stageDuration - cent.stageTimeRemaining) / stageDuration);
                             }
@@ -1427,6 +1659,7 @@ export default function OperationsClient({
                             if (cent.stageTimeRemaining <= 0) {
                                 cent.state = 'idle';
                                 cent.timeIntoCycle = 0;
+                                cent.currentLoadQQ = 0;
                             }
                             break;
                         }
@@ -1434,62 +1667,116 @@ export default function OperationsClient({
                 });
 
                 if (isCentrifugesAuto) {
-                    const idleCentrifuges = nextState.centrifuges.filter(c => c.state === 'idle');
-                    const runningCentrifuges = nextState.centrifuges.filter(c => c.state !== 'idle');
+                    // 1. Control de Alarma de Silos
+                    const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
+                    const granelSilo = nextState.silos.find(s => s.id === 'granel');
+                    const allSilosFull = (familiarSilo?.currentQQ ?? 0) >= (familiarSilo?.capacityQQ ?? 0) - 0.1 && 
+                                        (granelSilo?.currentQQ ?? 0) >= (granelSilo?.capacityQQ ?? 0) - 0.1;
                     
-                    for (const idleCent of idleCentrifuges) {
-                        const availableReceiver = nextState.receivers.find(r => r.state === 'ready' && r.currentQQ >= centrifugeBatchSizeQQ);
-                        if (!availableReceiver) continue;
-
-                        let canStart = false;
-                        if (runningCentrifuges.length === 0) {
-                            canStart = true; // First one can always start
-                        } else {
-                            // Check if the OTHER centrifuge has been running for longer than the interval
-                            const otherCentrifuge = runningCentrifuges.find(c => c.id !== idleCent.id);
-                            if (!otherCentrifuge || (otherCentrifuge.timeIntoCycle >= centrifugeStartInterval)) {
-                                canStart = true;
-                            }
+                    if (allSilosFull) {
+                        nextState.silosFullAlarm = true;
+                    } else {
+                        // Reseteo con histeresis (por debajo del 95% en alguno de los silos)
+                        const familiarLevel = familiarSilo ? (familiarSilo.currentQQ / familiarSilo.capacityQQ) : 1;
+                        const granelLevel = granelSilo ? (granelSilo.currentQQ / granelSilo.capacityQQ) : 1;
+                        if (familiarLevel < 0.95 || granelLevel < 0.95) {
+                            nextState.silosFullAlarm = false;
                         }
-                        
-                        if (canStart) {
-                            idleCent.state = 'loading';
-                            idleCent.stageTimeRemaining = centrifugeLoadTime;
-                            idleCent.timeIntoCycle = 0; // Reset cycle timer on start
-                            availableReceiver.drainingBy.push(idleCent.id);
-                            runningCentrifuges.push(idleCent); // Add to running list for next tick
+                    }
+
+                    // Update isBufferDraining state based on levels
+                    if (nextState.bufferTankQQ >= (bufferTankCapacityQQ * 0.5)) {
+                        nextState.isBufferDraining = true;
+                    } else if (nextState.bufferTankQQ <= 0.1) {
+                        nextState.isBufferDraining = false;
+                    }
+
+                    // MODO AUTOMÃƒÂTICO: Las centrifugas inician cuando se activa el modo de drenado
+                    // (al llegar al 50%) y continÃƒÂºan operando hasta que el tanque se vacÃƒÂ­e.
+                    // BLOQUEO: Solo inician si la alarma de silos NO esta activa.
+                    if (nextState.isBufferDraining && !nextState.silosFullAlarm) {
+
+                        const idleCentrifuges = nextState.centrifuges.filter(c => c.state === 'idle');
+                        const runningCentrifuges = nextState.centrifuges.filter(c => c.state !== 'idle');
+
+                        for (const idleCent of idleCentrifuges) {
+                            if (nextState.bufferTankQQ > 0.1) {
+                                let canStart = false;
+                                if (runningCentrifuges.length === 0) {
+                                    canStart = true;
+                                } else {
+                                    const otherCentrifuge = runningCentrifuges.find(c => c.id !== idleCent.id);
+                                    if (!otherCentrifuge || (otherCentrifuge.timeIntoCycle >= centrifugeStartInterval)) {
+                                        canStart = true;
+                                    }
+                                }
+
+                                if (canStart) {
+                                    idleCent.state = 'loading';
+                                    idleCent.stageTimeRemaining = centrifugeLoadTime;
+                                    idleCent.timeIntoCycle = 0;
+                                    idleCent.currentLoadQQ = 0;
+                                    runningCentrifuges.push(idleCent);
+                                }
+                            }
                         }
                     }
                 }
+                // MODO MANUAL: el usuario inicia cada centrifuga con el boton en la UI.
+
 
 
                 nextState.qqInCentrifuges = qqPurgedThisTick > 0 ? (qqPurgedThisTick / elapsedIncrement) * 3600 : prev.qqInCentrifuges;
 
                 nextState.receivers.forEach(r => {
                     if (r.currentQQ <= 0.1 && r.state === 'ready' && r.drainingBy.length === 0) {
-                       r.state = 'idle';
+                        r.state = 'idle';
                     }
                 });
 
                 if (qqPurgedThisTick > 0) {
                     nextState.totalQQProduced += qqPurgedThisTick;
                     const familiarSilo = nextState.silos.find(s => s.id === 'familiar');
-                    if (familiarSilo) {
-                        const availableCapacity = familiarSilo.capacityQQ - familiarSilo.currentQQ;
-                        const toFamiliar = Math.min(qqPurgedThisTick, availableCapacity);
-                        familiarSilo.currentQQ += toFamiliar;
+                    const reserveSilo = nextState.silos.find(s => s.id === 'reserva');
+                    
+                    let remainingQQ = qqPurgedThisTick;
 
-                        const overflow = qqPurgedThisTick - toFamiliar;
-                        if (overflow > 0) {
-                            const granelSilo = nextState.silos.find(s => s.id === 'granel');
-                            if (granelSilo) {
-                                granelSilo.currentQQ = Math.min(granelSilo.capacityQQ, granelSilo.currentQQ + overflow);
+                    // Simultaneous distribution to Familiar and Reserva
+                    if (familiarSilo || reserveSilo) {
+                        const targetSilos = [];
+                        if (familiarSilo && familiarSilo.currentQQ < familiarSilo.capacityQQ) targetSilos.push(familiarSilo);
+                        if (reserveSilo && reserveSilo.currentQQ < reserveSilo.capacityQQ) targetSilos.push(reserveSilo);
+
+                        if (targetSilos.length > 0) {
+                            const qqPerSilo = remainingQQ / targetSilos.length;
+                            targetSilos.forEach(silo => {
+                                const canTake = Math.min(qqPerSilo, silo.capacityQQ - silo.currentQQ);
+                                silo.currentQQ += canTake;
+                                remainingQQ -= canTake;
+                            });
+                            
+                            // If one was full and the other not, try to give the rest to the one with space
+                            if (remainingQQ > 0) {
+                                const sillWithSpace = targetSilos.find(s => s.currentQQ < s.capacityQQ);
+                                if (sillWithSpace) {
+                                    const takeMore = Math.min(remainingQQ, sillWithSpace.capacityQQ - sillWithSpace.currentQQ);
+                                    sillWithSpace.currentQQ += takeMore;
+                                    remainingQQ -= takeMore;
+                                }
                             }
+                        }
+                    }
+
+                    const overflow = remainingQQ;
+                    if (overflow > 0) {
+                        const granelSilo = nextState.silos.find(s => s.id === 'granel');
+                        if (granelSilo) {
+                            granelSilo.currentQQ = Math.min(granelSilo.capacityQQ, granelSilo.currentQQ + overflow);
                         }
                     }
                 }
                 
-                const totalQQinReceiversNow = nextState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
+                const totalQQinReceiversNow = nextState.receivers.reduce((sum, r) => sum + r.currentQQ, 0) + nextState.bufferTankQQ;
                 const singleCycleTime = centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime;
                 const effectiveTimePerBatch = centrifugeStartInterval > 0 ? centrifugeStartInterval : singleCycleTime;
                 const centrifugeThroughputQQperHour = effectiveTimePerBatch > 0 ? (centrifugeBatchSizeQQ * 3600) / effectiveTimePerBatch : 0;
@@ -1498,31 +1785,86 @@ export default function OperationsClient({
 
 
                 // 3. Envasadoras & Enfardadoras Logic
-                const totalKgConsumedPerSecond = machinesRef.current
-                    .filter(m => m.isSimulatingActive && m.productId !== 'inactive')
-                    .reduce((sum, machine) => {
-                        const product = productsRef.current.find(p => p.id === machine.productId);
-                        if (!product || !product.presentationWeight) return sum;
-                        const bagsPerMinute = machine.speed * (1 - machine.loss / 100);
-                        return sum + (bagsPerMinute * product.presentationWeight) / 60;
-                    }, 0);
-                
-                const kgConsumedThisTick = totalKgConsumedPerSecond * elapsedIncrement;
-                
                 const familiarSilo = nextState.silos.find((s: SiloState) => s.id === 'familiar');
-                const canProduce = familiarSilo && familiarSilo.currentQQ * KG_PER_QUINTAL >= kgConsumedThisTick;
+                const reserveSilo = nextState.silos.find((s: SiloState) => s.id === 'reserva');
+
+                // Determine which machines consume from which silo
+                const activeMachines = machinesRef.current.filter(m => m.isSimulatingActive && m.productId !== 'inactive');
                 
-                if (canProduce && kgConsumedThisTick > 0 && familiarSilo) {
-                    const qqConsumed = kgConsumedThisTick / KG_PER_QUINTAL;
-                    familiarSilo.currentQQ -= qqConsumed;
-                    nextState.totalQQPacked += qqConsumed;
-                } else if (totalKgConsumedPerSecond > 0) {
-                    if (familiarSilo) familiarSilo.currentQQ = 0;
+                let totalKgConsumedPerSecond = 0;
+                let canProduceAllRequired = true;
+
+                // Temporary objects to store consumption to apply after verification
+                const consumptionBySilo: Record<string, number> = { familiar: 0, reserva: 0 };
+                const machineCanProduce: Record<number, boolean> = {};
+
+                activeMachines.forEach(machine => {
+                    const product = productsRef.current.find(p => p.id === machine.productId);
+                    if (!product || !product.presentationWeight) return;
+                    
+                    const bagsPerMinute = machine.speed * (1 - machine.loss / 100);
+                    const kgPerSecond = (bagsPerMinute * product.presentationWeight) / 60;
+                    const kgThisTick = kgPerSecond * elapsedIncrement;
+
+                    // Decision: which silo to use?
+                    const useReserve = machine.id === 4 && isReserveSiloEnabledRef.current;
+                    const targetSilo = useReserve ? reserveSilo : familiarSilo;
+                    
+                    if (targetSilo && targetSilo.currentQQ * KG_PER_QUINTAL >= kgThisTick) {
+                        machineCanProduce[machine.id] = true;
+                        consumptionBySilo[targetSilo.id] += kgThisTick;
+                        totalKgConsumedPerSecond += kgPerSecond;
+                    } else {
+                        machineCanProduce[machine.id] = false;
+                        if (targetSilo) targetSilo.currentQQ = 0; // Empty it if it was almost empty
+                    }
+                });
+
+                // Apply verified consumption
+                if (familiarSilo) {
+                    const qqFromFamiliar = consumptionBySilo.familiar / KG_PER_QUINTAL;
+                    familiarSilo.currentQQ -= qqFromFamiliar;
+                    nextState.totalQQPacked += qqFromFamiliar;
+                }
+                if (reserveSilo) {
+                    const qqFromReserve = consumptionBySilo.reserva / KG_PER_QUINTAL;
+                    reserveSilo.currentQQ -= qqFromReserve;
+                    nextState.totalQQPacked += qqFromReserve;
+                }
+
+                // Overall production status for timing logic
+                const canProduce = Object.values(machineCanProduce).some(v => v === true);
+
+                // 4. Shift Duration Logic
+                const isOperating = totalKgConsumedPerSecond > 0 && canProduce;
+                if (isOperating) {
+                    nextState.accumulatedOperationSeconds += elapsedIncrement;
+                }
+
+                if (isShiftGoalEnabledRef.current && nextState.accumulatedOperationSeconds >= (targetShiftHoursRef.current * 3600)) {
                     nextState.isFinished = true;
                 }
 
+                // 5. Auto-Start Logic (30% Silo Level)
+                const familiarSiloForStart = nextState.silos.find(s => s.id === 'familiar');
+                const familiarLevelPercent = familiarSiloForStart ? (familiarSiloForStart.currentQQ / familiarSiloForStart.capacityQQ) * 100 : 0;
+                
+                if (isAutoStartEnabledRef.current && familiarLevelPercent >= 30) {
+                    const machinesToStart = machinesRef.current.filter(m => m.productId !== 'inactive' && !m.isSimulatingActive);
+                    if (machinesToStart.length > 0) {
+                        // We use setMachines to update the UI state. 
+                        // The machinesRef will be updated automatically via the useEffect on machines.
+                        setMachines(prevMachines => prevMachines.map(m => {
+                            if (m.productId !== 'inactive' && !m.isSimulatingActive) {
+                                return { ...m, isSimulatingActive: true };
+                            }
+                            return m;
+                        }));
+                    }
+                }
+
                 machinesRef.current
-                    .filter(m => m.isSimulatingActive && m.productId !== 'inactive' && canProduce)
+                    .filter(m => m.isSimulatingActive && m.productId !== 'inactive' && machineCanProduce[m.id])
                     .forEach(machine => {
                         const product = productsRef.current.find(p => p.id === machine.productId);
                         if (!product) return;
@@ -1532,9 +1874,54 @@ export default function OperationsClient({
                         const unitsProducedThisTick = unitsPerSecond * elapsedIncrement;
 
                         nextState.machineTotals[machine.id] += unitsProducedThisTick;
+                        nextState.machineActiveTimes[machine.id] = (nextState.machineActiveTimes[machine.id] || 0) + elapsedIncrement;
+                        
                         const targetWrapper = wrappersRef.current.find(w => w.machineIds.includes(machine.id));
                         if (targetWrapper) {
                             nextState.wrappers[targetWrapper.id].conveyorBelt.push({ producedAt: prev.elapsedTime, units: unitsProducedThisTick });
+                        } else {
+                            // --- Machine WITHOUT Wrapper (Experimental Manual/Direct Estiba) ---
+                            // We accumulate until we reach the bundle equivalent size
+                            // Bundle Size = Sack Weight / Presentation Weight
+                            const bundleSize = (product.sackWeight && product.presentationWeight) 
+                                ? Math.floor(product.sackWeight / product.presentationWeight)
+                                : 12; // Fallback to 12 as per Don Antonio example
+                            
+                            nextState.machineUnwrappedProgress[machine.id] = (nextState.machineUnwrappedProgress[machine.id] || 0) + unitsProducedThisTick;
+                            
+                            if (nextState.machineUnwrappedProgress[machine.id] >= bundleSize) {
+                                const virtualBundlesFinished = Math.floor(nextState.machineUnwrappedProgress[machine.id] / bundleSize);
+                                nextState.machineUnwrappedProgress[machine.id] %= bundleSize;
+                                
+                                // Direct entry to Estiba
+                                const pName = product.productName;
+                                if (!nextState.palletGroups[pName]) {
+                                    const getPalletCapacity = (name: string): number => {
+                                        const lower = name.toLowerCase();
+                                        if (lower.includes('don antonio') || lower.includes('12 kg') || lower.includes('12kg')) return 165;
+                                        if (lower.includes('500 g') || lower.includes('500g') || lower.includes('25 kg') || lower.includes('25kg')) return 72;
+                                        return 35;
+                                    };
+
+                                    nextState.palletGroups[pName] = {
+                                        productName: pName,
+                                        sacks: 0,
+                                        fullPallets: 0,
+                                        currentPalletSacks: 0,
+                                        sacksPerPallet: getPalletCapacity(pName)
+                                    };
+                                }
+                                
+                                const pGroup = nextState.palletGroups[pName];
+                                pGroup.sacks += virtualBundlesFinished;
+                                pGroup.currentPalletSacks += virtualBundlesFinished;
+
+                                if (pGroup.currentPalletSacks >= pGroup.sacksPerPallet) {
+                                    const palletsFinished = Math.floor(pGroup.currentPalletSacks / pGroup.sacksPerPallet);
+                                    pGroup.fullPallets += palletsFinished;
+                                    pGroup.currentPalletSacks %= pGroup.sacksPerPallet;
+                                }
+                            }
                         }
                     });
 
@@ -1567,8 +1954,56 @@ export default function OperationsClient({
                         const bundlesCreated = Math.floor(wrapperState.currentBundleProgress / wrapperConfig.unitsPerBundle);
                         wrapperState.totalBundles += bundlesCreated;
                         wrapperState.currentBundleProgress %= wrapperConfig.unitsPerBundle;
+
+                        // --- Zona de Estiba Logic for Wrapped Production ---
+                        const activeMachineOnWrapper = machinesRef.current.find(m => 
+                            wrapperConfig.machineIds.includes(m.id) && m.isSimulatingActive && m.productId !== 'inactive'
+                        );
+
+                        if (activeMachineOnWrapper) {
+                            const product = productsRef.current.find(p => p.id === activeMachineOnWrapper.productId);
+                            if (product) {
+                                const pName = product.productName;
+                                if (!nextState.palletGroups[pName]) {
+                                    const getPalletCapacity = (name: string): number => {
+                                        const lower = name.toLowerCase();
+                                        if (lower.includes('don antonio') || lower.includes('12 kg') || lower.includes('12kg')) return 165;
+                                        if (lower.includes('500 g') || lower.includes('500g') || lower.includes('25 kg') || lower.includes('25kg')) return 72;
+                                        return 35;
+                                    };
+
+                                    nextState.palletGroups[pName] = {
+                                        productName: pName,
+                                        sacks: 0,
+                                        fullPallets: 0,
+                                        currentPalletSacks: 0,
+                                        sacksPerPallet: getPalletCapacity(pName)
+                                    };
+                                }
+                                
+                                const pGroup = nextState.palletGroups[pName];
+                                pGroup.sacks += bundlesCreated;
+                                pGroup.currentPalletSacks += bundlesCreated;
+
+                                if (pGroup.currentPalletSacks >= pGroup.sacksPerPallet) {
+                                    const palletsFinished = Math.floor(pGroup.currentPalletSacks / pGroup.sacksPerPallet);
+                                    pGroup.fullPallets += palletsFinished;
+                                    pGroup.currentPalletSacks %= pGroup.sacksPerPallet;
+                                }
+                            }
+                        }
                     }
+                    wrapperState.currentBundleProgress = safeNum(wrapperState.currentBundleProgress);
+                    wrapperState.totalBundles = safeNum(wrapperState.totalBundles);
+                    wrapperState.buffer = safeNum(wrapperState.buffer);
                 }
+
+                // Final state sanitization to prevent NaN propagation
+                nextState.totalQQProduced = safeNum(nextState.totalQQProduced);
+                nextState.totalQQPacked = safeNum(nextState.totalQQPacked);
+                nextState.bufferTankQQ = safeNum(nextState.bufferTankQQ);
+                nextState.timeToProcessReceivers = safeNum(nextState.timeToProcessReceivers);
+                nextState.elapsedTime = safeNum(nextState.elapsedTime);
 
                 return nextState;
             });
@@ -1616,48 +2051,150 @@ export default function OperationsClient({
             const bagsPerMinuteForThisWrapper = connectedMachines.reduce((machineSum, machine) => machineSum + (machine.speed * (1 - machine.loss/100)), 0);
             
             const wrapperEffectiveBagsPerMinute = Math.min(bagsPerMinuteForThisWrapper, wrapper.capacity);
-            
             return sum + (wrapperEffectiveBagsPerMinute / (wrapper.unitsPerBundle || 1));
         }, 0);
         
         return {
             isWrapperBottleneck,
-            totalBagsPerMinuteFromPackers,
-            totalWrapperCapacity,
-            bundlesPerMinute,
+            totalBagsPerMinuteFromPackers: safeNum(totalBagsPerMinuteFromPackers),
+            totalWrapperCapacity: safeNum(totalWrapperCapacity),
+            bundlesPerMinute: safeNum(bundlesPerMinute),
         };
 
     }, [machines, wrappers]);
 
     const liveSimulationResults = React.useMemo(() => {
-        let totalUnitsProduced = 0;
-        machinesRef.current.forEach(machine => {
-            if (machine.productId !== 'inactive' && simulationState.machineTotals[machine.id]) {
-                const machineUnits = simulationState.machineTotals[machine.id] || 0;
-                totalUnitsProduced += machineUnits;
-            }
-        });
-        
+        const totalUnitsProduced = Object.values(simulationState.machineTotals).reduce((sum, total) => sum + total, 0);
         const anyMachineActive = machines.some(m => m.isSimulatingActive);
+
+        // 1. Tachos Rate
+        const qqRateFromTachos = (masaQQAmount * 3600) / (tachosCookTime * 60 + tachosTransferTime * 60);
         
-        const qqRateToPackers = (staticSimulationResults.totalBagsPerMinuteFromPackers * 60 / 1000) * KG_PER_QUINTAL;
-        
+        // 2. Centrifuge Rate
         const effectiveTimePerBatch = centrifugeStartInterval > 0 ? centrifugeStartInterval : (centrifugeLoadTime + centrifugeWashTime + centrifugePurgeTime);
         const qqRateFromCentrifuges = effectiveTimePerBatch > 0 ? (centrifugeBatchSizeQQ * 3600) / effectiveTimePerBatch * 2 : 0;
         
+        // 3. Packer Rate
+        const qqRateToPackers = (staticSimulationResults.totalBagsPerMinuteFromPackers * 60 / 1000) * KG_PER_QUINTAL;
+        
+        // 4. Wrapper Rate
+        // Ratio of Bags/Min to QQ/h from packers: (qqRateToPackers / totalBagsPerMinuteFromPackers)
+        const qqPerBagMinute = staticSimulationResults.totalBagsPerMinuteFromPackers > 0 
+            ? qqRateToPackers / staticSimulationResults.totalBagsPerMinuteFromPackers 
+            : (60 / 1000) * KG_PER_QUINTAL;
+        const qqRateFromWrappers = staticSimulationResults.totalWrapperCapacity * qqPerBagMinute;
+
         const familiarSilo = simulationState.silos.find(s => s.id === 'familiar');
+        const familiarSiloLevel = (familiarSilo?.currentQQ || 0) / (familiarSilo?.capacityQQ || 1) * 100;
         const familiarSiloKg = (familiarSilo?.currentQQ || 0) * KG_PER_QUINTAL;
         const totalKgConsumedPerSecond = (qqRateToPackers / 3600) * KG_PER_QUINTAL;
         const timeToEmptySeconds = totalKgConsumedPerSecond > 0 ? familiarSiloKg / totalKgConsumedPerSecond : Infinity;
         
-        let bottleneck: 'none' | 'wrapper' | 'centrifuge' | 'inactive' = 'none';
+        const bottleneckStages: { name: string; status: 'optimal' | 'warning' | 'critical'; message: string; advice: string }[] = [];
 
         if (!anyMachineActive) {
-            bottleneck = 'inactive';
-        } else if (staticSimulationResults.isWrapperBottleneck) {
-            bottleneck = 'wrapper';
-        } else if (isSimulating && qqRateToPackers > qqRateFromCentrifuges && qqRateFromCentrifuges > 0) {
-            bottleneck = 'centrifuge';
+            bottleneckStages.push({
+                name: "Sistema",
+                status: 'warning',
+                message: "Linea Detenida",
+                advice: "Active las envasadoras para iniciar el analisis de flujo."
+            });
+        } else {
+            // Tachos vs Centrifuges
+            if (qqRateFromTachos < qqRateFromCentrifuges * 0.9) {
+                bottleneckStages.push({
+                    name: "Cristalizacion",
+                    status: 'critical',
+                    message: "Tacho es el cuello de botella",
+                    advice: "Aumente el tamano de masa o reduzca tiempos de coccion."
+                });
+            } else {
+                bottleneckStages.push({
+                    name: "Cristalizacion",
+                    status: 'optimal',
+                    message: "Suministro de masa fluido",
+                    advice: "Balance optimo."
+                });
+            }
+
+            // Centrifugas vs Packers
+            if (qqRateFromCentrifuges < qqRateToPackers * 0.95) {
+                bottleneckStages.push({
+                    name: "Purga",
+                    status: 'critical',
+                    message: "Baja capacidad de centrifugado",
+                    advice: "El silo se vaciara. Aumente la velocidad de centrifugado."
+                });
+            } else if (qqRateFromCentrifuges < qqRateToPackers * 1.1) {
+                bottleneckStages.push({
+                    name: "Purga",
+                    status: 'warning',
+                    message: "Capacidad ajustada",
+                    advice: "Casi al lÃƒÂ­mite de la demanda de empaque."
+                });
+            } else {
+                bottleneckStages.push({
+                    name: "Purga",
+                    status: 'optimal',
+                    message: "Centrifugadoras eficientes",
+                    advice: "Produccion superior a la demanda."
+                });
+            }
+
+            // Silos status
+            if (simulationState.silosFullAlarm) {
+                bottleneckStages.push({
+                    name: "Almacenamiento",
+                    status: 'critical',
+                    message: "Silos Llenos",
+                    advice: "Produccion detenida. Aumente el ritmo de empaque."
+                });
+            } else if (familiarSiloLevel < 10) {
+                bottleneckStages.push({
+                    name: "Almacenamiento",
+                    status: 'critical',
+                    message: "Nivel CrÃƒÂ­tico de AzÃƒÂºcar",
+                    advice: "Surtido insuficiente desde centrifugas."
+                });
+            } else if (familiarSiloLevel < 25) {
+                bottleneckStages.push({
+                    name: "Almacenamiento",
+                    status: 'warning',
+                    message: "Nivel Bajo",
+                    advice: "Vigilancia necesaria."
+                });
+            } else {
+                bottleneckStages.push({
+                    name: "Almacenamiento",
+                    status: 'optimal',
+                    message: "Stock estable",
+                    advice: "Niveles adecuados."
+                });
+            }
+
+            // Packers vs Wrappers
+            if (staticSimulationResults.isWrapperBottleneck) {
+                bottleneckStages.push({
+                    name: "Empaque",
+                    status: 'critical',
+                    message: "Enfardadora saturada",
+                    advice: "Reduzca velocidad de envasadoras o anada enfardadoras."
+                });
+            } else if (staticSimulationResults.totalBagsPerMinuteFromPackers > staticSimulationResults.totalWrapperCapacity * 0.8) {
+                bottleneckStages.push({
+                    name: "Empaque",
+                    status: 'warning',
+                    message: "Alta carga en enfardado",
+                    advice: "Poco margen de maniobra."
+                });
+            } else {
+                bottleneckStages.push({
+                    name: "Empaque",
+                    status: 'optimal',
+                    message: "Flujo de salida balanceado",
+                    advice: "Carga de trabajo estable."
+                });
+            }
         }
 
         const totalQQinReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
@@ -1665,16 +2202,21 @@ export default function OperationsClient({
         const processingProgress = simulationState.initialQQInReceivers > 0 ? (processedQQ / simulationState.initialQQInReceivers) * 100 : 0;
 
         return {
-            totalBundlesProduced: Object.values(simulationState.wrappers).reduce((sum, w) => sum + w.totalBundles, 0),
-            timeToEmptyHours: timeToEmptySeconds / 3600,
-            totalUnitsProduced,
-            bottleneck,
-            qqRateFromCentrifuges: isSimulating && anyMachineActive ? qqRateFromCentrifuges : 0,
-            qqRateToPackers: isSimulating && anyMachineActive ? qqRateToPackers : 0,
-            processingProgress,
+            totalBundlesProduced: safeNum(Object.values(simulationState.wrappers).reduce((sum, w) => sum + w.totalBundles, 0)),
+            timeToEmptyHours: safeNum(timeToEmptySeconds / 3600, Infinity),
+            totalUnitsProduced: safeNum(totalUnitsProduced),
+            bottleneckStages,
+            qqRateFromCentrifuges: safeNum(isSimulating && anyMachineActive ? qqRateFromCentrifuges : 0),
+            qqRateToPackers: safeNum(isSimulating && anyMachineActive ? qqRateToPackers : 0),
+            processingProgress: safeNum(processingProgress),
+            totalPallets: Object.values(simulationState.palletGroups).reduce((sum, group) => sum + group.fullPallets, 0),
+            globalEfficiency: simulationState.elapsedTime > 0 ? (simulationState.accumulatedOperationSeconds / simulationState.elapsedTime) * 100 : 0,
+            totalInProcessQQ: (simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0) + 
+                               simulationState.bufferTankQQ + 
+                               simulationState.silos.reduce((sum, s) => sum + s.currentQQ, 0))
         }
 
-    }, [simulationState, machines, staticSimulationResults, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeBatchSizeQQ, centrifugeStartInterval, isSimulating]);
+    }, [simulationState, machines, staticSimulationResults, centrifugeLoadTime, centrifugeWashTime, centrifugePurgeTime, centrifugeBatchSizeQQ, centrifugeStartInterval, isSimulating, masaQQAmount, tachosCookTime, tachosTransferTime]);
     
     const simTachos = simulationState.tachos;
     const tachosStateConfig = {
@@ -1685,7 +2227,7 @@ export default function OperationsClient({
     };
     const currentTachosConfig = tachosStateConfig[simTachos.state];
 
-    const tachosStateForDialog = { id: 'tachos', name: 'Tachos', ...simulationState.tachos };
+    const tachosStateForDialog = { ...simulationState.tachos };
     
     const totalQQInReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
 
@@ -1697,10 +2239,21 @@ export default function OperationsClient({
           <Factory className="h-8 w-8 text-primary" />
           <h1 className="text-2xl font-bold text-foreground">Panel de Operaciones</h1>
         </div>
-        <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver a la Planificación</Button></Link>
+        <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver a la Planificacion</Button></Link>
       </header>
       
       <main className="p-4 md:p-8 space-y-8">
+        {simulationState.silosFullAlarm && (
+            <Alert variant="destructive" className="border-2 animate-pulse">
+                <AlertTriangle className="h-5 w-5" />
+                <AlertTitle className="font-bold">ALERTA: CAPACIDAD DE SILOS AGOTADA</AlertTitle>
+                <AlertDescription>
+                    La produccion se ha detenido automaticamente porque todos los silos estan al 100%. 
+                    La Linea se reanudara cuando el nivel de los silos baje del 95%.
+                </AlertDescription>
+            </Alert>
+        )}
+
         {!isClient ? (
           <div className="flex justify-center items-center h-64">
             <p className="text-muted-foreground">Cargando panel de operaciones...</p>
@@ -1708,7 +2261,7 @@ export default function OperationsClient({
         ) : (
         <>
             <div className="mb-8">
-                <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Producción</h3>
+                <h3 className="text-lg font-semibold text-center mb-4">Flujo del Proceso de Produccion</h3>
                 <div className="flex justify-around items-center p-4 border rounded-lg bg-muted/30 overflow-x-auto">
                     <TooltipProvider> <Tooltip> <TooltipTrigger>
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
@@ -1716,47 +2269,55 @@ export default function OperationsClient({
                             <h4 className="font-semibold">Tachos</h4>
                             <p className="text-sm text-muted-foreground">{simulationState.totalMasasSent} Masas</p>
                         </div>
-                    </TooltipTrigger> <TooltipContent><p>Inicio: Generación de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger> <TooltipContent><p>Inicio: GeneraciÃƒÂ³n de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
                     <TooltipProvider> <Tooltip> <TooltipTrigger>
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Droplets className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Recibidores</h4>
-                             <p className="text-sm text-muted-foreground">{totalQQInReceivers.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
+                             <p className="text-sm text-muted-foreground">{(totalQQInReceivers ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                         </div>
                     </TooltipTrigger> <TooltipContent><p>Almacenamiento temporal de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
                     <TooltipProvider> <Tooltip> <TooltipTrigger>
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
-                            <Hourglass className="h-10 w-10 text-primary" />
-                            <h4 className="font-semibold">Centrífugas</h4>
-                             <p className="text-sm text-muted-foreground">{simulationState.totalQQProduced.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
+                            <Activity className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold text-xs md:text-sm">Tanque Pulmon</h4>
+                             <p className="text-xs text-muted-foreground">{(simulationState.bufferTankQQ ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                         </div>
-                    </TooltipTrigger>  <TooltipContent> <p>Total de azúcar purgada y lavada.</p> </TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger> <TooltipContent><p>Pulmon de almacenamiento intermedio.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                    <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
+                    <TooltipProvider> <Tooltip> <TooltipTrigger>
+                        <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
+                            <Hourglass className="h-10 w-10 text-primary" />
+                            <h4 className="font-semibold text-xs md:text-sm">Centrifugas</h4>
+                             <p className="text-xs text-muted-foreground">{(simulationState.totalQQProduced ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
+                        </div>
+                    </TooltipTrigger>  <TooltipContent> <p>Total de azucar purgada y lavada.</p> </TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
                     <TooltipProvider>  <Tooltip>  <TooltipTrigger>
                         <div className="flex flex-col items-center gap-2 text-center min-w-[80px]">
                             <Warehouse className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Silos</h4>
-                            <p className="text-sm text-muted-foreground">{simulationState.silos.find(s => s.id === 'familiar')?.currentQQ.toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
+                            <p className="text-sm text-muted-foreground">{(simulationState.silos.find(s => s.id === 'familiar')?.currentQQ ?? 0).toLocaleString(undefined, {maximumFractionDigits: 0})} QQ</p>
                         </div>
-                    </TooltipTrigger>  <TooltipContent> <p>Almacenamiento de azúcar seca.</p> </TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger>  <TooltipContent> <p>Almacenamiento de azucar seca.</p> </TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
                     <TooltipProvider>  <Tooltip>  <TooltipTrigger>
                         <div className={cn("flex flex-col items-center gap-2 text-center p-2 rounded-md min-w-[90px]", liveSimulationResults.bottleneck === 'wrapper' && 'bg-destructive/10')}>
                             <Package className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Envasado</h4>
-                            <p className="text-sm text-muted-foreground">{Math.floor(liveSimulationResults.totalUnitsProduced).toLocaleString()} Fundas</p>
+                            <p className="text-sm text-muted-foreground">{Math.floor(liveSimulationResults.totalUnitsProduced ?? 0).toLocaleString()} Fundas</p>
                         </div>
-                    </TooltipTrigger>  <TooltipContent> <p>Producción de las envasadoras.</p> </TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger>  <TooltipContent> <p>Produccion de las envasadoras.</p> </TooltipContent> </Tooltip> </TooltipProvider>
                     <ArrowRight className="h-8 w-8 text-muted-foreground shrink-0 mx-2 md:mx-4" />
                     <TooltipProvider>  <Tooltip>  <TooltipTrigger>
                         <div className="flex flex-col items-center gap-2 text-center min-w-[90px]">
                             <PackageCheck className="h-10 w-10 text-primary" />
                             <h4 className="font-semibold">Enfardado</h4>
-                             <p className="text-sm text-muted-foreground">{staticSimulationResults.bundlesPerMinute.toLocaleString(undefined, { maximumFractionDigits: 2 })} Fardos/Min</p>
+                             <p className="text-sm text-muted-foreground">{(staticSimulationResults.bundlesPerMinute ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} Fardos/Min</p>
                         </div>
-                    </TooltipTrigger>  <TooltipContent> <p>Capacidad teórica de empaque final en fardos por minuto.</p> </TooltipContent> </Tooltip> </TooltipProvider>
+                    </TooltipTrigger>  <TooltipContent> <p>Capacidad teÃƒÂ³rica de empaque final en fardos por minuto.</p> </TooltipContent> </Tooltip> </TooltipProvider>
                 </div>
             </div>
             
@@ -1764,8 +2325,18 @@ export default function OperationsClient({
                 <Card>
                     <CardHeader className="flex-col md:flex-row items-start md:items-center justify-between gap-4">
                         <div className="flex items-center gap-2">
-                            <CardTitle>Controles de Simulación</CardTitle>
+                            <CardTitle>Controles de Simulacion</CardTitle>
                             <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button variant="ghost" size="icon" onClick={() => setIsAppearanceDialogOpen(true)}>
+                                            <Palette className="h-5 w-5 text-primary" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Personalizar Apariencia</p>
+                                    </TooltipContent>
+                                </Tooltip>
                                 <Tooltip>
                                     <TooltipTrigger asChild>
                                         <Button variant="ghost" size="icon" onClick={handleShowImagesChange}>
@@ -1773,7 +2344,7 @@ export default function OperationsClient({
                                         </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                        <p>{showImages ? 'Ocultar Imágenes' : 'Mostrar Imágenes'}</p>
+                                        <p>{showImages ? 'Ocultar ImÃƒÂ¡genes' : 'Mostrar ImÃƒÂ¡genes'}</p>
                                     </TooltipContent>
                                 </Tooltip>
                                 <Tooltip>
@@ -1786,14 +2357,14 @@ export default function OperationsClient({
                                             </AlertDialogTrigger>
                                             <AlertDialogContent>
                                                 <AlertDialogHeader>
-                                                    <AlertDialogTitle>Restaurar Configuración por Defecto</AlertDialogTitle>
+                                                    <AlertDialogTitle>Restaurar Configuracion por Defecto</AlertDialogTitle>
                                                     <AlertDialogDescription>
-                                                        ¿Estás seguro? Esto restaurará todos los parámetros de la simulación (en este navegador) y las imágenes (para todos los usuarios) a sus valores originales.
+                                                        ¿Estas seguro? Esto restaurara todos los parametros de la simulacion (en este navegador) y las imagenes (para todos los usuarios) a sus valores originales.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
                                                     <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={handleRestoreDefaults}>Sí, Restaurar</AlertDialogAction>
+                                                    <AlertDialogAction onClick={handleRestoreDefaults}>Si, Restaurar</AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
                                         </AlertDialog>
@@ -1819,30 +2390,94 @@ export default function OperationsClient({
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                        <div className="space-y-4">
-                            <div className="space-y-1.5">
-                                 <div className='flex justify-between items-center'>
-                                   <Label htmlFor="sim-speed">Acelerador de Tiempo (x{simulationSpeed.toLocaleString()})</Label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                                 <div className="space-y-1.5">
+                                      <div className='flex justify-between items-center'>
+                                        <Label htmlFor="sim-speed">Acelerador de Tiempo (x{(simulationSpeed ?? 1).toLocaleString()})</Label>
+                                      </div>
+                                      <Slider
+                                         id="sim-speed"
+                                         min={1}
+                                         max={1000}
+                                         step={1}
+                                         value={[simulationSpeed]}
+                                         onValueChange={(value) => setSimulationSpeed(value[0])}
+                                      />
                                  </div>
-                                 <Slider
-                                    id="sim-speed"
-                                    min={1}
-                                    max={1000}
-                                    step={1}
-                                    value={[simulationSpeed]}
-                                    onValueChange={(value) => setSimulationSpeed(value[0])}
-                                 />
+                                 <div className="space-y-1.5">
+                                     <div className="flex justify-between items-center">
+                                         <Label className="text-xs">Duracion del Turno (Horas de Operacion)</Label>
+                                         <span className="text-xs font-mono font-bold bg-primary/10 text-primary px-2 py-0.5 rounded">{targetShiftHours}h</span>
+                                     </div>
+                                     <Slider 
+                                         min={0.5} 
+                                         max={24} 
+                                         step={0.5} 
+                                         value={[targetShiftHours]} 
+                                         onValueChange={(v) => setTargetShiftHours(v[0])} 
+                                     />
+                                 </div>
+                             </div>
+
+                            <div className="pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div className="flex items-center justify-between p-2.5 border rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors">
+                                    <div className="space-y-0.5">
+                                        <Label className="text-xs font-semibold">Turno Automatico</Label>
+                                        <div className="text-[10px] text-muted-foreground line-clamp-1">Detener por horas</div>
+                                    </div>
+                                    <Switch checked={isShiftGoalEnabled} onCheckedChange={setIsShiftGoalEnabled} size="sm" />
+                                </div>
+                                <div className="flex items-center justify-between p-2.5 border rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors">
+                                     <div className="space-y-0.5">
+                                         <div className="flex items-center gap-2">
+                                             <Label className="text-xs font-semibold">Auto-Arranque (30%)</Label>
+                                             <TooltipProvider> <Tooltip> <TooltipTrigger asChild><Activity className="h-3 w-3 text-muted-foreground cursor-help"/></TooltipTrigger> <TooltipContent><p className="w-60 text-xs text-center border-none shadow-none bg-transparent">Las maquinas se encenderan solas cuando el silo familiar tenga suficiente reserva (30%) para asegurar produccion continua.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                                         </div>
+                                         <div className="text-[10px] text-muted-foreground line-clamp-1">Nivel optimo de inicio</div>
+                                     </div>
+                                     <Switch checked={isAutoStartEnabled} onCheckedChange={setIsAutoStartEnabled} size="sm" />
+                                 </div>
+                                <div className="flex items-center justify-between p-2.5 border rounded-lg bg-muted/20 hover:bg-muted/40 transition-colors">
+                                     <div className="space-y-0.5">
+                                         <div className="flex items-center gap-2">
+                                             <Label className="text-xs font-semibold">Reserva (M4)</Label>
+                                             <TooltipProvider> <Tooltip> <TooltipTrigger asChild><Database className="h-3 w-3 text-muted-foreground cursor-help"/></TooltipTrigger> <TooltipContent><p className="w-60 text-xs text-center border-none shadow-none bg-transparent text-xs">Activa el consumo desde el Silo de Reserva de 150 QQ para la Maquina 4.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                                         </div>
+                                         <div className="text-[10px] text-muted-foreground line-clamp-1">Alimentacion dedicada M4</div>
+                                     </div>
+                                     <Switch checked={isReserveSiloEnabled} onCheckedChange={setIsReserveSiloEnabled} size="sm" />
+                                 </div>
                             </div>
                        </div>
-                       <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4">
-                           <Clock className="h-6 w-6 text-muted-foreground mb-2" />
-                           <p className="text-sm text-muted-foreground">Tiempo Transcurrido</p>
-                           <p className="text-4xl font-bold font-mono text-primary">{formatElapsedTime(simulationState.elapsedTime)}</p>
-                            {simulationState.isFinished && simulationState.elapsedTime > 0 && (
-                               <p className="text-destructive font-semibold mt-2 flex items-center gap-2">
-                                    <AlertTriangle className="h-4 w-4" />
-                                    ¡Sin Materia Prima en Silo Familiar!
-                               </p>
-                           )}
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full">
+                           <div className="flex flex-col items-center justify-center bg-muted/30 border rounded-lg p-4 transition-all hover:bg-muted/50">
+                               <Clock className="h-5 w-5 text-muted-foreground mb-1" />
+                               <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold italic">Tiempo Cronologico</p>
+                               <p className="text-2xl font-bold font-mono text-foreground">{formatElapsedTime(simulationState.elapsedTime)}</p>
+                           </div>
+                           <div className="flex flex-col items-center justify-center bg-muted/40 border border-primary/20 rounded-lg p-4 relative overflow-hidden transition-all hover:bg-muted/60">
+                               <Activity className={cn("h-5 w-5 mb-1", isSimulating && machines.some(m => m.isSimulatingActive) && (simulationState.silos.find(s => s.id === 'familiar')?.currentQQ || 0) > 0 ? "text-primary animate-pulse" : "text-muted-foreground")} />
+                               <p className="text-[10px] uppercase tracking-wider text-primary font-bold italic">Tiempo de Operacion</p>
+                               <p className="text-2xl font-bold font-mono text-primary">{formatElapsedTime(simulationState.accumulatedOperationSeconds)}</p>
+                               {isShiftGoalEnabled && (
+                                   <div className="w-full mt-2 h-1.5 bg-muted rounded-full overflow-hidden border border-primary/10">
+                                       <div 
+                                           className="h-full bg-primary transition-all duration-300" 
+                                           style={{ width: `${Math.min(100, (simulationState.accumulatedOperationSeconds / (targetShiftHours * 3600)) * 100)}%` }}
+                                       />
+                                   </div>
+                               )}
+                               {isShiftGoalEnabled && simulationState.accumulatedOperationSeconds >= (targetShiftHours * 3600) && (
+                                   <div className="absolute inset-0 bg-primary/10 flex items-center justify-center backdrop-blur-[1px]">
+                                       <Badge className="bg-primary text-primary-foreground font-bold py-1">TURNO COMPLETADO</Badge>
+                                   </div>
+                               )}
+                               {isSimulating && machines.some(m => m.isSimulatingActive) && (simulationState.silos.find(s => s.id === 'familiar')?.currentQQ || 0) <= 0.1 && (
+                                   <div className="absolute bottom-0 left-0 right-0 bg-destructive/80 text-destructive-foreground text-[10px] py-0.5 text-center font-bold animate-pulse">
+                                       ESPERANDO MATERIA PRIMA
+                                   </div>
+                               )}
+                           </div>
                        </div>
                    </CardContent>
                 </Card>
@@ -1855,8 +2490,10 @@ export default function OperationsClient({
                          {/* Tachos */}
                          <div className="p-4 border rounded-lg space-y-3 bg-background flex flex-col h-full">
                              <div className='flex justify-between items-start'>
-                                 <h3 className="font-bold text-lg flex items-center gap-2">{simTachos.name}
-                                 {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
+                                 <h3 className="font-bold text-lg flex items-center gap-2">
+                                     <Factory className="h-5 w-5 text-primary" />
+                                     {simTachos.name}
+                                     {isTachosAuto && <Badge variant="secondary">Auto</Badge>}
                                  </h3>
                                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(tachosStateForDialog)}>
                                       <Edit className="h-4 w-4" />
@@ -1898,7 +2535,10 @@ export default function OperationsClient({
                                 return (
                                      <div key={receiver.id} className="p-4 border rounded-lg bg-background flex-1 flex flex-col h-full">
                                          <div className='flex justify-between items-start mb-2'>
-                                             <h3 className="font-bold text-lg">{receiver.name}</h3>
+                                             <h3 className="font-bold text-lg flex items-center gap-2">
+                                                 <ArrowDownToLine className="h-5 w-5 text-primary" />
+                                                 {receiver.name}
+                                             </h3>
                                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingReceiver(receiver)}>
                                                   <Edit className="h-4 w-4" />
                                              </Button>
@@ -1915,7 +2555,7 @@ export default function OperationsClient({
                                                   <Progress value={consumptionPercentage} indicatorClassName="bg-amber-500" />
                                              </div>
                                               <div className="text-center">
-                                                  <p className="text-sm">Nivel: {simReceiver.currentQQ.toFixed(0)} / {simReceiver.capacityQQ.toLocaleString()} QQ</p>
+                                                  <p className="text-sm">Nivel: {(simReceiver.currentQQ ?? 0).toFixed(0)} / {(simReceiver.capacityQQ ?? 0).toLocaleString()} QQ</p>
                                              </div>
                                          </div>
                                      </div>
@@ -1923,55 +2563,111 @@ export default function OperationsClient({
                             })}
                          </div>
 
-                         {/* Centrifuges */}
-                         <div className="p-4 border rounded-lg bg-background flex flex-col h-full">
-                             <div className="flex justify-between items-start mb-2">
-                                 <div className="space-y-1">
-                                     <h3 className="font-bold text-lg">Centrífugas</h3>
-                                 </div>
-                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
-                                      <Edit className="h-4 w-4" />
-                                 </Button>
-                             </div>
-                             <div className="space-y-2 mb-3">
-                                <div className="flex justify-between items-center text-xs">
-                                  <Label className="text-muted-foreground">Tiempo para Procesar</Label>
-                                  <span className="font-bold text-primary">{formatElapsedTime(simulationState.timeToProcessReceivers * 3600)}</span>
-                                </div>
-                                <Progress value={liveSimulationResults.processingProgress} />
-                            </div>
-                             <div className="grid grid-cols-2 gap-4 flex-grow">
-                                {centrifuges.map((centrifuge) => {
-                                    const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
-                                    const stateConfig = {
-                                        idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
-                                        loading: { text: "Cargando", color: "text-blue-600", icon: Droplets },
-                                        washing_centrifuging: { text: "Lavando/Girar", color: "text-purple-600", icon: Waves },
-                                        purging: { text: "Purgando", color: "text-amber-600", icon: Snowflake },
-                                    };
-                                    const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
-                                    return (
-                                         <div key={centrifuge.id} className="border p-3 rounded-lg flex flex-col justify-between">
-                                             <div>
-                                                 <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
+                         {/* Centrifuges and Buffer Tank Column */}
+                         <div className="flex flex-col gap-4 h-full">
+                              {/* Buffer Tank Card */}
+                              <div className="p-4 border rounded-lg bg-background">
+                                   <div className="flex justify-between items-start mb-2">
+                                        <div className="space-y-1">
+                                             <h3 className="font-bold text-lg flex items-center gap-2">
+                                                  <Waves className="h-5 w-5 text-blue-500" />
+                                                   Tanque Pulmon
+                                             </h3>
+                                        </div>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
+                                             <Edit className="h-4 w-4" />
+                                        </Button>
+                                   </div>
+                                   <div className="space-y-3">
+                                        <div className="space-y-1">
+                                             <div className="flex justify-between text-xs mb-1">
+                                                  <Label className="text-muted-foreground font-medium">Nivel de Masa</Label>
+                                                  <span className="font-bold text-blue-600">{safeNum(simulationState.bufferTankQQ).toFixed(1)} QQ</span>
                                              </div>
-                                             <div className="space-y-1">
-                                                 <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
-                                                     <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
-                                                     <span>{formatElapsedTime(simCentrifuge.stageTimeRemaining)}</span>
-                                                 </div>
-                                                  <Progress value={simCentrifuge.stageProgress} indicatorClassName={cn(
-                                                     simCentrifuge.state === 'loading' ? 'bg-blue-500' :
-                                                     simCentrifuge.state === 'washing_centrifuging' ? 'bg-purple-500' :
-                                                     simCentrifuge.state === 'purging' ? 'bg-amber-500' :
-                                                     'bg-primary'
-                                                 )} />
+                                             <Progress 
+                                                  value={safeNum((simulationState.bufferTankQQ / (bufferTankCapacityQQ || 1)) * 100)} 
+                                                  indicatorClassName="bg-blue-600" 
+                                             />
+                                             <div className="flex justify-between text-[10px] text-muted-foreground mt-1 text-center font-medium">
+                                                  <span>Capacidad Max: {safeNum(bufferTankCapacityQQ ?? 380).toLocaleString()} QQ</span>
                                              </div>
-                                         </div>
-                                    )
-                                })}
-                             </div>
-                         </div>
+                                        </div>
+                                   </div>
+                              </div>
+
+                              {/* Centrifuges */}
+                               <div className="p-4 border rounded-lg bg-background flex-grow flex flex-col h-full">
+                                   <div className="flex justify-between items-start mb-2">
+                                       <div className="space-y-1">
+                                           <h3 className="font-bold text-lg flex items-center gap-2">
+                                                <RotateCw className="h-5 w-5 text-primary" />
+                                                Centrifugas
+                                               <Badge variant={isCentrifugesAuto ? "default" : "secondary"} className="text-[10px] py-0">
+                                                   {isCentrifugesAuto ? '⚡ Auto' : 'Ã°Å¸â€“Â Manual'}
+                                               </Badge>
+                                           </h3>
+                                           {isCentrifugesAuto && (
+                                               <p className="text-[10px] text-muted-foreground">
+                                                   Inicia al ≥ 50% del tanque pulmon
+                                               </p>
+                                           )}
+                                       </div>
+                                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingCentrifuges(true)}>
+                                            <Edit className="h-4 w-4" />
+                                       </Button>
+                                   </div>
+                                   <div className="space-y-2 mb-3">
+                                      <div className="flex justify-between items-center text-xs">
+                                        <Label className="text-muted-foreground">Tiempo para Procesar</Label>
+                                        <span className="font-bold text-primary">{formatElapsedTime(simulationState.timeToProcessReceivers * 3600)}</span>
+                                      </div>
+                                      <Progress value={liveSimulationResults.processingProgress} />
+                                  </div>
+                                   <div className="grid grid-cols-2 gap-4 flex-grow">
+                                      {centrifuges.map((centrifuge) => {
+                                          const simCentrifuge = simulationState.centrifuges.find(c => c.id === centrifuge.id) || centrifuge;
+                                          const stateConfig = {
+                                              idle: { text: "Libre", color: "text-primary", icon: CircleSlash },
+                                              loading: { text: "Cargando", color: "text-blue-600", icon: Droplets },
+                                              washing_centrifuging: { text: "Lavando/Girar", color: "text-purple-600", icon: Waves },
+                                              purging: { text: "Purgando", color: "text-amber-600", icon: Snowflake },
+                                          };
+                                          const currentCentrifugeConfig = stateConfig[simCentrifuge.state];
+                                          const canManualStart = !isCentrifugesAuto && simCentrifuge.state === 'idle' && (simulationState.bufferTankQQ ?? 0) > 0.1 && isSimulating;
+                                          return (
+                                               <div key={centrifuge.id} className="border p-3 rounded-lg flex flex-col justify-between gap-2">
+                                                   <div>
+                                                       <h4 className='text-sm font-semibold mb-2'>{simCentrifuge.name}</h4>
+                                                   </div>
+                                                   <div className="space-y-1">
+                                                       <div className={cn("flex justify-between items-center text-xs font-medium", currentCentrifugeConfig.color)}>
+                                                           <span className="flex items-center gap-1.5"><currentCentrifugeConfig.icon className="h-3 w-3" /> {currentCentrifugeConfig.text}</span>
+                                                           <span>{formatElapsedTime(simCentrifuge.stageTimeRemaining)}</span>
+                                                       </div>
+                                                        <Progress value={simCentrifuge.stageProgress} indicatorClassName={cn(
+                                                           simCentrifuge.state === 'loading' ? 'bg-blue-500' :
+                                                           simCentrifuge.state === 'washing_centrifuging' ? 'bg-purple-500' :
+                                                           simCentrifuge.state === 'purging' ? 'bg-amber-500' :
+                                                           'bg-primary'
+                                                       )} />
+                                                   </div>
+                                                   {!isCentrifugesAuto && (
+                                                       <Button
+                                                           size="sm"
+                                                           className="w-full h-7 text-xs"
+                                                           onClick={() => handleManualStartCentrifuge(centrifuge.id)}
+                                                           disabled={!canManualStart}
+                                                       >
+                                                           <Play className="h-3 w-3 mr-1" />
+                                                           {simCentrifuge.state === 'idle' ? 'Iniciar' : 'En Proceso'}
+                                                       </Button>
+                                                   )}
+                                               </div>
+                                          )
+                                      })}
+                                   </div>
+                               </div>
+                          </div>
                     </CardContent>
                 </Card>
 
@@ -1979,7 +2675,7 @@ export default function OperationsClient({
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">2. Almacenamiento</CardTitle>
                     </CardHeader>
-                    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {silos.map((silo) => {
                             const simSilo = simulationState.silos.find(s => s.id === silo.id) || silo;
                             const fillPercentage = simSilo.capacityQQ > 0 ? (simSilo.currentQQ / simSilo.capacityQQ) * 100 : 0;
@@ -1989,10 +2685,18 @@ export default function OperationsClient({
                             return (
                                  <div key={simSilo.id} className="p-4 border rounded-lg space-y-3 bg-background">
                                       <div className='flex justify-between items-start'>
-                                         <h3 className="font-bold text-lg">{simSilo.name}</h3>
-                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
-                                              <Edit className="h-4 w-4" />
-                                         </Button>
+                                         <h3 className="font-bold text-lg flex items-center gap-2">
+                                              <Database className="h-5 w-5 text-primary" />
+                                              {simSilo.name}
+                                          </h3>
+                                         <div className="flex items-center gap-1.5">
+                                              {simulationState.silosFullAlarm && fillPercentage >= 99 && (
+                                                  <Badge variant="destructive" className="text-[10px] animate-pulse">CAPACIDAD CRÃƒÂTICA</Badge>
+                                              )}
+                                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
+                                                   <Edit className="h-4 w-4" />
+                                              </Button>
+                                         </div>
                                      </div>
                                     {showImages && (
                                          <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden my-2">
@@ -2000,21 +2704,21 @@ export default function OperationsClient({
                                          </div>
                                     )}
                                      <div className="space-y-1.5">
-                                         <Label className='text-xs text-muted-foreground'>Capacidad: {simSilo.capacityQQ.toLocaleString()} QQ</Label>
+                                         <Label className='text-xs text-muted-foreground'>Capacidad: {(simSilo.capacityQQ ?? 0).toLocaleString()} QQ</Label>
                                     </div>
                                      <div className="space-y-2 pt-2">
-                                         <Label className="text-sm">Nivel: {simSilo.currentQQ.toLocaleString(undefined, {maximumFractionDigits:1})} QQ ({fillPercentage.toFixed(1)}%)</Label>
+                                         <Label className="text-sm">Nivel: {(simSilo.currentQQ ?? 0).toLocaleString(undefined, {maximumFractionDigits:1})} QQ ({(fillPercentage ?? 0).toFixed(1)}%)</Label>
                                          <Progress value={fillPercentage} indicatorClassName={fillColorClass} />
                                      </div>
                                       {isProductionSilo && (
                                           <div className="text-center border bg-muted/30 rounded-lg p-2">
-                                               <p className="text-xs text-muted-foreground">Tiempo de Producción Restante</p>
+                                               <p className="text-xs text-muted-foreground">Tiempo de Produccion Restante</p>
                                                <p className="text-lg font-bold text-primary">{formatTime(liveSimulationResults.timeToEmptyHours)}</p>
-                                          </div>
-                                     )}
-                                 </div>
-                            )
-                        })}
+                                           </div>
+                                      )}
+                                  </div>
+                             )
+                         })}
                     </CardContent>
                 </Card>
 
@@ -2034,7 +2738,9 @@ export default function OperationsClient({
                                 return (
                                      <div key={machine.id} className={cn("p-3 border rounded-lg space-y-3 bg-background relative transition-all", machine.isSimulatingActive && "ring-2 ring-green-500")}>
                                          <div className="flex justify-between items-start">
-                                             <Label className="font-bold text-primary">Máquina {machine.id}</Label>
+                                             <Label className="font-bold text-primary flex items-center gap-2">
+                                                  <Box className="h-4 w-4" /> Maquina {machine.id}
+                                              </Label>
                                              <div className="flex items-center gap-1">
                                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingMachine(machine)}>
                                                       <Edit className="h-4 w-4" />
@@ -2053,10 +2759,10 @@ export default function OperationsClient({
                                                                </Button>
                                                           </TooltipTrigger>
                                                           <TooltipContent>
-                                                              <p>{machine.isSimulatingActive ? 'Apagar Máquina' : 'Encender Máquina'}</p>
+                                                              <p>{machine.isSimulatingActive ? 'Apagar Maquina' : 'Encender Maquina'}</p>
                                                          </TooltipContent>
-                                                     </Tooltip>
-                                                 </TooltipProvider>
+                                                      </Tooltip>
+                                                  </TooltipProvider>
                                              </div>
                                          </div>
                                          
@@ -2064,7 +2770,7 @@ export default function OperationsClient({
                                              <div className="aspect-video bg-white border rounded-md flex items-center justify-center overflow-hidden">
                                                  <Image 
                                                      src={machine.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} 
-                                                     alt={`Máquina ${machine.id}`}
+                                                     alt={`Maquina ${machine.id}`}
                                                      width={600}
                                                      height={400}
                                                      className="object-contain w-full h-full"
@@ -2083,7 +2789,7 @@ export default function OperationsClient({
                                          {machine.productId !== 'inactive' && (
                                            <>
                                              <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
-                                                 <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
+                                                 <h3 className="font-semibold text-center text-muted-foreground">Configuracion Clave</h3>
                                                  <div className="grid grid-cols-2 gap-1 text-center">
                                                      <div className="bg-background p-1 rounded-md border">
                                                          <p className="text-muted-foreground">Velocidad</p>
@@ -2100,27 +2806,37 @@ export default function OperationsClient({
                                                  <div className="grid grid-cols-2 gap-2 text-center">
                                                      <div className="bg-background p-1 rounded-md border">
                                                          <p className="text-muted-foreground">Fundas/Min</p>
-                                                         <p className="font-bold text-sm">{unitsPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
+                                                         <p className="font-bold text-sm">{(unitsPerMinuteNeto ?? 0).toLocaleString(undefined, {maximumFractionDigits: 0})}</p>
                                                      </div>
                                                      <div className="bg-background p-1 rounded-md border">
                                                          <p className="text-muted-foreground">Fardos/Min</p>
-                                                         <p className="font-bold text-sm text-green-600">{fardosPerMinuteNeto.toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
+                                                         <p className="font-bold text-sm text-green-600">{(fardosPerMinuteNeto ?? 0).toLocaleString(undefined, {maximumFractionDigits: 2})}</p>
                                                      </div>
                                                  </div>
                                              </div>
+
+                                             <div className="space-y-2 rounded-lg bg-primary/10 p-2 border border-primary/20 text-xs text-center mb-3">
+                                                 <h3 className="font-semibold text-primary flex items-center justify-center gap-1.5">
+                                                     <Clock className="h-3 w-3" /> Reloj de Operacion
+                                                 </h3>
+                                                 <p className="text-lg font-mono font-bold text-primary tracking-wider">
+                                                     {formatSeconds(simulationState.machineActiveTimes[machine.id] || 0)}
+                                                 </p>
+                                             </div>
+
                                              <div className="space-y-1">
-                                                 <Label className="text-xs">Producción Total (Fundas)</Label>
-                                                 <p className="text-lg font-bold text-center text-primary">{Math.floor(unitsProducedByMachine).toLocaleString()}</p>
+                                                 <Label className="text-xs">Produccion Total (Fundas)</Label>
+                                                 <p className="text-lg font-bold text-center text-primary">{Math.floor(unitsProducedByMachine ?? 0).toLocaleString()}</p>
                                                  <Progress value={(unitsProducedByMachine % machine.speed) / machine.speed * 100} className="h-1" />
                                              </div>
                                            </>
                                          )}
                                      </div>
                                 )
-                            })}
-                         </div>
-                    </CardContent>
-                </Card>
+                             })}
+                          </div>
+                     </CardContent>
+                 </Card>
 
                  <Card>
                     <CardHeader>
@@ -2136,7 +2852,9 @@ export default function OperationsClient({
                             return (
                                  <div key={wrapperConfig.id} className="p-4 border rounded-lg space-y-3 bg-background">
                                      <div className="flex justify-between items-start">
-                                         <Label className="font-bold text-primary">{wrapperConfig.name}</Label>
+                                         <Label className="font-bold text-primary flex items-center gap-2">
+                                              <Package2 className="h-4 w-4" /> {wrapperConfig.name}
+                                          </Label>
                                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingWrapper(wrapperConfig)}>
                                               <Edit className="h-4 w-4" />
                                          </Button>
@@ -2156,7 +2874,7 @@ export default function OperationsClient({
                                      )}
                                      
                                       <div className="space-y-2 rounded-lg bg-muted/30 p-2 border text-xs">
-                                         <h3 className="font-semibold text-center text-muted-foreground">Configuración Clave</h3>
+                                         <h3 className="font-semibold text-center text-muted-foreground">Configuracion Clave</h3>
                                          <div className="grid grid-cols-3 gap-1 text-center">
                                              <div className="bg-background p-1 rounded-md border">
                                                  <p className="text-muted-foreground">Capacidad</p>
@@ -2185,20 +2903,20 @@ export default function OperationsClient({
                                           <div className="grid grid-cols-2 gap-2 text-center">
                                              <div>
                                                  <p className="text-xs text-muted-foreground">Fundas en Transporte</p>
-                                                 <p className="font-bold text-lg text-orange-500">{Math.floor(unitsInTransit).toLocaleString()}</p>
+                                                 <p className="font-bold text-lg text-orange-500">{Math.floor(unitsInTransit ?? 0).toLocaleString()}</p>
                                              </div>
                                              <div>
                                                  <p className="text-xs text-muted-foreground">En Cola</p>
-                                                 <p className="font-bold text-lg text-blue-600">{Math.floor(wrapperState.buffer).toLocaleString()}</p>
+                                                 <p className="font-bold text-lg text-blue-600">{Math.floor(wrapperState.buffer ?? 0).toLocaleString()}</p>
                                              </div>
                                         </div>
                                           <div>
-                                             <Label className="text-xs">Fardo Actual ({Math.floor(wrapperState.currentBundleProgress)}/{wrapperConfig.unitsPerBundle} fundas)</Label>
+                                             <Label className="text-xs">Fardo Actual ({Math.floor(wrapperState.currentBundleProgress ?? 0)}/{wrapperConfig.unitsPerBundle} fundas)</Label>
                                              <Progress value={(wrapperState.currentBundleProgress / (wrapperConfig.unitsPerBundle || 1)) * 100} />
                                          </div>
                                          <div className='text-center border bg-background rounded-lg p-2'>
                                              <p className="text-xs text-muted-foreground">Total Fardos</p>
-                                             <p className="font-bold text-lg text-green-600">{wrapperState.totalBundles.toLocaleString()}</p>
+                                             <p className="font-bold text-lg text-green-600">{(wrapperState.totalBundles ?? 0).toLocaleString()}</p>
                                          </div>
                                     </div>
                                 </div>
@@ -2206,22 +2924,99 @@ export default function OperationsClient({
                         })}
                     </CardContent>
                 </Card>
-                
+
+                <Card className="shadow-lg border-2 border-primary/10">
+                    <CardHeader className="bg-primary/5 pb-3">
+                        <CardTitle className="flex items-center gap-2 text-lg">
+                             <Layers className="h-5 w-5 text-primary" />
+                             5. Zona de Estiba
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-6">
+                        {Object.keys(simulationState.palletGroups).length === 0 ? (
+                            <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-xl bg-muted/5">
+                                <Package className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                                <p className="font-medium">Esperando producciÃƒÂ³n para iniciar estiba...</p>
+                                <p className="text-xs">Los pallets aparecerÃƒÂ¡n aquÃƒÂ­ una vez que las envasadoras o enfardadoras completen unidades.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {Object.values(simulationState.palletGroups).map((group) => {
+                                    const isFardo = group.productName.toLowerCase().includes('don antonio') || group.productName.toLowerCase().includes('12 kg');
+                                    const unitLabel = isFardo ? 'Paquetes' : 'Sacos';
+                                    const singularLabel = isFardo ? 'Paquete' : 'Saco';
+
+                                    return (
+                                        <div key={group.productName} className="p-4 border-2 rounded-xl space-y-4 bg-background shadow-sm hover:shadow-md transition-all hover:border-primary/20 group">
+                                            <div className="space-y-1">
+                                                <div className="flex justify-between items-start">
+                                                    <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest">Presentacion</p>
+                                                    <Badge variant="outline" className="text-[9px] font-bold">{group.sacksPerPallet} / Pallet</Badge>
+                                                </div>
+                                                <p className="font-black text-sm text-primary leading-tight h-10 line-clamp-2" title={group.productName}>
+                                                    {group.productName}
+                                                </p>
+                                            </div>
+                                            
+                                            <div className="grid grid-cols-2 gap-3 text-center border-y py-4 bg-muted/30 rounded-lg group-hover:bg-primary/5 transition-colors">
+                                                <div className="border-r border-muted-foreground/10">
+                                                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Pallets</p>
+                                                    <p className="text-3xl font-black text-primary tabular-nums">{group.fullPallets}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] text-muted-foreground uppercase font-bold">Total {unitLabel}</p>
+                                                    <p className="text-3xl font-black text-green-600 tabular-nums">{group.sacks}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between text-[11px] font-black">
+                                                    <span className="text-muted-foreground">PROGRESO PALLET</span>
+                                                    <span className="font-mono text-primary bg-primary/10 px-1.5 rounded">{group.currentPalletSacks} / {group.sacksPerPallet}</span>
+                                                </div>
+                                                <Progress value={(group.currentPalletSacks / group.sacksPerPallet) * 100} indicatorClassName="bg-primary shadow-[0_0_10px_rgba(var(--primary),0.5)]" className="h-2.5 bg-muted/50" />
+                                            </div>
+
+                                            <div className="pt-3 flex flex-col items-center gap-2 border-t border-dashed">
+                                                <div className="grid grid-cols-7 gap-1.5">
+                                                    {[...Array(21)].map((_, i) => {
+                                                        const isFilled = i < (group.currentPalletSacks / group.sacksPerPallet * 21);
+                                                        return (
+                                                            <div 
+                                                                key={i} 
+                                                                className={cn(
+                                                                    "h-2 w-3.5 rounded-[1px] transition-all duration-300",
+                                                                    isFilled ? "bg-primary scale-110 shadow-sm" : "bg-muted opacity-40"
+                                                                )} 
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground font-medium italic">Estibado de {unitLabel.toLowerCase()}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
                  <div className="space-y-6">
-                    <h3 className="font-semibold text-xl text-center">Resultados Globales de la Línea</h3>
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <h3 className="font-semibold text-xl text-center">Resultados Globales de la Linea</h3>
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <KpiCard 
                             title="Tiempo para Agotar Silo" 
                             value={formatTime(liveSimulationResults.timeToEmptyHours)} 
                             icon={Hourglass} 
-                            description="Tiempo estimado para que se agote el azúcar en el Silo Familiar al ritmo de consumo actual." 
+                            description="Tiempo estimado para que se agote el azucar en el Silo Familiar al ritmo de consumo actual." 
                         />
                         <KpiCard
-                            title="Flujo de Producción (QQ/hora)"
-                            value={liveSimulationResults.qqRateFromCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                            subValue={`vs ${liveSimulationResults.qqRateToPackers.toLocaleString(undefined, { maximumFractionDigits: 1 })} de Empaque`}
+                            title="Flujo de Produccion (QQ/hora)"
+                            value={(liveSimulationResults.qqRateFromCentrifuges ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                            subValue={`vs ${(liveSimulationResults.qqRateToPackers ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })} de Empaque`}
                             icon={Activity}
-                            description="Compara la producción de azúcar de las centrífugas con la demanda de las envasadoras."
+                            description="Compara la produccion de azucar de las centrifugas con la demanda de las envasadoras."
                         />
                         <KpiCard 
                             title="Total Fundas Producidas" 
@@ -2244,60 +3039,97 @@ export default function OperationsClient({
                             description="Suma total de fardos que han sido completados por las enfardadoras."
                             fractionDigits={0}
                         />
+                        <KpiCard 
+                            title="Total Pallets Estibados" 
+                            value={liveSimulationResults.totalPallets} 
+                            icon={Layers} 
+                            description="Cantidad total de pallets completos en la zona de estiba." 
+                            fractionDigits={0} 
+                        />
+                        <KpiCard 
+                            title="Eficiencia de Linea (OEE)" 
+                            value={liveSimulationResults.globalEfficiency} 
+                            icon={Zap} 
+                            description="Porcentaje de tiempo que las maquinas estuvieron produciendo vs. tiempo total transcurrido." 
+                            suffix="%"
+                            fractionDigits={1} 
+                        />
+                        <KpiCard 
+                            title="Total Azucar en Sistema" 
+                            value={liveSimulationResults.totalInProcessQQ} 
+                            icon={Database} 
+                            description="Suma de toda la materia prima presente actualmente en tacho, recibidores y silos." 
+                            suffix=" QQ"
+                            fractionDigits={1} 
+                        />
                     </div>
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base">Análisis de Cuello de Botella</CardTitle>
+                    <Card className="border-2 shadow-xl overflow-hidden">
+                        <CardHeader className="bg-muted/50 border-b">
+                            <CardTitle className="flex items-center gap-2 text-lg">
+                                <Activity className="h-5 w-5 text-primary" />
+                                Diagnostico Multietapa: Analisis de Cuello de Botella
+                            </CardTitle>
                         </CardHeader>
-                        <CardContent>
-                             {liveSimulationResults.bottleneck === 'inactive' ? (
-                                 <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-blue-500/10 text-blue-600">
-                                     <PowerOff className="h-5 w-5 mt-0.5" />
-                                     <div>
-                                         <h4 className="font-bold mb-1">Línea Detenida</h4>
-                                         <p>Inicia una o más envasadoras para analizar el flujo de producción y detectar posibles cuellos de botella.</p>
-                                     </div>
-                                 </div>
-                            ) : liveSimulationResults.bottleneck === 'none' ? (
-                                 <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-green-600/10 text-green-700">
-                                     <CheckCircle2 className="h-5 w-5 mt-0.5" />
-                                     <div>
-                                         <h4 className="font-bold mb-1">Operación Óptima</h4>
-                                         <p>La línea de producción está balanceada. Las envasadoras están siendo alimentadas a un ritmo adecuado y las enfardadoras pueden manejar la carga.</p>
-                                     </div>
-                                 </div>
-                            ) : liveSimulationResults.bottleneck === 'wrapper' ? (
-                                 <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-destructive/10 text-destructive">
-                                     <AlertTriangle className="h-5 w-5 mt-0.5" />
-                                     <div>
-                                         <h4 className="font-bold mb-1">Cuello de Botella: Empaque</h4>
-                                         <p>
-                                             La capacidad de las enfardadoras ({staticSimulationResults.totalWrapperCapacity.toLocaleString()} f/min) es menor que la producción de las envasadoras ({staticSimulationResults.totalBagsPerMinuteFromPackers.toLocaleString()} f/min).
-                                             Considere aumentar la capacidad de las enfardadoras o reducir la velocidad de las envasadoras.
-                                         </p>
-                                     </div>
-                                 </div>
-                            ) : liveSimulationResults.bottleneck === 'centrifuge' ? (
-                                 <div className="text-sm p-3 rounded-md flex items-start gap-3 bg-amber-500/10 text-amber-600">
-                                     <Hourglass className="h-5 w-5 mt-0.5" />
-                                     <div>
-                                         <h4 className="font-bold mb-1">Cuello de Botella: Materia Prima</h4>
-                                         <p>
-                                             Las envasadoras demandan {liveSimulationResults.qqRateToPackers.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h, pero las centrífugas solo producen {liveSimulationResults.qqRateFromCentrifuges.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ/h. 
-                                             Las envasadoras se detendrán por falta de azúcar.
-                                         </p>
-                                     </div>
-                                 </div>
-                            ) : null}
+                        <CardContent className="pt-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {liveSimulationResults.bottleneckStages.map((stage, idx) => {
+                                    const statusColors = {
+                                        optimal: "bg-green-600/10 text-green-700 border-green-200 shadow-green-100",
+                                        warning: "bg-amber-500/10 text-amber-700 border-amber-200 shadow-amber-100",
+                                        critical: "bg-destructive/10 text-destructive border-destructive/20 shadow-red-100"
+                                    };
+                                    
+                                    const statusIcons = {
+                                        optimal: CheckCircle2,
+                                        warning: AlertTriangle,
+                                        critical: AlertTriangle 
+                                    };
+                                    
+                                    const Icon = statusIcons[stage.status];
+                                    
+                                    return (
+                                        <div key={idx} className={cn(
+                                            "p-4 rounded-xl border-2 transition-all hover:scale-[1.02] flex flex-col gap-3 h-full shadow-sm",
+                                            statusColors[stage.status]
+                                        )}>
+                                            <div className="flex justify-between items-center border-b pb-2 border-current/10">
+                                                <span className="text-[10px] font-black uppercase tracking-tighter opacity-70">ETAPA: {stage.name}</span>
+                                                <Icon className={cn("h-5 w-5", stage.status === 'critical' && "animate-pulse")} />
+                                            </div>
+                                            
+                                            <div className="flex-grow">
+                                                <h4 className="font-bold text-sm leading-tight mb-1">{stage.message}</h4>
+                                                <p className="text-[11px] font-medium leading-relaxed opacity-90">{stage.advice}</p>
+                                            </div>
+
+                                            <div className="mt-auto pt-2">
+                                                <Badge className={cn(
+                                                    "w-full justify-center text-[10px] font-bold py-0.5",
+                                                    stage.status === 'optimal' ? "bg-green-600" :
+                                                    stage.status === 'warning' ? "bg-amber-600" : "bg-destructive"
+                                                )}>
+                                                    {stage.status === 'optimal' ? 'FLUJO LIBRE' : 
+                                                     stage.status === 'warning' ? 'ADVERTENCIA' : 'CUELLO DE BOTELLA'}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            
+                            <div className="mt-6 p-3 rounded-lg bg-primary/5 border border-primary/20 text-[11px] text-muted-foreground italic flex items-start gap-2">
+                                <Activity className="h-4 w-4 mt-0.5 shrink-0 opacity-50" />
+                                <p>El analisis se basa en el balance de masas en tiempo real entre la capacidad de los equipos seleccionados y la demanda de empaque establecida.</p>
+                            </div>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base">Contribución por Máquina (Fardos)</CardTitle>
+                            <CardTitle className="flex items-center gap-2 text-base">Contribucion por Maquina (Fardos)</CardTitle>
                         </CardHeader>
                         <CardContent>
                             {Object.values(simulationState.machineTotals).every(m => m === 0) ? (
-                                 <p className="text-center text-muted-foreground h-[200px] flex items-center justify-center">Activa una máquina para ver la contribución.</p>
+                                 <p className="text-center text-muted-foreground h-[200px] flex items-center justify-center">Activa una maquina para ver la contribucion.</p>
                             ) : (
                                 <ResponsiveContainer width="100%" height={200}>
                                      <PieChart>
@@ -2315,7 +3147,7 @@ export default function OperationsClient({
                                                   const totalKg = totalUnits * (product.presentationWeight || 1);
                                                   
                                                   return {
-                                                      name: `Máquina ${machineId}`,
+                                                      name: `Maquina ${machineId}`,
                                                       productName: product.productName,
                                                       value: totalBundles,  // Value for pie chart size
                                                       units: totalUnits,
@@ -2338,7 +3170,15 @@ export default function OperationsClient({
                     </Card>
                 </div>
             </div>
-            {editingMachine && (
+        
+        <AppearanceDialog 
+            open={isAppearanceDialogOpen}
+            onOpenChange={setIsAppearanceDialogOpen}
+            config={appearanceConfig}
+            onConfigChange={setAppearanceConfig}
+        />
+
+        {editingMachine && (
                  <MachineEditDialog
                     open={!!editingMachine}
                     onOpenChange={(isOpen) => !isOpen && setEditingMachine(null)}
@@ -2390,6 +3230,8 @@ export default function OperationsClient({
                         washTime: centrifugeWashTime,
                         purgeTime: centrifugePurgeTime,
                         startInterval: centrifugeStartInterval,
+                        bufferTankCapacityQQ: bufferTankCapacityQQ,
+                        bufferTransferTimeMinutes: bufferTransferTimeMinutes,
                     }}
                     isUploading={isUploading}
                 />

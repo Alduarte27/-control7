@@ -1,0 +1,9 @@
+{
+  "apphosting": {
+    "backendId": "control-7",
+    "rootDir": "./"
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

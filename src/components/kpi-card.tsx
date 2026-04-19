@@ -23,13 +23,16 @@ export default function KpiCard({ title, value, icon: Icon, description, valueCo
   }, []);
 
   const formattedValue = React.useMemo(() => {
-    if (typeof value === 'number' && !isNaN(value)) {
-      return value.toLocaleString(undefined, {
-        maximumFractionDigits: fractionDigits,
-        minimumFractionDigits: fractionDigits,
-      });
+    if (typeof value === 'number') {
+      if (Number.isFinite(value)) {
+        return value.toLocaleString(undefined, {
+          maximumFractionDigits: fractionDigits,
+          minimumFractionDigits: fractionDigits,
+        });
+      }
+      return value === Infinity ? '∞' : '0';
     }
-    return value;
+    return value ?? '-';
   }, [value, fractionDigits]);
 
   return (
