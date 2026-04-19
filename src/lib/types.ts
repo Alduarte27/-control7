@@ -33,11 +33,11 @@ export type ProductDefinition = {
   categoryId: string;
   color?: string; // e.g., '#ff0000'
   isActive: boolean;
-  sackWeight?: number; // Weight of one sack in kg
-  bundleWeight?: number; // Weight of one bundle (fardo) in kg
-  presentationWeight?: number; // Weight of one presentation/bag in kg
-  primaryPackaging?: 'saco' | 'fardo' | 'granel';
-  unitsPerPallet?: number; // Number of sacks/bundles per pallet
+  sackWeight?: number | null; // Weight of one sack in kg
+  bundleWeight?: number | null; // Weight of one bundle (fardo) in kg
+  presentationWeight?: number | null; // Weight of one presentation/bag in kg
+  primaryPackaging?: 'saco' | 'fardo' | 'granel' | null;
+  unitsPerPallet?: number | null; // Number of sacks/bundles per pallet
 }
 
 export type ProductData = ProductDefinition & {
