@@ -5,7 +5,9 @@ import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
 
 export async function getCategories(): Promise<CategoryDefinition[]> {
     try {
+        console.log("Fetching categories from Firestore...");
         const categoriesSnapshot = await getDocs(query(collection(db, 'categories'), orderBy('name')));
+        console.log(`Fetched ${categoriesSnapshot.docs.length} categories.`);
         return categoriesSnapshot.docs.map(doc => ({ 
             id: doc.id, 
             isPlanned: doc.data().isPlanned ?? true, 
@@ -19,7 +21,9 @@ export async function getCategories(): Promise<CategoryDefinition[]> {
 
 export async function getProducts(): Promise<ProductDefinition[]> {
     try {
+        console.log("Fetching products from Firestore...");
         const productsSnapshot = await getDocs(query(collection(db, 'products'), orderBy('order')));
+        console.log(`Fetched ${productsSnapshot.docs.length} products.`);
         return productsSnapshot.docs.map(doc => ({ 
             id: doc.id, 
             isActive: doc.data().isActive ?? true, 

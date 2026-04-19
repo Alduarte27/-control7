@@ -212,6 +212,22 @@ export default function Control7Client({
 
         setLoading(true);
         setIsDirty(false);
+
+        // Safety timeout: if it takes more than 10s, force stop loading.
+        const timeoutId = setTimeout(() => {
+            setLoading(prev => {
+                if (prev) {
+                    toast({
+                        title: 'La carga está demorando',
+                        description: 'Verificando conexión con Firestore. Por favor intenta recargar si no aparecen los datos.',
+                        variant: 'destructive',
+                    });
+                    return false;
+                }
+                return false;
+            });
+        }, 10000);
+
         try {
             const categories = prefetchedCategories;
             const productDefinitions = prefetchedProducts;
@@ -220,6 +236,7 @@ export default function Control7Client({
 
             if (productDefinitions.length === 0) {
                 setData([]);
+                clearTimeout(timeoutId);
                 setLoading(false);
                 return;
             }
@@ -303,12 +320,22 @@ export default function Control7Client({
                 variant: 'destructive',
             });
             setData([]);
+        } finally {
+            clearTimeout(timeoutId);
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     fetchData();
   }, [date, prefetchedCategories, prefetchedProducts, applyAISuggestion, toast]);
+
+  const handleResetApp = () => {
+    if (confirm('Esto limpiará el caché local y la sesión. Úsalo si la aplicación parece trabada o muestra datos antiguos. ¿Continuar?')) {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = '/';
+    }
+  };
 
   const handleSave = async () => {
     if (!date) return;
@@ -591,6 +618,13 @@ export default function Control7Client({
         )}
       </div>
       <InfoDialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen} />
+      
+      {/* Footer Support */}
+      <div className="p-4 flex justify-center border-t mt-8 space-x-4">
+        <Button variant="ghost" size="sm" onClick={handleResetApp} className="text-muted-foreground text-xs">
+          <RefreshCw className="mr-2 h-3 w-3" /> Limpiar Caché y Resetear App
+        </Button>
+      </div>
     </div>
   );
 }

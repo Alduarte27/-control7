@@ -761,7 +761,7 @@ export default function OeeClient({ prefetchedProducts, prefetchedStopCauses }: 
                                                 {filteredStopsForTable.length > 0 ? filteredStopsForTable.map(stop => (
                                                     <TableRow key={stop.id}>
                                                         <TableCell>{stop.logDate}</TableCell>
-                                                        <TableCell className="capitalize">{stop.shift === 'day' ? 'Día' : 'Noche'}</TableCell>
+                                                        <TableCell className="capitalize">{stop.shift === 'day' ? 'Dia' : 'Noche'}</TableCell>
                                                         <TableCell>{stop.machineId}</TableCell>
                                                         <TableCell>{stop.startTime}</TableCell>
                                                         <TableCell>{stop.endTime}</TableCell>

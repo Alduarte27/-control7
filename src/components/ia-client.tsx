@@ -1598,7 +1598,7 @@ export default function OperationsClient({
                         activeDraining.state = 'idle';
                     }
                 } else {
-                    // 2. No hay drenado activo Ã¢â€ â€™ iniciar SOLO si el tanque esta VACÃƒÂO
+                    // 2. No hay drenado activo -> iniciar SOLO si el tanque esta VACÃƒÂO
                     const tankIsEmpty = nextState.bufferTankQQ <= 0.01;
                     if (tankIsEmpty) {
                         const nextReceiver = nextState.receivers.find(
@@ -1615,7 +1615,7 @@ export default function OperationsClient({
                             }
                         }
                     }
-                    // Tank aun tiene masa Ã¢â€ â€™ recibidores esperan en 'ready' sin drenar
+                    // Tank aun tiene masa -> recibidores esperan en 'ready' sin drenar
                 }
 
                 // 2. Centrifuges Logic
