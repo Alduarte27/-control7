@@ -1513,9 +1513,6 @@ function ProductionProjectionView({
         <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
             <header className="flex items-center justify-between p-3 border-b bg-card shrink-0 shadow-sm z-10 relative">
                 <div className="flex items-center gap-3">
-                    <Button variant="outline" size="icon" onClick={onClose} className="h-8 w-8">
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
                     <h1 className="text-lg font-bold flex items-center gap-2 leading-tight">
                         <Target className="h-4 w-4 text-primary" /> Proyección {currentYear}
                     </h1>
@@ -1529,6 +1526,9 @@ function ProductionProjectionView({
                         <Button variant={viewMode === 'semana' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('semana')}>Vista Semanal</Button>
                         <Button variant={viewMode === 'dia' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('dia')}>Vista Diaria</Button>
                     </div>
+                    <Button variant="outline" size="icon" onClick={onClose} className="h-8 w-8 ml-1">
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
                 </div>
             </header>
 
