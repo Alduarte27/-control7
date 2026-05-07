@@ -962,18 +962,18 @@ function MaterialCard({
              {material.status !== 'consumido' && (
                 <div className="p-4 pt-0">
                     {material.status === 'recibido' && (
-                        <Button className="w-full h-auto whitespace-normal" onClick={() => onActionClick(material, 'weigh')}>
-                            <Weight className="mr-2 h-4 w-4 flex-shrink-0" /> Pesar y Poner en Uso
+                        <Button className="w-full h-auto whitespace-normal p-2 text-xs md:text-sm" onClick={() => onActionClick(material, 'weigh')}>
+                            <Weight className="mr-1 md:mr-2 h-4 w-4 flex-shrink-0" /> Pesar y Poner Uso
                         </Button>
                     )}
                     {(material.status === 'en_uso') && (
-                        <Button className="w-full h-auto whitespace-normal" variant="destructive" onClick={() => onActionClick(material, 'consume')}>
-                            <PackageCheck className="mr-2 h-4 w-4 flex-shrink-0" /> Marcar como Consumido
+                        <Button className="w-full h-auto whitespace-normal p-2 text-xs md:text-sm" variant="destructive" onClick={() => onActionClick(material, 'consume')}>
+                            <PackageCheck className="mr-1 md:mr-2 h-4 w-4 flex-shrink-0" /> Marcar Consumido
                         </Button>
                     )}
                      {(material.status === 'por_pesar_tara') && (
-                        <Button className="w-full h-auto whitespace-normal" variant="secondary" onClick={() => onActionClick(material, 'weigh_tare')}>
-                            <Zap className="mr-2 h-4 w-4 flex-shrink-0" /> Pesar Tara
+                        <Button className="w-full h-auto whitespace-normal p-2 text-xs md:text-sm" variant="secondary" onClick={() => onActionClick(material, 'weigh_tare')}>
+                            <Zap className="mr-1 md:mr-2 h-4 w-4 flex-shrink-0" /> Pesar Tara
                         </Button>
                     )}
                 </div>
@@ -1489,33 +1489,35 @@ export default function MelazaClient({
     return (
         <>
             <div className="bg-background min-h-screen text-foreground">
-                <header className="flex items-center justify-between p-4 border-b bg-card z-20 sticky top-0">
-                    <div className="flex items-center gap-3">
-                        <Package className="h-8 w-8 text-primary" />
-                        <h1 className="text-2xl font-bold text-foreground">Material Melaza</h1>
-                    </div>
+                <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 p-2 md:p-4 border-b bg-card z-20 sticky top-0">
                     <div className="flex items-center gap-2">
+                        <Package className="h-6 w-6 md:h-8 md:w-8 text-primary flex-shrink-0" />
+                        <h1 className="text-base md:text-xl font-bold text-foreground leading-tight">Material Melaza</h1>
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
                         <Link href="/bodega-melaza">
-                            <Button variant="outline">
-                                <MapPin className="mr-2 h-4 w-4" /> Mapa de Bodega
+                            <Button variant="outline" size="sm">
+                                <MapPin className="h-4 w-4 md:mr-2" />
+                                <span className="hidden md:inline">Mapa de Bodega</span>
                             </Button>
                         </Link>
-                        <Button variant="outline" onClick={handleExportCSV}>
-                            <FileDown className="mr-2 h-4 w-4" /> Exportar a CSV
+                        <Button variant="outline" size="sm" onClick={handleExportCSV}>
+                            <FileDown className="h-4 w-4 md:mr-2" />
+                            <span className="hidden md:inline">Exportar a CSV</span>
                         </Button>
                         <Link href="/melaza-kpi">
-                            <Button variant="outline">
-                                <BarChart className="mr-2 h-4 w-4" /> Dashboard
+                            <Button variant="outline" size="sm">
+                                <BarChart className="h-4 w-4 md:mr-2" />
+                                <span className="hidden md:inline">Dashboard</span>
                             </Button>
                         </Link>
-                         <Button variant="outline" onClick={() => setConfigOpen(true)}>
-                            <Settings className="mr-2 h-4 w-4" />
-                            Configuración
+                        <Button variant="outline" size="sm" onClick={() => setConfigOpen(true)}>
+                            <Settings className="h-4 w-4 md:mr-2" />
+                            <span className="hidden md:inline">Configuración</span>
                         </Button>
                         <Link href="/">
-                            <Button variant="outline">
-                                <ChevronLeft className="mr-2 h-4 w-4" />
-                                Volver
+                            <Button variant="outline" size="icon" className="h-8 w-8">
+                                <ChevronLeft className="h-4 w-4" />
                             </Button>
                         </Link>
                     </div>

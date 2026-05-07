@@ -1103,7 +1103,11 @@ export default function StopsClient({
                         <Link href="/log-history">
                             <Button variant="outline"><History className="mr-2 h-4 w-4" />Historial</Button>
                         </Link>
-                        <Link href="/"><Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
+                        <Link href="/">
+                            <Button variant="outline" size="icon" className="h-8 w-8">
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                        </Link>
                     </div>
                     {/* Mobile Dropdown */}
                     <div className="md:hidden">

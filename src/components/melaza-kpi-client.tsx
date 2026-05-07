@@ -188,9 +188,8 @@ export default function MelazaKpiClient() {
                 </div>
                 <div className="flex items-center gap-2">
                     <Link href="/material-melaza">
-                        <Button variant="outline">
-                            <ChevronLeft className="mr-2 h-4 w-4" />
-                            Volver a Material Melaza
+                        <Button variant="outline" size="icon" className="h-8 w-8">
+                            <ChevronLeft className="h-4 w-4" />
                         </Button>
                     </Link>
                 </div>

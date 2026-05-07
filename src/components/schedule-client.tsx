@@ -785,7 +785,7 @@ export default function StopsClient({
                     </TooltipProvider>
                     <Button onClick={() => handleSaveLog(dailyLog, true)} disabled={loading}>Guardar Cambios</Button>
                     <Link href="/">
-                        <Button variant="outline"><ChevronLeft className="mr-2 h-4 w-4" />Volver</Button>
+                        <Button variant="outline"><ChevronLeft className="h-4 w-4" /></Button>
                     </Link>
                 </div>
             </header>

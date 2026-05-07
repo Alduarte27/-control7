@@ -214,9 +214,8 @@ export default function MaterialsKpiClient() {
                 </div>
                 <div className="flex items-center gap-2">
                     <Link href="/materials">
-                        <Button variant="outline">
-                            <ChevronLeft className="mr-2 h-4 w-4" />
-                            Volver a Materiales
+                        <Button variant="outline" size="icon" className="h-8 w-8">
+                            <ChevronLeft className="h-4 w-4" />
                         </Button>
                     </Link>
                 </div>

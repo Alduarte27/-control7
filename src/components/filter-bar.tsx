@@ -65,7 +65,7 @@ export default function FilterBar({
   return (
     <>
     <div className="p-4 bg-card rounded-lg shadow-sm border">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
         <div className="flex flex-col gap-1.5 xl:col-span-1">
             <Label htmlFor="productSearch">Búsqueda de Producto</Label>
             <div className="relative">
@@ -79,7 +79,7 @@ export default function FilterBar({
               />
             </div>
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 xl:col-span-1">
           <Label>Fecha</Label>
           <Input
             type="date"
@@ -88,7 +88,7 @@ export default function FilterBar({
             className="w-full justify-start text-left font-normal"
             />
         </div>
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 xl:col-span-1">
           <Label>Semana ISO</Label>
           <Select value={String(currentWeek)} onValueChange={handleWeekChange}>
             <SelectTrigger>
@@ -103,20 +103,20 @@ export default function FilterBar({
             </SelectContent>
           </Select>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end xl:col-span-2">
-            <Button onClick={onCopyLastWeek} variant="outline" className="w-full">
-                <Copy className="mr-2 h-4 w-4" />
-                Copiar Plan Anterior
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end md:col-span-2 lg:col-span-3 xl:col-span-2">
+            <Button onClick={onCopyLastWeek} variant="outline" className="w-full text-xs md:text-sm whitespace-normal h-auto min-h-[40px] px-2">
+                <Copy className="mr-2 h-4 w-4 shrink-0" />
+                <span className="leading-tight">Copiar Anterior</span>
             </Button>
-            <Button asChild variant="outline" className="w-full">
+            <Button asChild variant="outline" className="w-full text-xs md:text-sm whitespace-normal h-auto min-h-[40px] px-2 text-center flex items-center justify-center">
               <Link href="/history">
-                <History className="mr-2 h-4 w-4" />
-                Historial de Planes
+                <History className="mr-2 h-4 w-4 shrink-0" />
+                <span className="leading-tight">Historial</span>
               </Link>
             </Button>
-            <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-full">
-                <Download className="mr-2 h-4 w-4" />
-                Exportar / Reportes
+            <Button onClick={() => setIsExportDialogOpen(true)} variant="outline" className="w-full text-xs md:text-sm whitespace-normal h-auto min-h-[40px] px-2">
+                <Download className="mr-2 h-4 w-4 shrink-0" />
+                <span className="leading-tight">Exportar</span>
             </Button>
         </div>
       </div>

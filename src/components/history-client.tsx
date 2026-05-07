@@ -248,8 +248,7 @@ export default function HistoryClient() {
         </div>
         <Link href="/">
           <Button variant="outline">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver
+            <ChevronLeft className="h-4 w-4" />
           </Button>
         </Link>
       </header>

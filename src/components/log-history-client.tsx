@@ -245,9 +245,8 @@ export default function LogHistoryClient() {
           <h1 className="text-2xl font-bold text-foreground">Historial de Bitácoras</h1>
         </div>
         <Link href="/stops">
-          <Button variant="outline">
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            Volver a la Bitácora
+          <Button variant="outline" size="icon" className="h-8 w-8">
+            <ChevronLeft className="h-4 w-4" />
           </Button>
         </Link>
       </header>

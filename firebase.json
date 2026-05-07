@@ -1,12 +1,15 @@
 {
   "apphosting": {
     "backendId": "control-7",
-    "rootDir": "./"
+    "rootDir": "./",
+    "alwaysDeployFromSource": true
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "database": "(default)"
   },
   "storage": {
-    "rules": "storage.rules"
+    "rules": "storage.rules",
+    "bucket": "control-7-61a3f.firebasestorage.app"
   }
 }

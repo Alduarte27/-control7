@@ -57,10 +57,9 @@ export default function ReportClient({ initialData, week, year }: ReportClientPr
         <header className="p-4 bg-card border-b no-print flex justify-between items-center">
             <h1 className="text-xl font-bold">Reporte Semanal</h1>
             <div className="flex items-center gap-2">
-                <Button asChild variant="outline">
+                <Button asChild variant="outline" size="icon" className="h-8 w-8">
                     <Link href={`/?planId=${year}-W${week}`}>
-                        <ChevronLeft className="mr-2 h-4 w-4" />
-                        Volver
+                        <ChevronLeft className="h-4 w-4" />
                     </Link>
                 </Button>
                 <Button onClick={handlePrint}>

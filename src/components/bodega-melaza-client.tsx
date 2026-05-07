@@ -266,8 +266,7 @@ export default function BodegaMelazaClient({ initialMaterials, initialSuppliers 
                 </div>
                 <Link href="/material-melaza">
                     <Button variant="outline">
-                        <ChevronLeft className="mr-2 h-4 w-4" />
-                        Volver
+                        <ChevronLeft className="h-4 w-4" />
                     </Button>
                 </Link>
             </header>
