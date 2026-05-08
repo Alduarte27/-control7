@@ -357,7 +357,7 @@ function MachineEditDialog({
                                 Mantener activa durante descansos
                             </Label>
                             <p className="text-[10px] text-muted-foreground">
-                                Si se activa, esta máquina no se detendrá durante el almuerzo o merienda.
+                                Si se activa, esta mÃ¡quina no se detendrÃ¡ durante el almuerzo o merienda.
                             </p>
                         </div>
                     </div>
@@ -481,7 +481,7 @@ function SiloEditDialog({
                                 <div className="space-y-0.5">
                                     <Label htmlFor="reserve-silo-toggle" className="text-sm font-medium">Alimentacion dedicada M4</Label>
                                     <p className="text-[10px] text-muted-foreground">
-                                        Si se desactiva, no ingresará azúcar a este silo durante la simulación.
+                                        Si se desactiva, no ingresarÃ¡ azÃºcar a este silo durante la simulaciÃ³n.
                                     </p>
                                 </div>
                                 <Switch
@@ -962,7 +962,7 @@ function ProductionProjectionView({
     const [machineConfig, setMachineConfig] = React.useState<Record<number, { active: boolean, productId: string, speed: number }>>({});
 
     const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-    const dayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
+    const dayNames = ["Lunes", "Martes", "MiÃ©rcoles", "Jueves", "Viernes", "SÃ¡bado", "Domingo"];
     const currentYear = new Date().getFullYear();
 
     const [isDataLoaded, setIsDataLoaded] = React.useState(false);
@@ -1185,11 +1185,11 @@ function ProductionProjectionView({
 
         const shiftHeaders = activeMachines.flatMap(m => {
             const headers = [
-                <th key={m.id + 'd'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-[90px] h-4">Día</th>,
+                <th key={m.id + 'd'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-[90px] h-4">DÃ­a</th>,
                 <th key={m.id + 'n'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-[90px] h-4">Noche</th>
             ];
             if (viewMode === 'semana') {
-                headers.unshift(<th key={m.id + 's'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-8 h-4">Días</th>);
+                headers.unshift(<th key={m.id + 's'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-8 h-4">DÃ­as</th>);
             }
             return headers;
         });
@@ -1454,7 +1454,7 @@ function ProductionProjectionView({
             const cells = [
                 <td key={m.id + 'd'} className="px-1 py-1 border-l text-center bg-card border-t border-b">
                     <div className="font-bold text-primary text-[9px]">{totals.dia.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    <div className="text-[7px] text-muted-foreground uppercase leading-tight">Día</div>
+                    <div className="text-[7px] text-muted-foreground uppercase leading-tight">DÃ­a</div>
                 </td>,
                 <td key={m.id + 'n'} className="px-1 py-1 border-l text-center bg-card border-t border-b">
                     <div className="font-bold text-primary text-[9px]">{totals.noche.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -1465,7 +1465,7 @@ function ProductionProjectionView({
                 cells.unshift(
                     <td key={m.id + 's'} className="px-1 py-1 border-l text-center bg-muted/5 border-t border-b">
                         <div className="font-bold text-muted-foreground text-[9px]">{totals.days.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
-                        <div className="text-[7px] text-muted-foreground uppercase leading-tight">Días</div>
+                        <div className="text-[7px] text-muted-foreground uppercase leading-tight">DÃ­as</div>
                     </td>
                 );
             }
@@ -1481,7 +1481,7 @@ function ProductionProjectionView({
                                 <th className="px-2 py-2 border-r bg-muted w-10 text-center" rowSpan={2}>Mes</th>
                                 <th className="px-2 py-2 border-r bg-muted w-12 text-center" rowSpan={2}>Sem</th>
                                 {viewMode === 'dia' && (
-                                    <th className="px-2 py-2 border-r bg-muted w-20 text-center" rowSpan={2}>Día</th>
+                                    <th className="px-2 py-2 border-r bg-muted w-20 text-center" rowSpan={2}>DÃ­a</th>
                                 )}
                                 {machineHeaders}
                                 <th className="px-2 py-2 border-l bg-primary/10 w-24 text-center text-primary font-bold" rowSpan={2}>Total QQ</th>
@@ -1497,7 +1497,7 @@ function ProductionProjectionView({
                             <tr className="font-bold">
                                 <td colSpan={viewMode === 'dia' ? 2 : 1} className="px-2 py-1 text-right bg-card text-[8px] uppercase font-bold">Total:</td>
                                 <td className="px-1 py-1 text-center bg-muted/30 border-r text-[9px] font-bold text-foreground">
-                                    {grandTotalDays.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[7px] text-muted-foreground font-normal">Días</span>
+                                    {grandTotalDays.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[7px] text-muted-foreground font-normal">DÃ­as</span>
                                 </td>
                                 {totalsCells}
                                 <td className="px-2 py-1 border-l text-center bg-primary/20 text-primary text-[10px] font-bold">{grandTotalSemanal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} QQ</td>
@@ -1514,7 +1514,7 @@ function ProductionProjectionView({
             <header className="flex items-center justify-between p-3 border-b bg-card shrink-0 shadow-sm z-10 relative">
                 <div className="flex items-center gap-3">
                     <h1 className="text-lg font-bold flex items-center gap-2 leading-tight">
-                        <Target className="h-4 w-4 text-primary" /> Proyección {currentYear}
+                        <Target className="h-4 w-4 text-primary" /> ProyecciÃ³n {currentYear}
                     </h1>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1564,7 +1564,7 @@ function ProductionProjectionView({
                                 </div>
                             </Card>
                             <Card className="border rounded-lg shadow-sm">
-                                <div className="bg-muted/50 px-3 py-1.5 border-b font-medium text-xs flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Parámetros</div>
+                                <div className="bg-muted/50 px-3 py-1.5 border-b font-medium text-xs flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" /> ParÃ¡metros</div>
                                 <div className="p-2 space-y-2">
                                     <div className="flex items-center justify-between gap-2">
                                         <Label className="text-[10px] font-medium w-20">Eficiencia</Label>
@@ -1572,7 +1572,7 @@ function ProductionProjectionView({
                                         <span className="text-[9px] font-mono bg-muted px-1 py-0.5 rounded">{(rendimiento * 100).toFixed(0)}%</span>
                                     </div>
                                     <div className="flex items-center justify-between gap-2">
-                                        <Label className="text-[10px] font-medium w-20">Hr Turno Día</Label>
+                                        <Label className="text-[10px] font-medium w-20">Hr Turno DÃ­a</Label>
                                         <Input type="number" value={horasTurnoDia} onChange={(e) => setHorasTurnoDia(Number(e.target.value))} className="h-6 text-[10px] w-14 px-1 text-center" step="0.5" />
                                         <span className="text-[9px] text-muted-foreground w-6 text-right">h</span>
                                     </div>
@@ -1619,15 +1619,15 @@ function ProductionProjectionView({
                     <DialogHeader className="border-b pb-3">
                         <DialogTitle className="flex items-center gap-2 text-xl">
                             <Box className="h-6 w-6 text-primary" />
-                            Ajuste de Producción
+                            Ajuste de ProducciÃ³n
                         </DialogTitle>
                         <DialogDescription className="text-xs font-medium">
-                            Tecnotok <span className="text-primary font-bold">#{editingOverride?.machineId}</span> • Turno <span className="text-primary font-bold uppercase">{editingOverride?.shift}</span>
+                            Tecnotok <span className="text-primary font-bold">#{editingOverride?.machineId}</span> â€¢ Turno <span className="text-primary font-bold uppercase">{editingOverride?.shift}</span>
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="py-4 space-y-5">
-                        {/* Estado y Sincronización */}
+                        {/* Estado y SincronizaciÃ³n */}
                         <div className="grid grid-cols-1 gap-2">
                             <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg border">
                                 <div className="flex items-center gap-3">
@@ -1648,7 +1648,7 @@ function ProductionProjectionView({
                                         <ArrowLeftRight className="h-5 w-5" />
                                     </div>
                                     <div>
-                                        <Label className="text-sm font-bold">Aplicar a Día y Noche</Label>
+                                        <Label className="text-sm font-bold">Aplicar a DÃ­a y Noche</Label>
                                         <p className="text-[10px] text-muted-foreground">Configura ambos turnos a la vez</p>
                                     </div>
                                 </div>
@@ -1684,7 +1684,7 @@ function ProductionProjectionView({
                         {!editingOverride?.inactive && (
                             <div className="space-y-4 pt-2 animate-in fade-in duration-300">
                                 <div className="space-y-1.5">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">Presentación</Label>
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">PresentaciÃ³n</Label>
                                     <Select value={editingOverride?.currentProductId || ''} onValueChange={(val) => setEditingOverride(prev => prev ? { ...prev, currentProductId: val } : null)}>
                                         <SelectTrigger className="w-full h-10 font-medium">
                                             <SelectValue />
@@ -1852,7 +1852,7 @@ function OnDemandReportModal({
                             <div>
                                 <DialogTitle className="text-2xl font-bold">Reporte de Operaciones (Actual)</DialogTitle>
                                 <DialogDescription className="font-medium text-muted-foreground">
-                                    Resumen de la simulación en curso
+                                    Resumen de la simulaciÃ³n en curso
                                 </DialogDescription>
                             </div>
                         </div>
@@ -1863,7 +1863,7 @@ function OnDemandReportModal({
                     <div className="border-b-2 border-primary pb-6 mb-8 flex justify-between items-end">
                         <div>
                             <h2 className="text-3xl font-black text-primary uppercase tracking-tighter">Control 7</h2>
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Sistema de Simulación Industrial</p>
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Sistema de SimulaciÃ³n Industrial</p>
                         </div>
                         <div className="text-right">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fecha del Reporte</p>
@@ -1895,7 +1895,7 @@ function OnDemandReportModal({
                         <div className="p-4 rounded-xl border bg-card text-center space-y-1">
                             <Clock className="h-5 w-5 mx-auto text-purple-500 mb-1" />
                             <div className="text-xl font-bold">{formatSeconds(simulationState.elapsedTime)}</div>
-                            <div className="text-[10px] font-black uppercase tracking-tighter opacity-60">Tiempo Operación</div>
+                            <div className="text-[10px] font-black uppercase tracking-tighter opacity-60">Tiempo OperaciÃ³n</div>
                         </div>
                     </div>
 
@@ -1916,7 +1916,7 @@ function OnDemandReportModal({
                                     <Progress value={s.capacityQQ > 0 ? (s.currentQQ / s.capacityQQ) * 100 : 0} className="h-3" />
                                     <div className="flex justify-between text-xs text-muted-foreground">
                                         <span>{s.currentQQ.toLocaleString(undefined, {maximumFractionDigits:1})} QQ</span>
-                                        <span>Máx: {s.capacityQQ.toLocaleString()} QQ</span>
+                                        <span>MÃ¡x: {s.capacityQQ.toLocaleString()} QQ</span>
                                     </div>
                                 </div>
                             ))}
@@ -1956,11 +1956,11 @@ function OnDemandReportModal({
                     <div className="space-y-4">
                         <h4 className="font-bold text-sm flex items-center gap-2">
                             <PackageCheck className="h-4 w-4" />
-                            Producción Actual por Máquina
+                            ProducciÃ³n Actual por MÃ¡quina
                         </h4>
                         <div className="grid gap-3">
                             {machineActuals.length === 0 ? (
-                                <p className="text-sm text-muted-foreground text-center py-4">No hay máquinas configuradas.</p>
+                                <p className="text-sm text-muted-foreground text-center py-4">No hay mÃ¡quinas configuradas.</p>
                             ) : (
                                 machineActuals.map(mp => (
                                     <div key={mp.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg border bg-muted/20 gap-2">
@@ -1969,7 +1969,7 @@ function OnDemandReportModal({
                                                 {mp.id}
                                             </div>
                                             <div>
-                                                <div className="font-bold text-sm">Máquina {mp.id}</div>
+                                                <div className="font-bold text-sm">MÃ¡quina {mp.id}</div>
                                                 <div className="text-[10px] text-muted-foreground">{mp.productName}</div>
                                             </div>
                                         </div>
@@ -2164,7 +2164,7 @@ export default function OperationsClient({
         const availableReceiver = simulationState.receivers.find(r => r.state === 'idle');
         
         if (simulationState.tachos.state === 'sending') {
-            toast({ title: 'Tachos Ocupados', description: 'Ya se está enviando una masa actualmente.', variant: 'destructive' });
+            toast({ title: 'Tachos Ocupados', description: 'Ya se estÃ¡ enviando una masa actualmente.', variant: 'destructive' });
             return;
         }
 
@@ -2215,7 +2215,7 @@ export default function OperationsClient({
             };
         });
 
-        toast({ title: 'Masa Procesada', description: 'Acción manual ejecutada correctamente.' });
+        toast({ title: 'Masa Procesada', description: 'AcciÃ³n manual ejecutada correctamente.' });
     };
 
 
@@ -2591,7 +2591,7 @@ export default function OperationsClient({
 
             if (nextState.silosFullAlarm) {
                 toast({
-                    title: "AcciÃƒÂ³n Bloqueada",
+                    title: "AcciÃƒÆ’Ã‚Â³n Bloqueada",
                     description: "No se puede iniciar la centrifuga: Los silos estan llenos.",
                     variant: "destructive"
                 });
@@ -2760,7 +2760,7 @@ export default function OperationsClient({
                 // 1.5 Buffer Tank Logic (Receiver -> Buffer Tank)
                 //
                 // REGLA PRINCIPAL:
-                // - El tanque pulmon solo acepta masa cuando esta COMPLETAMENTE VACÃƒÂ O.
+                // - El tanque pulmon solo acepta masa cuando esta COMPLETAMENTE VACÃƒÆ’Ã‚ O.
                 // - Un recibidor que YA esta drenando (transferRate != null) continua
                 //   hasta vaciarse, sin importar el nivel del tanque.
                 // - Cuando no hay drenado activo, el siguiente recibidor espera a que
@@ -2782,14 +2782,14 @@ export default function OperationsClient({
                             nextState.bufferTankQQ = Math.min(bufferTankCapacityQQ, nextState.bufferTankQQ + amountToTransfer);
                         }
                     }
-                    // Recibidor vaciado → liberar (idle) para que pueda recibir nueva masa del tacho
+                    // Recibidor vaciado â†’ liberar (idle) para que pueda recibir nueva masa del tacho
                     if (activeDraining.currentQQ <= 0.01) {
                         activeDraining.currentQQ = 0;
                         activeDraining.transferRate = null;
                         activeDraining.state = 'idle';
                     }
                 } else {
-                    // 2. No hay drenado activo -> iniciar SOLO si el tanque esta VACÃƒÂ O
+                    // 2. No hay drenado activo -> iniciar SOLO si el tanque esta VACÃƒÆ’Ã‚ O
                     const tankIsEmpty = nextState.bufferTankQQ <= 0.01;
                     if (tankIsEmpty) {
                         const nextReceiver = nextState.receivers.find(
@@ -2892,8 +2892,8 @@ export default function OperationsClient({
                         nextState.isBufferDraining = false;
                     }
 
-                    // MODO AUTOMÃƒÂ TICO: Las centrifugas inician cuando se activa el modo de drenado
-                    // (al llegar al 50%) y continÃƒÂºan operando hasta que el tanque se vacÃƒÂ­e.
+                    // MODO AUTOMÃƒÆ’Ã‚ TICO: Las centrifugas inician cuando se activa el modo de drenado
+                    // (al llegar al 50%) y continÃƒÆ’Ã‚Âºan operando hasta que el tanque se vacÃƒÆ’Ã‚Â­e.
                     // BLOQUEO: Solo inician si la alarma de silos NO esta activa.
                     if (nextState.isBufferDraining && !nextState.silosFullAlarm) {
 
@@ -3393,7 +3393,7 @@ export default function OperationsClient({
                     name: "Purga",
                     status: 'warning',
                     message: "Capacidad ajustada",
-                    advice: "Casi al lÃƒÂ­mite de la demanda de empaque."
+                    advice: "Casi al lÃƒÆ’Ã‚Â­mite de la demanda de empaque."
                 });
             } else {
                 bottleneckStages.push({
@@ -3416,7 +3416,7 @@ export default function OperationsClient({
                 bottleneckStages.push({
                     name: "Almacenamiento",
                     status: 'critical',
-                    message: "Nivel CrÃƒÂ­tico de AzÃƒÂºcar",
+                    message: "Nivel CrÃƒÆ’Ã‚Â­tico de AzÃƒÆ’Ã‚Âºcar",
                     advice: "Surtido insuficiente desde centrifugas."
                 });
             } else if (familiarSiloLevel < 25) {
@@ -3512,17 +3512,17 @@ export default function OperationsClient({
                 <div className="flex items-center gap-2 md:gap-3">
                     <Factory className="h-6 w-6 md:h-8 md:w-8 text-primary" />
                     <h1 className="text-lg md:text-2xl font-bold text-foreground">Panel de Operaciones</h1>
-                </div>
-                <div className="flex items-center gap-2">
                     <Button 
                         variant="secondary" 
                         size="sm" 
-                        className="text-xs md:text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 border" 
+                        className="text-xs md:text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 border ml-2" 
                         onClick={() => setIsProjectionModalOpen(true)}
                     >
                         <Target className="mr-1 h-3 w-3 md:mr-2 md:h-4 md:w-4" />
                         <span className="hidden sm:inline">Proyección</span>
                     </Button>
+                </div>
+                <div className="flex items-center gap-2">
                     <Button 
                         variant="secondary" 
                         size="sm" 
@@ -3558,10 +3558,10 @@ export default function OperationsClient({
                     <Alert className="border-2 bg-amber-500/10 text-amber-600 border-amber-500/50 animate-pulse">
                         <Clock className="h-5 w-5" />
                         <AlertTitle className="font-bold uppercase">
-                            {shiftType === 'day' ? 'PAUSA DE ALMUERZO ACTIVADA' : 'PAUSA DE ALIMENTACIÓN ACTIVADA'}
+                            {shiftType === 'day' ? 'PAUSA DE ALMUERZO ACTIVADA' : 'PAUSA DE ALIMENTACIÃ“N ACTIVADA'}
                         </AlertTitle>
                         <AlertDescription>
-                            Periodo de descanso programado activo. Las máquinas en modo pausa están detenidas; el resto de la planta y máquinas configuradas continúan operando.
+                            Periodo de descanso programado activo. Las mÃ¡quinas en modo pausa estÃ¡n detenidas; el resto de la planta y mÃ¡quinas configuradas continÃºan operando.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -3581,7 +3581,7 @@ export default function OperationsClient({
                                         <h4 className="font-semibold text-xs md:text-sm">Tachos</h4>
                                         <p className="text-[10px] md:text-xs text-muted-foreground">{simulationState.totalMasasSent} Masas</p>
                                     </div>
-                                </TooltipTrigger> <TooltipContent><p>Inicio: Generación de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
+                                </TooltipTrigger> <TooltipContent><p>Inicio: GeneraciÃ³n de masa.</p></TooltipContent> </Tooltip> </TooltipProvider>
                                 <ArrowRight className="h-4 w-4 md:h-8 md:w-8 text-muted-foreground shrink-0" />
                                 <TooltipProvider> <Tooltip> <TooltipTrigger>
                                     <div className="flex flex-col items-center gap-1 text-center min-w-[60px] md:min-w-[80px]">
@@ -3594,7 +3594,7 @@ export default function OperationsClient({
                                 <TooltipProvider> <Tooltip> <TooltipTrigger>
                                     <div className="flex flex-col items-center gap-1 text-center min-w-[60px] md:min-w-[80px]">
                                         <Activity className="h-6 w-6 md:h-10 md:w-10 text-primary" />
-                                        <h4 className="font-semibold text-xs">T. Pulmón</h4>
+                                        <h4 className="font-semibold text-xs">T. PulmÃ³n</h4>
                                         <p className="text-[10px] md:text-xs text-muted-foreground">{(simulationState.bufferTankQQ ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</p>
                                     </div>
                                 </TooltipTrigger> <TooltipContent><p>Pulmon de almacenamiento intermedio.</p></TooltipContent> </Tooltip> </TooltipProvider>
@@ -3629,7 +3629,7 @@ export default function OperationsClient({
                                         <h4 className="font-semibold text-xs md:text-sm">Enfardado</h4>
                                         <p className="text-[10px] md:text-xs text-muted-foreground">{(staticSimulationResults.bundlesPerMinute ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 })} F/Min</p>
                                     </div>
-                                </TooltipTrigger>  <TooltipContent> <p>Capacidad teórica de empaque final en fardos por minuto.</p> </TooltipContent> </Tooltip> </TooltipProvider>
+                                </TooltipTrigger>  <TooltipContent> <p>Capacidad teÃ³rica de empaque final en fardos por minuto.</p> </TooltipContent> </Tooltip> </TooltipProvider>
                             </div>
                         </div>
 
@@ -3641,7 +3641,7 @@ export default function OperationsClient({
                                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                             <div className="flex items-center gap-1">
                                                 <CalendarDays className="h-3 w-3" />
-                                                <span>Turno {shiftType === 'day' ? 'Día (07:00 - 17:59)' : 'Noche (18:00 - 06:59)'}</span>
+                                                <span>Turno {shiftType === 'day' ? 'DÃ­a (07:00 - 17:59)' : 'Noche (18:00 - 06:59)'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -3669,7 +3669,7 @@ export default function OperationsClient({
                                                     </Button>
                                                 </TooltipTrigger>
                                                 <TooltipContent>
-                                                    <p>{showImages ? 'Ocultar ImÃƒÂ¡genes' : 'Mostrar ImÃƒÂ¡genes'}</p>
+                                                    <p>{showImages ? 'Ocultar ImÃƒÆ’Ã‚Â¡genes' : 'Mostrar ImÃƒÆ’Ã‚Â¡genes'}</p>
                                                 </TooltipContent>
                                             </Tooltip>
                                             <Tooltip>
@@ -3684,7 +3684,7 @@ export default function OperationsClient({
                                                             <AlertDialogHeader>
                                                                 <AlertDialogTitle>Restaurar Configuracion por Defecto</AlertDialogTitle>
                                                                 <AlertDialogDescription>
-                                                                    ¿Estas seguro? Esto restaurara todos los parametros de la simulacion (en este navegador) y las imagenes (para todos los usuarios) a sus valores originales.
+                                                                    Â¿Estas seguro? Esto restaurara todos los parametros de la simulacion (en este navegador) y las imagenes (para todos los usuarios) a sus valores originales.
                                                                 </AlertDialogDescription>
                                                             </AlertDialogHeader>
                                                             <AlertDialogFooter>
@@ -3857,14 +3857,14 @@ export default function OperationsClient({
                                                         >
                                                             <Zap className={cn("mr-2 h-4 w-4 md:h-5 md:w-5", simTachos.state === 'cooking' && "animate-bounce")} />
                                                             <span className="text-xs md:text-sm font-bold uppercase tracking-tight">
-                                                                {simTachos.state === 'cooking' ? '¡FORZAR ENVÍO!' : 'ENVIAR MASA'}
+                                                                {simTachos.state === 'cooking' ? 'Â¡FORZAR ENVÃO!' : 'ENVIAR MASA'}
                                                             </span>
                                                         </Button>
                                                     </TooltipTrigger>
                                                     <TooltipContent side="bottom" className="max-w-[200px] text-center text-xs">
                                                         {simTachos.state === 'cooking' 
-                                                            ? "Termina la cocción inmediatamente para enviar la masa." 
-                                                            : "Inicia el envío de una nueva masa si hay recibidores libres."}
+                                                            ? "Termina la cocciÃ³n inmediatamente para enviar la masa." 
+                                                            : "Inicia el envÃ­o de una nueva masa si hay recibidores libres."}
                                                     </TooltipContent>
                                                 </Tooltip>
                                             </TooltipProvider>
@@ -3947,12 +3947,12 @@ export default function OperationsClient({
                                                         <RotateCw className="h-5 w-5 text-primary" />
                                                         Centrifugas
                                                         <Badge variant={isCentrifugesAuto ? "default" : "secondary"} className="text-[10px] py-0">
-                                                            {isCentrifugesAuto ? '⚡ Auto' : 'Ã°Å¸â€“Â Manual'}
+                                                            {isCentrifugesAuto ? 'âš¡ Auto' : 'ÃƒÂ°Ã…Â¸Ã¢â‚¬â€œÃ‚Â Manual'}
                                                         </Badge>
                                                     </h3>
                                                     {isCentrifugesAuto && (
                                                         <p className="text-[10px] text-muted-foreground">
-                                                            Inicia al ≥ 50% del tanque pulmon
+                                                            Inicia al â‰¥ 50% del tanque pulmon
                                                         </p>
                                                     )}
                                                 </div>
@@ -4035,7 +4035,7 @@ export default function OperationsClient({
                                                     </h3>
                                                     <div className="flex items-center gap-1.5">
                                                         {simulationState.silosFullAlarm && fillPercentage >= 99 && (
-                                                            <Badge variant="destructive" className="text-[10px] animate-pulse">CAPACIDAD CRÃƒÂTICA</Badge>
+                                                            <Badge variant="destructive" className="text-[10px] animate-pulse">CAPACIDAD CRÃƒÆ’Ã‚ÂTICA</Badge>
                                                         )}
                                                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingSilo(silo)}>
                                                             <Edit className="h-4 w-4" />
@@ -4319,8 +4319,8 @@ export default function OperationsClient({
                                     {Object.keys(simulationState.palletGroups).length === 0 ? (
                                         <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-xl bg-muted/5">
                                             <Package className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                                            <p className="font-medium">Esperando producciÃƒÂ³n para iniciar estiba...</p>
-                                            <p className="text-xs">Los pallets aparecerÃƒÂ¡n aquÃƒÂ­ una vez que las envasadoras o enfardadoras completen unidades.</p>
+                                            <p className="font-medium">Esperando producciÃƒÆ’Ã‚Â³n para iniciar estiba...</p>
+                                            <p className="text-xs">Los pallets aparecerÃƒÆ’Ã‚Â¡n aquÃƒÆ’Ã‚Â­ una vez que las envasadoras o enfardadoras completen unidades.</p>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -4564,10 +4564,10 @@ export default function OperationsClient({
                                 <DialogHeader>
                                     <DialogTitle className="flex items-center gap-2">
                                         <Settings2 className="h-5 w-5" />
-                                        Configuración de Turno Real
+                                        ConfiguraciÃ³n de Turno Real
                                     </DialogTitle>
                                     <DialogDescription>
-                                        Configure el horario de producción y los periodos de descanso.
+                                        Configure el horario de producciÃ³n y los periodos de descanso.
                                     </DialogDescription>
                                 </DialogHeader>
 
@@ -4585,7 +4585,7 @@ export default function OperationsClient({
                                             >
                                                 <Sun className="h-6 w-6" />
                                                 <div className="text-center">
-                                                    <div className="font-bold">Día</div>
+                                                    <div className="font-bold">DÃ­a</div>
                                                     <div className="text-[10px] opacity-80">07:00 - 17:59</div>
                                                 </div>
                                             </Button>
@@ -4723,7 +4723,7 @@ export default function OperationsClient({
                                     <div className="space-y-3">
                                         <h4 className="text-sm font-semibold flex items-center gap-2">
                                             <Activity className="h-4 w-4" />
-                                            Estado de Máquinas en Pausa
+                                            Estado de MÃ¡quinas en Pausa
                                         </h4>
                                         <div className="grid grid-cols-2 gap-2">
                                             {machines.map(m => (
@@ -4731,7 +4731,7 @@ export default function OperationsClient({
                                                     "text-[10px] p-2 rounded border flex items-center justify-between",
                                                     m.keepActiveDuringBreaks ? "bg-primary/5 border-primary/20" : "bg-muted/50 border-muted-foreground/10 opacity-60"
                                                 )}>
-                                                    <span className="font-medium">Máquina {m.id}</span>
+                                                    <span className="font-medium">MÃ¡quina {m.id}</span>
                                                     <Badge variant={m.keepActiveDuringBreaks ? "default" : "outline"} className="text-[8px] h-4 px-1">
                                                         {m.keepActiveDuringBreaks ? "ACTIVA" : "PAUSA"}
                                                     </Badge>
@@ -4739,14 +4739,14 @@ export default function OperationsClient({
                                             ))}
                                         </div>
                                         <p className="text-[10px] text-muted-foreground italic">
-                                            * Configure la actividad individual editando cada máquina en el tablero principal.
+                                            * Configure la actividad individual editando cada mÃ¡quina en el tablero principal.
                                         </p>
                                     </div>
                                 </div>
 
                                 <DialogFooter>
                                     <Button className="w-full" onClick={() => setIsShiftConfigOpen(false)}>
-                                        Aplicar Configuración
+                                        Aplicar ConfiguraciÃ³n
                                     </Button>
                                 </DialogFooter>
                             </DialogContent>
@@ -4764,12 +4764,12 @@ export default function OperationsClient({
                                                 <div>
                                                     <DialogTitle className="text-2xl font-bold">Reporte de Fin de Turno</DialogTitle>
                                                     <DialogDescription className="font-medium text-primary">
-                                                        Turno {shiftType === 'day' ? 'Día' : 'Noche'} completado exitosamente
+                                                        Turno {shiftType === 'day' ? 'DÃ­a' : 'Noche'} completado exitosamente
                                                     </DialogDescription>
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <div className="text-sm font-bold text-muted-foreground uppercase">Duración Total</div>
+                                                <div className="text-sm font-bold text-muted-foreground uppercase">DuraciÃ³n Total</div>
                                                 <div className="text-xl font-mono font-bold">{targetShiftHours} Horas</div>
                                             </div>
                                         </div>
@@ -4795,7 +4795,7 @@ export default function OperationsClient({
                                             <div className="p-4 rounded-xl border-2 bg-card text-center space-y-1">
                                                 <Clock className="h-5 w-5 mx-auto text-primary mb-1" />
                                                 <div className="text-2xl font-bold">{formatSeconds(simulationState.accumulatedOperationSeconds)}</div>
-                                                <div className="text-[10px] font-black uppercase tracking-tighter opacity-60">Tiempo Operación</div>
+                                                <div className="text-[10px] font-black uppercase tracking-tighter opacity-60">Tiempo OperaciÃ³n</div>
                                             </div>
                                         </div>
 
@@ -4804,7 +4804,7 @@ export default function OperationsClient({
                                         <div className="space-y-4">
                                             <h4 className="font-bold text-sm flex items-center gap-2">
                                                 <Activity className="h-4 w-4" />
-                                                Resumen de Producción por Máquina
+                                                Resumen de ProducciÃ³n por MÃ¡quina
                                             </h4>
                                             <div className="grid gap-3">
                                                 {machines.filter(m => m.productId !== 'inactive').map(machine => {
@@ -4820,7 +4820,7 @@ export default function OperationsClient({
                                                                     {machine.id}
                                                                 </div>
                                                                 <div>
-                                                                    <div className="font-bold text-sm">Máquina {machine.id}</div>
+                                                                    <div className="font-bold text-sm">MÃ¡quina {machine.id}</div>
                                                                     <div className="text-[10px] text-muted-foreground">{product?.productName}</div>
                                                                 </div>
                                                             </div>
@@ -4840,7 +4840,7 @@ export default function OperationsClient({
                                                 <h5 className="font-bold text-sm">Observaciones del Turno</h5>
                                                 <p className="text-xs text-muted-foreground leading-relaxed">
                                                     La eficiencia global del {liveSimulationResults.globalEfficiency.toFixed(1)}% refleja el impacto de las pausas programadas y la capacidad de silo. 
-                                                    {liveSimulationResults.bottleneck === 'wrapper' ? ' El cuello de botella principal se detectó en el área de enfardado.' : ' El flujo de producción se mantuvo estable durante el turno.'}
+                                                    {liveSimulationResults.bottleneck === 'wrapper' ? ' El cuello de botella principal se detectÃ³ en el Ã¡rea de enfardado.' : ' El flujo de producciÃ³n se mantuvo estable durante el turno.'}
                                                 </p>
                                             </div>
                                         </div>
