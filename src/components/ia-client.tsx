@@ -1771,25 +1771,25 @@ function ProductionProjectionView({
                     {!isSummaryView ? (
                         <Button 
                             variant="ghost" 
-                            size="sm" 
+                            size="icon" 
                             onClick={() => {
                                 setIsSummaryView(true);
                                 setIsSidebarOpen(false);
                             }}
-                            className="h-9 gap-2"
+                            className="h-9 w-9"
+                            title="Reporte Detallado"
                         >
                             <BarChart4 className="h-4 w-4" />
-                            <span className="hidden sm:inline text-xs font-semibold">Reporte Detallado</span>
                         </Button>
                     ) : (
                         <Button 
                             variant="ghost" 
-                            size="sm" 
+                            size="icon" 
                             onClick={() => setIsSummaryView(false)}
-                            className="h-9 gap-2 text-primary hover:bg-primary/10"
+                            className="h-9 w-9 text-primary hover:bg-primary/10"
+                            title="Volver a Proyección"
                         >
                             <ChevronLeft className="h-4 w-4" />
-                            <span className="text-xs font-semibold">Volver a Proyección</span>
                         </Button>
                     )}
                     <Separator orientation="vertical" className={cn("h-6 mx-1", isSummaryView && "hidden")} />
