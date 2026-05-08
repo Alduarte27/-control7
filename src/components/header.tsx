@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Factory, Save, LayoutDashboard, Settings, Download, Info, Sparkles, MoreVertical, HardHat, Package, Shield, Palette } from 'lucide-react';
+import { Factory, Save, LayoutDashboard, Settings, Download, Info, Sparkles, MoreVertical, HardHat, Package, Shield, Palette, Target } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
