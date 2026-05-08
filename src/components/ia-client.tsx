@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Package2, Image as ImageIcon, ImageOff, RotateCcw, ArrowDownToLine, RotateCw, Database, Layers, CalendarDays, Settings2, Sunrise, Sunset, Utensils, Coffee, Moon, Sun, FileText, Calculator, Target, PanelLeftClose, PanelLeftOpen, CalendarRange, Calendar, ArrowLeftRight, Save, History } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Package2, Image as ImageIcon, ImageOff, RotateCcw, ArrowDownToLine, RotateCw, Database, Layers, CalendarDays, Settings2, Sunrise, Sunset, Utensils, Coffee, Moon, Sun, FileText, Calculator, Target, PanelLeftClose, PanelLeftOpen, CalendarRange, Calendar, ArrowLeftRight, Save, History, BarChart4 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
@@ -930,7 +930,7 @@ function ProductionProjectionView({
 }) {
     const [season, setSeason] = React.useState<'zafra' | 'no-zafra'>('zafra');
     const [viewMode, setViewMode] = React.useState<'semana' | 'dia'>('dia');
-    const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
     const [zafraStartMonth, setZafraStartMonth] = React.useState<number>(7);
     const [zafraEndMonth, setZafraEndMonth] = React.useState<number>(11);
     
@@ -963,6 +963,7 @@ function ProductionProjectionView({
     const [snapshotName, setSnapshotName] = React.useState('');
     const [isSavingSnapshot, setIsSavingSnapshot] = React.useState(false);
     const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
+    const [isSummaryView, setIsSummaryView] = React.useState(false);
     const [snapshots, setSnapshots] = React.useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = React.useState(false);
 
@@ -1051,7 +1052,7 @@ function ProductionProjectionView({
     const [machineConfig, setMachineConfig] = React.useState<Record<number, { active: boolean, productId: string, speed: number }>>({});
 
     const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-    const dayNames = ["Lunes", "Martes", "MiÃ©rcoles", "Jueves", "Viernes", "SÃ¡bado", "Domingo"];
+    const dayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
     const currentYear = new Date().getFullYear();
 
     const [isDataLoaded, setIsDataLoaded] = React.useState(false);
@@ -1165,9 +1166,16 @@ function ProductionProjectionView({
     };
 
     const groupedWeeks = generateWeeksGroupedByMonth();
+    const totalWeeksInProjection = groupedWeeks.reduce((acc, group) => acc + group.weeks.length, 0);
 
-    const totalProjectedQQ = React.useMemo(() => {
-        let total = 0;
+    const productionStats = React.useMemo(() => {
+        const byProduct: Record<string, { qq: number, days: number, units: number }> = {};
+        const byMachine: Record<number, { 
+            qq: number, 
+            days: number, 
+            units: number, 
+            products: Record<string, { qq: number, units: number, days: number, weeks: Set<number> }> 
+        }> = {};
         const activeMachines = machines.filter(m => machineConfig[m.id]?.active);
         
         groupedWeeks.forEach(group => {
@@ -1191,22 +1199,60 @@ function ProductionProjectionView({
                         
                         const scalingFactor = machineAutoDays > 0 ? machineDays / machineAutoDays : (machineAutoDays === 0 && machineDays > 0 ? 1 : 0);
 
-                        let weekDiaQQ = 0;
-                        let weekNocQQ = 0;
                         week.days.forEach(day => {
                             const dateStr = day.toISOString().split('T')[0];
                             if (customActiveDays[dateStr] === false) return;
                             const oD = overrides[`${m.id}-${dateStr}-dia`];
                             const oN = overrides[`${m.id}-${dateStr}-noche`];
-                            const pD = products.find(p => p.id === (oD?.productId || conf.productId)) || products[0];
-                            const pN = products.find(p => p.id === (oN?.productId || conf.productId)) || products[0];
+                            
+                            const pIdD = oD?.productId || conf.productId;
+                            const pIdN = oN?.productId || conf.productId;
+                            const pD = products.find(p => p.id === pIdD) || products[0];
+                            const pN = products.find(p => p.id === pIdN) || products[0];
                             const sD = oD?.speed || conf.speed || 30;
                             const sN = oN?.speed || conf.speed || 30;
 
-                            if (!oD?.inactive) weekDiaQQ += ((sD * 60) * rendimiento * horasTurnoDia * (pD?.presentationWeight || 50)) / 50;
-                            if (!oN?.inactive) weekNocQQ += ((sN * 60) * rendimiento * horasTurnoNoche * (pN?.presentationWeight || 50)) / 50;
+                            if (!byMachine[m.id]) byMachine[m.id] = { qq: 0, days: 0, units: 0, products: {} };
+
+                            if (!oD?.inactive && pD) {
+                                const qq = ((sD * 60) * rendimiento * horasTurnoDia * (pD.presentationWeight || 50)) / 50 * scalingFactor;
+                                const isFardo = pD.primaryPackaging === 'fardo' || !!pD.bundleWeight;
+                                const units = isFardo ? (qq * 50) / (pD.bundleWeight || 12) : qq;
+                                
+                                if (!byProduct[pIdD]) byProduct[pIdD] = { qq: 0, days: 0, units: 0 };
+                                byProduct[pIdD].qq += qq;
+                                byProduct[pIdD].days += 0.5 * scalingFactor;
+                                byProduct[pIdD].units += units;
+
+                                byMachine[m.id].qq += qq;
+                                byMachine[m.id].days += 0.5 * scalingFactor;
+                                byMachine[m.id].units += units;
+                                if (!byMachine[m.id].products[pIdD]) byMachine[m.id].products[pIdD] = { qq: 0, units: 0, days: 0, weeks: new Set() };
+                                byMachine[m.id].products[pIdD].qq += qq;
+                                byMachine[m.id].products[pIdD].units += units;
+                                byMachine[m.id].products[pIdD].days += 0.5 * scalingFactor;
+                                byMachine[m.id].products[pIdD].weeks.add(week.weekNum);
+                            }
+                            if (!oN?.inactive && pN) {
+                                const qq = ((sN * 60) * rendimiento * horasTurnoNoche * (pN.presentationWeight || 50)) / 50 * scalingFactor;
+                                const isFardo = pN.primaryPackaging === 'fardo' || !!pN.bundleWeight;
+                                const units = isFardo ? (qq * 50) / (pN.bundleWeight || 12) : qq;
+
+                                if (!byProduct[pIdN]) byProduct[pIdN] = { qq: 0, days: 0, units: 0 };
+                                byProduct[pIdN].qq += qq;
+                                byProduct[pIdN].days += 0.5 * scalingFactor;
+                                byProduct[pIdN].units += units;
+
+                                byMachine[m.id].qq += qq;
+                                byMachine[m.id].days += 0.5 * scalingFactor;
+                                byMachine[m.id].units += units;
+                                if (!byMachine[m.id].products[pIdN]) byMachine[m.id].products[pIdN] = { qq: 0, units: 0, days: 0, weeks: new Set() };
+                                byMachine[m.id].products[pIdN].qq += qq;
+                                byMachine[m.id].products[pIdN].units += units;
+                                byMachine[m.id].products[pIdN].days += 0.5 * scalingFactor;
+                                byMachine[m.id].products[pIdN].weeks.add(week.weekNum);
+                            }
                         });
-                        total += (weekDiaQQ + weekNocQQ) * scalingFactor;
                     });
                 } else {
                     week.days.forEach(day => {
@@ -1223,15 +1269,57 @@ function ProductionProjectionView({
                             const pD = products.find(p => p.id === pIdD);
                             const pN = products.find(p => p.id === pIdN);
                             
-                            if (pD && !oD?.inactive) total += ((sD * 60) * rendimiento * horasTurnoDia * (pD.presentationWeight || 50)) / 50;
-                            if (pN && !oN?.inactive) total += ((sN * 60) * rendimiento * horasTurnoNoche * (pN.presentationWeight || 50)) / 50;
+                            if (!byMachine[m.id]) byMachine[m.id] = { qq: 0, days: 0, units: 0, products: {} };
+
+                            if (pD && !oD?.inactive) {
+                                const qq = ((sD * 60) * rendimiento * horasTurnoDia * (pD.presentationWeight || 50)) / 50;
+                                const isFardo = pD.primaryPackaging === 'fardo' || !!pD.bundleWeight;
+                                const units = isFardo ? (qq * 50) / (pD.bundleWeight || 12) : qq;
+
+                                if (!byProduct[pIdD]) byProduct[pIdD] = { qq: 0, days: 0, units: 0 };
+                                byProduct[pIdD].qq += qq;
+                                byProduct[pIdD].days += 0.5;
+                                byProduct[pIdD].units += units;
+
+                                byMachine[m.id].qq += qq;
+                                byMachine[m.id].days += 0.5;
+                                byMachine[m.id].units += units;
+                                if (!byMachine[m.id].products[pIdD]) byMachine[m.id].products[pIdD] = { qq: 0, units: 0, days: 0, weeks: new Set() };
+                                byMachine[m.id].products[pIdD].qq += qq;
+                                byMachine[m.id].products[pIdD].units += units;
+                                byMachine[m.id].products[pIdD].days += 0.5;
+                                byMachine[m.id].products[pIdD].weeks.add(week.weekNum);
+                            }
+                            if (pN && !oN?.inactive) {
+                                const qq = ((sN * 60) * rendimiento * horasTurnoNoche * (pN.presentationWeight || 50)) / 50;
+                                const isFardo = pN.primaryPackaging === 'fardo' || !!pN.bundleWeight;
+                                const units = isFardo ? (qq * 50) / (pN.bundleWeight || 12) : qq;
+
+                                if (!byProduct[pIdN]) byProduct[pIdN] = { qq: 0, days: 0, units: 0 };
+                                byProduct[pIdN].qq += qq;
+                                byProduct[pIdN].days += 0.5;
+                                byProduct[pIdN].units += units;
+
+                                byMachine[m.id].qq += qq;
+                                byMachine[m.id].days += 0.5;
+                                byMachine[m.id].units += units;
+                                if (!byMachine[m.id].products[pIdN]) byMachine[m.id].products[pIdN] = { qq: 0, units: 0, days: 0, weeks: new Set() };
+                                byMachine[m.id].products[pIdN].qq += qq;
+                                byMachine[m.id].products[pIdN].units += units;
+                                byMachine[m.id].products[pIdN].days += 0.5;
+                                byMachine[m.id].products[pIdN].weeks.add(week.weekNum);
+                            }
                         });
                     });
                 }
             });
         });
-        return total;
+        return { byProduct, byMachine };
     }, [machines, machineConfig, groupedWeeks, viewMode, customActiveDays, overrides, customMachineDays, products, rendimiento, horasTurnoDia, horasTurnoNoche]);
+
+    const totalProjectedQQ = React.useMemo(() => {
+        return Object.values(productionStats.byProduct).reduce((sum, t) => sum + t.qq, 0);
+    }, [productionStats]);
 
     const handleCustomMachineDaysChange = (machineId: number, weekNum: number, value: string) => {
         const num = parseFloat(value);
@@ -1333,7 +1421,7 @@ function ProductionProjectionView({
                         <div className="relative w-8 h-6 bg-white rounded border overflow-hidden shrink-0">
                             <Image src={m.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} alt={`M${m.id}`} fill className="object-contain" unoptimized />
                         </div>
-                        <span className="font-bold text-primary text-[10px] leading-tight truncate">Tecnotok #{m.id}</span>
+                        <span className="font-bold text-primary text-[10px] leading-tight truncate">Maquina #{m.id}</span>
                     </div>
                 </th>
             );
@@ -1629,8 +1717,8 @@ function ProductionProjectionView({
         });
 
         return (
-            <div className="overflow-x-auto rounded-lg border shadow-sm bg-card w-full flex-1 min-h-0 flex flex-col">
-                <div className="overflow-y-auto flex-1 h-full max-h-[calc(100vh-140px)]">
+            <div className="rounded-lg border shadow-sm bg-card w-full h-full flex flex-col overflow-hidden">
+                <div className="w-full flex-1 overflow-auto custom-scrollbar">
                     <table className="w-full text-sm text-left table-fixed border-collapse">
                         <thead className="text-[10px] uppercase bg-muted text-muted-foreground sticky top-0 z-10 shadow-sm leading-none">
                             <tr>
@@ -1669,32 +1757,41 @@ function ProductionProjectionView({
         <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden">
             <header className="flex items-center justify-between p-3 border-b bg-card shrink-0 shadow-sm z-10 relative">
                 <div className="flex items-center gap-3">
-                    <h1 className="text-lg font-bold flex items-center gap-2 leading-tight">
-                        <Target className="h-4 w-4 text-primary" /> Proyección {currentYear}
+                    <h1 className="text-lg font-black flex items-center gap-2 leading-tight uppercase tracking-tighter">
+                        <Target className="h-5 w-5 text-primary" /> Proyección de Producción
                     </h1>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="h-9 px-3 gap-2">
-                        {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-                        <span className="text-xs">{isSidebarOpen ? 'Ocultar Panel' : 'Mostrar Panel'}</span>
-                    </Button>
+                    {!isSummaryView && (
+                        <Button variant="ghost" size="sm" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="h-9 px-3 gap-2">
+                            {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                            <span className="text-xs">{isSidebarOpen ? 'Ocultar Panel' : 'Mostrar Panel'}</span>
+                        </Button>
+                    )}
                     <Button 
-                        variant="ghost" 
+                        variant={isSummaryView ? 'default' : 'ghost'} 
                         size="sm" 
-                        onClick={() => setIsHistoryOpen(true)}
-                        className="h-9 gap-2"
+                        onClick={() => {
+                            setIsSummaryView(!isSummaryView);
+                            if (!isSummaryView) setIsSidebarOpen(false);
+                        }}
+                        className={cn("h-9 gap-2", isSummaryView && "bg-primary text-primary-foreground")}
                     >
-                        <History className="h-4 w-4" />
-                        <span className="hidden sm:inline text-xs font-semibold">Historial</span>
+                        <BarChart4 className="h-4 w-4" />
+                        <span className="hidden sm:inline text-xs font-semibold">Reporte Detallado</span>
                     </Button>
-                    <Separator orientation="vertical" className="h-6 mx-1" />
-                    <div className="flex bg-muted p-1 rounded-md h-9">
-                        <Button variant={viewMode === 'semana' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('semana')}>Vista Semanal</Button>
-                        <Button variant={viewMode === 'dia' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('dia')}>Vista Diaria</Button>
-                    </div>
-                    <Button variant="outline" size="icon" onClick={() => setIsSaveSnapshotOpen(true)} className="h-8 w-8 ml-2 text-primary border-primary/20 bg-primary/5 hover:bg-primary/10">
-                        <Save className="h-4 w-4" />
-                    </Button>
+                    <Separator orientation="vertical" className={cn("h-6 mx-1", isSummaryView && "hidden")} />
+                    {!isSummaryView && (
+                        <div className="flex bg-muted p-1 rounded-md h-9">
+                            <Button variant={viewMode === 'semana' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('semana')}>Vista Semanal</Button>
+                            <Button variant={viewMode === 'dia' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('dia')}>Vista Diaria</Button>
+                        </div>
+                    )}
+                    {!isSummaryView && (
+                        <Button variant="outline" size="icon" onClick={() => setIsSaveSnapshotOpen(true)} className="h-8 w-8 ml-2 text-primary border-primary/20 bg-primary/5 hover:bg-primary/10">
+                            <Save className="h-4 w-4" />
+                        </Button>
+                    )}
                     <Button variant="outline" size="icon" onClick={onClose} className="h-8 w-8 ml-1">
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -1733,7 +1830,7 @@ function ProductionProjectionView({
                                 </div>
                             </Card>
                             <Card className="border rounded-lg shadow-sm">
-                                <div className="bg-muted/50 px-3 py-1.5 border-b font-medium text-xs flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" /> ParÃ¡metros</div>
+                                <div className="bg-muted/50 px-3 py-1.5 border-b font-medium text-xs flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Parámetro</div>
                                 <div className="p-2 space-y-2">
                                     <div className="flex items-center justify-between gap-2">
                                         <Label className="text-[10px] font-medium w-20">Eficiencia</Label>
@@ -1779,7 +1876,127 @@ function ProductionProjectionView({
                             </Card>
                         </div>
                     )}
-                    <div className="flex-1 flex flex-col min-w-0 min-h-0">{renderTable()}</div>
+                    <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+                        {isSummaryView ? (
+                            <div id="resumen-detallado" className="flex-1 overflow-y-auto p-4 scroll-smooth">
+                                <div className="max-w-7xl mx-auto w-full pt-4 flex flex-col gap-3 pb-8">
+                                    {/* Summary Indicators by Machine */}
+                                    <div className="flex items-center justify-between mb-4 px-1">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-4 w-1.5 bg-primary rounded-full"></div>
+                                            <h2 className="font-black uppercase tracking-widest text-xl">
+                                                Reporte de Producción por Envasadora
+                                            </h2>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-3 bg-muted/30 px-3 py-1.5 rounded-full border border-muted-foreground/10 shadow-sm">
+                                            <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground">
+                                                <Calendar className="h-3 w-3 text-primary" />
+                                                <span>PERIODO:</span>
+                                                <span className="text-primary">{groupedWeeks[0].weeks[0].days[0].toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
+                                                <span>-</span>
+                                                <span className="text-primary">{groupedWeeks[groupedWeeks.length-1].weeks[groupedWeeks[groupedWeeks.length-1].weeks.length-1].days[groupedWeeks[groupedWeeks.length-1].weeks[groupedWeeks[groupedWeeks.length-1].weeks.length-1].days.length-1].toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                            </div>
+                                            <div className="h-3 w-[1px] bg-muted-foreground/20"></div>
+                                            <div className="text-[9px] font-black text-primary uppercase">
+                                                {totalWeeksInProjection} Semanas / {totalWeeksInProjection * 7} Días
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto">
+                                        {machines.filter(m => productionStats.byMachine[m.id]?.qq > 0).map(machine => {
+                                            const stats = productionStats.byMachine[machine.id];
+                                            const machineProducts = Object.entries(stats.products);
+                                            return (
+                                                <Card key={machine.id} className="border shadow-md overflow-hidden bg-card/50 flex flex-col">
+                                                    <CardContent className="p-4 flex flex-col h-full">
+                                                        {/* Header Machine */}
+                                                        <div className="flex items-center justify-between mb-4 pb-2 border-b">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="relative w-10 h-10 bg-white rounded-lg border shadow-sm p-1">
+                                                                    <Image src={machine.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} alt={`M${machine.id}`} fill className="object-contain" unoptimized />
+                                                                </div>
+                                                                <div>
+                                                                    <div className="text-sm font-black text-primary leading-none uppercase">Maquina #{machine.id} - {machine.machineName}</div>
+                                                                    <div className="text-[10px] text-muted-foreground font-medium mt-0.5">{machineProducts.length} presentaciones producidas</div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-lg font-black text-primary leading-none">{Math.round(stats.qq).toLocaleString()}</div>
+                                                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Total QQ</div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Breakdown Table */}
+                                                        <div className="flex-1 overflow-auto">
+                                                            <table className="w-full text-[10px]">
+                                                                <thead>
+                                                                    <tr className="text-muted-foreground border-b uppercase font-bold text-[8px] tracking-wider">
+                                                                        <th className="text-left pb-1">Presentación</th>
+                                                                        <th className="text-center pb-1">Sems</th>
+                                                                        <th className="text-center pb-1">Días</th>
+                                                                        <th className="text-right pb-1">Unidades</th>
+                                                                        <th className="text-right pb-1">QQ</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-border/50">
+                                                                    {machineProducts.map(([pId, pStats]) => {
+                                                                        const product = products.find(p => p.id === pId);
+                                                                        if (!product) return null;
+                                                                        const isFardo = product.primaryPackaging === 'fardo' || !!product.bundleWeight;
+                                                                        return (
+                                                                            <tr key={pId} className="group hover:bg-muted/30 transition-colors">
+                                                                                <td className="py-2 pr-2">
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: product.color }}></div>
+                                                                                        <div className="font-bold truncate max-w-[100px]" title={product.productName}>{product.productName}</div>
+                                                                                    </div>
+                                                                                </td>
+                                                                                <td className="py-2 text-center font-medium">{pStats.weeks.size}</td>
+                                                                                <td className="py-2 text-center font-black text-primary">{pStats.days.toFixed(1)}</td>
+                                                                                <td className="py-2 text-right">
+                                                                                    <div className="font-bold">{Math.round(pStats.units).toLocaleString()}</div>
+                                                                                    <div className="text-[7px] text-muted-foreground uppercase">{isFardo ? 'Fardos' : 'Sacos'}</div>
+                                                                                </td>
+                                                                                <td className="py-2 text-right font-black text-primary">
+                                                                                    {Math.round(pStats.qq).toLocaleString()}
+                                                                                </td>
+                                                                            </tr>
+                                                                        );
+                                                                    })}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+
+                                                        {/* Footer Stats */}
+                                                        <div className="mt-4 pt-3 border-t grid grid-cols-2 gap-4">
+                                                            <div className="bg-muted/30 p-2 rounded-lg">
+                                                                <div className="text-[8px] font-bold text-muted-foreground uppercase mb-0.5">Uso de Máquina</div>
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-xs font-black text-primary">{stats.days.toFixed(1)} <span className="text-[8px] font-normal">Días</span></span>
+                                                                    <span className="text-[9px] font-bold text-primary/70">{(stats.days / (totalWeeksInProjection * 7) * 100).toFixed(0)}%</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="bg-primary/5 p-2 rounded-lg border border-primary/10">
+                                                                <div className="text-[8px] font-bold text-primary/70 uppercase mb-0.5">Prom. Semanal</div>
+                                                                <div className="text-xs font-black text-primary">
+                                                                    {Math.round(stats.qq / (totalWeeksInProjection || 1)).toLocaleString()} <span className="text-[8px] font-normal">QQ/Sem</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex-1 p-1 overflow-hidden">
+                                {renderTable()}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </main>
 
@@ -1788,10 +2005,10 @@ function ProductionProjectionView({
                     <DialogHeader className="border-b pb-3">
                         <DialogTitle className="flex items-center gap-2 text-xl">
                             <Box className="h-6 w-6 text-primary" />
-                            Ajuste de ProducciÃ³n
+                            Ajuste de Producción
                         </DialogTitle>
                         <DialogDescription className="text-xs font-medium">
-                            Tecnotok <span className="text-primary font-bold">#{editingOverride?.machineId}</span> â€¢ Turno <span className="text-primary font-bold uppercase">{editingOverride?.shift}</span>
+                            Tecnotok <span className="text-primary font-bold">#{editingOverride?.machineId}</span> Turno <span className="text-primary font-bold uppercase">{editingOverride?.shift}</span>
                         </DialogDescription>
                     </DialogHeader>
 
@@ -1853,7 +2070,7 @@ function ProductionProjectionView({
                         {!editingOverride?.inactive && (
                             <div className="space-y-4 pt-2 animate-in fade-in duration-300">
                                 <div className="space-y-1.5">
-                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">PresentaciÃ³n</Label>
+                                    <Label className="text-[10px] font-bold text-muted-foreground uppercase">Presentación</Label>
                                     <Select value={editingOverride?.currentProductId || ''} onValueChange={(val) => setEditingOverride(prev => prev ? { ...prev, currentProductId: val } : null)}>
                                         <SelectTrigger className="w-full h-10 font-medium">
                                             <SelectValue />
@@ -2208,11 +2425,11 @@ function OnDemandReportModal({
                     <div className="space-y-4">
                         <h4 className="font-bold text-sm flex items-center gap-2">
                             <PackageCheck className="h-4 w-4" />
-                            ProducciÃ³n Actual por MÃ¡quina
+                            Producción Actual por Máquina
                         </h4>
                         <div className="grid gap-3">
                             {machineActuals.length === 0 ? (
-                                <p className="text-sm text-muted-foreground text-center py-4">No hay mÃ¡quinas configuradas.</p>
+                                <p className="text-sm text-muted-foreground text-center py-4">No hay máquinas configuradas.</p>
                             ) : (
                                 machineActuals.map(mp => (
                                     <div key={mp.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 rounded-lg border bg-muted/20 gap-2">
@@ -2221,7 +2438,7 @@ function OnDemandReportModal({
                                                 {mp.id}
                                             </div>
                                             <div>
-                                                <div className="font-bold text-sm">MÃ¡quina {mp.id}</div>
+                                                <div className="font-bold text-sm">Máquina {mp.id}</div>
                                                 <div className="text-[10px] text-muted-foreground">{mp.productName}</div>
                                             </div>
                                         </div>
@@ -3821,7 +4038,7 @@ export default function OperationsClient({
     const totalQQInReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
 
     if (isProjectionModalOpen) {
-        return <ProductionProjectionView onClose={() => { setIsProjectionModalOpen(false); router.push('/ia'); }} machines={machines} products={products} />;
+        return <ProductionProjectionView onClose={() => { router.push('/'); }} machines={machines} products={products} />;
     }
 
     return (
@@ -4876,7 +5093,7 @@ export default function OperationsClient({
                                         ConfiguraciÃ³n de Turno Real
                                     </DialogTitle>
                                     <DialogDescription>
-                                        Configure el horario de producciÃ³n y los periodos de descanso.
+                                        Configure el horario de producción y los periodos de descanso.
                                     </DialogDescription>
                                 </DialogHeader>
 
@@ -5113,7 +5330,7 @@ export default function OperationsClient({
                                         <div className="space-y-4">
                                             <h4 className="font-bold text-sm flex items-center gap-2">
                                                 <Activity className="h-4 w-4" />
-                                                Resumen de ProducciÃ³n por MÃ¡quina
+                                                Resumen de Producción por Máquina
                                             </h4>
                                             <div className="grid gap-3">
                                                 {machines.filter(m => m.productId !== 'inactive').map(machine => {
@@ -5129,7 +5346,7 @@ export default function OperationsClient({
                                                                     {machine.id}
                                                                 </div>
                                                                 <div>
-                                                                    <div className="font-bold text-sm">MÃ¡quina {machine.id}</div>
+                                                                    <div className="font-bold text-sm">Máquina {machine.id}</div>
                                                                     <div className="text-[10px] text-muted-foreground">{product?.productName}</div>
                                                                 </div>
                                                             </div>
@@ -5149,7 +5366,7 @@ export default function OperationsClient({
                                                 <h5 className="font-bold text-sm">Observaciones del Turno</h5>
                                                 <p className="text-xs text-muted-foreground leading-relaxed">
                                                     La eficiencia global del {liveSimulationResults.globalEfficiency.toFixed(1)}% refleja el impacto de las pausas programadas y la capacidad de silo. 
-                                                    {liveSimulationResults.bottleneck === 'wrapper' ? ' El cuello de botella principal se detectÃ³ en el Ã¡rea de enfardado.' : ' El flujo de producciÃ³n se mantuvo estable durante el turno.'}
+                                                    {liveSimulationResults.bottleneck === 'wrapper' ? ' El cuello de botella principal se detecta en el área de enfardado.' : ' El flujo de producción se mantuvo estable durante el turno.'}
                                                 </p>
                                             </div>
                                         </div>
