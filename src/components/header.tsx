@@ -115,6 +115,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
 
   const navModules = [
       { id: 'ia', href: '/ia', icon: Sparkles, label: 'Operaciones', tooltip: 'Operaciones y Simulación' },
+      { id: 'projection', href: '/ia?view=projection', icon: Target, label: 'Proyección', tooltip: 'Proyección de Producción' },
       { id: 'dashboard', href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', tooltip: 'Dashboard General' },
       { id: 'stops', href: '/stops', icon: HardHat, label: 'Bitácora', tooltip: 'Bitácora de Producción' },
       { id: 'materials', href: '/materials', icon: Package, label: 'Material Empaque', tooltip: 'Control de Materiales de Empaque' },
@@ -181,7 +182,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                         icon={mod.icon}
                         label={mod.label}
                         tooltipText={mod.tooltip}
-                        isVisible={hasPermission(mod.id)}
+                        isVisible={mod.id === 'projection' ? hasPermission('ia') : hasPermission(mod.id)}
                     />
                 ))
             )}
@@ -220,7 +221,7 @@ export default function Header({ onSave, hasUnsavedChanges, setIsInfoDialogOpen 
                           href={mod.href}
                           icon={mod.icon}
                           label={mod.label}
-                          isVisible={hasPermission(mod.id)}
+                          isVisible={mod.id === 'projection' ? hasPermission('ia') : hasPermission(mod.id)}
                         />
                     ))}
                     <DropdownMenuItem onClick={() => setIsCustomizerOpen(true)}><Palette className="mr-2 h-4 w-4" />Apariencia</DropdownMenuItem>

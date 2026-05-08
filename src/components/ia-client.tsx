@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useSearchParams } from 'next/navigation';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -2053,6 +2054,13 @@ export default function OperationsClient({
     const [isShiftGoalEnabled, setIsShiftGoalEnabled] = React.useState(true);
     const [isProjectionReportOpen, setIsProjectionReportOpen] = React.useState(false);
     const [isProjectionModalOpen, setIsProjectionModalOpen] = React.useState(false);
+    const searchParams = useSearchParams();
+
+    React.useEffect(() => {
+        if (searchParams.get('view') === 'projection') {
+            setIsProjectionModalOpen(true);
+        }
+    }, [searchParams]);
     const [projectionHours, setProjectionHours] = React.useState(8);
     const [isAutoStartEnabled, setIsAutoStartEnabled] = React.useState(false);
     const [isReserveSiloEnabled, setIsReserveSiloEnabled] = React.useState(false);
