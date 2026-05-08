@@ -1768,18 +1768,30 @@ function ProductionProjectionView({
                             <span className="text-xs">{isSidebarOpen ? 'Ocultar Panel' : 'Mostrar Panel'}</span>
                         </Button>
                     )}
-                    <Button 
-                        variant={isSummaryView ? 'default' : 'ghost'} 
-                        size="sm" 
-                        onClick={() => {
-                            setIsSummaryView(!isSummaryView);
-                            if (!isSummaryView) setIsSidebarOpen(false);
-                        }}
-                        className={cn("h-9 gap-2", isSummaryView && "bg-primary text-primary-foreground")}
-                    >
-                        <BarChart4 className="h-4 w-4" />
-                        <span className="hidden sm:inline text-xs font-semibold">Reporte Detallado</span>
-                    </Button>
+                    {!isSummaryView ? (
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => {
+                                setIsSummaryView(true);
+                                setIsSidebarOpen(false);
+                            }}
+                            className="h-9 gap-2"
+                        >
+                            <BarChart4 className="h-4 w-4" />
+                            <span className="hidden sm:inline text-xs font-semibold">Reporte Detallado</span>
+                        </Button>
+                    ) : (
+                        <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => setIsSummaryView(false)}
+                            className="h-9 gap-2 text-primary hover:bg-primary/10"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                            <span className="text-xs font-semibold">Volver a Proyección</span>
+                        </Button>
+                    )}
                     <Separator orientation="vertical" className={cn("h-6 mx-1", isSummaryView && "hidden")} />
                     {!isSummaryView && (
                         <div className="flex bg-muted p-1 rounded-md h-9">
@@ -1792,9 +1804,11 @@ function ProductionProjectionView({
                             <Save className="h-4 w-4" />
                         </Button>
                     )}
-                    <Button variant="outline" size="icon" onClick={onClose} className="h-8 w-8 ml-1">
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
+                    {!isSummaryView && (
+                        <Button variant="outline" size="icon" onClick={onClose} className="h-8 w-8 ml-1">
+                            <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                    )}
                 </div>
             </header>
 
