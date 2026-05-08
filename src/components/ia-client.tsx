@@ -1860,7 +1860,7 @@ function ProductionProjectionView({
                                                 <div className="flex items-center justify-between mb-1.5">
                                                     <div className="flex items-center gap-1.5 font-bold text-primary">
                                                         <Switch checked={conf.active} onCheckedChange={() => toggleMachine(machine.id)} className="scale-[0.6] origin-left" />
-                                                        Tecnotok #{machine.id}
+                                                        Maquina #{machine.id}
                                                     </div>
                                                 </div>
                                                 {conf.active && (
@@ -1903,7 +1903,41 @@ function ProductionProjectionView({
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto">
+                                    {/* Global Summary Stats */}
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                        <Card className="bg-primary shadow-lg border-none">
+                                            <CardContent className="p-4 flex flex-col items-center justify-center text-primary-foreground">
+                                                <PackageCheck className="h-6 w-6 mb-1 opacity-80" />
+                                                <div className="text-2xl font-black">{(totalProjectedQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Total Quintales</div>
+                                            </CardContent>
+                                        </Card>
+                                        <Card className="bg-blue-600 shadow-lg border-none">
+                                            <CardContent className="p-4 flex flex-col items-center justify-center text-white">
+                                                <Database className="h-6 w-6 mb-1 opacity-80" />
+                                                <div className="text-2xl font-black">{(totalProjectedQQ * 0.05).toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
+                                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Toneladas Métricas</div>
+                                            </CardContent>
+                                        </Card>
+                                        <Card className="bg-amber-500 shadow-lg border-none">
+                                            <CardContent className="p-4 flex flex-col items-center justify-center text-white">
+                                                <Activity className="h-6 w-6 mb-1 opacity-80" />
+                                                <div className="text-2xl font-black">
+                                                    {(Object.values(productionStats.byMachine).reduce((acc, m) => acc + m.days, 0) / (machines.filter(m => machineConfig[m.id]?.active).length * totalWeeksInProjection * 7) * 100).toFixed(1)}%
+                                                </div>
+                                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Ocupación Promedio</div>
+                                            </CardContent>
+                                        </Card>
+                                        <Card className="bg-emerald-600 shadow-lg border-none">
+                                            <CardContent className="p-4 flex flex-col items-center justify-center text-white">
+                                                <CalendarRange className="h-6 w-6 mb-1 opacity-80" />
+                                                <div className="text-2xl font-black">{totalWeeksInProjection}</div>
+                                                <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Semanas Proyectadas</div>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {machines.filter(m => productionStats.byMachine[m.id]?.qq > 0).map(machine => {
                                             const stats = productionStats.byMachine[machine.id];
                                             const machineProducts = Object.entries(stats.products);
@@ -1917,13 +1951,40 @@ function ProductionProjectionView({
                                                                     <Image src={machine.imageUrl || "https://firebasestorage.googleapis.com/v0/b/control-7-61a3f.appspot.com/o/envasadora.png?alt=media"} alt={`M${machine.id}`} fill className="object-contain" unoptimized />
                                                                 </div>
                                                                 <div>
-                                                                    <div className="text-sm font-black text-primary leading-none uppercase">Maquina #{machine.id} - {machine.machineName}</div>
+                                                                    <div className="text-sm font-black text-primary leading-none uppercase">Maquina #{machine.id}</div>
                                                                     <div className="text-[10px] text-muted-foreground font-medium mt-0.5">{machineProducts.length} presentaciones producidas</div>
                                                                 </div>
                                                             </div>
-                                                            <div className="text-right">
-                                                                <div className="text-lg font-black text-primary leading-none">{Math.round(stats.qq).toLocaleString()}</div>
-                                                                <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Total QQ</div>
+                                                            <div className="flex gap-4">
+                                                                <div className="text-right">
+                                                                    <div className="text-lg font-black text-primary leading-none">{Math.round(stats.qq).toLocaleString()}</div>
+                                                                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">Total QQ</div>
+                                                                </div>
+                                                                <div className="h-8 w-[1px] bg-border mx-1"></div>
+                                                                <div className="text-right">
+                                                                    <div className="text-lg font-black text-blue-600 leading-none">{(stats.qq * 0.05).toFixed(1)}</div>
+                                                                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-tighter">TM</div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Machine KPIs */}
+                                                        <div className="grid grid-cols-3 gap-2 mb-4">
+                                                            <div className="bg-muted/50 rounded p-2 text-center">
+                                                                <div className="text-xs font-black text-primary">{(stats.days).toFixed(1)}</div>
+                                                                <div className="text-[8px] font-bold text-muted-foreground uppercase">Días Ops</div>
+                                                            </div>
+                                                            <div className="bg-muted/50 rounded p-2 text-center">
+                                                                <div className="text-xs font-black text-amber-600">
+                                                                    {((stats.days / (totalWeeksInProjection * 7)) * 100).toFixed(0)}%
+                                                                </div>
+                                                                <div className="text-[8px] font-bold text-muted-foreground uppercase">% Uso</div>
+                                                            </div>
+                                                            <div className="bg-muted/50 rounded p-2 text-center">
+                                                                <div className="text-xs font-black text-emerald-600">
+                                                                    {Math.round(stats.qq / stats.days).toLocaleString()}
+                                                                </div>
+                                                                <div className="text-[8px] font-bold text-muted-foreground uppercase">QQ/Día</div>
                                                             </div>
                                                         </div>
 
