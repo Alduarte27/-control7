@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
@@ -1341,11 +1341,11 @@ function ProductionProjectionView({
 
         const shiftHeaders = activeMachines.flatMap(m => {
             const headers = [
-                <th key={m.id + 'd'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-[90px] h-4">DÃ­a</th>,
+                <th key={m.id + 'd'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-[90px] h-4">Dia</th>,
                 <th key={m.id + 'n'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-[90px] h-4">Noche</th>
             ];
             if (viewMode === 'semana') {
-                headers.unshift(<th key={m.id + 's'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-8 h-4">DÃ­as</th>);
+                headers.unshift(<th key={m.id + 's'} className="px-1 py-1 border-l text-center bg-card text-[8px] font-bold text-muted-foreground w-8 h-4">Dias</th>);
             }
             return headers;
         });
@@ -1531,7 +1531,7 @@ function ProductionProjectionView({
                     rows.push(
                         <tr key={week.weekNum} className="border-b hover:bg-muted/30">
                             {wIndex === 0 && (
-                                <td rowSpan={group.weeks.length} className="px-2 py-1 bg-muted/10 border-r align-top text-center">
+                                <td rowSpan={group.weeks.length} className="px-2 py-1 bg-muted/10 border-r align-middle text-center">
                                     <div className="text-xs font-bold text-foreground">{group.monthName.substring(0,3)}</div>
                                 </td>
                             )}
@@ -1583,7 +1583,7 @@ function ProductionProjectionView({
                         rows.push(
                             <tr key={dateStr} className={cn("border-b hover:bg-muted/30", !isActive && "bg-muted/10 opacity-60")}>
                                 {wIndex === 0 && dIndex === 0 && (
-                                    <td rowSpan={group.weeks.length * 7} className="px-2 py-1 bg-muted/10 border-r align-top text-center">
+                                    <td rowSpan={group.weeks.length * 7} className="px-2 py-1 bg-muted/10 border-r align-middle text-center">
                                         <div className="text-xs font-bold text-foreground">{group.monthName.substring(0,3)}</div>
                                     </td>
                                 )}
@@ -1610,7 +1610,7 @@ function ProductionProjectionView({
             const cells = [
                 <td key={m.id + 'd'} className="px-1 py-1 border-l text-center bg-card border-t border-b">
                     <div className="font-bold text-primary text-[9px]">{totals.dia.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    <div className="text-[7px] text-muted-foreground uppercase leading-tight">DÃ­a</div>
+                    <div className="text-[7px] text-muted-foreground uppercase leading-tight">Dias</div>
                 </td>,
                 <td key={m.id + 'n'} className="px-1 py-1 border-l text-center bg-card border-t border-b">
                     <div className="font-bold text-primary text-[9px]">{totals.noche.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -1621,7 +1621,7 @@ function ProductionProjectionView({
                 cells.unshift(
                     <td key={m.id + 's'} className="px-1 py-1 border-l text-center bg-muted/5 border-t border-b">
                         <div className="font-bold text-muted-foreground text-[9px]">{totals.days.toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
-                        <div className="text-[7px] text-muted-foreground uppercase leading-tight">DÃ­as</div>
+                        <div className="text-[7px] text-muted-foreground uppercase leading-tight">Dias</div>
                     </td>
                 );
             }
@@ -1637,7 +1637,7 @@ function ProductionProjectionView({
                                 <th className="px-2 py-2 border-r bg-muted w-10 text-center" rowSpan={2}>Mes</th>
                                 <th className="px-2 py-2 border-r bg-muted w-12 text-center" rowSpan={2}>Sem</th>
                                 {viewMode === 'dia' && (
-                                    <th className="px-2 py-2 border-r bg-muted w-20 text-center" rowSpan={2}>DÃ­a</th>
+                                    <th className="px-2 py-2 border-r bg-muted w-20 text-center" rowSpan={2}>Dias</th>
                                 )}
                                 {machineHeaders}
                                 <th className="px-2 py-2 border-l bg-primary/10 w-24 text-center text-primary font-bold" rowSpan={2}>Total QQ</th>
@@ -1653,7 +1653,7 @@ function ProductionProjectionView({
                             <tr className="font-bold">
                                 <td colSpan={viewMode === 'dia' ? 2 : 1} className="px-2 py-1 text-right bg-card text-[8px] uppercase font-bold">Total:</td>
                                 <td className="px-1 py-1 text-center bg-muted/30 border-r text-[9px] font-bold text-foreground">
-                                    {grandTotalDays.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[7px] text-muted-foreground font-normal">DÃ­as</span>
+                                    {grandTotalDays.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[7px] text-muted-foreground font-normal">Dias</span>
                                 </td>
                                 {totalsCells}
                                 <td className="px-2 py-1 border-l text-center bg-primary/20 text-primary text-[10px] font-bold">{grandTotalSemanal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} QQ</td>
@@ -1678,16 +1678,6 @@ function ProductionProjectionView({
                         {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
                         <span className="text-xs">{isSidebarOpen ? 'Ocultar Panel' : 'Mostrar Panel'}</span>
                     </Button>
-                    <Separator orientation="vertical" className="h-6 mx-1" />
-                    <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        onClick={() => setIsSaveSnapshotOpen(true)}
-                        className="h-9 gap-2 bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 border"
-                    >
-                        <Save className="h-4 w-4" />
-                        <span className="hidden sm:inline text-xs font-semibold">Guardar Escenario</span>
-                    </Button>
                     <Button 
                         variant="ghost" 
                         size="sm" 
@@ -1702,15 +1692,8 @@ function ProductionProjectionView({
                         <Button variant={viewMode === 'semana' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('semana')}>Vista Semanal</Button>
                         <Button variant={viewMode === 'dia' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('dia')}>Vista Diaria</Button>
                     </div>
-                    <Separator orientation="vertical" className="h-6 mx-1" />
-                    <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        onClick={() => setIsSaveSnapshotOpen(true)}
-                        className="h-9 gap-2 bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 border"
-                    >
+                    <Button variant="outline" size="icon" onClick={() => setIsSaveSnapshotOpen(true)} className="h-8 w-8 ml-2 text-primary border-primary/20 bg-primary/5 hover:bg-primary/10">
                         <Save className="h-4 w-4" />
-                        <span className="hidden sm:inline text-xs font-semibold">Guardar Escenario</span>
                     </Button>
                     <Button variant="outline" size="icon" onClick={onClose} className="h-8 w-8 ml-1">
                         <ChevronLeft className="h-4 w-4" />
@@ -1758,7 +1741,7 @@ function ProductionProjectionView({
                                         <span className="text-[9px] font-mono bg-muted px-1 py-0.5 rounded">{(rendimiento * 100).toFixed(0)}%</span>
                                     </div>
                                     <div className="flex items-center justify-between gap-2">
-                                        <Label className="text-[10px] font-medium w-20">Hr Turno DÃ­a</Label>
+                                        <Label className="text-[10px] font-medium w-20">Hr Turno Dias</Label>
                                         <Input type="number" value={horasTurnoDia} onChange={(e) => setHorasTurnoDia(Number(e.target.value))} className="h-6 text-[10px] w-14 px-1 text-center" step="0.5" />
                                         <span className="text-[9px] text-muted-foreground w-6 text-right">h</span>
                                     </div>
@@ -1834,7 +1817,7 @@ function ProductionProjectionView({
                                         <ArrowLeftRight className="h-5 w-5" />
                                     </div>
                                     <div>
-                                        <Label className="text-sm font-bold">Aplicar a DÃ­a y Noche</Label>
+                                        <Label className="text-sm font-bold">Aplicar a Dia y Noche</Label>
                                         <p className="text-[10px] text-muted-foreground">Configura ambos turnos a la vez</p>
                                     </div>
                                 </div>
@@ -2381,6 +2364,7 @@ export default function OperationsClient({
     const [snapshotName, setSnapshotName] = React.useState('');
     const [isSavingSnapshot, setIsSavingSnapshot] = React.useState(false);
     const searchParams = useSearchParams();
+    const router = useRouter();
 
     React.useEffect(() => {
         if (searchParams.get('view') === 'projection') {
@@ -3837,7 +3821,7 @@ export default function OperationsClient({
     const totalQQInReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
 
     if (isProjectionModalOpen) {
-        return <ProductionProjectionView onClose={() => setIsProjectionModalOpen(false)} machines={machines} products={products} />;
+        return <ProductionProjectionView onClose={() => { setIsProjectionModalOpen(false); router.push('/ia'); }} machines={machines} products={products} />;
     }
 
     return (
@@ -3966,7 +3950,7 @@ export default function OperationsClient({
                                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                             <div className="flex items-center gap-1">
                                                 <CalendarDays className="h-3 w-3" />
-                                                <span>Turno {shiftType === 'day' ? 'DÃ­a (07:00 - 17:59)' : 'Noche (18:00 - 06:59)'}</span>
+                                                <span>Turno {shiftType === 'day' ? 'Dia (07:00 - 17:59)' : 'Noche (18:00 - 06:59)'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -4644,8 +4628,8 @@ export default function OperationsClient({
                                     {Object.keys(simulationState.palletGroups).length === 0 ? (
                                         <div className="text-center py-10 text-muted-foreground border-2 border-dashed rounded-xl bg-muted/5">
                                             <Package className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                                            <p className="font-medium">Esperando producciÃƒÆ’Ã‚Â³n para iniciar estiba...</p>
-                                            <p className="text-xs">Los pallets aparecerÃƒÆ’Ã‚Â¡n aquÃƒÆ’Ã‚Â­ una vez que las envasadoras o enfardadoras completen unidades.</p>
+                                            <p className="font-medium">Esperando produccion para iniciar estiba...</p>
+                                            <p className="text-xs">Los pallets apareceran aqui una vez que las envasadoras o enfardadoras completen unidades.</p>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -4910,7 +4894,7 @@ export default function OperationsClient({
                                             >
                                                 <Sun className="h-6 w-6" />
                                                 <div className="text-center">
-                                                    <div className="font-bold">DÃ­a</div>
+                                                    <div className="font-bold">Dia</div>
                                                     <div className="text-[10px] opacity-80">07:00 - 17:59</div>
                                                 </div>
                                             </Button>
@@ -5089,7 +5073,7 @@ export default function OperationsClient({
                                                 <div>
                                                     <DialogTitle className="text-2xl font-bold">Reporte de Fin de Turno</DialogTitle>
                                                     <DialogDescription className="font-medium text-primary">
-                                                        Turno {shiftType === 'day' ? 'DÃ­a' : 'Noche'} completado exitosamente
+                                                        Turno {shiftType === 'day' ? 'Dia' : 'Noche'} completado exitosamente
                                                     </DialogDescription>
                                                 </div>
                                             </div>
