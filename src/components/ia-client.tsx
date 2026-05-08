@@ -1029,7 +1029,7 @@ function ProductionProjectionView({
                     machineConfig
                 },
                 summary: {
-                    totalQQ: grandTotalSemanal
+                    totalQQ: totalProjectedQQ
                 }
             };
 
@@ -1165,6 +1165,73 @@ function ProductionProjectionView({
     };
 
     const groupedWeeks = generateWeeksGroupedByMonth();
+
+    const totalProjectedQQ = React.useMemo(() => {
+        let total = 0;
+        const activeMachines = machines.filter(m => machineConfig[m.id]?.active);
+        
+        groupedWeeks.forEach(group => {
+            group.weeks.forEach(week => {
+                if (viewMode === 'semana') {
+                    activeMachines.forEach(m => {
+                        const conf = machineConfig[m.id];
+                        if (!conf) return;
+
+                        const machineAutoDays = week.days.reduce((t, d) => {
+                            const dateStr = d.toISOString().split('T')[0];
+                            if (customActiveDays[dateStr] === false) return t;
+                            const oD = overrides[`${m.id}-${dateStr}-dia`];
+                            const oN = overrides[`${m.id}-${dateStr}-noche`];
+                            return t + (oD?.inactive ? 0 : 0.5) + (oN?.inactive ? 0 : 0.5);
+                        }, 0);
+
+                        const machineDays = customMachineDays[`${m.id}-${week.weekNum}`] !== undefined 
+                            ? customMachineDays[`${m.id}-${week.weekNum}`] 
+                            : machineAutoDays;
+                        
+                        const scalingFactor = machineAutoDays > 0 ? machineDays / machineAutoDays : (machineAutoDays === 0 && machineDays > 0 ? 1 : 0);
+
+                        let weekDiaQQ = 0;
+                        let weekNocQQ = 0;
+                        week.days.forEach(day => {
+                            const dateStr = day.toISOString().split('T')[0];
+                            if (customActiveDays[dateStr] === false) return;
+                            const oD = overrides[`${m.id}-${dateStr}-dia`];
+                            const oN = overrides[`${m.id}-${dateStr}-noche`];
+                            const pD = products.find(p => p.id === (oD?.productId || conf.productId)) || products[0];
+                            const pN = products.find(p => p.id === (oN?.productId || conf.productId)) || products[0];
+                            const sD = oD?.speed || conf.speed || 30;
+                            const sN = oN?.speed || conf.speed || 30;
+
+                            if (!oD?.inactive) weekDiaQQ += ((sD * 60) * rendimiento * horasTurnoDia * (pD?.presentationWeight || 50)) / 50;
+                            if (!oN?.inactive) weekNocQQ += ((sN * 60) * rendimiento * horasTurnoNoche * (pN?.presentationWeight || 50)) / 50;
+                        });
+                        total += (weekDiaQQ + weekNocQQ) * scalingFactor;
+                    });
+                } else {
+                    week.days.forEach(day => {
+                        const dateStr = day.toISOString().split('T')[0];
+                        if (customActiveDays[dateStr] === false) return;
+                        activeMachines.forEach(m => {
+                            const conf = machineConfig[m.id];
+                            const oD = overrides[`${m.id}-${dateStr}-dia`];
+                            const oN = overrides[`${m.id}-${dateStr}-noche`];
+                            const pIdD = oD?.productId || conf?.productId;
+                            const pIdN = oN?.productId || conf?.productId;
+                            const sD = oD?.speed || conf?.speed || 30;
+                            const sN = oN?.speed || conf?.speed || 30;
+                            const pD = products.find(p => p.id === pIdD);
+                            const pN = products.find(p => p.id === pIdN);
+                            
+                            if (pD && !oD?.inactive) total += ((sD * 60) * rendimiento * horasTurnoDia * (pD.presentationWeight || 50)) / 50;
+                            if (pN && !oN?.inactive) total += ((sN * 60) * rendimiento * horasTurnoNoche * (pN.presentationWeight || 50)) / 50;
+                        });
+                    });
+                }
+            });
+        });
+        return total;
+    }, [machines, machineConfig, groupedWeeks, viewMode, customActiveDays, overrides, customMachineDays, products, rendimiento, horasTurnoDia, horasTurnoNoche]);
 
     const handleCustomMachineDaysChange = (machineId: number, weekNum: number, value: string) => {
         const num = parseFloat(value);
