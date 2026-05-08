@@ -3520,15 +3520,6 @@ export default function OperationsClient({
                 <div className="flex items-center gap-2 md:gap-3">
                     <Factory className="h-6 w-6 md:h-8 md:w-8 text-primary" />
                     <h1 className="text-lg md:text-2xl font-bold text-foreground">Panel de Operaciones</h1>
-                    <Button 
-                        variant="secondary" 
-                        size="sm" 
-                        className="text-xs md:text-sm font-semibold bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 border ml-2" 
-                        onClick={() => setIsProjectionModalOpen(true)}
-                    >
-                        <Target className="mr-1 h-3 w-3 md:mr-2 md:h-4 md:w-4" />
-                        <span className="hidden sm:inline">Proyección</span>
-                    </Button>
                 </div>
                 <div className="flex items-center gap-2">
                     <Button 
