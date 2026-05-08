@@ -4,7 +4,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Package2, Image as ImageIcon, ImageOff, RotateCcw, ArrowDownToLine, RotateCw, Database, Layers, CalendarDays, Settings2, Sunrise, Sunset, Utensils, Coffee, Moon, Sun, FileText, Calculator, Target, PanelLeftClose, PanelLeftOpen, CalendarRange, Calendar, ArrowLeftRight } from 'lucide-react';
+import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Package2, Image as ImageIcon, ImageOff, RotateCcw, ArrowDownToLine, RotateCw, Database, Layers, CalendarDays, Settings2, Sunrise, Sunset, Utensils, Coffee, Moon, Sun, FileText, Calculator, Target, PanelLeftClose, PanelLeftOpen, CalendarRange, Calendar, ArrowLeftRight, Save, History } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import type { CategoryDefinition, ProductDefinition } from '@/lib/types';
@@ -23,6 +23,9 @@ import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Slider } from './ui/slider';
+import { db } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { toast } from '@/hooks/use-toast';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
@@ -958,6 +961,93 @@ function ProductionProjectionView({
         syncWithNight?: boolean;
     } | null>(null);
 
+    const [isSaveSnapshotOpen, setIsSaveSnapshotOpen] = React.useState(false);
+    const [snapshotName, setSnapshotName] = React.useState('');
+    const [isSavingSnapshot, setIsSavingSnapshot] = React.useState(false);
+    const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
+    const [snapshots, setSnapshots] = React.useState<any[]>([]);
+    const [isLoadingHistory, setIsLoadingHistory] = React.useState(false);
+
+    const fetchHistory = React.useCallback(async () => {
+        setIsLoadingHistory(true);
+        try {
+            const q = query(collection(db, 'projectionSnapshots'), orderBy('createdAt', 'desc'), limit(20));
+            const querySnapshot = await getDocs(q);
+            const docs = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setSnapshots(docs);
+        } catch (error) {
+            console.error("Error fetching history:", error);
+        } finally {
+            setIsLoadingHistory(false);
+        }
+    }, []);
+
+    React.useEffect(() => {
+        if (isHistoryOpen) {
+            fetchHistory();
+        }
+    }, [isHistoryOpen, fetchHistory]);
+
+    const loadSnapshot = (snapshot: any) => {
+        const { config } = snapshot;
+        if (config.season) setSeason(config.season);
+        if (config.zafraStartMonth !== undefined) setZafraStartMonth(config.zafraStartMonth);
+        if (config.zafraEndMonth !== undefined) setZafraEndMonth(config.zafraEndMonth);
+        if (config.rendimiento !== undefined) setRendimiento(config.rendimiento);
+        if (config.horasTurnoDia !== undefined) setHorasTurnoDia(config.horasTurnoDia);
+        if (config.horasTurnoNoche !== undefined) setHorasTurnoNoche(config.horasTurnoNoche);
+        if (config.customMachineDays) setCustomMachineDays(config.customMachineDays);
+        if (config.customActiveDays) setCustomActiveDays(config.customActiveDays);
+        if (config.overrides) setOverrides(config.overrides);
+        if (config.syncContinuity !== undefined) setSyncContinuity(config.syncContinuity);
+        if (config.machineConfig) setMachineConfig(config.machineConfig);
+        
+        toast({ title: "Escenario cargado", description: `Se cargó el escenario "${snapshot.name}"` });
+        setIsHistoryOpen(false);
+    };
+
+    const handleSaveSnapshot = async () => {
+        if (!snapshotName.trim()) {
+            toast({ title: "Nombre requerido", description: "Por favor asigna un nombre al escenario", variant: "destructive" });
+            return;
+        }
+
+        setIsSavingSnapshot(true);
+        try {
+            const snapshotData = {
+                name: snapshotName.trim(),
+                createdAt: serverTimestamp(),
+                config: {
+                    season,
+                    zafraStartMonth,
+                    zafraEndMonth,
+                    rendimiento,
+                    horasTurnoDia,
+                    horasTurnoNoche,
+                    customMachineDays,
+                    customActiveDays,
+                    overrides,
+                    syncContinuity,
+                    machineConfig
+                },
+                summary: {
+                    totalQQ: grandTotalSemanal
+                }
+            };
+
+            await addDoc(collection(db, 'projectionSnapshots'), snapshotData);
+            
+            toast({ title: "Escenario guardado", description: `El escenario "${snapshotName}" se guardó correctamente.` });
+            setIsSaveSnapshotOpen(false);
+            setSnapshotName('');
+        } catch (error) {
+            console.error("Error saving snapshot:", error);
+            toast({ title: "Error al guardar", description: "No se pudo guardar el escenario.", variant: "destructive" });
+        } finally {
+            setIsSavingSnapshot(false);
+        }
+    };
+
     
     
     const [machineConfig, setMachineConfig] = React.useState<Record<number, { active: boolean, productId: string, speed: number }>>({});
@@ -1515,7 +1605,7 @@ function ProductionProjectionView({
             <header className="flex items-center justify-between p-3 border-b bg-card shrink-0 shadow-sm z-10 relative">
                 <div className="flex items-center gap-3">
                     <h1 className="text-lg font-bold flex items-center gap-2 leading-tight">
-                        <Target className="h-4 w-4 text-primary" /> ProyecciÃ³n {currentYear}
+                        <Target className="h-4 w-4 text-primary" /> Proyección {currentYear}
                     </h1>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1523,10 +1613,40 @@ function ProductionProjectionView({
                         {isSidebarOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
                         <span className="text-xs">{isSidebarOpen ? 'Ocultar Panel' : 'Mostrar Panel'}</span>
                     </Button>
+                    <Separator orientation="vertical" className="h-6 mx-1" />
+                    <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        onClick={() => setIsSaveSnapshotOpen(true)}
+                        className="h-9 gap-2 bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 border"
+                    >
+                        <Save className="h-4 w-4" />
+                        <span className="hidden sm:inline text-xs font-semibold">Guardar Escenario</span>
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setIsHistoryOpen(true)}
+                        className="h-9 gap-2"
+                    >
+                        <History className="h-4 w-4" />
+                        <span className="hidden sm:inline text-xs font-semibold">Historial</span>
+                    </Button>
+                    <Separator orientation="vertical" className="h-6 mx-1" />
                     <div className="flex bg-muted p-1 rounded-md h-9">
                         <Button variant={viewMode === 'semana' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('semana')}>Vista Semanal</Button>
                         <Button variant={viewMode === 'dia' ? 'default' : 'ghost'} size="sm" className="h-7 text-xs px-4" onClick={() => setViewMode('dia')}>Vista Diaria</Button>
                     </div>
+                    <Separator orientation="vertical" className="h-6 mx-1" />
+                    <Button 
+                        variant="secondary" 
+                        size="sm" 
+                        onClick={() => setIsSaveSnapshotOpen(true)}
+                        className="h-9 gap-2 bg-primary/10 text-primary hover:bg-primary/20 border-primary/20 border"
+                    >
+                        <Save className="h-4 w-4" />
+                        <span className="hidden sm:inline text-xs font-semibold">Guardar Escenario</span>
+                    </Button>
                     <Button variant="outline" size="icon" onClick={onClose} className="h-8 w-8 ml-1">
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -1723,8 +1843,91 @@ function ProductionProjectionView({
                 </DialogContent>
             </Dialog>
 
-            
+            <SaveSnapshotDialog 
+                open={isSaveSnapshotOpen}
+                onOpenChange={setIsSaveSnapshotOpen}
+                name={snapshotName}
+                setName={setSnapshotName}
+                onSave={handleSaveSnapshot}
+                isSaving={isSavingSnapshot}
+            />
+
+            <HistorySidebar 
+                open={isHistoryOpen}
+                onOpenChange={setIsHistoryOpen}
+                snapshots={snapshots}
+                isLoading={isLoadingHistory}
+                onLoad={loadSnapshot}
+            />
         </div>
+    );
+}
+
+function HistorySidebar({ 
+    open, 
+    onOpenChange, 
+    snapshots, 
+    isLoading, 
+    onLoad 
+}: { 
+    open: boolean, 
+    onOpenChange: (open: boolean) => void, 
+    snapshots: any[], 
+    isLoading: boolean, 
+    onLoad: (s: any) => void 
+}) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[400px] h-full sm:h-[90vh] flex flex-col p-0">
+                <DialogHeader className="p-6 border-b">
+                    <DialogTitle className="flex items-center gap-2">
+                        <History className="h-5 w-5 text-primary" /> Historial de Proyecciones
+                    </DialogTitle>
+                    <DialogDescription>
+                        Selecciona un escenario guardado para cargar sus parámetros.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {isLoading ? (
+                        <div className="flex flex-col items-center justify-center py-10 gap-2">
+                            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+                            <p className="text-sm text-muted-foreground">Cargando historial...</p>
+                        </div>
+                    ) : snapshots.length === 0 ? (
+                        <div className="text-center py-10">
+                            <Archive className="h-10 w-10 mx-auto text-muted-foreground opacity-20 mb-2" />
+                            <p className="text-sm text-muted-foreground">No hay escenarios guardados.</p>
+                        </div>
+                    ) : (
+                        snapshots.map((s) => (
+                            <div 
+                                key={s.id} 
+                                className="group p-4 border rounded-xl hover:border-primary/50 hover:bg-primary/5 transition-all cursor-pointer relative"
+                                onClick={() => onLoad(s)}
+                            >
+                                <div className="flex justify-between items-start mb-1">
+                                    <h4 className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">{s.name}</h4>
+                                    <span className="text-[10px] text-muted-foreground">
+                                        {s.createdAt?.toDate ? s.createdAt.toDate().toLocaleDateString() : 'Reciente'}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <div className="text-[11px] text-muted-foreground">
+                                        Total Proyectado: <span className="font-bold text-foreground">{(s.summary?.totalQQ || 0).toLocaleString()} QQ</span>
+                                    </div>
+                                    <ArrowRight className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+                <DialogFooter className="p-4 border-t">
+                    <Button variant="outline" className="w-full" onClick={() => onOpenChange(false)}>
+                        Cerrar Historial
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -2006,6 +2209,61 @@ function OnDemandReportModal({
     );
 }
 
+function SaveSnapshotDialog({ 
+    open, 
+    onOpenChange, 
+    name, 
+    setName, 
+    onSave, 
+    isSaving 
+}: { 
+    open: boolean, 
+    onOpenChange: (open: boolean) => void, 
+    name: string, 
+    setName: (val: string) => void, 
+    onSave: () => void, 
+    isSaving: boolean 
+}) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Save className="h-5 w-5 text-primary" /> Guardar Escenario
+                    </DialogTitle>
+                    <DialogDescription>
+                        Asigna un nombre descriptivo para identificar este escenario en el historial.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="snapshotName">Nombre del Escenario</Label>
+                        <Input
+                            id="snapshotName"
+                            placeholder="Ej. Plan de Contingencia..."
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            autoFocus
+                        />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
+                        Cancelar
+                    </Button>
+                    <Button onClick={onSave} disabled={isSaving || !name.trim()}>
+                        {isSaving ? (
+                            <>
+                                <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Guardando...
+                            </>
+                        ) : "Guardar Escenario"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export default function OperationsClient({
     prefetchedProducts,
     prefetchedCategories,
@@ -2054,6 +2312,9 @@ export default function OperationsClient({
     const [isShiftGoalEnabled, setIsShiftGoalEnabled] = React.useState(true);
     const [isProjectionReportOpen, setIsProjectionReportOpen] = React.useState(false);
     const [isProjectionModalOpen, setIsProjectionModalOpen] = React.useState(false);
+    const [isSaveSnapshotOpen, setIsSaveSnapshotOpen] = React.useState(false);
+    const [snapshotName, setSnapshotName] = React.useState('');
+    const [isSavingSnapshot, setIsSavingSnapshot] = React.useState(false);
     const searchParams = useSearchParams();
 
     React.useEffect(() => {
