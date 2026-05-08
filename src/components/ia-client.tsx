@@ -23,16 +23,14 @@ import Image from 'next/image';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { Progress } from '@/components/ui/progress';
 import { Slider } from './ui/slider';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db, storage } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
 import { Checkbox } from './ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from './ui/alert-dialog';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db, storage } from '@/lib/firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const KG_PER_QUINTAL = 50;
