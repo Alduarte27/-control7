@@ -22,6 +22,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Label } from './ui/label';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import Header from './header';
+import { SidebarInset } from './ui/sidebar';
 
 
 type SavedPlan = {
@@ -240,18 +242,8 @@ export default function HistoryClient() {
 
 
   return (
-    <div className="bg-background min-h-screen text-foreground">
-       <header className="flex items-center justify-between p-4 border-b bg-card sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <Factory className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Historial de Planes</h1>
-        </div>
-        <Link href="/">
-          <Button variant="outline">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-      </header>
+    <SidebarInset>
+      <Header title="Historial de Planes" icon={Factory} />
       <main className="p-4 md:p-8">
         <Dialog>
             <Card>
@@ -320,6 +312,6 @@ export default function HistoryClient() {
             <DeleteRangeDialog allPlans={allPlans} onConfirm={handleDeleteRange} isDeleting={isDeleting} />
         </Dialog>
       </main>
-    </div>
+    </SidebarInset>
   );
 }

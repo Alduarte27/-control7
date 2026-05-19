@@ -8,14 +8,25 @@ import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks, startOfWeek, getDayOf
 import { db } from '@/lib/firebase';
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
 import { useSearchParams } from 'next/navigation';
-import { AlertTriangle, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, RefreshCw, X, LayoutDashboard, Factory } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import Link from 'next/link';
 
 import Header from './header';
+import { SidebarInset } from "./ui/sidebar";
 import FilterBar from './filter-bar';
 import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
-import InfoDialog from './info-dialog';
 import { usePageVisibility } from '@/hooks/use-page-visibility';
 import { Button } from './ui/button';
 
@@ -66,14 +77,15 @@ export default function Control7Client({
     prefetchedProducts: ProductDefinition[]
 }) {
   const [data, setData] = React.useState<ProductData[]>([]);
+  const [isDirty, setIsDirty] = React.useState(false);
   const [productSearch, setProductSearch] = React.useState('');
   
   const searchParams = useSearchParams();
   const [date, setDate] = React.useState<Date | undefined>(undefined);
-  
   const [loading, setLoading] = React.useState(true);
-  const [isDirty, setIsDirty] = React.useState(false);
-  const [isInfoDialogOpen, setIsInfoDialogOpen] = React.useState(false);
+  const [isResetDialogOpen, setIsResetDialogOpen] = React.useState(false);
+  const [isUnsavedChangesDialogOpen, setIsUnsavedChangesDialogOpen] = React.useState(false);
+  const [unsavedChangesTarget, setUnsavedChangesTarget] = React.useState<{ type: 'date' | 'reload', date?: Date } | null>(null);
   const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false);
   const [showReloadNotification, setShowReloadNotification] = React.useState(false);
   const { toast } = useToast();
@@ -109,15 +121,7 @@ export default function Control7Client({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  React.useEffect(() => {
-    const showDialogPreference = localStorage.getItem('showInfoDialogOnStartup');
-    const hasBeenShownThisSession = sessionStorage.getItem('infoDialogShownThisSession');
 
-    if ((showDialogPreference === null || showDialogPreference === 'true') && !hasBeenShownThisSession) {
-        setIsInfoDialogOpen(true);
-        sessionStorage.setItem('infoDialogShownThisSession', 'true');
-    }
-  }, []);
 
   // Effect to handle unsaved changes warning
   React.useEffect(() => {
@@ -330,11 +334,9 @@ export default function Control7Client({
   }, [date, prefetchedCategories, prefetchedProducts, applyAISuggestion, toast]);
 
   const handleResetApp = () => {
-    if (confirm('Esto limpiará el caché local y la sesión. Úsalo si la aplicación parece trabada o muestra datos antiguos. ¿Continuar?')) {
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.href = '/';
-    }
+    localStorage.clear();
+    sessionStorage.clear();
+    window.location.href = '/';
   };
 
   const handleSave = async () => {
@@ -528,35 +530,39 @@ export default function Control7Client({
   const handleDateChange = (newDate: Date | undefined) => {
     if (!newDate) return;
     if (isDirty) {
-        if (confirm('Tienes cambios sin guardar. ¿Estás seguro de que quieres cambiar de semana? Se perderán los cambios.')) {
-            setDate(newDate);
-            // Update URL to reflect the new date
-            if (newDate) {
-              const newPlanId = `${newDate.getFullYear()}-W${getISOWeek(newDate)}`;
-              window.history.pushState({}, '', `?planId=${newPlanId}`);
-            } else {
-              window.history.pushState({}, '', `/`);
-            }
-        }
+        setUnsavedChangesTarget({ type: 'date', date: newDate });
+        setIsUnsavedChangesDialogOpen(true);
     } else {
-        setDate(newDate);
-        if (newDate) {
-          const newPlanId = `${newDate.getFullYear()}-W${getISOWeek(newDate)}`;
-          window.history.pushState({}, '', `?planId=${newPlanId}`);
-        } else {
-          window.history.pushState({}, '', `/`);
-        }
+        executeDateChange(newDate);
     }
+  };
+
+  const executeDateChange = (newDate: Date) => {
+    setDate(newDate);
+    const newPlanId = `${newDate.getFullYear()}-W${getISOWeek(newDate)}`;
+    window.history.pushState({}, '', `?planId=${newPlanId}`);
+    setIsDirty(false);
   };
 
   const handleReload = () => {
     if (isDirty) {
-        if (confirm('Tienes cambios sin guardar. Si recargas, perderás los cambios. ¿Estás seguro?')) {
-            window.location.reload();
-        }
+        setUnsavedChangesTarget({ type: 'reload' });
+        setIsUnsavedChangesDialogOpen(true);
     } else {
         window.location.reload();
     }
+  };
+
+  const handleConfirmUnsavedChanges = () => {
+    if (!unsavedChangesTarget) return;
+    
+    if (unsavedChangesTarget.type === 'date' && unsavedChangesTarget.date) {
+        executeDateChange(unsavedChangesTarget.date);
+    } else if (unsavedChangesTarget.type === 'reload') {
+        window.location.reload();
+    }
+    setIsUnsavedChangesDialogOpen(false);
+    setUnsavedChangesTarget(null);
   };
 
   const filteredData = data.filter(item =>
@@ -564,67 +570,128 @@ export default function Control7Client({
   );
 
   return (
-    <div className="bg-background min-h-screen text-foreground no-print">
+    <SidebarInset>
       <Header 
         onSave={handleSave} 
         hasUnsavedChanges={isDirty}
-        setIsInfoDialogOpen={setIsInfoDialogOpen}
+        title="Control de Producción"
+        icon={Factory}
       />
-      <div className="p-4 md:p-8 space-y-6">
-        {showReloadNotification && (
-            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md flex justify-between items-center shadow-md">
-                <div className="flex items-center">
-                    <AlertTriangle className="h-5 w-5 mr-3" />
-                    <div>
-                        <p className="font-bold">¡Bienvenido de vuelta!</p>
-                        <p className="text-sm">La sesión ha estado inactiva. Para asegurar que tienes los últimos datos, te recomendamos recargar la página.</p>
+      <main className="flex-1 overflow-y-auto bg-background/50 backdrop-blur-sm">
+        <div className="container-fluid p-4 md:p-8 mx-auto max-w-[1600px] space-y-6 pb-24">
+          {showReloadNotification && (
+              <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md flex justify-between items-center shadow-md">
+                  <div className="flex items-center">
+                      <AlertTriangle className="h-5 w-5 mr-3" />
+                      <div>
+                          <p className="font-bold">¡Bienvenido de vuelta!</p>
+                          <p className="text-sm">La sesión ha estado inactiva. Para asegurar que tienes los últimos datos, te recomendamos recargar la página.</p>
+                      </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={handleReload}>
+                          <RefreshCw className="mr-2 h-4 w-4" />
+                          Recargar Ahora
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowReloadNotification(false)}>
+                          <X className="h-4 w-4" />
+                      </Button>
+                  </div>
+              </div>
+          )}
+          <FilterBar 
+              productSearch={productSearch} 
+              onProductSearchChange={setProductSearch}
+              date={date}
+              onDateChange={handleDateChange}
+              onCopyLastWeek={handleCopyLastWeek}
+              isExportDialogOpen={isExportDialogOpen}
+              setIsExportDialogOpen={setIsExportDialogOpen}
+          />
+          {loading || !date ? (
+              <p>Cargando datos...</p>
+          ) : (
+              <>
+                  <KpiDashboard data={data} />
+                  <div className="space-y-6">
+                    <ProductionTable 
+                      data={filteredData} 
+                      onPlannedChange={handlePlannedDataChange} 
+                      onActualChange={handleActualDataChange}
+                      currentDate={date}
+                    />
+                    <WeeklySummary data={data} />
+                  </div>
+              </>
+          )}
+          
+          {/* Footer Support */}
+          <div className="p-4 flex justify-center border-t mt-8 space-x-4">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => setIsResetDialogOpen(true)} 
+              className="text-muted-foreground text-xs hover:text-primary hover:bg-primary/5 transition-colors"
+            >
+              <RefreshCw className="mr-2 h-3 w-3" /> Limpiar Caché y Resetear App
+            </Button>
+
+            <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+              <AlertDialogContent className="max-w-[400px]">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5 text-primary animate-spin-slow" />
+                    ¿Resetear Aplicación?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="space-y-3 pt-2">
+                    <p>
+                      Esta acción limpiará el <strong>caché local</strong> y reiniciará tu sesión en este navegador.
+                    </p>
+                    <div className="bg-primary/5 p-3 rounded-md border border-primary/10 text-xs text-primary/80">
+                      <strong>Nota:</strong> Tus datos de producción en la nube están 100% seguros y no se verán afectados.
                     </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" onClick={handleReload}>
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Recargar Ahora
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowReloadNotification(false)}>
-                        <X className="h-4 w-4" />
-                    </Button>
-                </div>
-            </div>
-        )}
-        <FilterBar 
-            productSearch={productSearch} 
-            onProductSearchChange={setProductSearch}
-            date={date}
-            onDateChange={handleDateChange}
-            onCopyLastWeek={handleCopyLastWeek}
-            isExportDialogOpen={isExportDialogOpen}
-            setIsExportDialogOpen={setIsExportDialogOpen}
-        />
-        {loading || !date ? (
-            <p>Cargando datos...</p>
-        ) : (
-            <>
-                <KpiDashboard data={data} />
-                <div className="space-y-6">
-                  <ProductionTable 
-                    data={filteredData} 
-                    onPlannedChange={handlePlannedDataChange} 
-                    onActualChange={handleActualDataChange}
-                    currentDate={date}
-                  />
-                  <WeeklySummary data={data} />
-                </div>
-            </>
-        )}
-      </div>
-      <InfoDialog open={isInfoDialogOpen} onOpenChange={setIsInfoDialogOpen} />
-      
-      {/* Footer Support */}
-      <div className="p-4 flex justify-center border-t mt-8 space-x-4">
-        <Button variant="ghost" size="sm" onClick={handleResetApp} className="text-muted-foreground text-xs">
-          <RefreshCw className="mr-2 h-3 w-3" /> Limpiar Caché y Resetear App
-        </Button>
-      </div>
-    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Úsalo solo si la aplicación presenta comportamientos extraños o lentitud.
+                    </p>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handleResetApp}
+                    className="bg-primary hover:bg-primary/90"
+                  >
+                    Confirmar Reseteo
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={isUnsavedChangesDialogOpen} onOpenChange={setIsUnsavedChangesDialogOpen}>
+              <AlertDialogContent className="max-w-[400px]">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                    Cambios sin Guardar
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Tienes modificaciones que no has guardado. Si continúas, perderás todos los cambios realizados en esta semana.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setUnsavedChangesTarget(null)}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction 
+                    onClick={handleConfirmUnsavedChanges}
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  >
+                    Perder Cambios y Continuar
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </div>
+      </main>
+    </SidebarInset>
   );
 }

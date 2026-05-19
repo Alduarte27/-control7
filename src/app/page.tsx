@@ -1,6 +1,7 @@
 import Control7Client from '@/components/control-7-client';
 import { getCategories, getProducts } from '@/services/data-service';
 import { redirect } from 'next/navigation';
+import React, { Suspense } from 'react';
 
 // This is a server component, so we can check for permissions here.
 // However, the actual permission logic is handled client-side for dynamic UI updates.
@@ -14,9 +15,13 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ [
   const categories = await getCategories();
   const products = await getProducts();
 
-  return <Control7Client 
-    initialPlanId={planId} 
-    prefetchedCategories={categories}
-    prefetchedProducts={products}
-  />;
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <Control7Client 
+        initialPlanId={planId} 
+        prefetchedCategories={categories}
+        prefetchedProducts={products}
+      />
+    </Suspense>
+  );
 }

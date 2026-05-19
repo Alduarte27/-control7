@@ -62,18 +62,18 @@ const renderProductRow = (
 
     return (
       <TableRow key={item.id} className="bg-card hover:bg-muted/50">
-        <TableCell className="font-medium sticky left-0 bg-card z-10 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.color || '#ccc' }}></span>
-            <span>{item.productName}</span>
+        <TableCell className="font-medium sticky left-0 bg-card z-10 text-[10px] py-1 px-2">
+          <div className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color || '#ccc' }}></span>
+            <span className="truncate max-w-[120px]">{item.productName}</span>
           </div>
         </TableCell>
-        <TableCell>
+        <TableCell className="py-1 px-2">
           <Input
             type="number"
             value={item.planned}
             onChange={(e) => handlePlannedInputChange(item.id, e.target.value)}
-            className={cn("text-right", item.isSuggested && "bg-blue-100 dark:bg-blue-900/50 border-blue-500")}
+            className={cn("text-right h-7 text-[10px]", item.isSuggested && "bg-blue-100 dark:bg-blue-900/50 border-blue-500")}
             min="0"
           />
         </TableCell>
@@ -85,36 +85,36 @@ const renderProductRow = (
             </TableCell>
           )
         })}
-        <TableCell className="text-right font-medium">{totalActual.toLocaleString()}</TableCell>
-        <TableCell className="text-right font-medium text-muted-foreground">{totalQuintales.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1})}</TableCell>
-        <TableCell className="text-right">
-            <span className={cn("font-medium rounded-md px-2 py-1", varianceColorClass)}>
+        <TableCell className="text-right font-medium py-1 px-2 text-[10px]">{totalActual.toLocaleString()}</TableCell>
+        <TableCell className="text-right font-medium text-muted-foreground py-1 px-2 text-[10px]">{totalQuintales.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1})}</TableCell>
+        <TableCell className="text-right py-1 px-2">
+            <span className={cn("font-bold rounded-md px-1.5 py-0.5 text-[9px]", varianceColorClass)}>
                 {variance.toLocaleString()}
             </span>
         </TableCell>
-        <TableCell>
-          <div className="flex items-center gap-2">
+        <TableCell className="py-1 px-2">
+          <div className="flex items-center gap-1.5">
             <Progress 
                 value={compliance > 100 ? 100 : compliance} 
-                className="w-[60%]" 
+                className="w-[50%] h-1.5" 
                 indicatorClassName={complianceColorClass}
             />
-            <span className="text-xs font-medium w-[45px] text-right">{compliance.toFixed(1)}%</span>
+            <span className="text-[9px] font-bold w-[35px] text-right">{compliance.toFixed(1)}%</span>
           </div>
         </TableCell>
-        <TableCell>
-          <Button variant="outline" size="icon" onClick={() => setSelectedProductForShifts(item)}>
-            <Edit className="h-4 w-4" />
+        <TableCell className="py-1 px-2 text-center">
+          <Button variant="outline" size="icon" className="h-6 w-6" onClick={() => setSelectedProductForShifts(item)}>
+            <Edit className="h-3 w-3" />
           </Button>
         </TableCell>
-        <TableCell>
+        <TableCell className="py-1 px-2 text-center">
             <Button 
                 variant={hasIncidents ? 'default' : 'outline'} 
                 size="icon" 
+                className={cn("h-6 w-6", hasIncidents && "bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800")}
                 onClick={() => setSelectedProductForIncidents(item)}
-                className={cn(hasIncidents && "bg-blue-600 hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-800")}
             >
-                <NotebookPen className="h-4 w-4" />
+                <NotebookPen className="h-3 w-3" />
             </Button>
         </TableCell>
       </TableRow>
@@ -209,16 +209,16 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="min-w-[200px] sticky left-0 bg-card z-10">Producto</TableHead>
-                <TableHead className="text-right min-w-[110px]">Plan (Sacos)</TableHead>
-                {days.map(day => <TableHead key={day} className="text-right min-w-[90px] capitalize">{dayNames[day]}</TableHead>)}
-                <TableHead className="text-right min-w-[110px]">Total Real (Sacos)</TableHead>
-                <TableHead className="text-right min-w-[90px]">QQ</TableHead>
-                <TableHead className="text-right min-w-[110px]">Varianza</TableHead>
-                <TableHead className="min-w-[120px]">Cumplimiento</TableHead>
-                <TableHead className="min-w-[70px]">Turnos</TableHead>
-                <TableHead className="min-w-[70px]">Incidencias</TableHead>
+              <TableRow className="bg-muted/50">
+                <TableHead className="min-w-[150px] sticky left-0 bg-muted/50 z-10 text-[10px] h-8 py-1 px-2">Producto</TableHead>
+                <TableHead className="text-right min-w-[80px] text-[10px] h-8 py-1 px-2">Plan (Sacos)</TableHead>
+                {days.map(day => <TableHead key={day} className="text-right min-w-[70px] capitalize text-[10px] h-8 py-1 px-2">{dayNames[day]}</TableHead>)}
+                <TableHead className="text-right min-w-[90px] text-[10px] h-8 py-1 px-2">Total Real</TableHead>
+                <TableHead className="text-right min-w-[70px] text-[10px] h-8 py-1 px-2">QQ</TableHead>
+                <TableHead className="text-right min-w-[85px] text-[10px] h-8 py-1 px-2">Varianza</TableHead>
+                <TableHead className="min-w-[100px] text-[10px] h-8 py-1 px-2">Cumplimiento</TableHead>
+                <TableHead className="min-w-[50px] text-[10px] h-8 py-1 px-2 text-center">Turnos</TableHead>
+                <TableHead className="min-w-[50px] text-[10px] h-8 py-1 px-2 text-center">Notas</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

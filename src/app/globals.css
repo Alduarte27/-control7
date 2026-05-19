@@ -93,3 +93,66 @@
     display: block !important;
   }
 }
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-xl;
+  }
+  .glass-dark {
+    @apply bg-slate-950/70 backdrop-blur-md border border-slate-800/50 shadow-2xl;
+  }
+  .premium-gradient {
+    @apply bg-gradient-to-br from-primary via-primary/90 to-primary/80;
+  }
+  .premium-text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-purple-600;
+  }
+
+  /* Sidebar smooth expansion — curva orgánica tipo "material" */
+  .sidebar-smooth {
+    transition-property: width, min-width, max-width;
+    transition-duration: 500ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .sidebar-smooth * {
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Etiquetas: aparecen con fade + micro-desplazamiento suave */
+  .sidebar-label-enter {
+    animation: sidebar-label-in 450ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+  @keyframes sidebar-label-in {
+    from {
+      opacity: 0;
+      transform: translateX(-6px);
+      filter: blur(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+      filter: blur(0px);
+    }
+  }
+
+  /* Íconos: micro-pulso al hover */
+  .sidebar-icon-pulse {
+    transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .sidebar-icon-pulse:hover,
+  a:hover .sidebar-icon-pulse,
+  button:hover .sidebar-icon-pulse {
+    transform: scale(1.12);
+  }
+
+  /* Custom Scrollbar */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full hover:bg-muted-foreground/40 transition-colors;
+  }
+}

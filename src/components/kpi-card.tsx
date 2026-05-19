@@ -41,24 +41,24 @@ export default function KpiCard({ title, value, icon: Icon, description, valueCo
       <Tooltip>
         <TooltipTrigger asChild>
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1">
-              <CardTitle className="text-sm font-medium">{title}</CardTitle>
-              <Icon className="h-4 w-4 text-muted-foreground" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0.5">
+              <CardTitle className="text-[10px] font-bold uppercase text-muted-foreground">{title}</CardTitle>
+              <Icon className="h-3 w-3 text-primary" />
             </CardHeader>
             <CardContent className="pt-0">
               {isClient ? (
                 <>
-                  <div className={cn("text-2xl font-bold", valueColor)}>
+                  <div className={cn("text-lg font-black tracking-tight", valueColor)}>
                     {formattedValue}{suffix}
                   </div>
-                  <p className={cn("text-xs font-medium h-[16px]", subValueColor)}>
+                  <p className={cn("text-[9px] font-bold h-[14px] mt-0.5 opacity-80", subValueColor)}>
                     {subValue || <>&nbsp;</>}
                   </p>
                 </>
               ) : (
                 <>
-                  <div className="text-2xl font-bold">-</div>
-                  <p className="text-xs font-medium h-[16px]">&nbsp;</p>
+                  <div className="text-lg font-black">-</div>
+                  <p className="text-[9px] font-bold h-[14px]">&nbsp;</p>
                 </>
               )}
             </CardContent>

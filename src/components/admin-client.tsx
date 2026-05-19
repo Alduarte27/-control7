@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Factory, ChevronLeft, PlusCircle, Edit, RefreshCw, Info, X, Shield, Trash2, QrCode, Share2, Package } from 'lucide-react';
+import { Factory, PlusCircle, Edit, RefreshCw, Info, X, Shield, Trash2, QrCode, Share2, Package } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Checkbox } from './ui/checkbox';
 import { QRCodeSVG } from 'qrcode.react';
 import { availableModules } from '@/lib/constants';
+import Header from '@/components/header';
+import { SidebarInset } from './ui/sidebar';
 
 // --- Access Management Types ---
 type Permissions = {
@@ -610,18 +612,8 @@ export default function AdminClient() {
 
 
   return (
-    <div className="bg-background min-h-screen text-foreground">
-      <header className="flex items-center justify-between p-2 md:p-4 border-b bg-card sticky top-0 z-10">
-        <div className="flex items-center gap-2 md:gap-3">
-          <Factory className="h-6 w-6 md:h-8 md:w-8 text-primary" />
-          <h1 className="text-lg md:text-2xl font-bold text-foreground">Administración</h1>
-        </div>
-        <Link href="/">
-          <Button variant="outline" size="icon" className="h-8 w-8 text-xs md:text-sm">
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-        </Link>
-      </header>
+    <SidebarInset>
+      <Header title="Administración" icon={Factory} />
       <main className="p-3 md:p-6 lg:p-8">
         <Tabs defaultValue="catalogs">
             <TabsList className="grid w-full grid-cols-2">
@@ -905,6 +897,6 @@ export default function AdminClient() {
               onSave={handleSaveProduct}
           />
       )}
-    </div>
+    </SidebarInset>
   );
 }

@@ -171,12 +171,12 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-            <CardTitle>Producción Total por Día (Sacos)</CardTitle>
-            <CardDescription>Suma de toda la producción para cada día de la semana.</CardDescription>
+            <CardTitle className="text-sm font-bold">Producción Total por Día (Sacos)</CardTitle>
+            <CardDescription className="text-[10px]">Suma de toda la producción para cada día de la semana.</CardDescription>
         </CardHeader>
         <CardContent>
              {dailyChartData.some(d => d.total > 0) ? (
-                <ChartContainer config={dailyChartConfig} className="w-full h-[300px]">
+                <ChartContainer config={dailyChartConfig} className="w-full h-[200px]">
                     <BarChart accessibilityLayer data={dailyChartData}>
                         <CartesianGrid vertical={false} />
                         <XAxis
@@ -200,12 +200,12 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Resumen Semanal por Producto</CardTitle>
-          <CardDescription>Producción Planificada vs. Real (solo productos con actividad).</CardDescription>
+          <CardTitle className="text-sm font-bold">Resumen Semanal por Producto</CardTitle>
+          <CardDescription className="text-[10px]">Producción Planificada vs. Real (solo productos con actividad).</CardDescription>
         </CardHeader>
         <CardContent>
           {productChartData.length > 0 ? (
-              <ChartContainer config={productChartConfig} className="w-full h-[400px]">
+              <ChartContainer config={productChartConfig} className="w-full h-[300px]">
               <BarChart accessibilityLayer data={productChartData} margin={{ top: 20, right: 20, left: 0, bottom: 20 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis
