@@ -1,8 +1,8 @@
 export const availableModules = [
-    { id: 'ia', label: 'Operaciones (IA)' },
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'history', label: 'Historial Planes' },
-    { id: 'access', label: 'Gestión de Acceso' },
-    { id: 'admin', label: 'Admin' },
-    { id: 'export', label: 'Exportar / Reportes' }
+    { id: 'production', label: 'Producción' },
+    { id: 'projection', label: 'Proyección' },
+    { id: 'materials', label: 'Materiales Empaque' },
+    { id: 'stops', label: 'Bitácora' },
+    { id: 'ia', label: 'Simulador' },
+    { id: 'admin', label: 'Configuración de Sistema' }
 ];

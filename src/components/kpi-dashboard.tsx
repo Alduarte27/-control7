@@ -15,11 +15,25 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   // --- Helper function to calculate total weight ---
   const calculateWeight = (products: ProductData[], type: 'planned' | 'actual'): number => {
     return products.reduce((totalWeight, item) => {
-      const sacks = type === 'planned'
+      const units = type === 'planned'
         ? (item.planned || 0)
         : Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0);
-      const itemWeight = sacks * (item.sackWeight || 50);
+      const isFardo = item.primaryPackaging === 'fardo' || !!item.bundleWeight;
+      const weightPerUnit = isFardo ? (item.bundleWeight || 12) : (item.sackWeight || item.presentationWeight || 50);
+      const itemWeight = units * weightPerUnit;
       return totalWeight + itemWeight;
+    }, 0);
+  };
+
+  // --- Helper function to calculate total pallets ---
+  const calculatePallets = (products: ProductData[], type: 'planned' | 'actual'): number => {
+    return products.reduce((totalPallets, item) => {
+      const units = type === 'planned'
+        ? (item.planned || 0)
+        : Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0);
+      
+      if (!item.unitsPerPallet || item.unitsPerPallet <= 0) return totalPallets;
+      return totalPallets + (units / item.unitsPerPallet);
     }, 0);
   };
   
@@ -32,6 +46,7 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
   
   const totalPlannedForComplianceSacks = productsForCompliance.reduce((sum, item) => sum + (item.planned || 0), 0);
   const totalPlannedForComplianceQuintales = calculateWeight(productsForCompliance, 'planned') / KG_PER_QUINTAL;
+  const totalPlannedForCompliancePallets = calculatePallets(productsForCompliance, 'planned');
 
   // Production from planned categories that had no plan for the week (plan === 0)
   const unplannedProductionProducts = data.filter(
@@ -42,17 +57,20 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
   const unplannedProductionQq = calculateWeight(unplannedProductionProducts, 'actual') / KG_PER_QUINTAL;
+  const unplannedProductionPallets = calculatePallets(unplannedProductionProducts, 'actual');
 
   // Calculate totals for all products for overall display
   const totalActualSacks = data.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
   const totalActualQuintales = calculateWeight(data, 'actual') / KG_PER_QUINTAL;
+  const totalActualPallets = calculatePallets(data, 'actual');
   
   const totalActualForComplianceSacks = productsForCompliance.reduce((sum, item) => 
     sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
   );
   const totalActualForComplianceQuintales = calculateWeight(productsForCompliance, 'actual') / KG_PER_QUINTAL;
+  const totalActualForCompliancePallets = calculatePallets(productsForCompliance, 'actual');
 
   const variance = totalActualForComplianceSacks - totalPlannedForComplianceSacks;
   const compliancePercentage = totalPlannedForComplianceSacks > 0
@@ -61,32 +79,32 @@ export default function KpiDashboard({ data }: KpiDashboardProps) {
 
   const kpiCards: KpiCardProps[] = [
     {
-      title: "Total Planificado (Sacos)",
+      title: "Total Planificado (Unids.)",
       value: totalPlannedForComplianceSacks,
       icon: Target,
       description: "Suma de producción planificada para productos en categorías planificables.",
-      subValue: `(${totalPlannedForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`,
+      subValue: `(${totalPlannedForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq) | ${totalPlannedForCompliancePallets.toLocaleString(undefined, {maximumFractionDigits:1})} pallets`,
     },
     {
-      title: "Real s/Plan (Sacos)",
+      title: "Real s/Planificado",
       value: totalActualForComplianceSacks,
       icon: PackageCheck,
       description: "Producción real de los productos que tenían un plan.",
-      subValue: `(${totalActualForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`,
+      subValue: `(${totalActualForComplianceQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq) | ${totalActualForCompliancePallets.toLocaleString(undefined, {maximumFractionDigits:1})} pallets`,
     },
     {
-      title: "No Programado (Sacos)",
+      title: "No Programado (Unids.)",
       value: unplannedProductionSacos,
       icon: ClipboardPlus,
       description: "Producción de productos planificables que no tenían un plan (plan = 0).",
-      subValue: `(${unplannedProductionQq.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`,
+      subValue: `(${unplannedProductionQq.toLocaleString(undefined, {maximumFractionDigits:1})} qq) | ${unplannedProductionPallets.toLocaleString(undefined, {maximumFractionDigits:1})} pallets`,
     },
     {
-      title: "Producción Total Real (Sacos)",
+      title: "Producción Total Real (Unids.)",
       value: totalActualSacks,
       icon: PackageCheck,
       description: "Suma de toda la producción real, incluyendo no programada y no planificable.",
-      subValue: `(${totalActualQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq)`,
+      subValue: `(${totalActualQuintales.toLocaleString(undefined, {maximumFractionDigits:1})} qq) | ${totalActualPallets.toLocaleString(undefined, {maximumFractionDigits:1})} pallets`,
     },
     {
       title: "Varianza vs. Plan Total",

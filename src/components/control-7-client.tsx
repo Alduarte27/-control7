@@ -6,7 +6,7 @@ import type { ProductData, ProductDefinition, CategoryDefinition, DailyProductio
 import { useToast } from '@/hooks/use-toast';
 import { getISOWeek, setISOWeek, startOfISOWeek, subWeeks, startOfWeek, getDayOfYear, addDays, parse } from 'date-fns';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, writeBatch, setDoc } from 'firebase/firestore';
 import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, RefreshCw, X, LayoutDashboard, Factory } from 'lucide-react';
 import {
@@ -20,14 +20,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import Link from 'next/link';
+import { useUnsavedChanges } from '@/components/unsaved-changes-provider';
 
 import Header from './header';
-import { SidebarInset } from "./ui/sidebar";
+import { cn } from '@/lib/utils';
 import FilterBar from './filter-bar';
 import KpiDashboard from './kpi-dashboard';
 import ProductionTable from './production-table';
 import WeeklySummary from './weekly-summary';
-import { usePageVisibility } from '@/hooks/use-page-visibility';
 import { Button } from './ui/button';
 
 const emptyProductionDay: ShiftProduction = { day: 0, night: 0, lotNumber: '', dayNote: '', nightNote: '' };
@@ -42,44 +42,79 @@ const emptyActual: DailyProduction = {
 };
 
 const getDateFromPlanId = (planId: string): Date | null => {
-    const [yearStr, weekStr] = planId.split('-W');
-    const year = parseInt(yearStr, 10);
-    const week = parseInt(weekStr, 10);
-    if (isNaN(year) || isNaN(week)) return null;
+  const [yearStr, weekStr] = planId.split('-W');
+  const year = parseInt(yearStr, 10);
+  const week = parseInt(weekStr, 10);
+  if (isNaN(year) || isNaN(week)) return null;
 
-    // Create a date in the middle of the year to avoid DST issues
-    const midYearDate = new Date(year, 6, 1); 
-    const dateWithWeek = setISOWeek(midYearDate, week);
-    return startOfISOWeek(dateWithWeek);
+  // Create a date in the middle of the year to avoid DST issues
+  const midYearDate = new Date(year, 6, 1);
+  const dateWithWeek = setISOWeek(midYearDate, week);
+  return startOfISOWeek(dateWithWeek);
 }
 
 const getDayOfYearForWeek = (weekDate: Date) => {
-    const start = startOfISOWeek(weekDate);
-    const dayOfYearMap: { [key in keyof DailyProduction]: string } = {} as any;
-    (Object.keys(emptyActual) as (keyof DailyProduction)[]).forEach((day, index) => {
-        const dateOfDay = addDays(start, index);
-        dayOfYearMap[day] = `${getDayOfYear(dateOfDay)}`;
-    });
-    return dayOfYearMap;
+  const start = startOfISOWeek(weekDate);
+  const dayOfYearMap: { [key in keyof DailyProduction]: string } = {} as any;
+  (Object.keys(emptyActual) as (keyof DailyProduction)[]).forEach((day, index) => {
+    const dateOfDay = addDays(start, index);
+    dayOfYearMap[day] = `${getDayOfYear(dateOfDay)}`;
+  });
+  return dayOfYearMap;
 };
-
-const INACTIVITY_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
 
 
 // We pass the prefetched data as props to avoid hydration issues and waterfalls.
-export default function Control7Client({ 
-    initialPlanId: serverInitialPlanId,
-    prefetchedCategories,
-    prefetchedProducts
-}: { 
-    initialPlanId?: string,
-    prefetchedCategories: CategoryDefinition[],
-    prefetchedProducts: ProductDefinition[]
+export default function Control7Client({
+  initialPlanId: serverInitialPlanId,
+  prefetchedCategories,
+  prefetchedProducts
+}: {
+  initialPlanId?: string,
+  prefetchedCategories: CategoryDefinition[],
+  prefetchedProducts: ProductDefinition[]
 }) {
   const [data, setData] = React.useState<ProductData[]>([]);
   const [isDirty, setIsDirty] = React.useState(false);
   const [productSearch, setProductSearch] = React.useState('');
-  
+  const [activeMode, setActiveMode] = React.useState<'interzafra' | 'zafra' | 'reempaque' | 'reenvase'>('interzafra');
+  const { setHasUnsavedChanges, proceedTo } = useUnsavedChanges();
+
+  React.useEffect(() => {
+    const fetchGlobalZafra = async () => {
+      try {
+        const docRef = doc(db, 'appConfiguration', 'production_settings');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const configData = docSnap.data();
+          if (configData.activeMode) {
+            setActiveMode(configData.activeMode as any);
+          } else if (configData.isZafraGlobal !== undefined) {
+            const mode = configData.isZafraGlobal ? 'zafra' : 'interzafra';
+            setActiveMode(mode);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching global mode setting:", error);
+      }
+    };
+    fetchGlobalZafra();
+  }, []);
+
+  const handleModeChange = async (mode: 'interzafra' | 'zafra' | 'reempaque' | 'reenvase') => {
+    setActiveMode(mode);
+    try {
+      const docRef = doc(db, 'appConfiguration', 'production_settings');
+      await setDoc(docRef, { activeMode: mode, isZafraGlobal: mode === 'zafra' }, { merge: true });
+    } catch (error) {
+      console.error("Error saving global mode setting:", error);
+    }
+  };
+
+  React.useEffect(() => {
+    setHasUnsavedChanges(isDirty);
+  }, [isDirty, setHasUnsavedChanges]);
+
   const searchParams = useSearchParams();
   const [date, setDate] = React.useState<Date | undefined>(undefined);
   const [loading, setLoading] = React.useState(true);
@@ -87,38 +122,31 @@ export default function Control7Client({
   const [isUnsavedChangesDialogOpen, setIsUnsavedChangesDialogOpen] = React.useState(false);
   const [unsavedChangesTarget, setUnsavedChangesTarget] = React.useState<{ type: 'date' | 'reload', date?: Date } | null>(null);
   const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false);
-  const [showReloadNotification, setShowReloadNotification] = React.useState(false);
   const { toast } = useToast();
-
-  usePageVisibility((isInitial, timeInactive) => {
-    if (!isInitial && timeInactive > INACTIVITY_THRESHOLD_MS) {
-      setShowReloadNotification(true);
-    }
-  });
 
   React.useEffect(() => {
     const planIdFromUrl = searchParams.get('planId');
     let targetDate;
 
     if (planIdFromUrl) {
-        const dateFromUrl = getDateFromPlanId(planIdFromUrl);
-        if (dateFromUrl) {
-            targetDate = dateFromUrl;
-        } else {
-            targetDate = new Date();
-        }
-    } else {
+      const dateFromUrl = getDateFromPlanId(planIdFromUrl);
+      if (dateFromUrl) {
+        targetDate = dateFromUrl;
+      } else {
         targetDate = new Date();
+      }
+    } else {
+      targetDate = new Date();
     }
 
     setDate(d => {
-        if (!d || d.getTime() !== targetDate.getTime()) {
-            return targetDate;
-        }
-        return d;
+      if (!d || d.getTime() !== targetDate.getTime()) {
+        return targetDate;
+      }
+      return d;
     });
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
 
@@ -150,15 +178,21 @@ export default function Control7Client({
       .map(p => {
         const newActual = JSON.parse(JSON.stringify(emptyActual));
         (Object.keys(newActual) as (keyof DailyProduction)[]).forEach(day => {
-            newActual[day].lotNumber = dayOfYearMap[day];
+          newActual[day].lotNumber = dayOfYearMap[day];
         });
+        const newActualZafra = JSON.parse(JSON.stringify(newActual));
+        const newActualReempaque = JSON.parse(JSON.stringify(newActual));
+        const newActualReenvase = JSON.parse(JSON.stringify(newActual));
 
         return {
-            ...p,
-            categoryName: categoryMap.get(p.categoryId)?.name || 'Sin Categoría',
-            categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
-            planned: 0,
-            actual: newActual,
+          ...p,
+          categoryName: categoryMap.get(p.categoryId)?.name || 'Sin Categoría',
+          categoryIsPlanned: categoryMap.get(p.categoryId)?.isPlanned ?? true,
+          planned: 0,
+          actual: newActual,
+          actualZafra: newActualZafra,
+          actualReempaque: newActualReempaque,
+          actualReenvase: newActualReenvase,
         };
       });
   };
@@ -166,168 +200,180 @@ export default function Control7Client({
   const applyAISuggestion = React.useCallback((currentData: ProductData[]): ProductData[] => {
     const suggestionRaw = sessionStorage.getItem('aiSuggestion');
     if (!suggestionRaw) return currentData;
-    
+
     try {
-        const suggestions = JSON.parse(suggestionRaw);
-        const suggestionsMap = new Map<string, number>(suggestions.map((s: any) => [s.productId, Number(s.suggestedPlan)]));
-        
-        const newData: ProductData[] = currentData.map(item => {
-            const suggestedPlan = suggestionsMap.get(item.id);
-            if (suggestedPlan !== undefined) {
-                return {
-                    ...item,
-                    planned: suggestedPlan,
-                    isSuggested: true,
-                };
-            }
-            return { ...item, isSuggested: false };
-        });
-        
-        setIsDirty(true);
-        toast({
-            title: 'Sugerencia Aplicada',
-            description: 'Se ha generado un nuevo plan desde la página de IA. Revisa los valores y guárdalos.',
-        });
-        return newData;
-    } catch (error) {
-        console.error("Failed to parse or apply AI suggestion:", error);
-        toast({ title: 'Error al aplicar sugerencia', variant: 'destructive'});
-        return currentData;
-    } finally {
-        sessionStorage.removeItem('aiSuggestion');
-        if (typeof window !== 'undefined') {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.has('applySuggestion')) {
-                urlParams.delete('applySuggestion');
-                const newUrl = window.location.pathname + (urlParams.toString() ? `?${urlParams.toString()}` : '');
-                window.history.replaceState({}, document.title, newUrl);
-            }
+      const suggestions = JSON.parse(suggestionRaw);
+      const suggestionsMap = new Map<string, number>(suggestions.map((s: any) => [s.productId, Number(s.suggestedPlan)]));
+
+      const newData: ProductData[] = currentData.map(item => {
+        const suggestedPlan = suggestionsMap.get(item.id);
+        if (suggestedPlan !== undefined) {
+          return {
+            ...item,
+            planned: suggestedPlan,
+            isSuggested: true,
+          };
         }
+        return { ...item, isSuggested: false };
+      });
+
+      setIsDirty(true);
+      toast({
+        title: 'Sugerencia Aplicada',
+        description: 'Se ha generado un nuevo plan desde la página de IA. Revisa los valores y guárdalos.',
+      });
+      return newData;
+    } catch (error) {
+      console.error("Failed to parse or apply AI suggestion:", error);
+      toast({ title: 'Error al aplicar sugerencia', variant: 'destructive' });
+      return currentData;
+    } finally {
+      sessionStorage.removeItem('aiSuggestion');
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('applySuggestion')) {
+          urlParams.delete('applySuggestion');
+          const newUrl = window.location.pathname + (urlParams.toString() ? `?${urlParams.toString()}` : '');
+          window.history.replaceState({}, document.title, newUrl);
+        }
+      }
     }
   }, [toast]);
 
   React.useEffect(() => {
     const fetchData = async () => {
-        if (!date) return;
-        
-        const currentYear = date.getFullYear();
-        const currentWeek = getISOWeek(date);
-        const planId = `${currentYear}-W${currentWeek}`;
+      if (!date) return;
 
-        setLoading(true);
-        setIsDirty(false);
+      const currentYear = date.getFullYear();
+      const currentWeek = getISOWeek(date);
+      const planId = `${currentYear}-W${currentWeek}`;
 
-        // Safety timeout: if it takes more than 10s, force stop loading.
-        const timeoutId = setTimeout(() => {
-            setLoading(prev => {
-                if (prev) {
-                    toast({
-                        title: 'La carga está demorando',
-                        description: 'Verificando conexión con Firestore. Por favor intenta recargar si no aparecen los datos.',
-                        variant: 'destructive',
-                    });
-                    return false;
-                }
-                return false;
-            });
-        }, 10000);
+      setLoading(true);
+      setIsDirty(false);
 
-        try {
-            const categories = prefetchedCategories;
-            const productDefinitions = prefetchedProducts;
-            const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, isPlanned: c.isPlanned }]));
-            const dayOfYearMap = getDayOfYearForWeek(date);
-
-            if (productDefinitions.length === 0) {
-                setData([]);
-                clearTimeout(timeoutId);
-                setLoading(false);
-                return;
-            }
-            
-            const planDocRef = doc(db, "productionPlans", planId);
-            const planDocSnap = await getDoc(planDocRef);
-
-            let loadedData: ProductData[];
-            if (planDocSnap.exists()) {
-                const planData = planDocSnap.data();
-                const weeklyData: ProductData[] = planData.products;
-                const weeklyDataProductIds = new Set(weeklyData.map(p => p.id));
-
-                const activeAndRelevantProducts = productDefinitions.filter(
-                    def => def.isActive || weeklyDataProductIds.has(def.id)
-                );
-
-                loadedData = activeAndRelevantProducts.map(def => {
-                    const savedProductData = weeklyData.find(d => d.id === def.id);
-                    const categoryInfo = categoryMap.get(def.categoryId);
-                    
-                    if (savedProductData) {
-                         const mergedActual: DailyProduction = { ...emptyActual };
-                        for (const day of Object.keys(mergedActual) as (keyof DailyProduction)[]) {
-                            if (savedProductData.actual && savedProductData.actual[day]) {
-                                mergedActual[day] = {
-                                    day: savedProductData.actual[day].day || 0,
-                                    night: savedProductData.actual[day].night || 0,
-                                    lotNumber: savedProductData.actual[day].lotNumber || dayOfYearMap[day],
-                                    dayNote: savedProductData.actual[day].dayNote || '',
-                                    nightNote: savedProductData.actual[day].nightNote || '',
-                                };
-                            } else {
-                                mergedActual[day] = { ...emptyProductionDay, lotNumber: dayOfYearMap[day] };
-                            }
-                        }
-
-                        return {
-                            ...savedProductData,
-                            ...def,
-                            actual: mergedActual,
-                            categoryName: categoryInfo?.name || 'Sin Categoría',
-                            categoryIsPlanned: categoryInfo?.isPlanned ?? true,
-                        };
-                    } else {
-                        // New product not present in the saved plan
-                        const newActual = JSON.parse(JSON.stringify(emptyActual));
-                        (Object.keys(newActual) as (keyof DailyProduction)[]).forEach(day => {
-                            newActual[day].lotNumber = dayOfYearMap[day];
-                        });
-                        return {
-                            ...def,
-                            categoryName: categoryInfo?.name || 'Sin Categoría',
-                            categoryIsPlanned: categoryInfo?.isPlanned ?? true,
-                            planned: 0,
-                            actual: newActual,
-                        };
-                    }
-                });
-            } else {
-                loadedData = generateInitialData(productDefinitions.filter(p => p.isActive), categories, date);
-            }
-
-            if (typeof window !== 'undefined') {
-                const urlParams = new URLSearchParams(window.location.search);
-                if (urlParams.get('applySuggestion') === 'true') {
-                    const finalData = applyAISuggestion(loadedData);
-                    setData(finalData);
-                } else {
-                    setData(loadedData);
-                }
-            } else {
-                setData(loadedData);
-            }
-
-        } catch (error) {
-            console.error("Error fetching data from Firestore:", error);
+      // Safety timeout: if it takes more than 10s, force stop loading.
+      const timeoutId = setTimeout(() => {
+        setLoading(prev => {
+          if (prev) {
             toast({
-                title: 'Error de Carga',
-                description: 'No se pudieron cargar los datos desde Firestore.',
-                variant: 'destructive',
+              title: 'La carga está demorando',
+              description: 'Verificando conexión con Firestore. Por favor intenta recargar si no aparecen los datos.',
+              variant: 'destructive',
             });
-            setData([]);
-        } finally {
-            clearTimeout(timeoutId);
-            setLoading(false);
+            return false;
+          }
+          return false;
+        });
+      }, 10000);
+
+      try {
+        const categories = prefetchedCategories;
+        const productDefinitions = prefetchedProducts;
+        const categoryMap = new Map(categories.map(c => [c.id, { name: c.name, isPlanned: c.isPlanned }]));
+        const dayOfYearMap = getDayOfYearForWeek(date);
+
+        if (productDefinitions.length === 0) {
+          setData([]);
+          clearTimeout(timeoutId);
+          setLoading(false);
+          return;
         }
+
+        const planDocRef = doc(db, "productionPlans", planId);
+        const planDocSnap = await getDoc(planDocRef);
+
+        let loadedData: ProductData[];
+        if (planDocSnap.exists()) {
+          const planData = planDocSnap.data();
+          const weeklyData: ProductData[] = planData.products;
+          const weeklyDataProductIds = new Set(weeklyData.map(p => p.id));
+
+          const activeAndRelevantProducts = productDefinitions.filter(
+            def => def.isActive || weeklyDataProductIds.has(def.id)
+          );
+
+          loadedData = activeAndRelevantProducts.map(def => {
+            const savedProductData = weeklyData.find(d => d.id === def.id);
+            const categoryInfo = categoryMap.get(def.categoryId);
+
+            const mergeActualField = (savedActual: any) => {
+              const merged: DailyProduction = { ...emptyActual };
+              for (const day of Object.keys(merged) as (keyof DailyProduction)[]) {
+                if (savedActual && savedActual[day]) {
+                  merged[day] = {
+                    day: savedActual[day].day || 0,
+                    night: savedActual[day].night || 0,
+                    lotNumber: savedActual[day].lotNumber || dayOfYearMap[day],
+                    dayNote: savedActual[day].dayNote || '',
+                    nightNote: savedActual[day].nightNote || '',
+                  };
+                } else {
+                  merged[day] = { ...emptyProductionDay, lotNumber: dayOfYearMap[day] };
+                }
+              }
+              return merged;
+            };
+
+            if (savedProductData) {
+              return {
+                ...savedProductData,
+                ...def,
+                actual: mergeActualField(savedProductData.actual),
+                actualZafra: mergeActualField(savedProductData.actualZafra),
+                actualReempaque: mergeActualField(savedProductData.actualReempaque),
+                actualReenvase: mergeActualField(savedProductData.actualReenvase),
+                categoryName: categoryInfo?.name || 'Sin Categoría',
+                categoryIsPlanned: categoryInfo?.isPlanned ?? true,
+              };
+            } else {
+              // New product not present in the saved plan
+              const newActual = JSON.parse(JSON.stringify(emptyActual));
+              (Object.keys(newActual) as (keyof DailyProduction)[]).forEach(day => {
+                newActual[day].lotNumber = dayOfYearMap[day];
+              });
+              const newActualZafra = JSON.parse(JSON.stringify(newActual));
+              const newActualReempaque = JSON.parse(JSON.stringify(newActual));
+              const newActualReenvase = JSON.parse(JSON.stringify(newActual));
+              return {
+                ...def,
+                categoryName: categoryInfo?.name || 'Sin Categoría',
+                categoryIsPlanned: categoryInfo?.isPlanned ?? true,
+                planned: 0,
+                actual: newActual,
+                actualZafra: newActualZafra,
+                actualReempaque: newActualReempaque,
+                actualReenvase: newActualReenvase,
+              };
+            }
+          });
+        } else {
+          loadedData = generateInitialData(productDefinitions.filter(p => p.isActive), categories, date);
+        }
+
+        if (typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          if (urlParams.get('applySuggestion') === 'true') {
+            const finalData = applyAISuggestion(loadedData);
+            setData(finalData);
+          } else {
+            setData(loadedData);
+          }
+        } else {
+          setData(loadedData);
+        }
+
+      } catch (error) {
+        console.error("Error fetching data from Firestore:", error);
+        toast({
+          title: 'Error de Carga',
+          description: 'No se pudieron cargar los datos desde Firestore.',
+          variant: 'destructive',
+        });
+        setData([]);
+      } finally {
+        clearTimeout(timeoutId);
+        setLoading(false);
+      }
     };
 
     fetchData();
@@ -347,25 +393,25 @@ export default function Control7Client({
 
     try {
       const dataToSave = data.map(({ isSuggested, ...rest }) => rest);
-      
+
       // --- Create Summary Data for Denormalization ---
-      
+
       // Overall Totals
       const productsForCompliance = data.filter(item => item.categoryIsPlanned && item.planned > 0);
       const totalPlannedForCompliance = productsForCompliance.reduce((sum, item) => sum + (item.planned || 0), 0);
-      const totalActualForCompliance = productsForCompliance.reduce((sum, item) => 
+      const totalActualForCompliance = productsForCompliance.reduce((sum, item) =>
         sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
       );
-      
+
       const unplannedProductionProducts = data.filter(item => item.categoryIsPlanned && (item.planned || 0) === 0);
       const totalUnplannedProduction = unplannedProductionProducts.reduce((sum, item) =>
         sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
       );
-      
-      const totalActual = data.reduce((sum, item) => 
+
+      const totalActual = data.reduce((sum, item) =>
         sum + Object.values(item.actual).reduce((daySum, dayVal) => daySum + (dayVal.day || 0) + (dayVal.night || 0), 0), 0
       );
-       
+
       const dailyTotals = { mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 };
       const dailyShiftTotals = {
         mon: { day: 0, night: 0 }, tue: { day: 0, night: 0 }, wed: { day: 0, night: 0 },
@@ -379,38 +425,38 @@ export default function Control7Client({
       data.forEach(product => {
         // Daily totals (overall)
         for (const day of Object.keys(dailyTotals) as (keyof typeof dailyTotals)[]) {
-            const dayActual = product.actual[day];
-            if (dayActual) {
-                dailyTotals[day] += (dayActual.day || 0) + (dayActual.night || 0);
-                dailyShiftTotals[day].day += dayActual.day || 0;
-                dailyShiftTotals[day].night += dayActual.night || 0;
-            }
+          const dayActual = product.actual[day];
+          if (dayActual) {
+            dailyTotals[day] += (dayActual.day || 0) + (dayActual.night || 0);
+            dailyShiftTotals[day].day += dayActual.day || 0;
+            dailyShiftTotals[day].night += dayActual.night || 0;
+          }
         }
 
         // Category totals
         const { categoryId } = product;
         if (!categoryTotals[categoryId]) {
-            categoryTotals[categoryId] = {
-                planned: 0,
-                actualForPlanned: 0,
-                unplannedProduction: 0,
-                totalActual: 0
-            };
+          categoryTotals[categoryId] = {
+            planned: 0,
+            actualForPlanned: 0,
+            unplannedProduction: 0,
+            totalActual: 0
+          };
         }
-        
+
         const productTotalActual = Object.values(product.actual).reduce((sum, dayVal) => sum + (dayVal.day || 0) + (dayVal.night || 0), 0);
         categoryTotals[categoryId].totalActual += productTotalActual;
 
         if (product.categoryIsPlanned) {
-            if (product.planned > 0) {
-                categoryTotals[categoryId].planned += product.planned;
-                categoryTotals[categoryId].actualForPlanned += productTotalActual;
-            } else {
-                categoryTotals[categoryId].unplannedProduction += productTotalActual;
-            }
+          if (product.planned > 0) {
+            categoryTotals[categoryId].planned += product.planned;
+            categoryTotals[categoryId].actualForPlanned += productTotalActual;
+          } else {
+            categoryTotals[categoryId].unplannedProduction += productTotalActual;
+          }
         }
       });
-      
+
       const summaryData = {
         week: currentWeek,
         year: currentYear,
@@ -422,16 +468,16 @@ export default function Control7Client({
         dailyShiftTotals,
         categoryTotals, // Add the new per-category data
       };
-      
+
       // Use a batched write to save both plan and summary atomically
       const batch = writeBatch(db);
-      
+
       const planDocRef = doc(db, "productionPlans", planId);
       batch.set(planDocRef, { products: dataToSave, week: currentWeek, year: currentYear });
-      
+
       const summaryDocRef = doc(db, "weeklySummaries", planId);
       batch.set(summaryDocRef, summaryData);
-      
+
       await batch.commit();
       // --- End of Summary Creation ---
 
@@ -466,26 +512,26 @@ export default function Control7Client({
 
       if (planDocSnap.exists()) {
         const lastWeekData = planDocSnap.data().products as ProductData[];
-        setData(currentData => 
-            currentData.map(currentItem => {
-                const correspondingLastWeekItem = lastWeekData.find(lw => lw.id === currentItem.id);
-                return {
-                    ...currentItem,
-                    planned: correspondingLastWeekItem ? correspondingLastWeekItem.planned : currentItem.planned,
-                    isSuggested: false, 
-                };
-            })
+        setData(currentData =>
+          currentData.map(currentItem => {
+            const correspondingLastWeekItem = lastWeekData.find(lw => lw.id === currentItem.id);
+            return {
+              ...currentItem,
+              planned: correspondingLastWeekItem ? correspondingLastWeekItem.planned : currentItem.planned,
+              isSuggested: false,
+            };
+          })
         );
         setIsDirty(true);
         toast({
-            title: 'Plan Copiado',
-            description: `Se han copiado los valores planificados de la semana ${lastWeekNumber}.`,
+          title: 'Plan Copiado',
+          description: `Se han copiado los valores planificados de la semana ${lastWeekNumber}.`,
         });
       } else {
         toast({
-            title: 'No se encontró el plan',
-            description: `No hay datos guardados para la semana ${lastWeekNumber}.`,
-            variant: 'destructive',
+          title: 'No se encontró el plan',
+          description: `No hay datos guardados para la semana ${lastWeekNumber}.`,
+          variant: 'destructive',
         });
       }
     } catch (error) {
@@ -509,17 +555,18 @@ export default function Control7Client({
     setData(currentData =>
       currentData.map(item => {
         if (item.id === id) {
-          const newActual = { ...item.actual };
+          const actualField = activeMode === 'zafra' ? 'actualZafra' : activeMode === 'reempaque' ? 'actualReempaque' : activeMode === 'reenvase' ? 'actualReenvase' : 'actual';
+          const newActual = { ...(item[actualField] || emptyActual) };
           if (typeof newActual[day] !== 'object' || newActual[day] === null) {
-              newActual[day] = { ...emptyProductionDay };
+            newActual[day] = { ...emptyProductionDay };
           }
-          
+
           if (shift === 'lotNumber' || shift === 'dayNote' || shift === 'nightNote') {
-              newActual[day] = { ...newActual[day], [shift]: String(value) };
+            newActual[day] = { ...newActual[day], [shift]: String(value) };
           } else {
-              newActual[day] = { ...newActual[day], [shift]: value };
+            newActual[day] = { ...newActual[day], [shift]: value };
           }
-          return { ...item, actual: newActual };
+          return { ...item, [actualField]: newActual };
         }
         return item;
       })
@@ -530,10 +577,10 @@ export default function Control7Client({
   const handleDateChange = (newDate: Date | undefined) => {
     if (!newDate) return;
     if (isDirty) {
-        setUnsavedChangesTarget({ type: 'date', date: newDate });
-        setIsUnsavedChangesDialogOpen(true);
+      setUnsavedChangesTarget({ type: 'date', date: newDate });
+      setIsUnsavedChangesDialogOpen(true);
     } else {
-        executeDateChange(newDate);
+      executeDateChange(newDate);
     }
   };
 
@@ -546,20 +593,20 @@ export default function Control7Client({
 
   const handleReload = () => {
     if (isDirty) {
-        setUnsavedChangesTarget({ type: 'reload' });
-        setIsUnsavedChangesDialogOpen(true);
+      setUnsavedChangesTarget({ type: 'reload' });
+      setIsUnsavedChangesDialogOpen(true);
     } else {
-        window.location.reload();
+      window.location.reload();
     }
   };
 
   const handleConfirmUnsavedChanges = () => {
     if (!unsavedChangesTarget) return;
-    
+
     if (unsavedChangesTarget.type === 'date' && unsavedChangesTarget.date) {
-        executeDateChange(unsavedChangesTarget.date);
+      executeDateChange(unsavedChangesTarget.date);
     } else if (unsavedChangesTarget.type === 'reload') {
-        window.location.reload();
+      window.location.reload();
     }
     setIsUnsavedChangesDialogOpen(false);
     setUnsavedChangesTarget(null);
@@ -570,67 +617,63 @@ export default function Control7Client({
   );
 
   return (
-    <SidebarInset>
-      <Header 
-        onSave={handleSave} 
+    <div className="flex flex-col flex-1 min-h-screen w-full min-w-0 overflow-x-hidden">
+      <Header
+        onSave={handleSave}
         hasUnsavedChanges={isDirty}
         title="Control de Producción"
         icon={Factory}
-      />
-      <main className="flex-1 overflow-y-auto bg-background/50 backdrop-blur-sm">
-        <div className="container-fluid p-4 md:p-8 mx-auto max-w-[1600px] space-y-6 pb-24">
-          {showReloadNotification && (
-              <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md flex justify-between items-center shadow-md">
-                  <div className="flex items-center">
-                      <AlertTriangle className="h-5 w-5 mr-3" />
-                      <div>
-                          <p className="font-bold">¡Bienvenido de vuelta!</p>
-                          <p className="text-sm">La sesión ha estado inactiva. Para asegurar que tienes los últimos datos, te recomendamos recargar la página.</p>
-                      </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={handleReload}>
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Recargar Ahora
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowReloadNotification(false)}>
-                          <X className="h-4 w-4" />
-                      </Button>
-                  </div>
-              </div>
-          )}
-          <FilterBar 
-              productSearch={productSearch} 
-              onProductSearchChange={setProductSearch}
-              date={date}
-              onDateChange={handleDateChange}
-              onCopyLastWeek={handleCopyLastWeek}
-              isExportDialogOpen={isExportDialogOpen}
-              setIsExportDialogOpen={setIsExportDialogOpen}
+      >
+        <Button asChild variant="outline" size="icon" className="h-8 w-8 text-primary border-primary/20 bg-primary/5 hover:bg-primary/10" title="Ver Dashboard General">
+          <Link
+            href="/dashboard"
+            onClick={(e) => {
+              e.preventDefault();
+              proceedTo('/dashboard');
+            }}
+          >
+            <LayoutDashboard className="h-4 w-4" />
+          </Link>
+        </Button>
+      </Header>
+      <main className="flex-1 overflow-y-auto overflow-x-hidden w-full min-w-0 bg-background/50 backdrop-blur-sm">
+        <div className="container-fluid p-4 md:p-8 mx-auto max-w-[1600px] w-full min-w-0 space-y-6 pb-24">
+
+          <FilterBar
+            productSearch={productSearch}
+            onProductSearchChange={setProductSearch}
+            date={date}
+            onDateChange={handleDateChange}
+            onCopyLastWeek={handleCopyLastWeek}
+            isExportDialogOpen={isExportDialogOpen}
+            setIsExportDialogOpen={setIsExportDialogOpen}
+            activeMode={activeMode}
+            onModeChange={handleModeChange}
           />
           {loading || !date ? (
-              <p>Cargando datos...</p>
+            <p className="text-muted-foreground animate-pulse">Cargando datos...</p>
           ) : (
-              <>
-                  <KpiDashboard data={data} />
-                  <div className="space-y-6">
-                    <ProductionTable 
-                      data={filteredData} 
-                      onPlannedChange={handlePlannedDataChange} 
-                      onActualChange={handleActualDataChange}
-                      currentDate={date}
-                    />
-                    <WeeklySummary data={data} />
-                  </div>
-              </>
+            <>
+              <KpiDashboard data={data} />
+              <div className="space-y-6 w-full min-w-0">
+                <ProductionTable
+                  data={filteredData}
+                  onPlannedChange={handlePlannedDataChange}
+                  onActualChange={handleActualDataChange}
+                  currentDate={date}
+                  activeMode={activeMode}
+                />
+                <WeeklySummary data={data} />
+              </div>
+            </>
           )}
-          
+
           {/* Footer Support */}
           <div className="p-4 flex justify-center border-t mt-8 space-x-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={() => setIsResetDialogOpen(true)} 
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsResetDialogOpen(true)}
               className="text-muted-foreground text-xs hover:text-primary hover:bg-primary/5 transition-colors"
             >
               <RefreshCw className="mr-2 h-3 w-3" /> Limpiar Caché y Resetear App
@@ -643,21 +686,23 @@ export default function Control7Client({
                     <RefreshCw className="h-5 w-5 text-primary animate-spin-slow" />
                     ¿Resetear Aplicación?
                   </AlertDialogTitle>
-                  <AlertDialogDescription className="space-y-3 pt-2">
-                    <p>
-                      Esta acción limpiará el <strong>caché local</strong> y reiniciará tu sesión en este navegador.
-                    </p>
-                    <div className="bg-primary/5 p-3 rounded-md border border-primary/10 text-xs text-primary/80">
-                      <strong>Nota:</strong> Tus datos de producción en la nube están 100% seguros y no se verán afectados.
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-3 pt-2 text-sm text-muted-foreground">
+                      <p>
+                        Esta acción limpiará el <strong>caché local</strong> y reiniciará tu sesión en este navegador.
+                      </p>
+                      <div className="bg-primary/5 p-3 rounded-md border border-primary/10 text-xs text-primary/80">
+                        <strong>Nota:</strong> Tus datos de producción en la nube están 100% seguros y no se verán afectados.
+                      </div>
+                      <p className="text-xs">
+                        Úsalo solo si la aplicación presenta comportamientos extraños o lentitud.
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      Úsalo solo si la aplicación presenta comportamientos extraños o lentitud.
-                    </p>
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction 
+                  <AlertDialogAction
                     onClick={handleResetApp}
                     className="bg-primary hover:bg-primary/90"
                   >
@@ -668,23 +713,28 @@ export default function Control7Client({
             </AlertDialog>
 
             <AlertDialog open={isUnsavedChangesDialogOpen} onOpenChange={setIsUnsavedChangesDialogOpen}>
-              <AlertDialogContent className="max-w-[400px]">
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-yellow-500" />
-                    Cambios sin Guardar
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
+              <AlertDialogContent className="border border-destructive/20 max-w-[400px] rounded-2xl">
+                <AlertDialogHeader className="flex flex-col items-center text-center">
+                  <div className="flex items-center justify-center p-3 rounded-full bg-destructive/10 text-destructive mb-3 animate-pulse">
+                    <AlertTriangle className="h-6 w-6" />
+                  </div>
+                  <AlertDialogTitle className="text-lg font-bold">¿Descartar cambios sin guardar?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-sm text-muted-foreground mt-1">
                     Tienes modificaciones que no has guardado. Si continúas, perderás todos los cambios realizados en esta semana.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel onClick={() => setUnsavedChangesTarget(null)}>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction 
-                    onClick={handleConfirmUnsavedChanges}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                <AlertDialogFooter className="grid grid-cols-2 gap-2 mt-4 sm:flex-row sm:justify-end">
+                  <AlertDialogCancel
+                    onClick={() => setUnsavedChangesTarget(null)}
+                    className="mt-0 border border-muted hover:bg-muted/50 rounded-xl"
                   >
-                    Perder Cambios y Continuar
+                    Cancelar
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleConfirmUnsavedChanges}
+                    className="bg-destructive hover:bg-destructive/90 text-white shadow-sm shadow-destructive/20 rounded-xl"
+                  >
+                    Sí, descartar
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -692,6 +742,6 @@ export default function Control7Client({
           </div>
         </div>
       </main>
-    </SidebarInset>
+    </div>
   );
 }

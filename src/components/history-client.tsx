@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Factory, ChevronLeft, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Label } from './ui/label';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import Header from './header';
-import { SidebarInset } from './ui/sidebar';
 
 
 type SavedPlan = {
@@ -108,6 +108,7 @@ function DeleteRangeDialog({ allPlans, onConfirm, isDeleting }: { allPlans: Save
 }
 
 export default function HistoryClient() {
+  const router = useRouter();
   const [allPlans, setAllPlans] = React.useState<SavedPlan[]>([]);
   const [paginatedPlans, setPaginatedPlans] = React.useState<SavedPlan[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -242,8 +243,8 @@ export default function HistoryClient() {
 
 
   return (
-    <SidebarInset>
-      <Header title="Historial de Planes" icon={Factory} />
+    <div className="flex flex-col flex-1 min-h-screen">
+      <Header title="Historial de Planes" icon={Factory} onBack={() => router.back()} />
       <main className="p-4 md:p-8">
         <Dialog>
             <Card>
@@ -312,6 +313,6 @@ export default function HistoryClient() {
             <DeleteRangeDialog allPlans={allPlans} onConfirm={handleDeleteRange} isDeleting={isDeleting} />
         </Dialog>
       </main>
-    </SidebarInset>
+    </div>
   );
 }

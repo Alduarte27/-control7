@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { SHIFT_CONFIG } from '@/lib/config/shifts';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import { Factory, ChevronLeft, Warehouse, Package, PackageCheck, LayoutDashboard, ArrowRight, AlertTriangle, Upload, Edit, Beaker, Play, Pause, RefreshCw, Clock, Zap, Power, PowerOff, Droplets, Wind, Hourglass, CircleSlash, Activity, CheckCircle2, Waves, Snowflake, Archive, Box, Boxes, Weight, Package2, Image as ImageIcon, ImageOff, RotateCcw, ArrowDownToLine, RotateCw, Database, Layers, CalendarDays, Settings2, Sunrise, Sunset, Utensils, Coffee, Moon, Sun, FileText, Calculator, Target, TrendingUp, PanelLeftClose, PanelLeftOpen, CalendarRange, Calendar as CalendarIcon, ArrowLeftRight, Save, History, BarChart as BarChartIcon, MousePointer2, Trash2, ChevronDown, ChevronUp, MoreVertical, Eye, Pencil, FileDown, Users, ShieldCheck, Bot } from 'lucide-react';
@@ -21,9 +22,6 @@ import { Separator } from '@/components/ui/separator';
 import { Pie, Cell, ResponsiveContainer, PieChart, Tooltip as RechartsTooltip, LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, BarChart, Bar, LabelList, ComposedChart } from 'recharts';
 import { cn } from '@/lib/utils';
 import Header from '@/components/header';
-import { runSmartPlannerEngine } from '@/lib/smart-planner-engine';
-import { AutonomousAgentView } from '@/components/autonomous-agent-view';
-import { FloatingCopilot } from '@/components/floating-copilot';
 
 import { Tooltip, TooltipProvider, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import Image from 'next/image';
@@ -40,7 +38,7 @@ import {
     DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, orderBy, limit, getDocs, doc, getDoc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { toast } from '@/hooks/use-toast';
 import { Switch } from './ui/switch';
 import { Badge } from './ui/badge';
@@ -54,6 +52,31 @@ const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042"];
 const LOCAL_STORAGE_CONFIG_KEY = 'simulationConfig';
 const FIRESTORE_ASSETS_PATH = 'simulation_assets';
 const LOCAL_STORAGE_SHOW_IMAGES_KEY = 'simulationShowImages';
+
+export const formatCustomNumber = (val: number) => {
+    const hasDecimals = val % 1 !== 0;
+    const numStr = Number(val).toLocaleString('en-US', { 
+        useGrouping: false, 
+        minimumFractionDigits: hasDecimals ? 2 : 0,
+        maximumFractionDigits: 2 
+    });
+    let parts = numStr.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return parts.join(',');
+};
+
+export const parseSmartNumber = (raw: string) => {
+    if (!raw) return 0;
+    const match = raw.match(/[,.](?=\d{1,2}$)/);
+    if (match) {
+        const lastSeparatorIndex = raw.lastIndexOf(match[0]);
+        const intPart = raw.substring(0, lastSeparatorIndex).replace(/[,.]/g, '');
+        const decPart = raw.substring(lastSeparatorIndex + 1);
+        return parseFloat(`${intPart}.${decPart}`);
+    }
+    const cleanStr = raw.replace(/[,.]/g, '');
+    return parseFloat(cleanStr) || 0;
+};
 
 const formatDateDisplay = (dateStr: string | undefined) => {
     if (!dateStr) return '';
@@ -982,10 +1005,12 @@ function ProductionProjectionView({
     onClose,
     machines,
     products,
+    modalProducts = products,
 }: {
     onClose: () => void;
     machines: MachineState[];
     products: ProductDefinition[];
+    modalProducts?: ProductDefinition[];
 }) {
     const { toast } = useToast();
     const router = useRouter();
@@ -993,11 +1018,10 @@ function ProductionProjectionView({
     const [season, setSeason] = React.useState<'zafra' | 'no-zafra'>('zafra');
     const [viewMode, setViewMode] = React.useState<'semana' | 'dia' | 'mes'>('dia');
     const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
+    const [showManoObra, setShowManoObra] = React.useState(true);
     const [zafraStartDate, setZafraStartDate] = React.useState<string>(`${currentYear}-08-01`);
     const [zafraEndDate, setZafraEndDate] = React.useState<string>(`${currentYear}-12-15`);
-    const [projectionMode, setProjectionMode] = React.useState<'auto' | 'manual'>('auto');
-    const [isCopilotOpen, setIsCopilotOpen] = React.useState(false);
-    const [isAgentViewOpen, setIsAgentViewOpen] = React.useState(false);
+    const [projectionMode, setProjectionMode] = React.useState<'auto' | 'manual'>('manual');
 
     const [rendimiento, setRendimiento] = React.useState<number>(0.8);
     const [horasTurnoDia, setHorasTurnoDia] = React.useState<number>(10.5);
@@ -1046,8 +1070,21 @@ function ProductionProjectionView({
     const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
     const [isSummaryView, setIsSummaryView] = React.useState(false);
     const [isPDFModalOpen, setIsPDFModalOpen] = React.useState(false);
+    const [isGeneratingPDF, setIsGeneratingPDF] = React.useState(false);
+    const [pdfGenerationProgress, setPdfGenerationProgress] = React.useState(0);
+    const [pdfGenerationStatus, setPdfGenerationStatus] = React.useState('');
     const [snapshots, setSnapshots] = React.useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = React.useState(false);
+
+    const [selectionStart, setSelectionStart] = React.useState<{ rowIndex: number; colIndex: number } | null>(null);
+    const [selectionEnd, setSelectionEnd] = React.useState<{ rowIndex: number; colIndex: number } | null>(null);
+    const [isSelecting, setIsSelecting] = React.useState(false);
+    const [contextMenu, setContextMenu] = React.useState<{ x: number; y: number; visible: boolean } | null>(null);
+    const internalClipboard = React.useRef<{
+        rows: number;
+        cols: number;
+        data: ({ productId: string; speed: number; inactive: boolean } | null)[][];
+    } | null>(null);
 
     const fetchHistory = React.useCallback(async () => {
         setIsLoadingHistory(true);
@@ -1110,6 +1147,7 @@ function ProductionProjectionView({
         setActiveSnapshotName(snapshot.name);
         setActiveSnapshotDate(snapshot.updatedAt || snapshot.createdAt);
         setIsReadOnly(readOnly);
+        localStorage.removeItem('control7_projections_cleared');
 
         toast({
             title: readOnly ? "Escenario cargado (Lectura)" : "Escenario cargado",
@@ -1119,9 +1157,12 @@ function ProductionProjectionView({
         setIsHistoryOpen(false);
     };
 
-    const handleSaveSnapshot = async (customName?: string) => {
-        const isUpdate = !!activeSnapshotId && !customName;
-        const nameToUse = (customName || (isUpdate ? (activeSnapshotName || '') : snapshotName)).trim().toUpperCase();
+
+
+    const handleSaveSnapshot = async (customName?: unknown) => {
+        const nameStr = typeof customName === 'string' ? customName : '';
+        const isUpdate = !!activeSnapshotId && !nameStr;
+        const nameToUse = (nameStr || (isUpdate ? (activeSnapshotName || '') : snapshotName)).trim().toUpperCase();
 
         if (!nameToUse) {
             toast({ title: "Nombre requerido", description: "Por favor asigna un nombre al escenario", variant: "destructive" });
@@ -1147,6 +1188,7 @@ function ProductionProjectionView({
                     machineConfig,
                     projectionMode,
                     plannedGoals,
+                    plannedSpeeds,
                     dailySupply,
                     isGranelActive,
                     laborType,
@@ -1169,6 +1211,7 @@ function ProductionProjectionView({
                 toast({ title: "Escenario guardado", description: `El escenario "${nameToUse}" se guardó correctamente.` });
             }
 
+            localStorage.removeItem('control7_projections_cleared');
             setIsSaveSnapshotOpen(false);
             setSnapshotName('');
             fetchHistory();
@@ -1195,322 +1238,420 @@ function ProductionProjectionView({
     };
 
     const handleGeneratePDF = async (requestedMode: 'dia' | 'semana' | 'visual') => {
-        const doc = new jsPDF({
-            orientation: 'landscape',
-            unit: 'mm',
-            format: 'a4'
-        });
+        setIsGeneratingPDF(true);
+        setPdfGenerationProgress(5);
+        setPdfGenerationStatus('Iniciando generación de reporte...');
+        await new Promise(resolve => setTimeout(resolve, 200));
 
-        // Título y Encabezado
-        doc.setFontSize(22);
-        doc.setTextColor(0, 51, 153);
-        doc.text('CONTROL 7 - REPORTE DE PROYECCIÓN', 10, 15);
+        try {
+            const doc = new jsPDF({
+                orientation: 'landscape',
+                unit: 'mm',
+                format: 'a4'
+            });
+            const now = new Date();
 
-        doc.setFontSize(9);
-        doc.setTextColor(100);
-        const now = new Date();
-        doc.text(`Generado el: ${format(now, 'dd/MM/yyyy HH:mm')}`, 10, 22);
-        if (activeSnapshotName) {
-            doc.text(`Escenario Actual: ${activeSnapshotName}`, 130, 22);
-        }
+            if (requestedMode === 'visual') {
+                const sections = [
+                    { id: 'pdf-cards-container', title: 'Resumen Ejecutivo de Operación' },
+                    { id: 'reporte-consolidado-grafico-pdf', title: 'Análisis Visual de Balances de Producción' },
+                    { id: 'pdf-resumen-container', title: 'Resumen por Presentación' }
+                ];
 
-        // Sección de Resumen
-        doc.setFontSize(12);
-        doc.setTextColor(0);
-        doc.text('Resumen de Operación', 10, 32);
+                // Mayor retraso para asegurar renderizado completo de gráficos y fuentes
+                setPdfGenerationStatus('Esperando renderizado de gráficos...');
+                setPdfGenerationProgress(15);
+                await new Promise(resolve => setTimeout(resolve, 800));
 
-        const summaryData = [
-            ['Producción Proyectada', `${(totalFamiliarQQ + totalGranelQQ).toLocaleString(undefined, { maximumFractionDigits: 2 })} QQ`],
-            ['Producción Planificada', `${totalPlannedQQ.toLocaleString(undefined, { maximumFractionDigits: 2 })} QQ`],
-            ['Porcentaje de Cumplimiento', `${fulfillmentPct.toFixed(1)}%`],
-            ['Costo Total Mano de Obra', `$ ${laborStats.totalCosto.toLocaleString(undefined, { maximumFractionDigits: 2 })}`]
-        ];
+                for (let i = 0; i < sections.length; i++) {
+                    const section = sections[i];
+                    setPdfGenerationStatus(`Procesando página ${i + 1} de 3: ${section.title}...`);
+                    setPdfGenerationProgress(20 + i * 25); // 20%, 45%, 70%
+                    await new Promise(resolve => setTimeout(resolve, 300)); // Esperar para que se actualice la interfaz antes de html2canvas
 
-        autoTable(doc, {
-            startY: 35,
-            head: [['Indicador de Rendimiento', 'Valor Proyectado']],
-            body: summaryData,
-            theme: 'striped',
-            headStyles: { fillColor: [0, 82, 155], fontSize: 9, fontStyle: 'bold' },
-            bodyStyles: { fontSize: 9 },
-            margin: { left: 10 },
-            tableWidth: 120
-        });
+                    const element = document.getElementById(section.id);
 
-        // Parámetros de Simulación
-        doc.text('Parámetros de Simulación', 145, 32);
-        const configData = [
-            ['Temporada', season === 'zafra' ? 'Zafra' : 'No Zafra'],
-            ['Rendimiento Global', `${(rendimiento * 100).toFixed(1)}%`],
-            ['Horas Turno Día', `${horasTurnoDia}h`],
-            ['Horas Turno Noche', `${horasTurnoNoche}h`]
-        ];
+                    if (element) {
+                        if (i > 0) {
+                            doc.addPage();
+                        }
 
-        autoTable(doc, {
-            startY: 35,
-            head: [['Parámetro Configurado', 'Valor']],
-            body: configData,
-            theme: 'grid',
-            headStyles: { fillColor: [80, 80, 80], fontSize: 9 },
-            bodyStyles: { fontSize: 9 },
-            margin: { left: 145 },
-            tableWidth: 120
-        });
-
-        // Tabla Detallada o Gráficos
-        const lastY = (doc as any).lastAutoTable.finalY || 100;
-
-        if (requestedMode === 'visual') {
-            const sections = [
-                { id: 'pdf-cards-container', title: 'Resumen Ejecutivo de Operación' },
-                { id: 'pdf-resumen-container', title: 'Resumen Detallado por Presentación' },
-                { id: 'reporte-consolidado-grafico-pdf', title: 'Análisis Visual de Balances de Producción' },
-                { id: 'labor-weekly-chart-pdf', title: 'Proyección de Mano de Obra' }
-            ];
-
-            // Mayor retraso para asegurar renderizado completo de gráficos y fuentes
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            for (let i = 0; i < sections.length; i++) {
-                const section = sections[i];
-                const element = document.getElementById(section.id);
-
-                if (element) {
-                    // Si no es la primera sección, añadir página nueva
-                    if (i > 0) {
-                        doc.addPage();
                         // Encabezado de página
                         doc.setFontSize(18);
                         doc.setTextColor(0, 51, 153);
-                        doc.text('CONTROL 7 - REPORTE VISUAL', 10, 15);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text('CONTROL 7 - REPORTE VISUAL', 10, 14);
 
                         doc.setFontSize(8);
                         doc.setTextColor(150);
-                        doc.text(`Generado: ${format(now, 'dd/MM/yyyy')} | Página ${i + 1}`, doc.internal.pageSize.width - 60, 15);
+                        doc.setFont('helvetica', 'normal');
+                        doc.text(`Generado: ${format(now, 'dd/MM/yyyy')} | Página ${i + 1}`, doc.internal.pageSize.width - 60, 14);
 
                         doc.setDrawColor(0, 51, 153);
                         doc.setLineWidth(0.5);
-                        doc.line(10, 18, doc.internal.pageSize.width - 10, 18);
-                    }
+                        doc.line(10, 17, doc.internal.pageSize.width - 10, 17);
 
-                    const canvas = await html2canvas(element as HTMLElement, {
-                        scale: 2,
-                        useCORS: true,
-                        logging: false,
-                        backgroundColor: '#ffffff',
-                        windowWidth: 1400,
-                        onclone: (clonedDoc) => {
-                            const clonedEl = clonedDoc.getElementById(section.id);
-                            if (clonedEl) {
-                                clonedEl.style.height = 'auto';
-                                clonedEl.style.overflow = 'visible';
-                            }
-                        }
-                    });
+                        // Nombre de escenario debajo de la línea
+                        const scenarioTitle = activeSnapshotName || activeScenarioName || "Escenario Sin Nombre";
+                        doc.setFontSize(9);
+                        doc.setTextColor(80);
+                        doc.setFont('helvetica', 'bold');
+                        doc.text(`Escenario: ${scenarioTitle}`, 10, 22);
 
-                    const imgData = canvas.toDataURL('image/png');
-                    const imgProps = doc.getImageProperties(imgData);
-
-                    const marginX = 10;
-                    const startY = (i === 0) ? (lastY + 22) : 30;
-                    const pdfWidth = doc.internal.pageSize.getWidth() - (marginX * 2);
-                    const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
-
-                    const maxAvailableHeight = doc.internal.pageSize.getHeight() - startY - 15;
-                    let finalPdfWidth = pdfWidth;
-                    let finalPdfHeight = pdfHeight;
-
-                    // Solo escalar si realmente no cabe en la hoja
-                    if (finalPdfHeight > maxAvailableHeight) {
-                        const scale = maxAvailableHeight / finalPdfHeight;
-                        finalPdfHeight = maxAvailableHeight;
-                        finalPdfWidth = finalPdfWidth * scale;
-                    }
-
-                    doc.setFontSize(14);
-                    doc.setTextColor(0);
-                    doc.setFont('helvetica', 'bold');
-                    doc.text(section.title, marginX, startY - 8);
-                    doc.addImage(imgData, 'PNG', marginX + (pdfWidth - finalPdfWidth) / 2, startY, finalPdfWidth, finalPdfHeight);
-
-                    // Pie de página
-                    doc.setDrawColor(200);
-                    doc.setLineWidth(0.1);
-                    doc.line(10, doc.internal.pageSize.height - 15, doc.internal.pageSize.width - 10, doc.internal.pageSize.height - 15);
-                    doc.setFontSize(8);
-                    doc.setFont('helvetica', 'normal');
-                    doc.setTextColor(150);
-                    doc.text('Control 7 - Sistema de Gestión de Producción', 14, doc.internal.pageSize.height - 10);
-                    doc.text(`Página ${i + 1}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
-                }
-            }
-
-            doc.save(`Control7_Reporte_Visual_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
-
-            toast({
-                title: "Reporte Visual Generado",
-                description: "Se han exportado 2 páginas con los gráficos de producción y mano de obra.",
-            });
-            return;
-        }
-
-        doc.setFontSize(14);
-        doc.setTextColor(0);
-        doc.text('Detalle de Proyección por Máquina', 14, lastY + 15);
-
-        const activeMachinesList = machines.filter(m => machineConfig[m.id]?.active);
-        const headRows: any[] = [];
-
-        // Primera fila de cabecera: Máquinas
-        const machineHeaderRow = [
-            { content: 'Tiempo', colSpan: requestedMode === 'dia' ? 3 : 2, styles: { halign: 'center', fillColor: [44, 62, 80] } }
-        ];
-        activeMachinesList.forEach(m => {
-            machineHeaderRow.push({ content: `Máquina #${m.id}`, colSpan: 2, styles: { halign: 'center', fillColor: [44, 62, 80] } } as any);
-        });
-        machineHeaderRow.push({ content: 'Totales de Producción', colSpan: 3, styles: { halign: 'center', fillColor: [44, 62, 80] } } as any);
-        headRows.push(machineHeaderRow);
-
-        // Segunda fila de cabecera: Turnos
-        const shiftHeaderRow: any[] = [
-            { content: 'Mes', styles: { fillColor: [52, 73, 94] } },
-            { content: requestedMode === 'dia' ? 'S' : 'W', styles: { fillColor: [52, 73, 94] } }
-        ];
-        if (requestedMode === 'dia') shiftHeaderRow.push({ content: 'Fecha', styles: { fillColor: [52, 73, 94] } });
-
-        activeMachinesList.forEach(() => {
-            shiftHeaderRow.push({ content: 'Día', styles: { halign: 'center', fillColor: [52, 73, 94] } });
-            shiftHeaderRow.push({ content: 'Noche', styles: { halign: 'center', fillColor: [52, 73, 94] } });
-        });
-        shiftHeaderRow.push({ content: 'Familiar QQ', styles: { halign: 'center', fillColor: [52, 73, 94] } });
-        shiftHeaderRow.push({ content: 'Granel QQ', styles: { halign: 'center', fillColor: [52, 73, 94] } });
-        shiftHeaderRow.push({ content: 'TOTAL PRODUCIDO', styles: { halign: 'center', fillColor: [109, 40, 217] } });
-        headRows.push(shiftHeaderRow);
-
-        const bodyRows: any[] = [];
-
-        groupedWeeks.forEach(group => {
-            group.weeks.forEach(week => {
-                if (requestedMode === 'semana') {
-                    const row: any[] = [group.monthName.substring(0, 3), `W${week.weekNum}`];
-                    let weekTotalQQ = 0;
-                    let weekMaxDays = 0;
-
-                    activeMachinesList.forEach(m => {
-                        const conf = machineConfig[m.id];
-                        const machineAutoDays = week.days.reduce((total, d) => {
-                            const dateStr = d.toISOString().split('T')[0];
-                            if (customActiveDays[dateStr] === false) return total;
-                            const oD = overrides[`${m.id}-${dateStr}-dia`];
-                            const oN = overrides[`${m.id}-${dateStr}-noche`];
-                            const isInactiveD = oD?.inactive || (!oD);
-                            const isInactiveN = oN?.inactive || (!oN);
-                            return total + ((!isInactiveD || !isInactiveN) ? 1 : 0);
-                        }, 0);
-
-                        const machineDays = customMachineDays[`${m.id}-${week.weekNum}`] !== undefined
-                            ? customMachineDays[`${m.id}-${week.weekNum}`]
-                            : machineAutoDays;
-
-                        weekMaxDays = Math.max(weekMaxDays, machineDays);
-                        const scalingFactor = machineAutoDays > 0 ? machineDays / machineAutoDays : 0;
-
-                        let weekDiaQQ = 0;
-                        let weekNocQQ = 0;
-
-                        week.days.forEach(day => {
-                            const dateStr = day.toISOString().split('T')[0];
-                            if (customActiveDays[dateStr] === false) return;
-                            const oD = overrides[`${m.id}-${dateStr}-dia`];
-                            const oN = overrides[`${m.id}-${dateStr}-noche`];
-                            const pD = products.find(p => p.id === (oD?.productId || conf.productId)) || products[0];
-                            const pN = products.find(p => p.id === (oN?.productId || conf.productId)) || products[0];
-                            const sD = oD?.speed || conf.speed || 38;
-                            const sN = oN?.speed || conf.speed || 38;
-
-                            if (!oD?.inactive && (!!oD)) {
-                                weekDiaQQ += ((sD * 60) * rendimiento * horasTurnoDia * (pD.presentationWeight || 50)) / 50;
-                            }
-                            if (!oN?.inactive && (!!oN)) {
-                                weekNocQQ += ((sN * 60) * rendimiento * horasTurnoNoche * (pN.presentationWeight || 50)) / 50;
+                        const canvas = await html2canvas(element as HTMLElement, {
+                            scale: 2,
+                            useCORS: true,
+                            logging: false,
+                            backgroundColor: '#ffffff',
+                            windowWidth: 1400,
+                            onclone: (clonedDoc) => {
+                                const clonedEl = clonedDoc.getElementById(section.id);
+                                if (clonedEl) {
+                                    clonedEl.style.height = 'auto';
+                                    clonedEl.style.overflow = 'visible';
+                                }
                             }
                         });
 
-                        row.push(`${(weekDiaQQ * scalingFactor).toFixed(1)}`);
-                        row.push(`${(weekNocQQ * scalingFactor).toFixed(1)}`);
-                        weekTotalQQ += (weekDiaQQ + weekNocQQ) * scalingFactor;
-                    });
+                        const imgData = canvas.toDataURL('image/png');
+                        const imgProps = doc.getImageProperties(imgData);
 
-                    row.push(`${weekTotalQQ.toFixed(1)}`);
-                    row.push(`${((dailySupply * weekMaxDays) - weekTotalQQ).toFixed(1)}`);
-                    row.push(`${(dailySupply * weekMaxDays).toFixed(1)}`);
-                    bodyRows.push(row);
-                } else {
-                    week.days.forEach(day => {
-                        const dateStr = day.toISOString().split('T')[0];
-                        const isActive = customActiveDays[dateStr] !== false;
-                        const row: any[] = [group.monthName.substring(0, 3), `S${week.weekNum}`, format(day, 'dd/MM')];
+                        const marginX = 10;
+                        const startY = 30;
+                        const pdfWidth = doc.internal.pageSize.getWidth() - (marginX * 2);
+                        const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
 
-                        let dayTotalQQ = 0;
+                        const maxAvailableHeight = doc.internal.pageSize.getHeight() - startY - 15;
+                        let finalPdfWidth = pdfWidth;
+                        let finalPdfHeight = pdfHeight;
+
+                        // Solo escalar si realmente no cabe en la hoja
+                        if (finalPdfHeight > maxAvailableHeight) {
+                            const scale = maxAvailableHeight / finalPdfHeight;
+                            finalPdfHeight = maxAvailableHeight;
+                            finalPdfWidth = finalPdfWidth * scale;
+                        }
+
+                        doc.addImage(imgData, 'PNG', marginX + (pdfWidth - finalPdfWidth) / 2, startY, finalPdfWidth, finalPdfHeight);
+
+                        // Pie de página
+                        doc.setDrawColor(200);
+                        doc.setLineWidth(0.1);
+                        doc.line(10, doc.internal.pageSize.height - 15, doc.internal.pageSize.width - 10, doc.internal.pageSize.height - 15);
+                        doc.setFontSize(8);
+                        doc.setFont('helvetica', 'normal');
+                        doc.setTextColor(150);
+                        doc.text('Control 7 - Sistema de Gestión de Producción', 14, doc.internal.pageSize.height - 10);
+                        doc.text(`Página ${i + 1}`, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
+                    }
+                }
+
+                setPdfGenerationStatus('Compilando y estructurando documento PDF...');
+                setPdfGenerationProgress(90);
+                await new Promise(resolve => setTimeout(resolve, 400));
+
+                const finalScenarioTitle = (activeSnapshotName || activeScenarioName || "Industrial").replace(/\s+/g, '_');
+                doc.save(`Control7_Reporte_Visual_${finalScenarioTitle}_${format(new Date(), 'yyyyMMdd_HHmm')}.pdf`);
+
+                setPdfGenerationProgress(100);
+                setPdfGenerationStatus('¡Reporte generado con éxito!');
+
+                toast({
+                    title: "Reporte Visual Generado",
+                    description: "Se han exportado 3 páginas con el resumen ejecutivo, balance de producción y resumen por presentación.",
+                });
+                return;
+            }
+
+            // Título y Encabezado
+            doc.setFontSize(18);
+            doc.setTextColor(0, 51, 153);
+            doc.setFont('helvetica', 'bold');
+            doc.text('CONTROL 7 - REPORTE DE PROYECCIÓN', 10, 14);
+
+            doc.setFontSize(8);
+            doc.setTextColor(150);
+            doc.setFont('helvetica', 'normal');
+            doc.text(`Generado: ${format(now, 'dd/MM/yyyy HH:mm')}`, doc.internal.pageSize.width - 60, 14);
+
+            doc.setDrawColor(0, 51, 153);
+            doc.setLineWidth(0.5);
+            doc.line(10, 17, doc.internal.pageSize.width - 10, 17);
+
+            // Nombre de escenario debajo de la línea
+            const scenarioTitle = activeSnapshotName || activeScenarioName || "Escenario Sin Nombre";
+            doc.setFontSize(9);
+            doc.setTextColor(80);
+            doc.setFont('helvetica', 'bold');
+            doc.text(`Escenario: ${scenarioTitle}`, 10, 22);
+
+            // Sección de Resumen
+            doc.setFontSize(12);
+            doc.setTextColor(0);
+            doc.text('Resumen de Operación', 10, 32);
+
+            const summaryData = [
+                ['Producción Proyectada', `${(totalFamiliarQQ + totalGranelQQ).toLocaleString(undefined, { maximumFractionDigits: 2 })} QQ`],
+                ['Producción Planificada', `${totalPlannedQQ.toLocaleString(undefined, { maximumFractionDigits: 2 })} QQ`],
+                ['Porcentaje de Cumplimiento', `${fulfillmentPct.toFixed(1)}%`],
+                ['Costo Total Mano de Obra', `$ ${laborStats.totalCosto.toLocaleString(undefined, { maximumFractionDigits: 2 })}`]
+            ];
+
+            autoTable(doc, {
+                startY: 35,
+                head: [['Indicador de Rendimiento', 'Valor Proyectado']],
+                body: summaryData,
+                theme: 'striped',
+                headStyles: { fillColor: [0, 82, 155], fontSize: 9, fontStyle: 'bold' },
+                bodyStyles: { fontSize: 9 },
+                margin: { left: 10 },
+                tableWidth: 120
+            });
+
+            // Parámetros de Simulación
+            doc.text('Parámetros de Simulación', 145, 32);
+            const configData = [
+                ['Temporada', season === 'zafra' ? 'Zafra' : 'No Zafra'],
+                ['Rendimiento Global', `${(rendimiento * 100).toFixed(1)}%`],
+                ['Horas Turno Día', `${horasTurnoDia}h`],
+                ['Horas Turno Noche', `${horasTurnoNoche}h`]
+            ];
+
+            autoTable(doc, {
+                startY: 35,
+                head: [['Parámetro Configurado', 'Valor']],
+                body: configData,
+                theme: 'grid',
+                headStyles: { fillColor: [80, 80, 80], fontSize: 9 },
+                bodyStyles: { fontSize: 9 },
+                margin: { left: 145 },
+                tableWidth: 120
+            });
+
+            setPdfGenerationStatus('Procesando datos operativos detallados...');
+            setPdfGenerationProgress(45);
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Tabla Detallada o Gráficos
+            const lastY = (doc as any).lastAutoTable.finalY || 100;
+
+            doc.setFontSize(14);
+            doc.setTextColor(0);
+            doc.text('Detalle de Proyección por Presentación', 14, lastY + 15);
+
+            const activeMachinesList = machines.filter(m => machineConfig[m.id]?.active);
+            const activeReportProducts = products.filter(p => (plannedGoals[p.id] || 0) > 0);
+            const reportProducts = activeReportProducts.length > 0 ? activeReportProducts : products;
+            const headRows: any[] = [];
+
+            // Primera fila de cabecera: Presentaciones
+            const presentationHeaderRow = [
+                { content: 'Tiempo', colSpan: requestedMode === 'dia' ? 3 : 2, styles: { halign: 'center', fillColor: [44, 62, 80] } }
+            ];
+            reportProducts.forEach(p => {
+                presentationHeaderRow.push({ content: p.productName, colSpan: 2, styles: { halign: 'center', fillColor: [44, 62, 80] } } as any);
+            });
+            presentationHeaderRow.push({ content: 'Totales de Producción', colSpan: 3, styles: { halign: 'center', fillColor: [44, 62, 80] } } as any);
+            headRows.push(presentationHeaderRow);
+
+            // Segunda fila de cabecera: Turnos
+            const shiftHeaderRow: any[] = [
+                { content: 'Mes', styles: { fillColor: [52, 73, 94] } },
+                { content: requestedMode === 'dia' ? 'S' : 'W', styles: { fillColor: [52, 73, 94] } }
+            ];
+            if (requestedMode === 'dia') shiftHeaderRow.push({ content: 'Fecha', styles: { fillColor: [52, 73, 94] } });
+
+            reportProducts.forEach(() => {
+                shiftHeaderRow.push({ content: 'Día', styles: { halign: 'center', fillColor: [52, 73, 94] } });
+                shiftHeaderRow.push({ content: 'Noche', styles: { halign: 'center', fillColor: [52, 73, 94] } });
+            });
+            shiftHeaderRow.push({ content: 'Familiar QQ', styles: { halign: 'center', fillColor: [52, 73, 94] } });
+            shiftHeaderRow.push({ content: 'Granel QQ', styles: { halign: 'center', fillColor: [52, 73, 94] } });
+            shiftHeaderRow.push({ content: 'TOTAL PRODUCIDO', styles: { halign: 'center', fillColor: [109, 40, 217] } });
+            headRows.push(shiftHeaderRow);
+
+            const bodyRows: any[] = [];
+
+            groupedWeeks.forEach(group => {
+                group.weeks.forEach(week => {
+                    if (requestedMode === 'semana') {
+                        const row: any[] = [group.monthName.substring(0, 3), `W${week.weekNum}`];
+                        let weekTotalQQ = 0;
+                        let weekMaxDays = 0;
+
+                        // Inicializar acumuladores por producto para esta semana
+                        const productTotals: Record<string, { dia: number, noche: number }> = {};
+                        reportProducts.forEach(p => {
+                            productTotals[p.id] = { dia: 0, noche: 0 };
+                        });
 
                         activeMachinesList.forEach(m => {
-                            if (!isActive) {
-                                row.push('-');
-                                row.push('-');
-                                return;
-                            }
                             const conf = machineConfig[m.id];
-                            const oD = overrides[`${m.id}-${dateStr}-dia`];
-                            const oN = overrides[`${m.id}-${dateStr}-noche`];
-                            const pD = products.find(p => p.id === (oD?.productId || conf.productId)) || products[0];
-                            const pN = products.find(p => p.id === (oN?.productId || conf.productId)) || products[0];
-                            const sD = oD?.speed || conf.speed || 38;
-                            const sN = oN?.speed || conf.speed || 38;
+                            const machineAutoDays = week.days.reduce((total, d) => {
+                                const dateStr = d.toISOString().split('T')[0];
+                                if (customActiveDays[dateStr] === false) return total;
+                                const oD = overrides[`${m.id}-${dateStr}-dia`];
+                                const oN = overrides[`${m.id}-${dateStr}-noche`];
+                                const isInactiveD = oD?.inactive || (!oD);
+                                const isInactiveN = oN?.inactive || (!oN);
+                                return total + ((!isInactiveD || !isInactiveN) ? 1 : 0);
+                            }, 0);
 
-                            const qqDia = (!oD?.inactive && (!!oD)) ? ((sD * 60) * rendimiento * horasTurnoDia * (pD.presentationWeight || 50)) / 50 : 0;
-                            const qqNoc = (!oN?.inactive && (!!oN)) ? ((sN * 60) * rendimiento * horasTurnoNoche * (pN.presentationWeight || 50)) / 50 : 0;
+                            const machineDays = customMachineDays[`${m.id}-${week.weekNum}`] !== undefined
+                                ? customMachineDays[`${m.id}-${week.weekNum}`]
+                                : machineAutoDays;
 
-                            row.push(qqDia > 0 ? qqDia.toFixed(1) : '0');
-                            row.push(qqNoc > 0 ? qqNoc.toFixed(1) : '0');
-                            dayTotalQQ += (qqDia + qqNoc);
+                            weekMaxDays = Math.max(weekMaxDays, machineDays);
+                            const scalingFactor = machineAutoDays > 0 ? machineDays / machineAutoDays : 0;
+
+                            week.days.forEach(day => {
+                                const dateStr = day.toISOString().split('T')[0];
+                                if (customActiveDays[dateStr] === false) return;
+                                const oD = overrides[`${m.id}-${dateStr}-dia`];
+                                const oN = overrides[`${m.id}-${dateStr}-noche`];
+                                const pD = products.find(p => p.id === (oD?.productId || conf.productId)) || products[0];
+                                const pN = products.find(p => p.id === (oN?.productId || conf.productId)) || products[0];
+                                const sD = oD?.speed || conf.speed || 38;
+                                const sN = oN?.speed || conf.speed || 38;
+
+                                if (!oD?.inactive && (!!oD)) {
+                                    const qq = ((sD * 60) * rendimiento * horasTurnoDia * (pD.presentationWeight || 50)) / 50;
+                                    if (pD && productTotals[pD.id]) {
+                                        productTotals[pD.id].dia += qq * scalingFactor;
+                                    }
+                                    weekTotalQQ += qq * scalingFactor;
+                                }
+                                if (!oN?.inactive && (!!oN)) {
+                                    const qq = ((sN * 60) * rendimiento * horasTurnoNoche * (pN.presentationWeight || 50)) / 50;
+                                    if (pN && productTotals[pN.id]) {
+                                        productTotals[pN.id].noche += qq * scalingFactor;
+                                    }
+                                    weekTotalQQ += qq * scalingFactor;
+                                }
+                            });
                         });
 
-                        row.push(isActive ? dayTotalQQ.toFixed(1) : '0');
-                        row.push(isActive ? (dailySupply - dayTotalQQ).toFixed(1) : '0');
-                        row.push(isActive ? dailySupply.toFixed(1) : '0');
+                        // Agregar los valores de los productos a la fila
+                        reportProducts.forEach(p => {
+                            const pTot = productTotals[p.id] || { dia: 0, noche: 0 };
+                            row.push(pTot.dia.toFixed(1));
+                            row.push(pTot.noche.toFixed(1));
+                        });
+
+                        row.push(`${weekTotalQQ.toFixed(1)}`);
+                        row.push(`${((dailySupply * weekMaxDays) - weekTotalQQ).toFixed(1)}`);
+                        row.push(`${(dailySupply * weekMaxDays).toFixed(1)}`);
                         bodyRows.push(row);
-                    });
+                    } else {
+                        week.days.forEach(day => {
+                            const dateStr = day.toISOString().split('T')[0];
+                            const isActive = customActiveDays[dateStr] !== false;
+                            const row: any[] = [group.monthName.substring(0, 3), `S${week.weekNum}`, format(day, 'dd/MM')];
+
+                            let dayTotalQQ = 0;
+
+                            // Inicializar acumuladores por producto para este día
+                            const productDayTotals: Record<string, { dia: number, noche: number }> = {};
+                            reportProducts.forEach(p => {
+                                productDayTotals[p.id] = { dia: 0, noche: 0 };
+                            });
+
+                            activeMachinesList.forEach(m => {
+                                if (!isActive) return;
+                                const conf = machineConfig[m.id];
+                                const oD = overrides[`${m.id}-${dateStr}-dia`];
+                                const oN = overrides[`${m.id}-${dateStr}-noche`];
+                                const pD = products.find(p => p.id === (oD?.productId || conf.productId)) || products[0];
+                                const pN = products.find(p => p.id === (oN?.productId || conf.productId)) || products[0];
+                                const sD = oD?.speed || conf.speed || 38;
+                                const sN = oN?.speed || conf.speed || 38;
+
+                                const qqDia = (!oD?.inactive && (!!oD)) ? ((sD * 60) * rendimiento * horasTurnoDia * (pD.presentationWeight || 50)) / 50 : 0;
+                                const qqNoc = (!oN?.inactive && (!!oN)) ? ((sN * 60) * rendimiento * horasTurnoNoche * (pN.presentationWeight || 50)) / 50 : 0;
+
+                                if (pD && qqDia > 0 && productDayTotals[pD.id]) {
+                                    productDayTotals[pD.id].dia += qqDia;
+                                }
+                                if (pN && qqNoc > 0 && productDayTotals[pN.id]) {
+                                    productDayTotals[pN.id].noche += qqNoc;
+                                }
+                                dayTotalQQ += (qqDia + qqNoc);
+                            });
+
+                            reportProducts.forEach(p => {
+                                if (!isActive) {
+                                    row.push('-');
+                                    row.push('-');
+                                } else {
+                                    const pTot = productDayTotals[p.id] || { dia: 0, noche: 0 };
+                                    row.push(pTot.dia > 0 ? pTot.dia.toFixed(1) : '0');
+                                    row.push(pTot.noche > 0 ? pTot.noche.toFixed(1) : '0');
+                                }
+                            });
+
+                            row.push(isActive ? dayTotalQQ.toFixed(1) : '0');
+                            row.push(isActive ? (dailySupply - dayTotalQQ).toFixed(1) : '0');
+                            row.push(isActive ? dailySupply.toFixed(1) : '0');
+                            bodyRows.push(row);
+                        });
+                    }
+                });
+            });
+
+            setPdfGenerationStatus('Generando tablas en el documento PDF...');
+            setPdfGenerationProgress(80);
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            autoTable(doc, {
+                startY: lastY + 20,
+                head: headRows,
+                body: bodyRows,
+                theme: 'grid',
+                styles: { fontSize: 7, cellPadding: 1, halign: 'center' },
+                columnStyles: {
+                    0: { halign: 'left', fontStyle: 'bold' },
+                    1: { halign: 'center' }
+                },
+                headStyles: { fontSize: 8, fontStyle: 'bold' },
+                didDrawPage: (data) => {
+                    // Pie de página
+                    doc.setFontSize(8);
+                    doc.setTextColor(150);
+                    const str = `Página ${data.pageNumber}`;
+                    doc.text(str, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
+                    doc.text('Control 7 - Sistema de Gestión de Producción', 14, doc.internal.pageSize.height - 10);
                 }
             });
-        });
 
-        autoTable(doc, {
-            startY: lastY + 20,
-            head: headRows,
-            body: bodyRows,
-            theme: 'grid',
-            styles: { fontSize: 7, cellPadding: 1, halign: 'center' },
-            columnStyles: {
-                0: { halign: 'left', fontStyle: 'bold' },
-                1: { halign: 'center' }
-            },
-            headStyles: { fontSize: 8, fontStyle: 'bold' },
-            didDrawPage: (data) => {
-                // Pie de página
-                doc.setFontSize(8);
-                doc.setTextColor(150);
-                const str = `Página ${data.pageNumber}`;
-                doc.text(str, doc.internal.pageSize.width - 25, doc.internal.pageSize.height - 10);
-                doc.text('Control 7 - Sistema de Gestión de Producción', 14, doc.internal.pageSize.height - 10);
-            }
-        });
+            setPdfGenerationStatus('Guardando reporte...');
+            setPdfGenerationProgress(95);
+            await new Promise(resolve => setTimeout(resolve, 150));
 
-        doc.save(`Reporte_Proyeccion_${activeSnapshotName || 'Industrial'}_${format(now, 'yyyyMMdd')}.pdf`);
+            const finalScenarioTitle = (activeSnapshotName || activeScenarioName || 'Industrial').replace(/\s+/g, '_');
+            doc.save(`Reporte_Proyeccion_${finalScenarioTitle}_${format(now, 'yyyyMMdd')}.pdf`);
 
-        toast({
-            title: "Reporte generado",
-            description: "El PDF se ha descargado correctamente.",
-        });
+            setPdfGenerationProgress(100);
+            setPdfGenerationStatus('¡Listo!');
+
+            toast({
+                title: "Reporte generado",
+                description: "El PDF se ha descargado correctamente.",
+            });
+        } catch (error) {
+            console.error("Error generating PDF:", error);
+            toast({
+                title: "Error al generar PDF",
+                description: "Ocurrió un error inesperado al procesar el archivo.",
+                variant: "destructive"
+            });
+        } finally {
+            // Un breve retraso antes de ocultar la barra de progreso
+            setTimeout(() => {
+                setIsGeneratingPDF(false);
+                setPdfGenerationProgress(0);
+                setPdfGenerationStatus('');
+            }, 800);
+        }
     };
 
     const handleRenameSnapshot = (e: React.MouseEvent, snapshotId: string, currentName: string) => {
@@ -1540,6 +1681,7 @@ function ProductionProjectionView({
     const [machineConfig, setMachineConfig] = React.useState<Record<number, { active: boolean, productId: string, speed: number }>>({});
     const [plannedGoals, setPlannedGoals] = React.useState<Record<string, number>>({});
     const [plannedSpeeds, setPlannedSpeeds] = React.useState<Record<string, number>>({});
+    const [isDataLoaded, setIsDataLoaded] = React.useState(false);
     const [isViewConfigModalOpen, setIsViewConfigModalOpen] = React.useState(false);
     const [isGoalsModalOpen, setIsGoalsModalOpen] = React.useState(false);
     const [collapsedSections, setCollapsedSections] = React.useState<Record<string, boolean>>({
@@ -1643,9 +1785,10 @@ function ProductionProjectionView({
     };
 
     React.useEffect(() => {
+        if (!isDataLoaded) return;
         localStorage.setItem('safeCombinations', JSON.stringify(safeCombinations));
         localStorage.setItem('prohibitedCombinations', JSON.stringify(prohibitedCombinations));
-    }, [safeCombinations, prohibitedCombinations]);
+    }, [isDataLoaded, safeCombinations, prohibitedCombinations]);
     const [lastUsedSpeed, setLastUsedSpeed] = React.useState<number | null>(null);
     const [granelDisplayMode, setGranelDisplayMode] = React.useState<'split' | 'combined'>(() => {
         if (typeof window !== 'undefined') {
@@ -1668,37 +1811,7 @@ function ProductionProjectionView({
 
 
 
-    // AUTO-HIDE SIDEBAR 2 SECONDS AFTER LAST INTERACTION WITH IT
-    React.useEffect(() => {
-        if (!isSidebarOpen || isComboModalOpen || isGoalsModalOpen || isViewConfigModalOpen) return;
 
-        let timeoutId: any;
-
-        const handleInteraction = () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            timeoutId = setTimeout(() => {
-                setIsSidebarOpen(false);
-            }, 2000);
-        };
-
-        const sidebar = document.getElementById('main-sidebar');
-        if (sidebar) {
-            sidebar.addEventListener('mousedown', handleInteraction);
-            sidebar.addEventListener('keydown', handleInteraction);
-            sidebar.addEventListener('touchstart', handleInteraction);
-            sidebar.addEventListener('mousemove', handleInteraction);
-        }
-
-        return () => {
-            if (timeoutId) clearTimeout(timeoutId);
-            if (sidebar) {
-                sidebar.removeEventListener('mousedown', handleInteraction);
-                sidebar.removeEventListener('keydown', handleInteraction);
-                sidebar.removeEventListener('touchstart', handleInteraction);
-                sidebar.removeEventListener('mousemove', handleInteraction);
-            }
-        };
-    }, [isSidebarOpen, isComboModalOpen, isGoalsModalOpen, isViewConfigModalOpen]);
 
     const toggleSection = (section: string) => {
         setCollapsedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -1707,51 +1820,112 @@ function ProductionProjectionView({
     const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
     const dayNames = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
-    const [isDataLoaded, setIsDataLoaded] = React.useState(false);
 
-    // PERSISTENCE LOAD
+
+    // PERSISTENCE LOAD FROM FIRESTORE AND LOCALSTORAGE
     React.useEffect(() => {
-        const saved = localStorage.getItem('production_projection_data');
-        if (saved) {
+        const loadInitialConfig = async () => {
             try {
-                const data = JSON.parse(saved);
-                if (data.season) setSeason(data.season);
-                if (data.viewMode) setViewMode(data.viewMode);
-                if (data.zafraStartDate !== undefined) setZafraStartDate(data.zafraStartDate);
-                if (data.zafraEndDate !== undefined) setZafraEndDate(data.zafraEndDate);
-                if (data.zafraStartMonth !== undefined && data.zafraStartDate === undefined) {
-                    setZafraStartDate(`${currentYear}-${(data.zafraStartMonth + 1).toString().padStart(2, '0')}-01`);
+                let loadedData: any = null;
+                let loadedSafe: any = null;
+                let loadedProhibited: any = null;
+
+                const isCleared = localStorage.getItem('control7_projections_cleared') === 'true';
+                
+                if (isCleared) {
+                    localStorage.removeItem('production_projection_data');
+                    localStorage.removeItem('control7_projections_cleared');
+                } else {
+                    // 1. Try to fetch from localStorage first
+                    const saved = localStorage.getItem('production_projection_data');
+                    if (saved) {
+                        try {
+                            loadedData = JSON.parse(saved);
+                        } catch (e) {
+                            console.error("Error parsing production_projection_data from localStorage", e);
+                        }
+                    }
                 }
-                if (data.zafraEndMonth !== undefined && data.zafraEndDate === undefined) {
-                    setZafraEndDate(`${currentYear}-${(data.zafraEndMonth + 1).toString().padStart(2, '0')}-28`);
+
+                const savedSafe = localStorage.getItem('safeCombinations');
+                if (savedSafe) {
+                    try {
+                        loadedSafe = JSON.parse(savedSafe);
+                    } catch (e) {
+                        console.error("Error parsing safeCombinations from localStorage", e);
+                    }
                 }
-                if (data.rendimiento !== undefined) setRendimiento(data.rendimiento);
-                if (data.horasTurnoDia !== undefined) setHorasTurnoDia(data.horasTurnoDia);
-                if (data.horasTurnoNoche !== undefined) setHorasTurnoNoche(data.horasTurnoNoche);
-                if (data.customMachineDays) setCustomMachineDays(data.customMachineDays);
-                if (data.customActiveDays) setCustomActiveDays(data.customActiveDays);
-                if (data.overrides) setOverrides(data.overrides);
-                if (data.syncContinuity !== undefined) setSyncContinuity(data.syncContinuity);
-                if (data.machineConfig) setMachineConfig(data.machineConfig);
-                if (data.projectionMode) setProjectionMode(data.projectionMode);
-                if (data.plannedGoals) setPlannedGoals(data.plannedGoals);
-                if (data.plannedSpeeds) setPlannedSpeeds(data.plannedSpeeds);
-                if (data.dailySupply !== undefined) setDailySupply(data.dailySupply);
-                if (data.isGranelActive !== undefined) setIsGranelActive(data.isGranelActive);
-                if (data.lastUsedSpeed !== undefined) setLastUsedSpeed(data.lastUsedSpeed);
-                if (data.granelDisplayMode !== undefined) setGranelDisplayMode(data.granelDisplayMode);
-                else if (data.tableDisplayMode !== undefined) setGranelDisplayMode(data.tableDisplayMode);
-                if (data.laborType !== undefined) setLaborType(data.laborType);
-                if (data.fixedDayRate !== undefined) setFixedDayRate(data.fixedDayRate);
-                if (data.fixedNightRate !== undefined) setFixedNightRate(data.fixedNightRate);
-            } catch (e) {
-                console.error("Error loading projection data", e);
+
+                const savedProhibited = localStorage.getItem('prohibitedCombinations');
+                if (savedProhibited) {
+                    try {
+                        loadedProhibited = JSON.parse(savedProhibited);
+                    } catch (e) {
+                        console.error("Error parsing prohibitedCombinations from localStorage", e);
+                    }
+                }
+
+                // 2. Fall back to Firestore if localStorage data is missing
+                const docRef = doc(db, 'simulation_assets', 'global_projection_config');
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const dbData = docSnap.data();
+                    if (!loadedData && !isCleared) loadedData = dbData.production_projection_data;
+                    if (!loadedSafe) loadedSafe = dbData.safeCombinations;
+                    if (!loadedProhibited) loadedProhibited = dbData.prohibitedCombinations;
+                }
+
+                // 3. Set the state with the loaded data
+                if (loadedData) {
+                    if (loadedData.season) setSeason(loadedData.season);
+                    if (loadedData.viewMode) setViewMode(loadedData.viewMode);
+                    if (loadedData.zafraStartDate !== undefined) setZafraStartDate(loadedData.zafraStartDate);
+                    if (loadedData.zafraEndDate !== undefined) setZafraEndDate(loadedData.zafraEndDate);
+                    if (loadedData.zafraStartMonth !== undefined && loadedData.zafraStartDate === undefined) {
+                        setZafraStartDate(`${currentYear}-${(loadedData.zafraStartMonth + 1).toString().padStart(2, '0')}-01`);
+                    }
+                    if (loadedData.zafraEndMonth !== undefined && loadedData.zafraEndDate === undefined) {
+                        setZafraEndDate(`${currentYear}-${(loadedData.zafraEndMonth + 1).toString().padStart(2, '0')}-28`);
+                    }
+                    if (loadedData.rendimiento !== undefined) setRendimiento(loadedData.rendimiento);
+                    if (loadedData.horasTurnoDia !== undefined) setHorasTurnoDia(loadedData.horasTurnoDia);
+                    if (loadedData.horasTurnoNoche !== undefined) setHorasTurnoNoche(loadedData.horasTurnoNoche);
+                    if (loadedData.customMachineDays) setCustomMachineDays(loadedData.customMachineDays);
+                    if (loadedData.customActiveDays) setCustomActiveDays(loadedData.customActiveDays);
+                    if (loadedData.overrides) setOverrides(loadedData.overrides);
+                    if (loadedData.syncContinuity !== undefined) setSyncContinuity(loadedData.syncContinuity);
+                    if (loadedData.machineConfig) setMachineConfig(loadedData.machineConfig);
+                    if (loadedData.projectionMode) setProjectionMode(loadedData.projectionMode);
+                    if (loadedData.plannedGoals) setPlannedGoals(loadedData.plannedGoals);
+                    if (loadedData.plannedSpeeds) setPlannedSpeeds(loadedData.plannedSpeeds);
+                    if (loadedData.dailySupply !== undefined) setDailySupply(loadedData.dailySupply);
+                    if (loadedData.isGranelActive !== undefined) setIsGranelActive(loadedData.isGranelActive);
+                    if (loadedData.lastUsedSpeed !== undefined) setLastUsedSpeed(loadedData.lastUsedSpeed);
+                    if (loadedData.granelDisplayMode !== undefined) setGranelDisplayMode(loadedData.granelDisplayMode);
+                    else if (loadedData.tableDisplayMode !== undefined) setGranelDisplayMode(loadedData.tableDisplayMode);
+                    if (loadedData.laborType !== undefined) setLaborType(loadedData.laborType);
+                    if (loadedData.fixedDayRate !== undefined) setFixedDayRate(loadedData.fixedDayRate);
+                    if (loadedData.fixedNightRate !== undefined) setFixedNightRate(loadedData.fixedNightRate);
+                }
+
+                if (loadedSafe) {
+                    setSafeCombinations(loadedSafe);
+                }
+                if (loadedProhibited) {
+                    setProhibitedCombinations(loadedProhibited);
+                }
+            } catch (error) {
+                console.error("Error loading configuration from Firestore:", error);
+            } finally {
+                setIsDataLoaded(true);
             }
-        }
-        setIsDataLoaded(true);
+        };
+
+        loadInitialConfig();
     }, []);
 
-    // PERSISTENCE SAVE
+    // PERSISTENCE LOCAL STORAGE SAVE
     React.useEffect(() => {
         if (!isDataLoaded) return;
         const data = {
@@ -1780,6 +1954,7 @@ function ProductionProjectionView({
         };
         localStorage.setItem('production_projection_data', JSON.stringify(data));
     }, [isDataLoaded, season, viewMode, zafraStartDate, zafraEndDate, rendimiento, horasTurnoDia, horasTurnoNoche, customMachineDays, customActiveDays, overrides, syncContinuity, machineConfig, projectionMode, plannedGoals, plannedSpeeds, dailySupply, isGranelActive, lastUsedSpeed, granelDisplayMode, laborType, fixedDayRate, fixedNightRate]);
+
 
     React.useEffect(() => {
         if (isDataLoaded && Object.keys(machineConfig).length === 0 && machines.length > 0) {
@@ -1847,7 +2022,335 @@ function ProductionProjectionView({
     };
 
     const groupedWeeks = generateWeeksGroupedByMonth();
+
+    const visibleColumns = React.useMemo(() => {
+        const cols: { id: string; machineId: number; shift: 'dia' | 'noche' }[] = [];
+        const activeMachines = machines.filter(m => machineConfig[m.id]?.active);
+        activeMachines.forEach(m => {
+            if (machinesDisplayMode === 'combined') {
+                cols.push({ id: `${m.id}-combined`, machineId: m.id, shift: 'dia' });
+            } else {
+                cols.push({ id: `${m.id}-dia`, machineId: m.id, shift: 'dia' });
+                cols.push({ id: `${m.id}-noche`, machineId: m.id, shift: 'noche' });
+            }
+        });
+        if (isGranelActive) {
+            if (granelDisplayMode === 'combined') {
+                cols.push({ id: `99-combined`, machineId: 99, shift: 'dia' });
+            } else {
+                cols.push({ id: `99-dia`, machineId: 99, shift: 'dia' });
+                cols.push({ id: `99-noche`, machineId: 99, shift: 'noche' });
+            }
+        }
+        return cols;
+    }, [machines, machineConfig, isGranelActive, machinesDisplayMode, granelDisplayMode]);
+
+    const visibleDates = React.useMemo(() => {
+        const dates: string[] = [];
+        groupedWeeks.forEach(group => {
+            group.weeks.forEach(week => {
+                week.days.forEach(day => {
+                    const dateStr = day.toISOString().split('T')[0];
+                    dates.push(dateStr);
+                });
+            });
+        });
+        return dates;
+    }, [groupedWeeks]);
+
+    const isCellSelected = (rowIndex: number, colIndex: number) => {
+        if (!selectionStart || !selectionEnd) return false;
+        const minRow = Math.min(selectionStart.rowIndex, selectionEnd.rowIndex);
+        const maxRow = Math.max(selectionStart.rowIndex, selectionEnd.rowIndex);
+        const minCol = Math.min(selectionStart.colIndex, selectionEnd.colIndex);
+        const maxCol = Math.max(selectionStart.colIndex, selectionEnd.colIndex);
+        return rowIndex >= minRow && rowIndex <= maxRow && colIndex >= minCol && colIndex <= maxCol;
+    };
+
+    const getCellDataAt = (r: number, c: number) => {
+        if (r < 0 || r >= visibleDates.length || c < 0 || c >= visibleColumns.length) return null;
+        const dateStr = visibleDates[r];
+        const col = visibleColumns[c];
+        const key = `${col.machineId}-${dateStr}-${col.shift}`;
+        
+        const override = overrides[key];
+        if (override) {
+            return {
+                productId: override.productId || '',
+                speed: override.speed || 0,
+                inactive: !!override.inactive
+            };
+        }
+        
+        if (col.machineId === 99) {
+            return {
+                productId: 'granel',
+                speed: 0,
+                inactive: true
+            };
+        } else {
+            const conf = machineConfig[col.machineId];
+            const machine = machines.find(m => m.id === col.machineId);
+            const prodId = conf?.productId || products[0]?.id || '';
+            const speed = plannedSpeeds[`${col.machineId}`] || machine?.speed || 100;
+            return {
+                productId: prodId,
+                speed: speed,
+                inactive: !conf?.active
+            };
+        }
+    };
+
+    const copySelectedCells = React.useCallback(() => {
+        if (!selectionStart || !selectionEnd) return;
+        
+        const minRow = Math.min(selectionStart.rowIndex, selectionEnd.rowIndex);
+        const maxRow = Math.max(selectionStart.rowIndex, selectionEnd.rowIndex);
+        const minCol = Math.min(selectionStart.colIndex, selectionEnd.colIndex);
+        const maxCol = Math.max(selectionStart.colIndex, selectionEnd.colIndex);
+        
+        const clipboardData: ({ productId: string; speed: number; inactive: boolean } | null)[][] = [];
+        const tsvLines: string[] = [];
+        
+        for (let r = minRow; r <= maxRow; r++) {
+            const rowData: ({ productId: string; speed: number; inactive: boolean } | null)[] = [];
+            const tsvRow: string[] = [];
+            for (let c = minCol; c <= maxCol; c++) {
+                const cellData = getCellDataAt(r, c);
+                rowData.push(cellData);
+                
+                if (!cellData || cellData.inactive) {
+                    tsvRow.push('');
+                } else {
+                    const prod = products.find(p => p.id === cellData.productId);
+                    tsvRow.push(prod ? `${prod.productName} (${cellData.speed} QQ)` : `${cellData.productId} (${cellData.speed} QQ)`);
+                }
+            }
+            clipboardData.push(rowData);
+            tsvLines.push(tsvRow.join('\t'));
+        }
+        
+        internalClipboard.current = {
+            rows: maxRow - minRow + 1,
+            cols: maxCol - minCol + 1,
+            data: clipboardData
+        };
+        
+        const tsvText = tsvLines.join('\n');
+        navigator.clipboard.writeText(tsvText).catch(() => {});
+        
+        toast({
+            title: "Copiado",
+            description: `Se han copiado ${clipboardData.length * clipboardData[0].length} celda(s) al portapapeles interno.`,
+        });
+    }, [selectionStart, selectionEnd, overrides, products, plannedSpeeds, machineConfig, machines, visibleDates, visibleColumns]);
+
+    const pasteSelectedCells = React.useCallback(() => {
+        if (!selectionStart || !selectionEnd || !internalClipboard.current) return;
+        
+        const minRowTarget = Math.min(selectionStart.rowIndex, selectionEnd.rowIndex);
+        const minColTarget = Math.min(selectionStart.colIndex, selectionEnd.colIndex);
+        
+        const newOverrides = { ...overrides };
+        let cellsPasted = 0;
+        
+        internalClipboard.current.data.forEach((rowData, rIdx) => {
+            rowData.forEach((cellData, cIdx) => {
+                const targetRow = minRowTarget + rIdx;
+                const targetCol = minColTarget + cIdx;
+                
+                if (targetRow < visibleDates.length && targetCol < visibleColumns.length) {
+                    const dateStr = visibleDates[targetRow];
+                    const col = visibleColumns[targetCol];
+                    const key = `${col.machineId}-${dateStr}-${col.shift}`;
+                    
+                    if (!cellData) {
+                        delete newOverrides[key];
+                    } else {
+                        newOverrides[key] = {
+                            productId: cellData.productId,
+                            speed: cellData.speed,
+                            inactive: cellData.inactive
+                        };
+                    }
+                    cellsPasted++;
+                }
+            });
+        });
+        
+        setOverrides(newOverrides);
+        toast({
+            title: "Pegado",
+            description: `Se han pegado ${cellsPasted} celda(s).`,
+        });
+    }, [selectionStart, selectionEnd, overrides, visibleDates, visibleColumns]);
+
+    const deleteSelectedCells = React.useCallback(() => {
+        if (!selectionStart || !selectionEnd) return;
+        
+        const minRow = Math.min(selectionStart.rowIndex, selectionEnd.rowIndex);
+        const maxRow = Math.max(selectionStart.rowIndex, selectionEnd.rowIndex);
+        const minCol = Math.min(selectionStart.colIndex, selectionEnd.colIndex);
+        const maxCol = Math.max(selectionStart.colIndex, selectionEnd.colIndex);
+        
+        const newOverrides = { ...overrides };
+        let cellsDeleted = 0;
+        
+        for (let r = minRow; r <= maxRow; r++) {
+            for (let c = minCol; c <= maxCol; c++) {
+                const dateStr = visibleDates[r];
+                const col = visibleColumns[c];
+                const key = `${col.machineId}-${dateStr}-${col.shift}`;
+                
+                delete newOverrides[key];
+                cellsDeleted++;
+            }
+        }
+        
+        setOverrides(newOverrides);
+        toast({
+            title: "Eliminado",
+            description: `Se ha limpiado el contenido de ${cellsDeleted} celda(s).`,
+        });
+    }, [selectionStart, selectionEnd, overrides, visibleDates, visibleColumns]);
+
+    const openEditDialogForCell = React.useCallback((r: number, c: number) => {
+        if (r < 0 || r >= visibleDates.length || c < 0 || c >= visibleColumns.length) return;
+        const dateStr = visibleDates[r];
+        const col = visibleColumns[c];
+        
+        if (col.machineId === 99) {
+            const key = `${col.machineId}-${dateStr}-${col.shift}`;
+            const override = overrides[key];
+            setEditingOverride({
+                key: key,
+                machineId: 99,
+                title: dateStr,
+                shift: col.shift,
+                currentProductId: 'granel',
+                currentSpeed: 0,
+                inactive: !!override?.inactive,
+                applyToBothShifts: granelDisplayMode === 'combined',
+                startDate: dateStr,
+                endDate: dateStr
+            });
+        } else {
+            const key = `${col.machineId}-${dateStr}-${col.shift}`;
+            const override = overrides[key];
+            const conf = machineConfig[col.machineId];
+            const machine = machines.find(m => m.id === col.machineId);
+            const prodId = override?.productId || conf?.productId || products[0]?.id || '';
+            const speed = override?.speed || plannedSpeeds[`${col.machineId}`] || machine?.speed || 100;
+            setEditingOverride({
+                key: key,
+                machineId: col.machineId,
+                title: dateStr,
+                shift: col.shift,
+                currentProductId: prodId,
+                currentSpeed: speed,
+                inactive: !!override?.inactive,
+                startDate: dateStr,
+                endDate: dateStr
+            });
+        }
+    }, [visibleDates, visibleColumns, overrides, machineConfig, machines, products, plannedSpeeds, granelDisplayMode]);
+
+    const getSelectionHandlersAndClass = React.useCallback((rowIndex: number, colIndex: number, baseClass: string) => {
+        if (colIndex === -1 || viewMode !== 'dia') return { className: baseClass };
+        
+        const selected = isCellSelected(rowIndex, colIndex);
+        
+        return {
+            className: cn(
+                baseClass,
+                selected && "bg-primary/20 outline outline-2 outline-primary/60 z-10"
+            ),
+            onMouseDown: (e: React.MouseEvent) => {
+                if (isReadOnly) return;
+                if (e.button === 0) { // Click izquierdo
+                    setIsSelecting(true);
+                    setSelectionStart({ rowIndex, colIndex });
+                    setSelectionEnd({ rowIndex, colIndex });
+                    setContextMenu(null);
+                }
+            },
+            onMouseEnter: () => {
+                if (isSelecting) {
+                    setSelectionEnd({ rowIndex, colIndex });
+                }
+            },
+            onContextMenu: (e: React.MouseEvent) => {
+                if (isReadOnly) return;
+                e.preventDefault();
+                
+                const currentSelected = isCellSelected(rowIndex, colIndex);
+                if (!currentSelected) {
+                    setSelectionStart({ rowIndex, colIndex });
+                    setSelectionEnd({ rowIndex, colIndex });
+                }
+                
+                setContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    visible: true
+                });
+            }
+        };
+    }, [selectionStart, selectionEnd, isSelecting, isReadOnly, viewMode]);
+
+    React.useEffect(() => {
+        const handleMouseUp = () => {
+            setIsSelecting(false);
+        };
+        const handleMouseDownOutside = () => {
+            setContextMenu(null);
+        };
+        window.addEventListener('mouseup', handleMouseUp);
+        window.addEventListener('mousedown', handleMouseDownOutside);
+        return () => {
+            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('mousedown', handleMouseDownOutside);
+        };
+    }, []);
+
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (isReadOnly) return;
+            if (!selectionStart || !selectionEnd) return;
+            
+            const activeEl = document.activeElement as HTMLElement | null;
+            if (activeEl && (
+                activeEl.tagName === 'INPUT' || 
+                activeEl.tagName === 'TEXTAREA' || 
+                activeEl.contentEditable === 'true'
+            )) {
+                return;
+            }
+            
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c') {
+                e.preventDefault();
+                copySelectedCells();
+            }
+            
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v') {
+                e.preventDefault();
+                pasteSelectedCells();
+            }
+            
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                e.preventDefault();
+                deleteSelectedCells();
+            }
+        };
+        
+        window.addEventListener('keydown', handleKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [selectionStart, selectionEnd, isReadOnly, copySelectedCells, pasteSelectedCells, deleteSelectedCells]);
+
     const totalWeeksInProjection = groupedWeeks.reduce((acc, group) => acc + group.weeks.length, 0);
+    const totalDaysInProjection = groupedWeeks.reduce((acc, group) => acc + group.weeks.reduce((wAcc, w) => wAcc + w.days.length, 0), 0);
     const allWeeks = groupedWeeks.flatMap(g => g.weeks);
 
     const productionStats = React.useMemo(() => {
@@ -1886,6 +2389,8 @@ function ProductionProjectionView({
             balanceQQ: number,
             productionDays: number,
             granelDays: number,
+            productQQ: Record<string, number>,
+            productUnits: Record<string, number>,
             days: Record<string, {
                 familiarQQ: number,
                 granelQQ: number,
@@ -1900,7 +2405,7 @@ function ProductionProjectionView({
 
         groupedWeeks.forEach(group => {
             group.weeks.forEach(week => {
-                if (!byWeek[week.weekNum]) byWeek[week.weekNum] = { qq: 0, familiarQQ: 0, granelQQ: 0, granelDiaQQ: 0, granelNocQQ: 0, totalQQ: 0, balanceQQ: 0, productionDays: 0, granelDays: 0, days: {} };
+                if (!byWeek[week.weekNum]) byWeek[week.weekNum] = { qq: 0, familiarQQ: 0, granelQQ: 0, granelDiaQQ: 0, granelNocQQ: 0, totalQQ: 0, balanceQQ: 0, productionDays: 0, granelDays: 0, productQQ: {}, productUnits: {}, days: {} };
 
                 if (viewMode === 'mes') {
                     let weekFamiliarQQ = 0;
@@ -1994,6 +2499,12 @@ function ProductionProjectionView({
                                 byMachine[m.id].products[pIdD].shifts += 1;
                                 byMachine[m.id].products[pIdD].dates.add(dateStr);
                                 byMachine[m.id].products[pIdD].weeks.add(week.weekNum);
+                                if (!byWeek[week.weekNum].productQQ[pIdD]) {
+                                    byWeek[week.weekNum].productQQ[pIdD] = 0;
+                                    byWeek[week.weekNum].productUnits[pIdD] = 0;
+                                }
+                                byWeek[week.weekNum].productQQ[pIdD] += qq;
+                                byWeek[week.weekNum].productUnits[pIdD] += units;
                                 weekFamiliarQQ += qq;
                             }
                             const isManualAndNoOverrideN = !oN;
@@ -2037,6 +2548,12 @@ function ProductionProjectionView({
                                 byMachine[m.id].products[pIdN].shifts += 1;
                                 byMachine[m.id].products[pIdN].dates.add(dateStr);
                                 byMachine[m.id].products[pIdN].weeks.add(week.weekNum);
+                                if (!byWeek[week.weekNum].productQQ[pIdN]) {
+                                    byWeek[week.weekNum].productQQ[pIdN] = 0;
+                                    byWeek[week.weekNum].productUnits[pIdN] = 0;
+                                }
+                                byWeek[week.weekNum].productQQ[pIdN] += qq;
+                                byWeek[week.weekNum].productUnits[pIdN] += units;
                                 weekFamiliarQQ += qq;
                             }
                         });
@@ -2194,6 +2711,12 @@ function ProductionProjectionView({
                                 byMachine[m.id].products[pIdD].shifts += 1;
                                 byMachine[m.id].products[pIdD].dates.add(dateStr);
                                 byMachine[m.id].products[pIdD].weeks.add(week.weekNum);
+                                if (!byWeek[week.weekNum].productQQ[pIdD]) {
+                                    byWeek[week.weekNum].productQQ[pIdD] = 0;
+                                    byWeek[week.weekNum].productUnits[pIdD] = 0;
+                                }
+                                byWeek[week.weekNum].productQQ[pIdD] += qq;
+                                byWeek[week.weekNum].productUnits[pIdD] += units;
                                 dayFamiliarQQ += qq;
                                 dayActiveD = true;
                             }
@@ -2240,6 +2763,12 @@ function ProductionProjectionView({
                                 byMachine[m.id].products[pIdN].shifts += 1;
                                 byMachine[m.id].products[pIdN].dates.add(dateStr);
                                 byMachine[m.id].products[pIdN].weeks.add(week.weekNum);
+                                if (!byWeek[week.weekNum].productQQ[pIdN]) {
+                                    byWeek[week.weekNum].productQQ[pIdN] = 0;
+                                    byWeek[week.weekNum].productUnits[pIdN] = 0;
+                                }
+                                byWeek[week.weekNum].productQQ[pIdN] += qq;
+                                byWeek[week.weekNum].productUnits[pIdN] += units;
                                 dayFamiliarQQ += qq;
                                 dayActiveN = true;
                             }
@@ -2256,11 +2785,35 @@ function ProductionProjectionView({
                         const granelDiaActive = isGActive('dia');
                         const granelNocActive = isGActive('noche');
 
-                        // Distribute remaining supply to active Granel shifts
+                        const ovD = overrides[`99-${dateStr}-dia`];
+                        const ovN = overrides[`99-${dateStr}-noche`];
+                        const manualD = ovD?.speed || 0;
+                        const manualN = ovN?.speed || 0;
+
                         const dailyRemainder = Math.max(0, dailySupply - dayFamiliarQQ);
-                        const activeGranelShifts = (granelDiaActive ? 1 : 0) + (granelNocActive ? 1 : 0);
-                        const baseGranelDiaQQ = granelDiaActive ? (dailyRemainder / (activeGranelShifts || 1)) : 0;
-                        const baseGranelNocQQ = granelNocActive ? (dailyRemainder / (activeGranelShifts || 1)) : 0;
+                        
+                        let baseGranelDiaQQ = 0;
+                        let baseGranelNocQQ = 0;
+
+                        if (granelDiaActive && granelNocActive) {
+                            if (manualD > 0 && manualN > 0) {
+                                baseGranelDiaQQ = manualD;
+                                baseGranelNocQQ = manualN;
+                            } else if (manualD > 0) {
+                                baseGranelDiaQQ = manualD;
+                                baseGranelNocQQ = Math.max(0, dailyRemainder - manualD);
+                            } else if (manualN > 0) {
+                                baseGranelNocQQ = manualN;
+                                baseGranelDiaQQ = Math.max(0, dailyRemainder - manualN);
+                            } else {
+                                baseGranelDiaQQ = dailyRemainder / 2;
+                                baseGranelNocQQ = dailyRemainder / 2;
+                            }
+                        } else if (granelDiaActive) {
+                            baseGranelDiaQQ = manualD > 0 ? manualD : dailyRemainder;
+                        } else if (granelNocActive) {
+                            baseGranelNocQQ = manualN > 0 ? manualN : dailyRemainder;
+                        }
 
                         const dayGranelDiaQQ = baseGranelDiaQQ * gScalingFactor;
                         const dayGranelNocQQ = baseGranelNocQQ * gScalingFactor;
@@ -2365,7 +2918,7 @@ function ProductionProjectionView({
         return Object.values(plannedGoals).reduce((acc, g) => acc + (g || 0), 0);
     }, [plannedGoals]);
 
-    const fulfillmentPct = totalPlannedQQ > 0 ? (totalFamiliarQQ / totalPlannedQQ) * 100 : 0;
+    const fulfillmentPct = totalPlannedQQ > 0 ? ((totalFamiliarQQ + totalGranelQQ) / totalPlannedQQ) * 100 : 0;
 
     const { totalSacos, totalFardos, totalSacosQQ, totalFardosQQ, sacosDays, fardosDays, familiarDays, granelDays } = React.useMemo(() => {
         let sacos = 0;
@@ -2799,32 +3352,35 @@ function ProductionProjectionView({
 
                 const isInactiveDay = editingOverride.inactiveDays?.[dateStr] === true;
 
+                const isGranelBoth = editingOverride.machineId === 99 && editingOverride.applyToBothShifts;
+                const sp = isGranelBoth ? editingOverride.currentSpeed / 2 : editingOverride.currentSpeed;
+
                 if (editingOverride.shift === 'dia') {
                     newOverrides[`${baseKey}-dia`] = {
                         productId: editingOverride.currentProductId,
-                        speed: editingOverride.currentSpeed,
+                        speed: sp,
                         inactive: editingOverride.inactive || isInactiveDay
                     };
                     if (editingOverride.applyToBothShifts) {
                         newOverrides[`${baseKey}-noche`] = {
                             productId: editingOverride.currentProductId,
-                            speed: editingOverride.currentSpeed,
+                            speed: sp,
                             inactive: editingOverride.inactive || isInactiveDay
                         };
                     }
                 } else {
                     newOverrides[`${baseKey}-noche`] = {
                         productId: editingOverride.currentProductId,
-                        speed: editingOverride.currentSpeed,
+                        speed: sp,
                         inactive: editingOverride.inactive || isInactiveDay
                     };
                     if (editingOverride.applyToBothShifts) {
                         // Sincronizamos con el turno de día del MISMO día, 
-                        // EXCEPTO el primer día del rango (porque ya pasó)
-                        if (curr.getTime() > start.getTime()) {
+                        // EXCEPTO el primer día del rango (porque ya pasó), a menos que sea Granel
+                        if (curr.getTime() > start.getTime() || isGranelBoth) {
                             newOverrides[`${editingOverride.machineId}-${dateStr}-dia`] = {
                                 productId: editingOverride.currentProductId,
-                                speed: editingOverride.currentSpeed,
+                                speed: sp,
                                 inactive: editingOverride.inactive || isInactiveDay
                             };
                         }
@@ -2971,7 +3527,7 @@ function ProductionProjectionView({
                 );
             }
             const isFardo = prod.primaryPackaging === 'fardo' || !!prod.bundleWeight;
-            const units = isFardo ? Math.round((qq * 50) / (prod.bundleWeight || 12)) : Math.round(qq);
+            const units = isFardo ? Math.round((qq * 50) / (prod.bundleWeight || 12)) : Math.round((qq * 50) / (prod.sackWeight || prod.presentationWeight || 50));
             const unitLabel = isFardo ? 'Fardo' : 'Sacos';
             return (
                 <div className="flex flex-col items-center">
@@ -2991,8 +3547,8 @@ function ProductionProjectionView({
                         })()}
                     </div>
                     <div className="font-bold text-primary text-[10px] leading-tight">{units.toLocaleString()} {unitLabel}</div>
-                    <div className="text-[8px] font-medium text-primary/70 leading-none">{qq.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                    <div className="text-[7px] text-muted-foreground leading-none mt-1">{speed} Vel</div>
+                    <div className="text-[10px] font-bold text-primary/80 leading-tight mt-0.5">{qq.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    <div className="text-[10px] font-bold text-muted-foreground/90 leading-tight mt-0.5">{speed}</div>
                 </div>
             );
         };
@@ -3475,20 +4031,81 @@ function ProductionProjectionView({
                             dayFamiliarQQ += (qqDia + qqNoche);
 
                             const machineDays = customMachineDays[m.id] || 0;
+                            const rowIndex = visibleDates.indexOf(dateStr);
+                            const diaColIndex = visibleColumns.findIndex(c => c.id === `${m.id}-dia`);
+                            const nocColIndex = visibleColumns.findIndex(c => c.id === `${m.id}-noche`);
+
+                            const diaCellProps = getSelectionHandlersAndClass(
+                                rowIndex, 
+                                diaColIndex, 
+                                cn(
+                                    "px-1 py-2 border-l text-center relative transition-all select-none", 
+                                    !isReadOnly && "cursor-pointer hover:bg-primary/5", 
+                                    (overrideDia || isManualAndNoOverrideD) && "bg-amber-500/5", 
+                                    isHoliday && "bg-indigo-50/30", 
+                                    !isHoliday && isWeekend && "bg-amber-50/30"
+                                )
+                            );
                             const diaCell = (
-                                <td key={m.id + 'd'} className={cn("px-1 py-2 border-l text-center relative", !isReadOnly && "cursor-pointer hover:bg-primary/5", (overrideDia || isManualAndNoOverrideD) && "bg-amber-500/5", isHoliday && "bg-indigo-50/30", !isHoliday && isWeekend && "bg-amber-50/30")} style={{ borderLeftColor: prodDia.color ? `${prodDia.color}80` : undefined, borderLeftWidth: prodDia.color ? "2px" : undefined }} onClick={() => !isReadOnly && setEditingOverride({ key: keyDia, machineId: m.id, title: dateStr, shift: 'dia', currentProductId: pIdDia, currentSpeed: sDia, inactive: !!overrideDia?.inactive, startDate: dateStr, endDate: dateStr })}>
+                                <td 
+                                    key={m.id + 'd'} 
+                                    {...diaCellProps}
+                                    style={{ borderLeftColor: prodDia.color ? `${prodDia.color}80` : undefined, borderLeftWidth: prodDia.color ? "2px" : undefined }}
+                                    onDoubleClick={() => !isReadOnly && setEditingOverride({ key: keyDia, machineId: m.id, title: dateStr, shift: 'dia', currentProductId: pIdDia, currentSpeed: sDia, inactive: !!overrideDia?.inactive, startDate: dateStr, endDate: dateStr })}
+                                >
                                     {renderCellInfo(prodDia, qqDia, sDia, !!overrideDia?.inactive || isManualAndNoOverrideD)}
                                 </td>
                             );
+
+                            const nocCellProps = getSelectionHandlersAndClass(
+                                rowIndex, 
+                                nocColIndex, 
+                                cn(
+                                    "px-1 py-2 border-l text-center relative transition-all select-none", 
+                                    !isReadOnly && "cursor-pointer hover:bg-primary/5", 
+                                    (overrideNoc || isManualAndNoOverrideN) && "bg-amber-500/5", 
+                                    isHoliday && "bg-indigo-50/30", 
+                                    !isHoliday && isWeekend && "bg-amber-50/30"
+                                )
+                            );
                             const nocCell = (
-                                <td key={m.id + 'n'} className={cn("px-1 py-2 border-l text-center relative", !isReadOnly && "cursor-pointer hover:bg-primary/5", (overrideNoc || isManualAndNoOverrideN) && "bg-amber-500/5", isHoliday && "bg-indigo-50/30", !isHoliday && isWeekend && "bg-amber-50/30")} style={{ borderLeftColor: prodNoc.color ? `${prodNoc.color}80` : undefined, borderLeftWidth: prodNoc.color ? "2px" : undefined }} onClick={() => !isReadOnly && setEditingOverride({ key: keyNoc, machineId: m.id, title: dateStr, shift: 'noche', currentProductId: pIdNoc, currentSpeed: sNoc, inactive: !!overrideNoc?.inactive, startDate: dateStr, endDate: dateStr })}>
+                                <td 
+                                    key={m.id + 'n'} 
+                                    {...nocCellProps}
+                                    style={{ borderLeftColor: prodNoc.color ? `${prodNoc.color}80` : undefined, borderLeftWidth: prodNoc.color ? "2px" : undefined }}
+                                    onDoubleClick={() => !isReadOnly && setEditingOverride({ key: keyNoc, machineId: m.id, title: dateStr, shift: 'noche', currentProductId: pIdNoc, currentSpeed: sNoc, inactive: !!overrideNoc?.inactive, startDate: dateStr, endDate: dateStr })}
+                                >
                                     {renderCellInfo(prodNoc, qqNoche, sNoc, !!overrideNoc?.inactive || isManualAndNoOverrideN)}
                                 </td>
                             );
 
                             if (machinesDisplayMode === 'combined') {
+                                const combinedColIndex = visibleColumns.findIndex(c => c.id === `${m.id}-combined`);
+                                const combinedCellProps = getSelectionHandlersAndClass(
+                                    rowIndex,
+                                    combinedColIndex,
+                                    cn("px-1 py-2 border-l text-center relative transition-all select-none", !isReadOnly && "cursor-pointer hover:bg-primary/5")
+                                );
                                 return [
-                                    <td key={m.id + 'c'} className={cn("px-1 py-2 border-l text-center relative", !isReadOnly && "cursor-pointer hover:bg-primary/5")}>
+                                    <td 
+                                        key={m.id + 'c'} 
+                                        {...combinedCellProps}
+                                        onDoubleClick={() => {
+                                            if (isReadOnly) return;
+                                            setEditingOverride({
+                                                key: keyDia,
+                                                machineId: m.id,
+                                                title: dateStr,
+                                                shift: 'dia',
+                                                currentProductId: pIdDia,
+                                                currentSpeed: sDia,
+                                                inactive: !!overrideDia?.inactive,
+                                                applyToBothShifts: true,
+                                                startDate: dateStr,
+                                                endDate: dateStr
+                                            });
+                                        }}
+                                    >
                                         <div className="flex flex-col items-center">
                                             <div className="font-bold text-primary text-[9px]">{(qqDia + qqNoche).toLocaleString(undefined, { maximumFractionDigits: 1 })}</div>
                                             <div className="text-[7px] text-muted-foreground">General</div>
@@ -3522,8 +4139,8 @@ function ProductionProjectionView({
                                             {dayNames[day.getDay() === 0 ? 6 : day.getDay() - 1]}
                                         </span>
                                         <span className={cn(
-                                            "text-[8px] leading-none",
-                                            isHoliday ? "text-indigo-600/70" : (isWeekend ? "text-amber-600/70" : "text-muted-foreground")
+                                            "text-[10px] leading-none font-medium",
+                                            isHoliday ? "text-indigo-700" : (isWeekend ? "text-amber-700" : "text-foreground")
                                         )}>
                                             {day.getDate()}/{day.getMonth() + 1}/{day.getFullYear()}
                                         </span>
@@ -3546,16 +4163,25 @@ function ProductionProjectionView({
                                                 const isInactive = !isDiaActive && !isNocheActive;
                                                 const dailyRemainder = Math.max(0, dailySupply - dayFamiliarQQ);
 
+                                                const rowIndex = visibleDates.indexOf(dateStr);
+                                                const granelCombColIndex = visibleColumns.findIndex(c => c.id === `99-combined`);
+                                                const granelCombCellProps = getSelectionHandlersAndClass(
+                                                    rowIndex,
+                                                    granelCombColIndex,
+                                                    cn(
+                                                        "px-1 py-2 border-l text-center transition-all relative select-none",
+                                                        isInactive ? "bg-muted/20 grayscale" : "bg-emerald-500/5",
+                                                        !isInactive && isHoliday && "bg-indigo-50/30",
+                                                        !isInactive && !isHoliday && isWeekend && "bg-amber-50/30",
+                                                        !isReadOnly && "cursor-pointer hover:bg-emerald-500/10"
+                                                    )
+                                                );
+
                                                 return (
                                                     <td
                                                         key={`99-${dateStr}-comb`}
-                                                        className={cn(
-                                                            "px-1 py-2 border-l text-center transition-all cursor-pointer hover:bg-emerald-500/10",
-                                                            isInactive ? "bg-muted/20 grayscale" : "bg-emerald-500/5",
-                                                            !isInactive && isHoliday && "bg-indigo-50/30",
-                                                            !isInactive && !isHoliday && isWeekend && "bg-amber-50/30"
-                                                        )}
-                                                        onClick={() => {
+                                                        {...granelCombCellProps}
+                                                        onDoubleClick={() => {
                                                             if (isReadOnly) return;
                                                             setEditingOverride({
                                                                 key: `99-${dateStr}-dia`,
@@ -3587,9 +4213,9 @@ function ProductionProjectionView({
                                                         </div>
                                                     </td>
                                                 );
-                                            })()
-                                        ) : (
-                                            ['dia', 'noche'].map(shift => {
+                                             })()
+                                         ) : (
+                                             ['dia', 'noche'].map(shift => {
                                                 const key = `99-${dateStr}-${shift}`;
                                                 const isGActive = (s: string) => {
                                                     if (!isActive) return false;
@@ -3603,18 +4229,48 @@ function ProductionProjectionView({
                                                 const isNocheActive = isGActive('noche');
                                                 const activeCount = (isDiaActive ? 1 : 0) + (isNocheActive ? 1 : 0);
                                                 const dailyRemainder = Math.max(0, dailySupply - dayFamiliarQQ);
-                                                const shiftValue = activeCount > 0 ? dailyRemainder / activeCount : 0;
+                                                
+                                                const ovD = overrides[`99-${dateStr}-dia`];
+                                                const ovN = overrides[`99-${dateStr}-noche`];
+                                                const manualD = ovD?.speed || 0;
+                                                const manualN = ovN?.speed || 0;
+                                                let shiftValue = 0;
+
+                                                if (isDiaActive && isNocheActive) {
+                                                    if (manualD > 0 && manualN > 0) {
+                                                        shiftValue = shift === 'dia' ? manualD : manualN;
+                                                    } else if (manualD > 0) {
+                                                        shiftValue = shift === 'dia' ? manualD : Math.max(0, dailyRemainder - manualD);
+                                                    } else if (manualN > 0) {
+                                                        shiftValue = shift === 'noche' ? manualN : Math.max(0, dailyRemainder - manualN);
+                                                    } else {
+                                                        shiftValue = dailyRemainder / 2;
+                                                    }
+                                                } else if (isDiaActive && shift === 'dia') {
+                                                    shiftValue = manualD > 0 ? manualD : dailyRemainder;
+                                                } else if (isNocheActive && shift === 'noche') {
+                                                    shiftValue = manualN > 0 ? manualN : dailyRemainder;
+                                                }
+
+                                                const rowIndex = visibleDates.indexOf(dateStr);
+                                                const granelColIndex = visibleColumns.findIndex(c => c.id === `99-${shift}`);
+                                                const granelCellProps = getSelectionHandlersAndClass(
+                                                    rowIndex,
+                                                    granelColIndex,
+                                                    cn(
+                                                        "px-1 py-2 border-l text-center transition-all relative select-none",
+                                                        isInactive ? "bg-muted/20 grayscale" : "bg-emerald-500/5",
+                                                        !isInactive && isHoliday && "bg-indigo-50/30",
+                                                        !isInactive && !isHoliday && isWeekend && "bg-amber-50/30",
+                                                        !isReadOnly && "cursor-pointer hover:bg-emerald-500/10"
+                                                    )
+                                                );
 
                                                 return (
                                                     <td
                                                         key={key}
-                                                        className={cn(
-                                                            "px-1 py-2 border-l text-center transition-all cursor-pointer hover:bg-emerald-500/10",
-                                                            isInactive ? "bg-muted/20 grayscale" : "bg-emerald-500/5",
-                                                            !isInactive && isHoliday && "bg-indigo-50/30",
-                                                            !isInactive && !isHoliday && isWeekend && "bg-amber-50/30"
-                                                        )}
-                                                        onClick={() => {
+                                                        {...granelCellProps}
+                                                        onDoubleClick={() => {
                                                             if (isReadOnly) return;
                                                             setEditingOverride({
                                                                 key: key,
@@ -3794,7 +4450,7 @@ function ProductionProjectionView({
                                 </>
                             )}
                         </colgroup>
-                        <thead className="text-[10px] uppercase bg-muted text-muted-foreground sticky top-0 z-10 shadow-sm leading-none">
+                        <thead className="text-[10px] uppercase bg-muted text-muted-foreground sticky top-0 z-30 shadow-sm leading-none">
                             <tr>
                                 <th className="px-2 py-2 border-r bg-muted w-8 text-center" rowSpan={2}>Mes</th>
                                 <th className="px-2 py-2 border-r bg-muted w-10 text-center" rowSpan={2}>Sem</th>
@@ -3936,7 +4592,7 @@ function ProductionProjectionView({
 
     return (
         <div className="flex flex-col h-screen max-h-screen bg-background text-foreground overflow-hidden w-full">
-            <Header title="Proyección de Producción" icon={Target}>
+            <Header title={isSummaryView ? (activeSnapshotName || activeScenarioName || "Escenario Sin Nombre") : "Proyección de Producción"} icon={isSummaryView ? undefined : Target} centerTitle={isSummaryView}>
                 <div className="flex items-center gap-2">
                     {!isSummaryView && (
                         <Button
@@ -3961,17 +4617,7 @@ function ProductionProjectionView({
                         </Button>
                     )}
                     <Separator orientation="vertical" className={cn("h-6 mx-1", isSummaryView && "hidden")} />
-                    {!isSummaryView && projectionMode === 'auto' && (
-                        <Button
-                            variant="default"
-                            size="sm"
-                            className="h-9 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md border-0 ml-2"
-                            onClick={() => setIsAgentViewOpen(true)}
-                        >
-                            <Bot className="h-4 w-4 mr-2" />
-                            Agente IA
-                        </Button>
-                    )}
+
                     {!isSummaryView && (
                         <div className="flex bg-muted p-1 rounded-md h-9">
                             <Button
@@ -4035,6 +4681,7 @@ function ProductionProjectionView({
                                             setActiveSnapshotName(null);
                                             setActiveSnapshotDate(null);
                                             setIsReadOnly(false);
+                                            localStorage.setItem('control7_projections_cleared', 'true');
                                             toast({
                                                 title: "Nuevo Escenario",
                                                 description: "Se ha limpiado la referencia del escenario actual.",
@@ -4145,18 +4792,12 @@ function ProductionProjectionView({
                                     className="bg-muted/50 px-3 py-1.5 border-b font-medium text-xs flex items-center justify-between cursor-pointer hover:bg-muted transition-colors"
                                     onClick={() => toggleSection('proyeccion')}
                                 >
-                                    <div className="flex items-center gap-1.5"><MousePointer2 className="h-3.5 w-3.5" /> Modo de Proyección</div>
+                                    <div className="flex items-center gap-1.5"><Target className="h-3.5 w-3.5 text-primary" /> Metas de Producción</div>
                                     {collapsedSections.proyeccion ? <ChevronDown className="h-3 w-3 text-muted-foreground" /> : <ChevronUp className="h-3 w-3 text-muted-foreground" />}
                                 </div>
                                 {!collapsedSections.proyeccion && (
                                     <div className="p-2 space-y-2 animate-in fade-in zoom-in-95 duration-200">
-                                        <div className="flex bg-muted p-0.5 rounded">
-                                            <Button disabled={isReadOnly} variant={projectionMode === 'auto' ? 'default' : 'ghost'} size="sm" className="flex-1 h-6 text-[10px]" onClick={() => setProjectionMode('auto')}>IA</Button>
-                                            <Button disabled={isReadOnly} variant={projectionMode === 'manual' ? 'default' : 'ghost'} size="sm" className="flex-1 h-6 text-[10px]" onClick={() => setProjectionMode('manual')}>Manual</Button>
-                                        </div>
-                                        <p className="text-[9px] text-muted-foreground px-1 text-center">
-                                            {projectionMode === 'auto' ? 'La IA de Planta Copilot y el Smart Engine planifican tu zafra de forma óptima.' : 'Tú planificas y editas manualmente cada día en la tabla.'}
-                                        </p>
+
                                         <Button
                                             disabled={isReadOnly}
                                             variant="outline"
@@ -4256,7 +4897,7 @@ function ProductionProjectionView({
                                         <div className={cn("p-2 border rounded text-xs", isGranelActive ? "bg-emerald-500/5 border-emerald-500/30" : "bg-muted/30 opacity-60")}>
                                             <div className="flex items-center gap-1.5 font-bold text-emerald-600">
                                                 <Switch disabled={isReadOnly} checked={isGranelActive} onCheckedChange={() => setIsGranelActive(!isGranelActive)} className="scale-[0.6] origin-left" />
-                                                Máquina Granel
+                                                Maquina Granel
                                             </div>
                                             <Button
                                                 variant="ghost"
@@ -4767,16 +5408,16 @@ function ProductionProjectionView({
                     <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
                         {isSummaryView ? (
                             <div id="resumen-detallado" className="flex-1 overflow-y-auto p-4 scroll-smooth">
-                                <div className="max-w-7xl mx-auto w-full pt-4 flex flex-col gap-3 pb-8">
-                                    <div className="flex items-center justify-between mb-4 px-1">
+                                <div className="w-full pt-4 flex flex-col gap-3 pb-8">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 px-1">
                                         <div className="flex items-center gap-2">
                                             <div className="h-4 w-1.5 bg-primary rounded-full"></div>
-                                            <h2 className="font-black uppercase tracking-widest text-xl">
+                                            <h2 className="font-black uppercase tracking-wider text-base md:text-lg">
                                                 Reporte de Producción por Envasadora
                                             </h2>
                                         </div>
 
-                                        <div className="flex items-center gap-3 bg-muted/30 px-3 py-1.5 rounded-full border border-muted-foreground/10 shadow-sm">
+                                        <div className="flex flex-wrap items-center gap-2 md:gap-3 bg-muted/30 px-3 py-2 rounded-xl border border-muted-foreground/10 shadow-sm">
                                             <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground">
                                                 <CalendarIcon className="h-3 w-3 text-primary" />
                                                 <span>PERIODO:</span>
@@ -4786,7 +5427,7 @@ function ProductionProjectionView({
                                             </div>
                                             <div className="h-3 w-[1px] bg-muted-foreground/20"></div>
                                             <div className="text-[9px] font-black text-primary uppercase">
-                                                {totalWeeksInProjection} Sems / {totalWeeksInProjection * 7} Días
+                                                {totalWeeksInProjection} Sems / {totalDaysInProjection} Días
                                             </div>
                                             <div className="h-3 w-[1px] bg-muted-foreground/20"></div>
                                             <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground uppercase">
@@ -4799,9 +5440,14 @@ function ProductionProjectionView({
                                                 <>
                                                     <div className="h-3 w-[1px] bg-muted-foreground/20"></div>
                                                     <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground uppercase">
-                                                        <span className="opacity-70">Balance:</span>
+                                                        <span className="opacity-70">Proyectado:</span>
                                                         <span className={cn("font-black", fulfillmentPct >= 100 ? "text-emerald-600" : "text-amber-600")}>
-                                                            {totalFamiliarQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} / {totalPlannedQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ
+                                                            {(totalFamiliarQQ + totalGranelQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                        </span>
+                                                        <span className="opacity-70 mx-0.5">/</span>
+                                                        <span className="opacity-70">Planificado:</span>
+                                                        <span className={cn("font-black", fulfillmentPct >= 100 ? "text-emerald-600" : "text-amber-600")}>
+                                                            {totalPlannedQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ
                                                         </span>
                                                         <span className={cn("px-1.5 py-0.5 rounded text-[8px] font-black", fulfillmentPct >= 100 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
                                                             {fulfillmentPct >= 100 ? "+" : ""}{fulfillmentPct.toFixed(1)}%
@@ -4814,7 +5460,7 @@ function ProductionProjectionView({
                                     {(() => {
                                         const activeMachinesCount = machines.filter(m => machineConfig[m.id]?.active).length;
                                         const totalUsedMachineDays = Object.values(productionStats.byMachine).reduce((acc, m) => acc + m.dates.size, 0);
-                                        const totalCapacityMachineDays = activeMachinesCount * totalWeeksInProjection * 7;
+                                        const totalCapacityMachineDays = activeMachinesCount * totalDaysInProjection;
                                         const occupationPct = totalCapacityMachineDays > 0 ? (totalUsedMachineDays / totalCapacityMachineDays) * 100 : 0;
                                         const projectedWeeksCount = Object.keys(productionStats.byWeek).length;
                                         const projectedDaysCount = productionStats.totalProductionDays;
@@ -4837,54 +5483,54 @@ function ProductionProjectionView({
                                                                     <LayoutDashboard className="h-4 w-4 text-indigo-300" />
                                                                 </div>
                                                                 <div>
-                                                                    <div className="text-[8px] font-black uppercase tracking-[0.2em] text-indigo-300/60 leading-none mb-0.5">Panel Control</div>
+                                                                    <div className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-100 leading-none mb-0.5">Panel Control</div>
                                                                     <div className="text-base font-black tracking-tight leading-none">Información General</div>
                                                                 </div>
                                                             </div>
 
                                                             <div className="space-y-2 flex-1">
-                                                                <div className="grid grid-cols-2 gap-2 border-b border-white/5 pb-2">
+                                                                <div className="grid grid-cols-2 gap-2 border-b border-white/20 pb-2">
                                                                     <div className="flex flex-col">
-                                                                        <span className="text-[8px] uppercase font-black text-indigo-300/40 mb-0.5 tracking-wider">Producción Total</span>
-                                                                        <span className="text-xl font-black">{(totalFamiliarQQ + totalGranelQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[10px] font-normal opacity-40">QQ</span></span>
+                                                                        <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Producción Total</span>
+                                                                        <span className="text-xl font-black">{(totalFamiliarQQ + totalGranelQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[11px] font-bold text-white/80">QQ</span></span>
                                                                     </div>
                                                                     <div className="flex flex-col text-right">
-                                                                        <span className="text-[8px] uppercase font-black text-indigo-300/40 mb-0.5 tracking-wider">Tonelaje Total</span>
-                                                                        <span className="text-xl font-black">{((totalFamiliarQQ + totalGranelQQ) / 20).toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[10px] font-normal opacity-40">Ton</span></span>
+                                                                        <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Tonelaje Total</span>
+                                                                        <span className="text-xl font-black">{((totalFamiliarQQ + totalGranelQQ) / 20).toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[11px] font-bold text-white/80">Ton</span></span>
                                                                     </div>
                                                                 </div>
 
-                                                                <div className="grid grid-cols-2 gap-2 border-b border-white/5 py-1.5">
+                                                                <div className="grid grid-cols-2 gap-2 border-b border-white/20 py-1.5">
                                                                     <div className="flex flex-col">
-                                                                        <span className="text-[8px] uppercase font-black text-indigo-300/40 mb-0.5 tracking-wider">Familiar</span>
+                                                                        <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Familiar</span>
                                                                         <div className="flex items-baseline gap-1">
                                                                             <span className="text-sm font-black text-white">
                                                                                 {((totalFamiliarQQ / (totalFamiliarQQ + totalGranelQQ || 1)) * 100).toFixed(1)}%
                                                                             </span>
-                                                                            <span className="text-[9px] font-bold text-white/30 tracking-tighter">({totalFamiliarQQ.toLocaleString()} QQ)</span>
+                                                                            <span className="text-[10px] font-bold text-white/80 tracking-tighter">({totalFamiliarQQ.toLocaleString()} QQ)</span>
                                                                         </div>
                                                                     </div>
                                                                     <div className="flex flex-col text-right">
-                                                                        <span className="text-[8px] uppercase font-black text-emerald-300/40 mb-0.5 tracking-wider">Granel</span>
+                                                                        <span className="text-[10px] uppercase font-black text-emerald-200 mb-0.5 tracking-wider">Granel</span>
                                                                         <div className="flex items-baseline gap-1 justify-end">
                                                                             <span className="text-sm font-black text-emerald-300">
                                                                                 {((totalGranelQQ / (totalFamiliarQQ + totalGranelQQ || 1)) * 100).toFixed(1)}%
                                                                             </span>
-                                                                            <span className="text-[9px] font-bold text-white/30 tracking-tighter">({totalGranelQQ.toLocaleString()} QQ)</span>
+                                                                            <span className="text-[10px] font-bold text-white/80 tracking-tighter">({totalGranelQQ.toLocaleString()} QQ)</span>
                                                                         </div>
                                                                     </div>
                                                                 </div>
 
                                                                 <div className="grid grid-cols-1 gap-2 pt-1">
                                                                     <div className="flex flex-col">
-                                                                        <span className="text-[8px] uppercase font-black text-indigo-300/40 mb-0.5 tracking-wider">Cumplimiento</span>
+                                                                        <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Cumplimiento</span>
                                                                         <div className="flex items-baseline gap-2">
                                                                             <span className={cn("text-lg font-black", fulfillmentPct >= 100 ? "text-emerald-400" : "text-amber-400")}>
                                                                                 {fulfillmentPct.toFixed(1)}%
                                                                             </span>
-                                                                            <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden self-center">
+                                                                            <div className="flex-1 h-1 bg-white/20 rounded-full overflow-hidden self-center">
                                                                                 <div
-                                                                                    className={cn("h-full", fulfillmentPct >= 100 ? "bg-emerald-500" : "bg-amber-500")}
+                                                                                    className={cn("h-full", fulfillmentPct >= 100 ? "bg-emerald-400" : "bg-amber-400")}
                                                                                     style={{ width: `${Math.min(100, fulfillmentPct)}%` }}
                                                                                 />
                                                                             </div>
@@ -4892,33 +5538,33 @@ function ProductionProjectionView({
                                                                     </div>
                                                                     <div className="grid grid-cols-2 gap-2">
                                                                         <div className="flex flex-col">
-                                                                            <span className="text-[8px] uppercase font-black text-indigo-300/40 mb-0.5 tracking-wider">Días Operativos</span>
-                                                                            <span className="text-lg font-black">{productionStats.totalProductionDays} <span className="text-[10px] font-normal opacity-40">Días</span></span>
+                                                                            <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Días Operativos</span>
+                                                                            <span className="text-lg font-black">{productionStats.totalProductionDays} <span className="text-[11px] font-bold text-white/80">Días</span></span>
                                                                         </div>
                                                                         <div className="flex flex-col">
-                                                                            <span className="text-[8px] uppercase font-black text-rose-300/40 mb-0.5 tracking-wider">Días Parados</span>
+                                                                            <span className="text-[10px] uppercase font-black text-rose-200 mb-0.5 tracking-wider">Días Parados</span>
                                                                             <span className="text-lg font-black text-rose-200">
                                                                                 {groupedWeeks.reduce((acc, g) => acc + g.weeks.reduce((wAcc, w) => wAcc + w.days.length, 0), 0) - productionStats.totalProductionDays}
-                                                                                <span className="text-[10px] font-normal opacity-40 ml-1">Días</span>
+                                                                                <span className="text-[11px] font-bold text-white/80 ml-1">Días</span>
                                                                             </span>
                                                                         </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
 
-                                                            <div className="mt-3 pt-2 border-t border-white/10 space-y-1.5 bg-white/5 p-2 rounded-lg">
-                                                                <div className="text-[8px] font-black uppercase text-indigo-300/60 mb-0.5 border-b border-white/10 pb-0.5">Total de Personal</div>
-                                                                <div className="flex justify-between items-center text-[9px] font-bold">
-                                                                    <span className="text-white/50">Supervisor:</span> <span className="text-indigo-200">{laborStats.globalTotalSupDia + laborStats.globalTotalSupNoc}</span>
+                                                            <div className="mt-3 pt-2 border-t border-white/20 space-y-1.5 bg-white/10 p-2 rounded-lg">
+                                                                <div className="text-[11px] font-black uppercase text-indigo-100 mb-0.5 border-b border-white/20 pb-0.5">Total de Personal</div>
+                                                                <div className="flex justify-between items-center text-[10px] font-bold">
+                                                                    <span className="text-white">Supervisor:</span> <span className="text-indigo-100 font-black">{laborStats.globalTotalSupDia + laborStats.globalTotalSupNoc}</span>
                                                                 </div>
-                                                                <div className="flex justify-between items-center text-[9px] font-bold">
-                                                                    <span className="text-white/50">Operador:</span> <span className="text-indigo-200">{laborStats.globalTotalOpDia + laborStats.globalTotalOpNoc}</span>
+                                                                <div className="flex justify-between items-center text-[10px] font-bold">
+                                                                    <span className="text-white">Operador:</span> <span className="text-indigo-100 font-black">{laborStats.globalTotalOpDia + laborStats.globalTotalOpNoc}</span>
                                                                 </div>
-                                                                <div className="flex justify-between items-center text-[9px] font-bold">
-                                                                    <span className="text-white/50">Envasador:</span> <span className="text-indigo-200">{laborStats.globalTotalEnvDia + laborStats.globalTotalEnvNoc}</span>
+                                                                <div className="flex justify-between items-center text-[10px] font-bold">
+                                                                    <span className="text-white">Envasador:</span> <span className="text-indigo-100 font-black">{laborStats.globalTotalEnvDia + laborStats.globalTotalEnvNoc}</span>
                                                                 </div>
-                                                                <div className="flex justify-between items-center text-[9px] font-bold">
-                                                                    <span className="text-white/50">Granelero:</span> <span className="text-indigo-200">{laborStats.globalTotalGraDia + laborStats.globalTotalGraNoc}</span>
+                                                                <div className="flex justify-between items-center text-[10px] font-bold">
+                                                                    <span className="text-white">Granelero:</span> <span className="text-indigo-100 font-black">{laborStats.globalTotalGraDia + laborStats.globalTotalGraNoc}</span>
                                                                 </div>
                                                             </div>
                                                         </CardContent>
@@ -5108,7 +5754,17 @@ function ProductionProjectionView({
                                         totalGranelQQ={totalGranelQQ}
                                         fulfillmentPct={fulfillmentPct}
                                         totalPlannedQQ={totalPlannedQQ}
+                                        plannedGranel={modalProducts.filter(p => p.productName.toLowerCase().includes('granel') && p.productName.toLowerCase().includes('50kg')).reduce((sum, p) => sum + (plannedGoals[p.id] || 0), 0)}
+                                        modalProducts={modalProducts}
                                     />
+
+                                    <WeeklyProductsChart
+                                        id="weekly-products-chart-view"
+                                        weeklyDetail={productionStats.byWeek}
+                                        products={products}
+                                        modalProducts={modalProducts}
+                                    />
+
 
                                     <div className="w-full overflow-x-auto py-2">
                                         <LaborWeeklyChart
@@ -5220,6 +5876,77 @@ function ProductionProjectionView({
                                                         </Card>
                                                     );
                                                 })}
+                                            {/* Granel 50Kg - Blanca (static card) */}
+                                            {totalGranelQQ > 0 && (
+                                                <Card className="border-l-4 shadow-sm hover:shadow-md transition-shadow overflow-hidden" style={{ borderLeftColor: '#10b981' }}>
+                                                    <CardContent className="p-3 space-y-2">
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="text-[10px] font-black uppercase text-muted-foreground leading-none mb-1">Presentación</span>
+                                                                <span className="text-sm font-bold leading-tight">Granel 50Kg - Blanca</span>
+                                                            </div>
+                                                            <Badge variant="outline" className="text-[10px] py-1 h-fit whitespace-nowrap bg-emerald-50 border-emerald-200 text-emerald-700 font-black shrink-0">
+                                                                {totalGranelQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ
+                                                            </Badge>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                                    <CalendarIcon className="h-2.5 w-2.5" /> Días Totales
+                                                                </div>
+                                                                <div className="text-base font-black text-primary leading-tight">{granelDays}</div>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                                    <Zap className="h-2.5 w-2.5" /> Toneladas
+                                                                </div>
+                                                                <div className="text-base font-black text-amber-600 leading-tight">
+                                                                    {(totalGranelQQ / 20).toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[9px] font-normal">Ton</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                                    <Database className="h-2.5 w-2.5" /> Granel Día
+                                                                </div>
+                                                                <div className="text-base font-black text-emerald-600 leading-tight">
+                                                                    {totalGranelDiaQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[9px] font-normal">QQ</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                                    <Database className="h-2.5 w-2.5" /> Granel Noche
+                                                                </div>
+                                                                <div className="text-base font-black text-blue-600 leading-tight">
+                                                                    {totalGranelNocQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[9px] font-normal">QQ</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="pt-2 border-t mt-1 grid grid-cols-3 gap-2">
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">Supervisor</div>
+                                                                <div className="text-[11px] font-black text-slate-700 leading-tight">{laborStats.granelBreakdown.sup} <span className="text-[9px] font-normal">Total</span></div>
+                                                                <div className="text-[9px] text-muted-foreground font-medium leading-tight mt-0.5 flex flex-col">
+                                                                    <span>{laborStats.granelBreakdown.supDia} Dia</span>
+                                                                    <span>{laborStats.granelBreakdown.supNoc} Noche</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">Granelero</div>
+                                                                <div className="text-[11px] font-black text-slate-700 leading-tight">{laborStats.granelBreakdown.gra} <span className="text-[9px] font-normal">Total</span></div>
+                                                                <div className="text-[9px] text-muted-foreground font-medium leading-tight mt-0.5 flex flex-col">
+                                                                    <span>{laborStats.granelBreakdown.graDia} Dia</span>
+                                                                    <span>{laborStats.granelBreakdown.graNoc} Noche</span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase">Tipo</div>
+                                                                <div className="text-[11px] font-black text-emerald-700 leading-tight">Granel</div>
+                                                                <div className="text-[9px] text-muted-foreground font-medium leading-tight mt-0.5">50 KG / saco</div>
+                                                            </div>
+                                                        </div>
+                                                    </CardContent>
+                                                </Card>
+                                            )}
                                         </div>
                                     </div>
 
@@ -5266,7 +5993,7 @@ function ProductionProjectionView({
                                                             </div>
                                                             <div className="bg-muted/50 rounded p-2 text-center">
                                                                 <div className="text-xs font-black text-amber-600">
-                                                                    {((stats.dates.size / (totalWeeksInProjection * 7)) * 100).toFixed(0)}%
+                                                                    {((stats.dates.size / (totalDaysInProjection || 1)) * 100).toFixed(0)}%
                                                                 </div>
                                                                 <div className="text-[8px] font-bold text-muted-foreground uppercase">% Uso</div>
                                                             </div>
@@ -5327,7 +6054,7 @@ function ProductionProjectionView({
                                                                 <div className="text-[8px] font-bold text-muted-foreground uppercase mb-0.5">Uso de Máquina</div>
                                                                 <div className="flex items-center justify-between">
                                                                     <span className="text-xs font-black text-primary">{stats.dates.size} <span className="text-[8px] font-normal">Días</span></span>
-                                                                    <span className="text-[9px] font-bold text-primary/70">{((stats.dates.size / (totalWeeksInProjection * 7)) * 100).toFixed(0)}%</span>
+                                                                    <span className="text-[9px] font-bold text-primary/70">{((stats.dates.size / (totalDaysInProjection || 1)) * 100).toFixed(0)}%</span>
                                                                 </div>
                                                             </div>
                                                             <div className="bg-primary/5 p-2 rounded-lg border border-primary/10">
@@ -5343,12 +6070,14 @@ function ProductionProjectionView({
                                         })}
                                     </div>
 
-                                    <div className="flex items-center gap-2 mb-4 px-1 mt-8">
+                                    <div className="flex items-center gap-2 mb-4 px-1 mt-8 cursor-pointer select-none" onClick={() => setShowManoObra(!showManoObra)}>
                                         <div className="h-4 w-1.5 bg-indigo-600 rounded-full"></div>
-                                        <h3 className="font-bold uppercase tracking-wider text-sm">Planificación de Mano de Obra</h3>
+                                        <h3 className="font-bold uppercase tracking-wider text-sm flex-1">Planificación de Mano de Obra</h3>
+                                        {showManoObra ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
                                     </div>
 
-                                    <Card className="border shadow-md overflow-hidden bg-card/30">
+                                    {showManoObra && (
+                                        <Card className="border shadow-md overflow-hidden bg-card/30">
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-[11px]">
                                                 <thead className="bg-slate-100 border-b">
@@ -5436,6 +6165,7 @@ function ProductionProjectionView({
                                             </table>
                                         </div>
                                     </Card>
+                                    )}
                                 </div>
                             </div>
                         ) : (
@@ -5446,6 +6176,59 @@ function ProductionProjectionView({
                     </div>
                 </div>
             </main>
+
+            {contextMenu && contextMenu.visible && (
+                <div 
+                    className="fixed z-50 bg-popover text-popover-foreground border rounded-md shadow-md p-1 min-w-[150px] animate-in fade-in-50 duration-100"
+                    style={{ top: contextMenu.y, left: contextMenu.x }}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button 
+                        className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded flex items-center justify-between"
+                        onClick={() => {
+                            copySelectedCells();
+                            setContextMenu(null);
+                        }}
+                    >
+                        <span>Copiar celdas</span>
+                        <span className="text-[10px] text-muted-foreground">Ctrl+C</span>
+                    </button>
+                    <button 
+                        className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded flex items-center justify-between"
+                        disabled={!internalClipboard.current}
+                        onClick={() => {
+                            pasteSelectedCells();
+                            setContextMenu(null);
+                        }}
+                    >
+                        <span>Pegar celdas</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">Ctrl+V</span>
+                    </button>
+                    <button 
+                        className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded text-destructive hover:bg-destructive/10 flex items-center justify-between"
+                        onClick={() => {
+                            deleteSelectedCells();
+                            setContextMenu(null);
+                        }}
+                    >
+                        <span>Eliminar contenido</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">Supr</span>
+                    </button>
+                    <div className="border-t my-1" />
+                    <button 
+                        className="w-full text-left px-2 py-1.5 text-xs hover:bg-muted rounded"
+                        onClick={() => {
+                            if (selectionStart) {
+                                openEditDialogForCell(selectionStart.rowIndex, selectionStart.colIndex);
+                            }
+                            setContextMenu(null);
+                        }}
+                    >
+                        Editar celda
+                    </button>
+                </div>
+            )}
 
             <Dialog open={!!editingOverride} onOpenChange={(open) => !open && setEditingOverride(null)}>
                 <DialogContent className="sm:max-w-md border-primary/20 shadow-xl max-h-[95vh] flex flex-col p-0 overflow-hidden">
@@ -5460,7 +6243,7 @@ function ProductionProjectionView({
                         </DialogTitle>
                         <DialogDescription className="text-xs font-medium">
                             {editingOverride?.machineId === 99 ? (
-                                <span className="text-emerald-600 font-bold">Máquina Granel 50KG</span>
+                                <span className="text-emerald-600 font-bold">Maquina Granel</span>
                             ) : (
                                 <>Tecnotok <span className="text-primary font-bold">#{editingOverride?.machineId}</span></>
                             )}
@@ -5628,6 +6411,32 @@ function ProductionProjectionView({
                             </div>
                         )}
 
+                        {!editingOverride?.inactive && editingOverride?.machineId === 99 && (
+                            <div className="bg-muted/50 p-4 rounded-xl border border-border/50 shadow-inner">
+                                <div className="space-y-2">
+                                    <Label className="text-xs font-black uppercase text-muted-foreground mb-1">Valor Manual de Proyección</Label>
+                                    <div className="flex items-center gap-2">
+                                        <Input
+                                            disabled={isReadOnly}
+                                            type="number"
+                                            min="0"
+                                            placeholder="Auto (Remanente)"
+                                            value={editingOverride?.currentSpeed || ''}
+                                            onChange={(e) => setEditingOverride(prev => prev ? { ...prev, currentSpeed: Number(e.target.value) || 0 } : null)}
+                                            className="h-10 text-lg font-black text-center border-primary/30"
+                                        />
+                                        <div className="flex flex-col shrink-0">
+                                            <span className="text-[10px] font-bold text-primary leading-none uppercase">Sacos</span>
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-muted-foreground italic leading-tight">
+                                        Si dejas en 0 o vacío, se calculará automáticamente repartiendo el remanente de la masa disponible.<br/>
+                                        Si seleccionas <b>sincronizar ambos turnos</b>, el valor ingresado se dividirá equitativamente.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         {!editingOverride?.inactive && editingOverride?.machineId !== 99 && (
                             <div className="grid grid-cols-2 gap-4 bg-muted/50 p-4 rounded-xl border border-border/50 shadow-inner">
                                 <div className="space-y-2">
@@ -5705,13 +6514,14 @@ function ProductionProjectionView({
             <GoalsModal
                 open={isGoalsModalOpen}
                 onOpenChange={setIsGoalsModalOpen}
-                products={products}
+                products={modalProducts}
                 plannedGoals={plannedGoals}
                 setPlannedGoals={setPlannedGoals}
                 plannedSpeeds={plannedSpeeds}
                 setPlannedSpeeds={setPlannedSpeeds}
                 dailySupply={dailySupply}
                 setDailySupply={setDailySupply}
+                setOverrides={setOverrides}
                 isReadOnly={isReadOnly}
             />
 
@@ -5775,106 +6585,548 @@ function ProductionProjectionView({
                 </DialogContent>
             </Dialog>
 
+            <Dialog open={isGeneratingPDF} onOpenChange={() => {}}>
+                <DialogContent className="sm:max-w-[420px] p-6 rounded-2xl border border-slate-100 shadow-2xl bg-white" onPointerDownOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+                    <DialogHeader className="space-y-3">
+                        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                            <RefreshCw className="h-6 w-6 animate-spin" />
+                        </div>
+                        <DialogTitle className="text-center text-lg font-black text-slate-800 uppercase tracking-tight">
+                            Generando Reporte PDF
+                        </DialogTitle>
+                        <DialogDescription className="text-center text-xs text-muted-foreground">
+                            Por favor, espere mientras el sistema procesa los datos y compila las páginas del reporte.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                        <Progress value={pdfGenerationProgress} className="h-2.5 w-full bg-slate-100" />
+                        <div className="flex justify-between items-center text-xs px-1">
+                            <span className="font-bold text-slate-600 truncate max-w-[280px]">
+                                {pdfGenerationStatus}
+                            </span>
+                            <span className="font-black text-primary bg-primary/10 px-2 py-0.5 rounded text-[10px]">
+                                {pdfGenerationProgress}%
+                            </span>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
             {/* Hidden container for PDF chart capture - using opacity 0 instead of visibility hidden for html2canvas */}
             <div style={{ position: 'absolute', left: '-9999px', top: '0', width: '1400px', zIndex: -100, opacity: 0, pointerEvents: 'none' }}>
                 <div className="bg-white p-8 space-y-12">
                     {/* SECCIÓN 1: TARJETAS DE INFORMACIÓN */}
-                    <div id="pdf-cards-container" className="w-full pb-10">
-                        <div className="flex items-center gap-3 mb-8 border-b-2 border-blue-100 pb-4">
-                            <PackageCheck className="h-10 w-10 text-blue-600" />
-                            <h2 className="text-3xl font-black uppercase tracking-tight text-slate-800">Resumen Ejecutivo de Operación</h2>
-                        </div>
-                        <div className="grid grid-cols-4 gap-8">
-                            <div className="bg-slate-900 rounded-2xl p-8 text-white shadow-2xl flex flex-col justify-between min-h-[180px]">
-                                <div>
-                                    <div className="text-4xl font-black mb-1">{totalFamiliarQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</div>
-                                    <div className="text-[10px] font-bold uppercase opacity-60 tracking-[0.2em]">Total Familiar</div>
-                                </div>
-                                <div className="mt-6 pt-6 border-t border-white/10 space-y-1.5 text-[12px]">
-                                    <div className="flex justify-between"><span>Supervisor:</span> <b className="text-blue-300">{laborStats.familiarBreakdown.sup}</b></div>
-                                    <div className="flex justify-between"><span>Operador:</span> <b className="text-blue-300">{laborStats.familiarBreakdown.op}</b></div>
-                                    <div className="flex justify-between"><span>Envasadores:</span> <b className="text-blue-300">{Math.round(laborStats.familiarBreakdown.env)}</b></div>
-                                </div>
+                    <div id="pdf-cards-container" className="w-full pb-10 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                        {/* Title and metadata badge exactly as on the screen */}
+                        <div className="flex flex-row items-center justify-between gap-4 mb-6 px-1">
+                            <div className="flex items-center gap-2">
+                                <div className="h-4 w-1.5 bg-primary rounded-full"></div>
+                                <h2 className="font-black uppercase tracking-wider text-lg text-slate-800">
+                                    Reporte de Producción por Envasadora
+                                </h2>
                             </div>
-                            <div className="bg-emerald-700 rounded-2xl p-8 text-white shadow-2xl flex flex-col justify-between min-h-[180px]">
-                                <div>
-                                    <div className="text-4xl font-black mb-1">{totalGranelQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ</div>
-                                    <div className="text-[10px] font-bold uppercase opacity-60 tracking-[0.2em]">Total Granel</div>
+
+                            <div className="flex items-center gap-2.5 bg-slate-100 border border-slate-200/80 px-3.5 py-2 rounded-xl shadow-sm text-slate-700">
+                                <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground">
+                                    <CalendarIcon className="h-3 w-3 text-primary" />
+                                    <span>PERIODO:</span>
+                                    <span className="text-primary">{groupedWeeks[0]?.weeks[0]?.days[0]?.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
+                                    <span>-</span>
+                                    <span className="text-primary">{groupedWeeks[groupedWeeks.length - 1]?.weeks[groupedWeeks[groupedWeeks.length - 1].weeks.length - 1]?.days[groupedWeeks[groupedWeeks.length - 1].weeks[groupedWeeks[groupedWeeks.length - 1].weeks.length - 1].days.length - 1]?.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                                 </div>
-                                <div className="mt-6 pt-6 border-t border-white/10 space-y-1.5 text-[12px]">
-                                    <div className="flex justify-between"><span>Supervisor:</span> <b className="text-emerald-200">{laborStats.granelBreakdown.sup}</b></div>
-                                    <div className="flex justify-between"><span>Operador:</span> <b className="text-emerald-200">{laborStats.granelBreakdown.op}</b></div>
-                                    <div className="flex justify-between"><span>Granelero:</span> <b className="text-emerald-200">{Math.round(laborStats.granelBreakdown.gra)}</b></div>
+                                <div className="h-3 w-[1px] bg-slate-300"></div>
+                                <div className="text-[9px] font-black text-primary uppercase">
+                                    {totalWeeksInProjection} Sems / {totalDaysInProjection} Días
                                 </div>
-                            </div>
-                            <div className="bg-blue-600 rounded-2xl p-8 text-white shadow-2xl flex flex-col justify-between min-h-[180px]">
-                                <div>
-                                    <div className="text-4xl font-black mb-1">{productionStats.totalProductionDays}</div>
-                                    <div className="text-[10px] font-bold uppercase opacity-60 tracking-[0.2em]">Días con Producción</div>
+                                <div className="h-3 w-[1px] bg-slate-300"></div>
+                                <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground uppercase">
+                                    <span className="opacity-70">Proyectado:</span>
+                                    <span className="text-blue-600 font-black">
+                                        {new Set(Object.values(productionStats.byMachine).flatMap(m => Object.values(m.products).flatMap(p => Array.from(p.weeks)))).size} Sems / {new Set(Object.values(productionStats.byMachine).flatMap(m => Array.from(m.dates))).size} Días
+                                    </span>
                                 </div>
-                                <div className="mt-6 pt-6 border-t border-white/10 space-y-3 text-[12px]">
-                                    <div className="flex justify-between items-center">
-                                        <span>Turno Día:</span>
-                                        <span className="bg-white/20 px-3 py-1 rounded-lg font-black">{productionStats.totalProductionShiftsDia} Días</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
-                                        <span>Turno Noche:</span>
-                                        <span className="bg-white/20 px-3 py-1 rounded-lg font-black">{productionStats.totalProductionShiftsNoc} Días</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="bg-indigo-700 rounded-2xl p-8 text-white shadow-2xl flex flex-col justify-between min-h-[180px]">
-                                <div>
-                                    <div className="text-4xl font-black mb-1">{fulfillmentPct.toFixed(1)}%</div>
-                                    <div className="text-[10px] font-bold uppercase opacity-60 tracking-[0.2em]">Cumplimiento Meta</div>
-                                </div>
-                                <div className="mt-6 pt-6 border-t border-white/10 text-[11px] opacity-80 leading-relaxed italic">
-                                    Meta planificada de {totalPlannedQQ.toLocaleString()} QQ para el periodo actual.
-                                </div>
+                                {totalPlannedQQ > 0 && (
+                                    <>
+                                        <div className="h-3 w-[1px] bg-slate-300"></div>
+                                        <div className="flex items-center gap-1.5 text-[9px] font-bold text-muted-foreground uppercase">
+                                            <span className="opacity-70">Proyectado:</span>
+                                            <span className={cn("font-black", fulfillmentPct >= 100 ? "text-emerald-600" : "text-amber-600")}>
+                                                {(totalFamiliarQQ + totalGranelQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                            </span>
+                                            <span className="opacity-70 mx-0.5">/</span>
+                                            <span className="opacity-70">Planificado:</span>
+                                            <span className={cn("font-black", fulfillmentPct >= 100 ? "text-emerald-600" : "text-amber-600")}>
+                                                {totalPlannedQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ
+                                            </span>
+                                            <span className={cn("px-1.5 py-0.5 rounded text-[8px] font-black", fulfillmentPct >= 100 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+                                                {fulfillmentPct >= 100 ? "+" : ""}{fulfillmentPct.toFixed(1)}%
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
+
+                        {(() => {
+                            const activeMachinesCount = machines.filter(m => machineConfig[m.id]?.active).length;
+                            const totalUsedMachineDays = Object.values(productionStats.byMachine).reduce((acc, m) => acc + m.dates.size, 0);
+                            const totalCapacityMachineDays = activeMachinesCount * totalDaysInProjection;
+                            const occupationPct = totalCapacityMachineDays > 0 ? (totalUsedMachineDays / totalCapacityMachineDays) * 100 : 0;
+                            const projectedWeeksCount = Object.keys(productionStats.byWeek).length;
+                            const projectedDaysCount = productionStats.totalProductionDays;
+                            const totalProductionHours = (productionStats.totalProductionShiftsDia * horasTurnoDia) + (productionStats.totalProductionShiftsNoc * horasTurnoNoche);
+
+                            const firstDate = groupedWeeks[0]?.weeks[0]?.days[0];
+                            const lastGroup = groupedWeeks[groupedWeeks.length - 1];
+                            const lastWeek = lastGroup?.weeks[lastGroup.weeks.length - 1];
+                            const lastDate = lastWeek?.days[lastWeek.days.length - 1];
+
+                            return (
+                                <div className="flex flex-row gap-4 mb-4 w-full text-left">
+                                    {/* Lado Izquierdo: Información General */}
+                                    <div className="w-1/4 flex">
+                                        <Card className="bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 shadow-2xl border-none overflow-hidden relative flex-1">
+                                            <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -mr-32 -mt-32 blur-3xl"></div>
+                                            <CardContent className="py-3 px-4 flex flex-col text-white h-full relative z-10">
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <div className="p-1.5 bg-white/10 rounded-lg shadow-inner">
+                                                        <LayoutDashboard className="h-4 w-4 text-indigo-300" />
+                                                    </div>
+                                                    <div>
+                                                        <div className="text-[11px] font-black uppercase tracking-[0.2em] text-indigo-100 leading-none mb-0.5">Panel Control</div>
+                                                        <div className="text-base font-black tracking-tight leading-none">Información General</div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-2 flex-1">
+                                                    <div className="grid grid-cols-2 gap-2 border-b border-white/20 pb-2">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Producción Total</span>
+                                                            <span className="text-xl font-black">{(totalFamiliarQQ + totalGranelQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[11px] font-bold text-white/80">QQ</span></span>
+                                                        </div>
+                                                        <div className="flex flex-col text-right">
+                                                            <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Tonelaje Total</span>
+                                                            <span className="text-xl font-black">{((totalFamiliarQQ + totalGranelQQ) / 20).toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[11px] font-bold text-white/80">Ton</span></span>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-2 gap-2 border-b border-white/20 py-1.5">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Familiar</span>
+                                                            <div className="flex items-baseline gap-1">
+                                                                <span className="text-sm font-black text-white">
+                                                                    {((totalFamiliarQQ / (totalFamiliarQQ + totalGranelQQ || 1)) * 100).toFixed(1)}%
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-white/80 tracking-tighter">({totalFamiliarQQ.toLocaleString()} QQ)</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-col text-right">
+                                                            <span className="text-[10px] uppercase font-black text-emerald-200 mb-0.5 tracking-wider">Granel</span>
+                                                            <div className="flex items-baseline gap-1 justify-end">
+                                                                <span className="text-sm font-black text-emerald-300">
+                                                                    {((totalGranelQQ / (totalFamiliarQQ + totalGranelQQ || 1)) * 100).toFixed(1)}%
+                                                                </span>
+                                                                <span className="text-[10px] font-bold text-white/80 tracking-tighter">({totalGranelQQ.toLocaleString()} QQ)</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="grid grid-cols-1 gap-2 pt-1">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Cumplimiento</span>
+                                                            <div className="flex items-baseline gap-2">
+                                                                <span className={cn("text-lg font-black", fulfillmentPct >= 100 ? "text-emerald-400" : "text-amber-400")}>
+                                                                    {fulfillmentPct.toFixed(1)}%
+                                                                </span>
+                                                                <div className="flex-1 h-1 bg-white/20 rounded-full overflow-hidden self-center">
+                                                                    <div
+                                                                        className={cn("h-full", fulfillmentPct >= 100 ? "bg-emerald-400" : "bg-amber-400")}
+                                                                        style={{ width: `${Math.min(100, fulfillmentPct)}%` }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] uppercase font-black text-indigo-100 mb-0.5 tracking-wider">Días Operativos</span>
+                                                                <span className="text-lg font-black">{productionStats.totalProductionDays} <span className="text-[11px] font-bold text-white/80">Días</span></span>
+                                                            </div>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] uppercase font-black text-rose-200 mb-0.5 tracking-wider">Días Parados</span>
+                                                                <span className="text-lg font-black text-rose-200">
+                                                                    {groupedWeeks.reduce((acc, g) => acc + g.weeks.reduce((wAcc, w) => wAcc + w.days.length, 0), 0) - productionStats.totalProductionDays}
+                                                                    <span className="text-[11px] font-bold text-white/80 ml-1">Días</span>
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-3 pt-2 border-t border-white/20 space-y-1.5 bg-white/10 p-2 rounded-lg">
+                                                    <div className="text-[11px] font-black uppercase text-indigo-100 mb-0.5 border-b border-white/20 pb-0.5">Total de Personal</div>
+                                                    <div className="flex justify-between items-center text-[10px] font-bold">
+                                                        <span className="text-white">Supervisor:</span> <span className="text-indigo-100 font-black">{laborStats.globalTotalSupDia + laborStats.globalTotalSupNoc}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-[10px] font-bold">
+                                                        <span className="text-white">Operador:</span> <span className="text-indigo-100 font-black">{laborStats.globalTotalOpDia + laborStats.globalTotalOpNoc}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-[10px] font-bold">
+                                                        <span className="text-white">Envasador:</span> <span className="text-indigo-100 font-black">{laborStats.globalTotalEnvDia + laborStats.globalTotalEnvNoc}</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-[10px] font-bold">
+                                                        <span className="text-white">Granelero:</span> <span className="text-indigo-100 font-black">{laborStats.globalTotalGraDia + laborStats.globalTotalGraNoc}</span>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+
+                                    {/* Lado Derecho: 2 Filas de 3 Tarjetas */}
+                                    <div className="w-3/4 flex flex-col gap-4">
+                                        {/* Fila Superior */}
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <Card className="bg-slate-950 shadow-lg border-none">
+                                                <CardContent className="py-3 px-4 flex flex-col items-center justify-center text-white h-full min-h-[160px]">
+                                                    <PackageCheck className="h-6 w-6 mb-1.5 opacity-80 text-blue-400" />
+                                                    <div className="text-2xl font-black">
+                                                        {(totalFamiliarQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                        <span className="text-[10px] font-normal opacity-40 ml-1">QQ</span>
+                                                    </div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Total Familiar</div>
+                                                    <div className="text-[11px] mt-1 opacity-80 font-medium mb-2 text-blue-300 flex flex-col items-center">
+                                                        <span>{familiarDays} Días Usados</span>
+                                                        <span className="text-[10px] font-normal bg-white/20 text-white px-2 py-0.5 rounded mt-1">
+                                                            {((totalFamiliarQQ / (totalFamiliarQQ + totalGranelQQ || 1)) * 100).toFixed(1)}% de la Produccion
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-1 pt-2 border-t border-white/20 w-full text-[9px] flex flex-col gap-1 opacity-90">
+                                                        <div className="grid grid-cols-3 w-full border-b border-white/5 pb-0.5">
+                                                            <div className="flex gap-1"><span>Sup:</span> <span className="font-bold text-white">{laborStats.familiarBreakdown.sup}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{laborStats.familiarBreakdown.supDia}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{laborStats.familiarBreakdown.supNoc}</span></div>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 w-full border-b border-white/5 py-0.5">
+                                                            <div className="flex gap-1"><span>Op:</span> <span className="font-bold text-white">{laborStats.familiarBreakdown.op}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{laborStats.familiarBreakdown.opDia}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{laborStats.familiarBreakdown.opNoc}</span></div>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 w-full pt-0.5">
+                                                            <div className="flex gap-1"><span>Env:</span> <span className="font-bold text-white">{Math.round(laborStats.familiarBreakdown.env)}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{Math.round(laborStats.familiarBreakdown.envDia)}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{Math.round(laborStats.familiarBreakdown.envNoc)}</span></div>
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                            <Card className="bg-blue-900 shadow-lg border-none">
+                                                <CardContent className="py-3 px-4 flex flex-col items-center justify-center text-white text-center h-full min-h-[160px]">
+                                                    <Package className="h-6 w-6 mb-1.5 opacity-80 text-blue-300" />
+                                                    <div className="text-2xl font-black">
+                                                        {(totalSacosQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                        <span className="text-[10px] font-normal opacity-40 ml-1">QQ</span>
+                                                    </div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Total Sacos</div>
+                                                    <div className="text-[11px] mt-1 opacity-80 font-medium mb-2 text-blue-200 flex flex-col items-center">
+                                                        <span>{sacosDays} Días</span>
+                                                        <span className="text-[10px] font-normal bg-white/20 text-white px-2 py-0.5 rounded mt-1">
+                                                            {((totalSacosQQ / (totalFamiliarQQ || 1)) * 100).toFixed(1)}% del Familiar
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-1 pt-2 border-t border-white/20 w-full text-[9px] flex flex-col gap-1 opacity-90">
+                                                        <div className="grid grid-cols-3 w-full border-b border-white/5 pb-0.5">
+                                                            <div className="flex gap-1"><span>Sup:</span> <span className="font-bold text-white">{laborStats.sacoBreakdown.sup}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{laborStats.sacoBreakdown.supDia}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{laborStats.sacoBreakdown.supNoc}</span></div>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 w-full border-b border-white/5 py-0.5">
+                                                            <div className="flex gap-1"><span>Op:</span> <span className="font-bold text-white">{laborStats.sacoBreakdown.op}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{laborStats.sacoBreakdown.opDia}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{laborStats.sacoBreakdown.opNoc}</span></div>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 w-full pt-0.5">
+                                                            <div className="flex gap-1"><span>Env:</span> <span className="font-bold text-white">{Math.round(laborStats.sacoBreakdown.env)}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{Math.round(laborStats.sacoBreakdown.envDia)}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{Math.round(laborStats.sacoBreakdown.envNoc)}</span></div>
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                            <Card className="bg-orange-800 shadow-lg border-none">
+                                                <CardContent className="py-3 px-4 flex flex-col items-center justify-center text-white text-center h-full min-h-[160px]">
+                                                    <Boxes className="h-6 w-6 mb-1.5 opacity-80 text-orange-400" />
+                                                    <div className="text-2xl font-black">
+                                                        {(totalFardosQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                        <span className="text-[10px] font-normal opacity-40 ml-1">QQ</span>
+                                                    </div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Total Fardos</div>
+                                                    <div className="text-[11px] mt-1 opacity-80 font-medium mb-2 text-orange-300 flex flex-col items-center">
+                                                        <span>{fardosDays} Días | {totalFardos.toLocaleString()} Unid.</span>
+                                                        <span className="text-[10px] font-normal bg-white/20 text-white px-2 py-0.5 rounded mt-1">
+                                                            {((totalFardosQQ / (totalFamiliarQQ || 1)) * 100).toFixed(1)}% del Familiar
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-1 pt-2 border-t border-white/20 w-full text-[9px] flex flex-col gap-1 opacity-90">
+                                                        <div className="grid grid-cols-3 w-full border-b border-white/5 pb-0.5">
+                                                            <div className="flex gap-1"><span>Sup:</span> <span className="font-bold text-white">{laborStats.fardoBreakdown.sup}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{laborStats.fardoBreakdown.supDia}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{laborStats.fardoBreakdown.supNoc}</span></div>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 w-full pt-0.5">
+                                                            <div className="flex gap-1"><span>Op:</span> <span className="font-bold text-white">{laborStats.fardoBreakdown.op}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{laborStats.fardoBreakdown.opDia}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{laborStats.fardoBreakdown.opNoc}</span></div>
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        </div>
+
+                                        {/* Fila Inferior */}
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <Card className="bg-emerald-800 shadow-lg border-none">
+                                                <CardContent className="py-3 px-4 flex flex-col items-center justify-center text-white text-center h-full min-h-[160px]">
+                                                    <Database className="h-6 w-6 mb-1.5 opacity-80 text-emerald-400" />
+                                                    <div className="text-2xl font-black">
+                                                        {(totalGranelQQ).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                        <span className="text-[10px] font-normal opacity-40 ml-1">QQ</span>
+                                                    </div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Total Granel</div>
+                                                    <div className="text-[11px] mt-1 opacity-80 font-medium mb-2 text-emerald-300 flex flex-col items-center">
+                                                        <span>{granelDays} Días Usados</span>
+                                                        <span className="text-[10px] font-normal bg-white/20 text-white px-2 py-0.5 rounded mt-1">
+                                                            {((totalGranelQQ / (totalFamiliarQQ + totalGranelQQ || 1)) * 100).toFixed(1)}% de la Produccion
+                                                        </span>
+                                                    </div>
+                                                    <div className="mt-1 pt-2 border-t border-white/20 w-full text-[9px] flex flex-col gap-1 opacity-90">
+                                                        <div className="grid grid-cols-3 w-full border-b border-white/5 pb-0.5">
+                                                            <div className="flex gap-1"><span>Sup:</span> <span className="font-bold text-white">{laborStats.granelBreakdown.sup}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{laborStats.granelBreakdown.supDia}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{laborStats.granelBreakdown.supNoc}</span></div>
+                                                        </div>
+                                                        <div className="grid grid-cols-3 w-full pt-0.5">
+                                                            <div className="flex gap-1"><span>Gra:</span> <span className="font-bold text-white">{laborStats.granelBreakdown.gra}</span></div>
+                                                            <div className="flex gap-1 justify-center border-l border-white/10"><span>Dias:</span> <span className="font-bold text-white">{laborStats.granelBreakdown.graDia}</span></div>
+                                                            <div className="flex gap-1 justify-end border-l border-white/10"><span>Noc:</span> <span className="font-bold text-white">{laborStats.granelBreakdown.graNoc}</span></div>
+                                                        </div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                            <Card className="bg-cyan-800 shadow-lg border-none">
+                                                <CardContent className="py-4 px-5 flex flex-col items-center justify-center text-white text-center h-full min-h-[140px]">
+                                                    <CalendarRange className="h-7 w-7 mb-2 text-cyan-300" />
+                                                    <div className="flex flex-col items-center">
+                                                        <div className="text-xl font-black">{projectedWeeksCount} Sems / {projectedDaysCount} Días</div>
+                                                        <div className="text-[10px] font-bold text-cyan-300/90 flex items-center gap-1 mt-0.5">
+                                                            <span>{firstDate?.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}</span>
+                                                            <ArrowRight className="h-2 w-2" />
+                                                            <span>{lastDate?.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-70 mt-1">Tiempo con Producción</div>
+                                                    <div className="mt-2 pt-2 border-t border-white/20 w-full text-[10px] flex flex-col gap-1 opacity-90">
+                                                        <div className="flex justify-between font-medium"><span>Total Horas:</span> <span className="font-bold text-cyan-200">{totalProductionHours.toLocaleString()} h</span></div>
+                                                        <div className="flex justify-between flex-row"><span>Día:</span> <span className="font-bold">{productionStats.totalProductionShiftsDia}</span></div>
+                                                        <div className="flex justify-between flex-row"><span>Noche:</span> <span className="font-bold">{productionStats.totalProductionShiftsNoc}</span></div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                            <Card className="bg-slate-800 shadow-lg border-none">
+                                                <CardContent className="py-4 px-5 flex flex-col items-center justify-center text-white text-center h-full min-h-[140px]">
+                                                    <Users className="h-7 w-7 mb-2 text-slate-300" />
+                                                    <div className="text-xl font-black">
+                                                        $ {laborStats.totalCosto.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                                    </div>
+                                                    <div className="text-[10px] font-bold uppercase tracking-widest opacity-70">Costo Mano de Obra</div>
+                                                    <div className="text-[9px] mt-1 opacity-60 font-medium border-b border-white/10 pb-1 mb-1 w-full">
+                                                        ${laborStats.costoPorQQ.toFixed(2)} / QQ
+                                                    </div>
+                                                    <div className="pt-1 w-full text-[10px] flex flex-col gap-1 opacity-90">
+                                                        <div className="flex justify-between font-medium"><span>Día:</span> <span className="font-bold">$ {laborStats.totalCostoDia.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                                                        <div className="flex justify-between font-medium"><span>Noche:</span> <span className="font-bold">$ {laborStats.totalCostoNoc.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span></div>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     {/* SECCIÓN 2: RESUMEN POR PRESENTACIÓN */}
-                    <div id="pdf-resumen-container" className="w-full pt-12 pb-10">
-                        <div className="flex items-center gap-4 mb-10 border-b-2 border-blue-100 pb-5">
-                            <LayoutDashboard className="h-10 w-10 text-blue-600" />
-                            <h2 className="text-3xl font-black uppercase tracking-tight text-slate-800">Resumen Detallado por Presentación</h2>
+                    <div id="pdf-resumen-container" className="w-full pb-10 bg-slate-50/50 p-6 rounded-2xl border border-slate-100">
+                        <div className="flex items-center gap-2 mb-4 px-1">
+                            <div className="h-4 w-1.5 bg-blue-600 rounded-full"></div>
+                            <h3 className="font-bold uppercase tracking-wider text-sm text-slate-800">Resumen por Presentación</h3>
                         </div>
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-4 gap-3">
                             {Object.entries(productionStats.byProduct)
                                 .sort((a, b) => b[1].qq - a[1].qq)
                                 .map(([pId, data]) => {
                                     const product = products.find(p => p.id === pId);
                                     if (!product) return null;
+                                    const avgSpeed = data.count > 0 ? data.speedSum / data.count : 0;
+                                    const calendarDays = data.dates.size;
+                                    const totalShifts = data.count;
+
                                     return (
-                                        <div key={pId} className="border-l-8 rounded-r-xl border shadow-sm p-5 bg-slate-50 flex flex-col justify-between" style={{ borderLeftColor: product.color }}>
-                                            <div className="flex justify-between items-start mb-4">
-                                                <div>
-                                                    <div className="text-[10px] font-black uppercase text-muted-foreground mb-1">Producto</div>
-                                                    <div className="text-lg font-black text-slate-800 leading-tight">{product.productName}</div>
+                                        <Card key={pId} className="border-l-4 shadow-sm overflow-hidden bg-white" style={{ borderLeftColor: product.color }}>
+                                            <CardContent className="p-3 space-y-2">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="flex flex-col min-w-0 text-left">
+                                                        <span className="text-[10px] font-black uppercase text-muted-foreground leading-none mb-1">Presentación</span>
+                                                        <span className="text-sm font-bold leading-tight" title={product.productName}>{product.productName}</span>
+                                                    </div>
+                                                    <Badge variant="outline" className="text-[10px] py-1 h-fit whitespace-nowrap bg-primary/5 border-primary/20 font-black shrink-0">
+                                                        {data.qq.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ
+                                                    </Badge>
                                                 </div>
-                                                <div className="bg-white px-3 py-1.5 rounded-lg border shadow-sm text-right">
-                                                    <div className="text-xl font-black text-primary leading-none">{data.qq.toLocaleString()} QQ</div>
+
+                                                <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-left">
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                            <CalendarIcon className="h-2.5 w-2.5" /> Días Totales
+                                                        </div>
+                                                        <div className="text-base font-black text-primary leading-tight">{calendarDays}</div>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                            <RefreshCw className="h-2.5 w-2.5" /> Turnos
+                                                        </div>
+                                                        <div className="text-base font-black text-blue-600 leading-tight">{totalShifts}</div>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                            <Zap className="h-2.5 w-2.5" /> Vel. Prom
+                                                        </div>
+                                                        <div className="text-base font-black text-amber-600 leading-tight">{avgSpeed.toFixed(1)} <span className="text-[9px] font-normal">BPM</span></div>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                            <Box className="h-2.5 w-2.5" /> Unidades
+                                                        </div>
+                                                        <div className="text-base font-black text-emerald-600 leading-tight">
+                                                            {Math.round(data.units).toLocaleString()}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="pt-2 border-t mt-1 grid grid-cols-3 gap-2 text-left">
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                            Supervisor
+                                                        </div>
+                                                        <div className="text-[11px] font-black text-slate-700 leading-tight">
+                                                            {data.supervisors} <span className="text-[9px] font-normal">Total</span>
+                                                        </div>
+                                                        <div className="text-[9px] text-muted-foreground font-medium leading-tight mt-0.5 flex flex-col">
+                                                            <span>{data.supervisorsDay} Dia</span>
+                                                            <span>{data.supervisorsNight} Noche</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                            Operador
+                                                        </div>
+                                                        <div className="text-[11px] font-black text-slate-700 leading-tight">
+                                                            {data.operators} <span className="text-[9px] font-normal">Total</span>
+                                                        </div>
+                                                        <div className="text-[9px] text-muted-foreground font-medium leading-tight mt-0.5 flex flex-col">
+                                                            <span>{data.operatorsDay} Dia</span>
+                                                            <span>{data.operatorsNight} Noche</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase">
+                                                            Envasador
+                                                        </div>
+                                                        <div className="text-[11px] font-black text-slate-700 leading-tight">
+                                                            {data.envasadores} <span className="text-[9px] font-normal">Total</span>
+                                                        </div>
+                                                        <div className="text-[9px] text-muted-foreground font-medium leading-tight mt-0.5 flex flex-col">
+                                                            <span>{data.envasadoresDay} Dia</span>
+                                                            <span>{data.envasadoresNight} Noche</span>
+                                                            <div className="mt-1 flex items-center gap-1.5 pt-1 border-t border-slate-100">
+                                                                <Users className="w-2.5 h-2.5 text-blue-500" />
+                                                                <span className="text-slate-700 font-bold">{data.envasadores} Jornadas</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            {/* Granel 50Kg - Blanca (static card) */}
+                            {totalGranelQQ > 0 && (
+                                <Card className="border-l-4 shadow-sm overflow-hidden bg-white" style={{ borderLeftColor: '#10b981' }}>
+                                    <CardContent className="p-3 space-y-2">
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="flex flex-col min-w-0 text-left">
+                                                <span className="text-[10px] font-black uppercase text-muted-foreground leading-none mb-1">Presentación</span>
+                                                <span className="text-sm font-bold leading-tight">Granel 50Kg - Blanca</span>
+                                            </div>
+                                            <Badge variant="outline" className="text-[10px] py-1 h-fit whitespace-nowrap bg-emerald-50 border-emerald-200 text-emerald-700 font-black shrink-0">
+                                                {totalGranelQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} QQ
+                                            </Badge>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-y-3 gap-x-4 text-left">
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                    <CalendarIcon className="h-2.5 w-2.5" /> Días Totales
+                                                </div>
+                                                <div className="text-base font-black text-primary leading-tight">{granelDays}</div>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                    <Zap className="h-2.5 w-2.5" /> Toneladas
+                                                </div>
+                                                <div className="text-base font-black text-amber-600 leading-tight">
+                                                    {(totalGranelQQ / 20).toLocaleString(undefined, { maximumFractionDigits: 1 })} <span className="text-[9px] font-normal">Ton</span>
                                                 </div>
                                             </div>
-                                            <div className="grid grid-cols-3 gap-4 border-t pt-4">
-                                                <div>
-                                                    <div className="text-[8px] font-bold text-muted-foreground uppercase">Días Ops</div>
-                                                    <div className="text-sm font-black">{data.dates.size}</div>
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                    <Database className="h-2.5 w-2.5" /> Granel Día
                                                 </div>
-                                                <div>
-                                                    <div className="text-[8px] font-bold text-muted-foreground uppercase">Turnos</div>
-                                                    <div className="text-sm font-black text-blue-600">{data.count}</div>
+                                                <div className="text-base font-black text-emerald-600 leading-tight">
+                                                    {totalGranelDiaQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[9px] font-normal">QQ</span>
                                                 </div>
-                                                <div>
-                                                    <div className="text-[8px] font-bold text-muted-foreground uppercase">Unidades</div>
-                                                    <div className="text-sm font-black text-emerald-600">{Math.round(data.units).toLocaleString()}</div>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">
+                                                    <Database className="h-2.5 w-2.5" /> Granel Noche
+                                                </div>
+                                                <div className="text-base font-black text-blue-600 leading-tight">
+                                                    {totalGranelNocQQ.toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[9px] font-normal">QQ</span>
                                                 </div>
                                             </div>
                                         </div>
-                                    );
-                                })}
+                                        <div className="pt-2 border-t mt-1 grid grid-cols-3 gap-2 text-left">
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">Supervisor</div>
+                                                <div className="text-[11px] font-black text-slate-700 leading-tight">{laborStats.granelBreakdown.sup} <span className="text-[9px] font-normal">Total</span></div>
+                                                <div className="text-[9px] text-muted-foreground font-medium leading-tight mt-0.5 flex flex-col">
+                                                    <span>{laborStats.granelBreakdown.supDia} Dia</span>
+                                                    <span>{laborStats.granelBreakdown.supNoc} Noche</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1 text-[8px] font-bold text-muted-foreground uppercase">Granelero</div>
+                                                <div className="text-[11px] font-black text-slate-700 leading-tight">{laborStats.granelBreakdown.gra} <span className="text-[9px] font-normal">Total</span></div>
+                                                <div className="text-[9px] text-muted-foreground font-medium leading-tight mt-0.5 flex flex-col">
+                                                    <span>{laborStats.granelBreakdown.graDia} Dia</span>
+                                                    <span>{laborStats.granelBreakdown.graNoc} Noche</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <div className="flex items-center gap-1 text-[9px] font-bold text-muted-foreground uppercase">Tipo</div>
+                                                <div className="text-[11px] font-black text-emerald-700 leading-tight">Granel</div>
+                                                <div className="text-[9px] text-muted-foreground font-medium leading-tight mt-0.5">50 KG / saco</div>
+                                            </div>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            )}
                         </div>
                     </div>
 
@@ -5891,6 +7143,15 @@ function ProductionProjectionView({
                             totalGranelQQ={totalGranelQQ}
                             fulfillmentPct={fulfillmentPct}
                             totalPlannedQQ={totalPlannedQQ}
+                            plannedGranel={modalProducts.filter(p => p.productName.toLowerCase().includes('granel') && p.productName.toLowerCase().includes('50kg')).reduce((sum, p) => sum + (plannedGoals[p.id] || 0), 0)}
+                            modalProducts={modalProducts}
+                        />
+                        <WeeklyProductsChart
+                            id="weekly-products-chart-pdf"
+                            isPDF={true}
+                            weeklyDetail={productionStats.byWeek}
+                            products={products}
+                            modalProducts={modalProducts}
                         />
                     </div>
 
@@ -5905,67 +7166,6 @@ function ProductionProjectionView({
                     </div>
                 </div>
             </div>
-
-            {/* Autonomous Agent View */}
-            {isAgentViewOpen && (
-                <AutonomousAgentView
-                    isOpen={isAgentViewOpen}
-                    onClose={() => setIsAgentViewOpen(false)}
-                    products={products}
-                    machines={machines}
-                    plannedGoals={plannedGoals}
-                    plannedSpeeds={plannedSpeeds}
-                    dailySupply={dailySupply}
-                    machineConfig={machineConfig}
-                    safeCombinations={safeCombinations}
-                    prohibitedCombinations={prohibitedCombinations}
-                    season={season}
-                    projectionMode={projectionMode}
-                    zafraStartDate={zafraStartDate}
-                    zafraEndDate={zafraEndDate}
-                    setPlannedGoals={setPlannedGoals}
-                    setPlannedSpeeds={setPlannedSpeeds}
-                    setDailySupply={setDailySupply}
-                    setMachineConfig={setMachineConfig}
-                    setSeason={setSeason}
-                    setProjectionMode={setProjectionMode}
-                    setSafeCombinations={setSafeCombinations}
-                    setProhibitedCombinations={setProhibitedCombinations}
-                    setZafraStartDate={setZafraStartDate}
-                    setZafraEndDate={setZafraEndDate}
-                    advisorInput={{
-                        goals: products.filter((p: any) => (plannedGoals[p.id] || 0) > 0).map((p: any) => ({
-                            productId: p.id,
-                            productName: p.productName,
-                            targetQQ: plannedGoals[p.id],
-                            presentationWeightKg: (p as any).presentationWeight || null,
-                            allowedMachines: [1, 2, 3].filter(id => machines.some((m: any) => m.id === id))
-                        })),
-                        machines: [1, 2, 3, 4].map(id => ({ id, name: 'Maquina ' + id, baseSpeed: machines.find((m: any) => m.id === id)?.speed || 100 })),
-                        shifts: { dayHours: horasTurnoDia, nightHours: horasTurnoNoche },
-                        efficiency: rendimiento,
-                        supply: dailySupply,
-                        maxWeeks: groupedWeeks.reduce((acc: any, g: any) => acc + g.weeks.length, 0),
-                        holidays: Array.from(getEcuadorHolidays(new Date(zafraStartDate).getFullYear())),
-                        safeCombinations,
-                        prohibitedCombinations,
-                        plannedSpeeds,
-                        season,
-                        labor: { type: laborType, dayRate: fixedDayRate, nightRate: fixedNightRate },
-                        availableDays: season === 'zafra' ? 'Lunes a Domingo (24/7)' : 'Lunes a Sábado',
-                        projectionMode,
-                        maxDays: groupedWeeks.reduce((acc: any, g: any) => acc + g.weeks.reduce((wAcc: any, w: any) => wAcc + w.days.length, 0), 0),
-                    }}
-                    groupedWeeks={groupedWeeks}
-                    classifyProduct={classifyProduct}
-                    generateAutoLabel={generateAutoLabel}
-                    onApplyOverrides={(smartEngineOverrides: any, scenarioName: string) => {
-                        setActiveScenarioName(scenarioName);
-                        setOverrides(smartEngineOverrides);
-                        setProjectionMode('auto');
-                    }}
-                />
-            )}
         </div>
     );
 }
@@ -5989,16 +7189,57 @@ function HistorySidebar({
     onDelete: (e: React.MouseEvent, id: string) => void,
     onRename: (e: React.MouseEvent, id: string, name: string) => void
 }) {
+    const [selectedYear, setSelectedYear] = React.useState<string>('todos');
+
+    const availableYears = React.useMemo(() => {
+        const years = new Set<string>();
+        snapshots.forEach(s => {
+            const date = s.updatedAt || s.createdAt;
+            if (date?.toDate) years.add(date.toDate().getFullYear().toString());
+            else if (date instanceof Date) years.add(date.getFullYear().toString());
+        });
+        return Array.from(years).sort((a, b) => b.localeCompare(a));
+    }, [snapshots]);
+
+    const filteredSnapshots = React.useMemo(() => {
+        if (selectedYear === 'todos') return snapshots;
+        return snapshots.filter(s => {
+            const date = s.updatedAt || s.createdAt;
+            let yearStr = '';
+            if (date?.toDate) yearStr = date.toDate().getFullYear().toString();
+            else if (date instanceof Date) yearStr = date.getFullYear().toString();
+            return yearStr === selectedYear;
+        });
+    }, [snapshots, selectedYear]);
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[1000px] h-full sm:h-[90vh] flex flex-col p-0">
-                <DialogHeader className="p-6 border-b">
-                    <DialogTitle className="flex items-center gap-2">
-                        <History className="h-5 w-5 text-primary" /> Historial de Proyecciones
-                    </DialogTitle>
-                    <DialogDescription>
-                        Gestiona y visualiza tus escenarios de producción guardados.
-                    </DialogDescription>
+                <DialogHeader className="p-6 border-b flex flex-row items-center justify-between">
+                    <div className="space-y-1.5">
+                        <DialogTitle className="flex items-center gap-2">
+                            <History className="h-5 w-5 text-primary" /> Historial de Proyecciones
+                        </DialogTitle>
+                        <DialogDescription>
+                            Gestiona y visualiza tus escenarios de producción guardados.
+                        </DialogDescription>
+                    </div>
+                    {availableYears.length > 0 && (
+                        <div className="flex items-center gap-2 mr-6">
+                            <span className="text-sm font-medium text-muted-foreground">Año:</span>
+                            <Select value={selectedYear} onValueChange={setSelectedYear}>
+                                <SelectTrigger className="w-[100px] h-9">
+                                    <SelectValue placeholder="Todos" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="todos">Todos</SelectItem>
+                                    {availableYears.map(year => (
+                                        <SelectItem key={year} value={year}>{year}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
                 </DialogHeader>
                 <div className="flex-1 overflow-y-auto p-6">
                     {isLoading ? (
@@ -6011,9 +7252,14 @@ function HistorySidebar({
                             <Archive className="h-10 w-10 mx-auto text-muted-foreground opacity-20 mb-2" />
                             <p className="text-sm text-muted-foreground">No hay escenarios guardados.</p>
                         </div>
+                    ) : filteredSnapshots.length === 0 ? (
+                        <div className="text-center py-20">
+                            <Archive className="h-10 w-10 mx-auto text-muted-foreground opacity-20 mb-2" />
+                            <p className="text-sm text-muted-foreground">No hay escenarios guardados para el año seleccionado.</p>
+                        </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {snapshots.map((s) => {
+                            {filteredSnapshots.map((s) => {
                                 const isActive = activeSnapshotId === s.id;
                                 return (
                                     <div
@@ -6252,8 +7498,8 @@ function OnDemandReportModal({
                 <div className="py-10 px-12 space-y-8 bg-white text-slate-900 shadow-2xl rounded-sm max-w-[95%] mx-auto" ref={reportRef}>
                     <div className="border-b-2 border-primary pb-6 mb-8 flex justify-between items-end">
                         <div>
-                            <h2 className="text-3xl font-black text-primary uppercase tracking-tighter">Control 7</h2>
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Sistema de SimulaciÃ³n Industrial</p>
+                            <h2 className="text-3xl font-black text-primary uppercase tracking-tighter">Control 7 SGP</h2>
+                            <p className="text-muted-foreground font-medium">SIMULADOR Y PROYECCIÓN</p>
                         </div>
                         <div className="text-right">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fecha del Reporte</p>
@@ -6511,17 +7757,74 @@ export default function OperationsClient({
     const [isClient, setIsClient] = React.useState(false);
     const { toast } = useToast();
 
+    const [realtimeProducts, setRealtimeProducts] = React.useState<ProductDefinition[]>(prefetchedProducts);
+
+    React.useEffect(() => {
+        const unsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+            const updatedProducts = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            })) as ProductDefinition[];
+            if (updatedProducts.length > 0) {
+                setRealtimeProducts(updatedProducts);
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
     const familiarCategoryId = React.useMemo(() => {
         return prefetchedCategories.find(c => c.name.toLowerCase() === 'familiar')?.id;
     }, [prefetchedCategories]);
 
     const products = React.useMemo(() => {
-        const activeProducts = prefetchedProducts.filter(p => p.isActive);
+        let activeProducts = realtimeProducts.filter(p => p.isActive);
         if (familiarCategoryId) {
-            return activeProducts.filter(p => p.categoryId === familiarCategoryId);
+            activeProducts = activeProducts.filter(p => p.categoryId === familiarCategoryId);
         }
-        return activeProducts; // Fallback to all active products if category not found
-    }, [prefetchedProducts, familiarCategoryId]);
+
+        const normalizeName = (name: string) => name.toLowerCase().replace(/\s+/g, ' ').replace(/[-\u2013\u2014]/g, '-').trim();
+        const customSortOrder = [
+            "1 kg -blanca (12 kg) san juan",
+            "1 kg -blanca (12 kg) don antonio",
+            "1 kg -blanca (50 kg) don antonio",
+            "1 kg -blanca (50 kg) san juan",
+            "2 kg -blanca (50 kg) san juan",
+            "5 kg -blanca (50 kg) san juan",
+            "500 g -blanca (25 kg) san juan",
+            "1 kg -morena (50 kg) san juan",
+            "2 kg -morena (50 kg) san juan",
+            "1 kg -morena (50 kg) don antonio"
+        ];
+
+        activeProducts.sort((a, b) => {
+            const nameA = normalizeName(a.productName);
+            const nameB = normalizeName(b.productName);
+            let idxA = customSortOrder.indexOf(nameA);
+            let idxB = customSortOrder.indexOf(nameB);
+
+            if (idxA === -1) idxA = customSortOrder.findIndex(c => nameA.includes(c) || c.includes(nameA));
+            if (idxB === -1) idxB = customSortOrder.findIndex(c => nameB.includes(c) || c.includes(nameB));
+
+            if (idxA === -1) idxA = 999;
+            if (idxB === -1) idxB = 999;
+
+            if (idxA !== idxB) return idxA - idxB;
+            return nameA.localeCompare(nameB);
+        });
+
+        return activeProducts; 
+    }, [realtimeProducts, familiarCategoryId]);
+
+    const modalProducts = React.useMemo(() => {
+        const granelBlanca = realtimeProducts.find(p => p.productName.toLowerCase().includes('granel') && p.productName.toLowerCase().includes('50kg') && p.productName.toLowerCase().includes('blanca'));
+        const granelObs = realtimeProducts.find(p => p.productName.toLowerCase().includes('granel') && p.productName.toLowerCase().includes('50kg') && p.productName.toLowerCase().includes('observaci'));
+        
+        const additional = [];
+        if (granelBlanca && !products.find(p => p.id === granelBlanca.id)) additional.push(granelBlanca);
+        if (granelObs && !products.find(p => p.id === granelObs.id)) additional.push(granelObs);
+
+        return [...products, ...additional];
+    }, [products, realtimeProducts]);
 
     // --- Unified Configuration State ---
     const [machines, setMachines] = React.useState<MachineState[]>([]);
@@ -6633,7 +7936,7 @@ export default function OperationsClient({
         const initialQQInReceivers = receivers.reduce((sum, r) => sum + r.currentQQ, 0);
         return {
             elapsedTime: 0,
-            virtualTimeSeconds: shiftType === 'day' ? 7 * 3600 : 18 * 3600, // 07:00 or 18:00
+            virtualTimeSeconds: shiftType === 'day' ? SHIFT_CONFIG.day.startHour * 3600 : SHIFT_CONFIG.night.startHour * 3600, // Dynamic shift start
             isBreakActive: false,
             machineTotals: { 1: 0, 2: 0, 3: 0, 4: 0 },
             wrappers: {
@@ -6780,8 +8083,8 @@ export default function OperationsClient({
                 { id: 4, productId: 'inactive', speed: 38, loss: 0, isSimulatingActive: false, keepActiveDuringBreaks: false },
             ],
             wrappers: [
-                { id: '1', name: 'Enfardadora 1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, machineIds: [1, 2] },
-                { id: '2', name: 'Enfardadora 2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, machineIds: [3, 4] },
+                { id: '1', name: 'Enfardadora #1', capacity: 110, unitsPerBundle: 12, conveyorDelay: 6, machineIds: [1, 2] },
+                { id: '2', name: 'Enfardadora #2', capacity: 80, unitsPerBundle: 12, conveyorDelay: 6, machineIds: [3, 4] },
             ],
             silos: [
                 { id: 'familiar', name: 'Silo Familiar', capacityQQ: 380 },
@@ -7312,7 +8615,7 @@ export default function OperationsClient({
                         activeDraining.state = 'idle';
                     }
                 } else {
-                    // 2. No hay drenado activo -> iniciar SOLO si el tanque esta VACÃƒÆ’Ã‚ O
+                    // 2. No hay drenado activo -> iniciar SOLO si el tanque esta vacio
                     const tankIsEmpty = nextState.bufferTankQQ <= 0.01;
                     if (tankIsEmpty) {
                         const nextReceiver = nextState.receivers.find(
@@ -8025,7 +9328,7 @@ export default function OperationsClient({
     const totalQQInReceivers = simulationState.receivers.reduce((sum, r) => sum + r.currentQQ, 0);
 
     if (isProjectionView) {
-        return <ProductionProjectionView onClose={() => { router.push('/ia'); }} machines={machines} products={products} />;
+        return <ProductionProjectionView onClose={() => { router.push('/ia'); }} machines={machines} products={products} modalProducts={modalProducts} />;
     }
 
     return (
@@ -8145,7 +9448,9 @@ export default function OperationsClient({
                                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                                             <div className="flex items-center gap-1">
                                                 <CalendarDays className="h-3 w-3" />
-                                                <span>Turno {shiftType === 'day' ? 'Dia (07:00 - 17:59)' : 'Noche (18:00 - 06:59)'}</span>
+                                                <span>Turno {shiftType === 'day' 
+                                                  ? `Dia (${String(SHIFT_CONFIG.day.startHour).padStart(2, '0')}:00 - ${String(SHIFT_CONFIG.day.endHour - 1).padStart(2, '0')}:59)` 
+                                                  : `Noche (${String(SHIFT_CONFIG.night.startHour).padStart(2, '0')}:00 - ${String(SHIFT_CONFIG.night.endHour - 1).padStart(2, '0')}:59)`}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -9089,7 +10394,7 @@ export default function OperationsClient({
                                                 <Sun className="h-6 w-6" />
                                                 <div className="text-center">
                                                     <div className="font-bold">Dia</div>
-                                                    <div className="text-[10px] opacity-80">07:00 - 17:59</div>
+                                                    <div className="text-[10px] opacity-80">{`${String(SHIFT_CONFIG.day.startHour).padStart(2, '0')}:00 - ${String(SHIFT_CONFIG.day.endHour - 1).padStart(2, '0')}:59`}</div>
                                                 </div>
                                             </Button>
                                             <Button
@@ -9103,7 +10408,7 @@ export default function OperationsClient({
                                                 <Moon className="h-6 w-6" />
                                                 <div className="text-center">
                                                     <div className="font-bold">Noche</div>
-                                                    <div className="text-[10px] opacity-80">18:00 - 06:59</div>
+                                                    <div className="text-[10px] opacity-80">{`${String(SHIFT_CONFIG.night.startHour).padStart(2, '0')}:00 - ${String(SHIFT_CONFIG.night.endHour - 1).padStart(2, '0')}:59`}</div>
                                                 </div>
                                             </Button>
                                         </div>
@@ -9408,6 +10713,7 @@ export default function OperationsClient({
                                 onReserveToggle={setIsReserveSiloEnabled}
                             />
                         )}
+
                         {editingReceiver && (
                             <ReceiverEditDialog
                                 open={!!editingReceiver}
@@ -9465,6 +10771,65 @@ export default function OperationsClient({
     );
 }
 
+
+
+function FormattedInput({ value, onChange, className, placeholder, disabled }: { value: number | string, onChange: (val: number) => void, className?: string, placeholder?: string, disabled?: boolean }) {
+    const [displayValue, setDisplayValue] = React.useState(() => {
+        if (value === '' || value === 0 || value === undefined) return '';
+        return formatCustomNumber(Number(value));
+    });
+
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    React.useEffect(() => {
+        if (document.activeElement !== inputRef.current) {
+            if (value === '' || value === 0 || value === undefined) {
+                setDisplayValue('');
+            } else {
+                setDisplayValue(formatCustomNumber(Number(value)));
+            }
+        }
+    }, [value]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const raw = e.target.value;
+        if (raw !== '' && /[^0-9.,]/.test(raw)) return;
+        
+        setDisplayValue(raw);
+        
+        if (raw === '') {
+            onChange(0);
+            return;
+        }
+
+        const num = parseSmartNumber(raw);
+        if (!isNaN(num)) {
+            onChange(num);
+        }
+    };
+
+    const handleBlur = () => {
+        if (!displayValue) return;
+        const num = parseSmartNumber(displayValue);
+        if (!isNaN(num)) {
+            setDisplayValue(formatCustomNumber(num));
+        }
+    };
+
+    return (
+        <Input 
+            ref={inputRef}
+            type="text" 
+            disabled={disabled}
+            className={className} 
+            placeholder={placeholder}
+            value={displayValue} 
+            onChange={handleChange}
+            onBlur={handleBlur}
+        />
+    );
+}
+
 function GoalsModal({
     open,
     onOpenChange,
@@ -9475,6 +10840,7 @@ function GoalsModal({
     setPlannedSpeeds,
     dailySupply,
     setDailySupply,
+    setOverrides,
     isReadOnly
 }: {
     open: boolean,
@@ -9486,6 +10852,7 @@ function GoalsModal({
     setPlannedSpeeds: React.Dispatch<React.SetStateAction<Record<string, number>>>,
     dailySupply: number,
     setDailySupply: (val: number) => void,
+    setOverrides?: React.Dispatch<React.SetStateAction<Record<string, { productId?: string, speed?: number, inactive?: boolean }>>>,
     isReadOnly?: boolean
 }) {
     const [localGoals, setLocalGoals] = React.useState<Record<string, number>>(plannedGoals);
@@ -9504,6 +10871,25 @@ function GoalsModal({
         setPlannedGoals(localGoals);
         setPlannedSpeeds(localSpeeds);
         setDailySupply(localSupply);
+        
+        if (setOverrides) {
+            setOverrides(prev => {
+                const next = { ...prev };
+                let updated = false;
+                Object.keys(next).forEach(key => {
+                    const block = next[key];
+                    if (block && !block.inactive && block.productId) {
+                        const newSpeed = localSpeeds[block.productId];
+                        if (newSpeed !== undefined && block.speed !== newSpeed) {
+                            next[key] = { ...block, speed: newSpeed };
+                            updated = true;
+                        }
+                    }
+                });
+                return updated ? next : prev;
+            });
+        }
+        
         onOpenChange(false);
     };
 
@@ -9529,11 +10915,10 @@ function GoalsModal({
                                 </div>
                             </div>
                             <div className="relative shrink-0">
-                                <Input
+                                <FormattedInput
                                     disabled={isReadOnly}
-                                    type="number"
                                     value={localSupply}
-                                    onChange={(e) => setLocalSupply(Number(e.target.value))}
+                                    onChange={(val) => setLocalSupply(val)}
                                     className="w-32 h-10 text-lg font-black bg-white border-primary/30 text-center pr-8 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                 />
                                 <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-primary/50">QQ</span>
@@ -9560,12 +10945,11 @@ function GoalsModal({
                                 <div className="flex flex-col gap-1">
                                     <Label className="text-[9px] uppercase font-bold text-muted-foreground text-center">Velocidad</Label>
                                     <div className="relative">
-                                        <Input
+                                        <FormattedInput
                                             disabled={isReadOnly}
-                                            type="number"
-                                            className="w-20 h-8 text-center font-black text-emerald-600 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="w-24 h-8 text-center font-black text-emerald-600 pr-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             value={localSpeeds[product.id] || ''}
-                                            onChange={(e) => setLocalSpeeds(prev => ({ ...prev, [product.id]: Number(e.target.value) }))}
+                                            onChange={(val) => setLocalSpeeds(prev => ({ ...prev, [product.id]: val }))}
                                             placeholder="0"
                                         />
                                         <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] font-bold text-emerald-600/50">bpm</span>
@@ -9574,12 +10958,11 @@ function GoalsModal({
                                 <div className="flex flex-col gap-1">
                                     <Label className="text-[9px] uppercase font-bold text-muted-foreground text-center">Meta QQ</Label>
                                     <div className="relative">
-                                        <Input
+                                        <FormattedInput
                                             disabled={isReadOnly}
-                                            type="number"
-                                            className="w-24 h-8 text-center font-black text-primary [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                            className="w-32 h-8 text-center font-black text-primary pr-6 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                                             value={localGoals[product.id] || ''}
-                                            onChange={(e) => setLocalGoals(prev => ({ ...prev, [product.id]: Number(e.target.value) }))}
+                                            onChange={(val) => setLocalGoals(prev => ({ ...prev, [product.id]: val }))}
                                             placeholder="0"
                                         />
                                         <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] font-bold text-primary/50">QQ</span>
@@ -9600,6 +10983,152 @@ function GoalsModal({
 
 
 
+function WeeklyProductsChart({
+    weeklyDetail,
+    products,
+    modalProducts,
+    isPDF,
+    id
+}: {
+    weeklyDetail: Record<number, any>,
+    products: ProductDefinition[],
+    modalProducts?: ProductDefinition[],
+    isPDF?: boolean,
+    id?: string
+}) {
+    const granelProducts = (modalProducts || products).filter(p => p.productName.toLowerCase().includes('granel') && p.productName.toLowerCase().includes('50kg'));
+    const blancaGranel = granelProducts.find(p => p.productName.toLowerCase().includes('blanca'));
+    
+    const allProducts = [...products];
+    if (blancaGranel && !allProducts.find(p => p.id === blancaGranel.id)) {
+        allProducts.push(blancaGranel);
+    }
+
+    const data = Object.entries(weeklyDetail).map(([weekNum, stats]) => {
+        const productQQ = stats.productQQ || {};
+        const productUnits = stats.productUnits || {};
+        const entry: any = { name: `Sem ${weekNum}` };
+        
+        Object.keys({ ...productQQ, ...productUnits }).forEach(pId => {
+            entry[pId + '_qq'] = productQQ[pId] || 0;
+            entry[pId + '_units'] = productUnits[pId] || 0;
+        });
+
+        if (blancaGranel && stats.granelQQ) {
+            entry[blancaGranel.id + '_qq'] = stats.granelQQ;
+            entry[blancaGranel.id + '_units'] = stats.granelQQ;
+        }
+
+        return entry;
+    });
+
+    if (data.length === 0) return null;
+
+    const productsWithData = allProducts.filter(p => {
+        return data.some(d => (d[p.id + '_qq'] || 0) > 0);
+    });
+
+    if (productsWithData.length === 0) return null;
+
+    const totals: Record<string, { qq: number, units: number }> = {};
+    productsWithData.forEach(p => {
+        totals[p.id] = { qq: 0, units: 0 };
+        data.forEach(row => {
+            totals[p.id].qq += (row[p.id + '_qq'] || 0);
+            totals[p.id].units += (row[p.id + '_units'] || 0);
+        });
+    });
+
+    const [isExpanded, setIsExpanded] = React.useState(true);
+
+    return (
+        <Card id={id} className="mt-6 mb-8 border shadow-lg overflow-hidden">
+            <CardHeader className="bg-muted/30 pb-4 border-b cursor-pointer select-none" onClick={() => setIsExpanded(!isExpanded)}>
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <CalendarDays className="h-5 w-5 text-purple-600" />
+                        <CardTitle className="text-lg font-black uppercase tracking-tight">Proyecciones Semanales por Presentación</CardTitle>
+                    </div>
+                    {isExpanded ? <ChevronUp className="h-5 w-5 text-muted-foreground" /> : <ChevronDown className="h-5 w-5 text-muted-foreground" />}
+                </div>
+            </CardHeader>
+            {isExpanded && (
+                <CardContent className="p-0">
+                <div className="w-full overflow-x-auto">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-muted/50 border-b text-muted-foreground">
+                            <tr>
+                                <th className="p-4 font-semibold whitespace-nowrap">Semana</th>
+                                {productsWithData.map(p => (
+                                    <th key={p.id} className="p-4 font-semibold min-w-[100px] max-w-[140px] align-top">
+                                        <div className="flex items-start gap-2">
+                                            <div className="w-3 h-3 rounded-full shrink-0 mt-1" style={{ backgroundColor: p.color || '#ccc' }}></div>
+                                            <span className="leading-tight text-balance">{p.productName}</span>
+                                        </div>
+                                    </th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                            {data.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-muted/20 transition-colors">
+                                    <td className="p-4 font-medium whitespace-nowrap">{row.name}</td>
+                                    {productsWithData.map(p => {
+                                        const qqVal = row[p.id + '_qq'] || 0;
+                                        const unitsVal = row[p.id + '_units'] || 0;
+                                        const isGranel = p?.productName.toLowerCase().includes('granel');
+                                        const unitType = (p?.primaryPackaging === 'fardo' || p?.bundleWeight) ? 'Fardos' : 'Sacos';
+                                        
+                                        return (
+                                            <td key={p.id} className="p-4 whitespace-nowrap text-muted-foreground">
+                                                {qqVal > 0 ? (
+                                                    <div className="flex flex-col">
+                                                        <span className="font-semibold text-foreground">
+                                                            {unitsVal.toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[10px] font-normal text-muted-foreground ml-0.5">{isGranel ? 'Sacos' : unitType}</span>
+                                                        </span>
+                                                        <span className="text-[11px] font-medium text-muted-foreground/80">
+                                                            {qqVal.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ
+                                                        </span>
+                                                    </div>
+                                                ) : '-'}
+                                            </td>
+                                        );
+                                    })}
+                                </tr>
+                            ))}
+                            <tr className="bg-muted/30 border-t-2 border-muted hover:bg-muted/40 transition-colors">
+                                <td className="p-4 font-black whitespace-nowrap uppercase tracking-tight text-foreground">Total</td>
+                                {productsWithData.map(p => {
+                                    const qqVal = totals[p.id].qq;
+                                    const unitsVal = totals[p.id].units;
+                                    const isGranel = p?.productName.toLowerCase().includes('granel');
+                                    const unitType = (p?.primaryPackaging === 'fardo' || p?.bundleWeight) ? 'Fardos' : 'Sacos';
+                                    
+                                    return (
+                                        <td key={p.id} className="p-4 whitespace-nowrap">
+                                            {qqVal > 0 ? (
+                                                <div className="flex flex-col">
+                                                    <span className="font-black text-foreground">
+                                                        {unitsVal.toLocaleString(undefined, { maximumFractionDigits: 0 })} <span className="text-[10px] font-bold text-muted-foreground ml-0.5">{isGranel ? 'Sacos' : unitType}</span>
+                                                    </span>
+                                                    <span className="text-[11px] font-bold text-muted-foreground/90">
+                                                        {qqVal.toLocaleString(undefined, { maximumFractionDigits: 1 })} QQ
+                                                    </span>
+                                                </div>
+                                            ) : '-'}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                </CardContent>
+            )}
+        </Card>
+    );
+}
+
 function CombinedReport({
     productionData,
     plannedGoals,
@@ -9609,6 +11138,8 @@ function CombinedReport({
     totalGranelQQ,
     fulfillmentPct,
     totalPlannedQQ,
+    plannedGranel = 0,
+    modalProducts,
     id,
     isPDF
 }: {
@@ -9620,14 +11151,16 @@ function CombinedReport({
     totalGranelQQ: number,
     fulfillmentPct: number,
     totalPlannedQQ: number,
+    plannedGranel?: number,
+    modalProducts?: ProductDefinition[],
     id?: string,
     isPDF?: boolean
 }) {
     const comparisonData = products
         .filter(p => productionData[p.id]?.qq > 0 || (plannedGoals[p.id] || 0) > 0)
         .map(p => {
-            const projected = Math.round(productionData[p.id]?.qq || 0);
-            const planned = Math.round(plannedGoals[p.id] || 0);
+            const projected = productionData[p.id]?.qq || 0;
+            const planned = plannedGoals[p.id] || 0;
             const diff = projected - planned;
             const percentage = planned > 0 ? (projected / planned) * 100 : 0;
 
@@ -9646,9 +11179,32 @@ function CombinedReport({
     const totalFulfillment = totalPlanned > 0 ? (totalFamiliarQQ / totalPlanned) * 100 : 0;
 
     const balance = Math.max(0, totalSupply - totalFamiliarQQ - totalGranelQQ);
-    const bulkData = [
-        { name: 'Granel', value: totalGranelQQ, color: '#10b981' }
-    ];
+    
+    const granelProducts = (modalProducts || products).filter(p => p.productName.toLowerCase().includes('granel') && p.productName.toLowerCase().includes('50kg'));
+    const totalPlannedGranel = granelProducts.reduce((sum, p) => sum + (plannedGoals[p.id] || 0), 0);
+
+    const bulkData = granelProducts.map(p => {
+        const planned = plannedGoals[p.id] || 0;
+        let projected = 0;
+        
+        if (p.productName.toLowerCase().includes('blanca')) {
+            projected = totalGranelQQ;
+        } else {
+            projected = 0;
+        }
+
+        const diff = projected - planned;
+        const percentage = planned > 0 ? (projected / planned) * 100 : 0;
+
+        return {
+            name: p.productName,
+            projected,
+            planned,
+            diff,
+            percentage: (percentage > 100 ? "+" : "") + percentage.toFixed(1) + '%',
+            color: p.color || '#10b981'
+        };
+    }).filter(d => d.projected > 0 || d.planned > 0);
 
     if (comparisonData.length === 0) return null;
 
@@ -9660,46 +11216,7 @@ function CombinedReport({
                         <BarChartIcon className="h-5 w-5 text-primary" />
                         <CardTitle className="text-lg font-black uppercase tracking-tight">Reporte Consolidado de Balances</CardTitle>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                        <div className="flex flex-col gap-1.5 bg-indigo-500/5 px-2 py-1 rounded border border-indigo-500/10">
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded bg-indigo-500/20 border border-indigo-500"></div>
-                                <span>Familiar: <span className="text-indigo-600 font-black ml-1">{totalFamiliarQQ.toLocaleString()}</span></span>
-                            </div>
-                            <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-indigo-100 text-indigo-700 border-indigo-200 font-black">
-                                {(totalFamiliarQQ + totalGranelQQ) > 0 ? ((totalFamiliarQQ / (totalFamiliarQQ + totalGranelQQ)) * 100).toFixed(1) : 0}% de Producción
-                            </Badge>
-                        </div>
-                        <div className="flex flex-col gap-1.5 bg-emerald-500/5 px-2 py-1 rounded border border-emerald-500/10">
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded bg-emerald-500/20 border border-emerald-500"></div>
-                                <span>Granel: <span className="text-emerald-600 font-black ml-1">{totalGranelQQ.toLocaleString()}</span></span>
-                            </div>
-                            <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-emerald-100 text-emerald-700 border-emerald-200 font-black">
-                                {(totalFamiliarQQ + totalGranelQQ) > 0 ? ((totalGranelQQ / (totalFamiliarQQ + totalGranelQQ)) * 100).toFixed(1) : 0}% de Producción
-                            </Badge>
-                        </div>
-                        <div className="h-4 w-px bg-border mx-1"></div>
-                        <div className="flex flex-col gap-1.5 bg-primary/5 px-2 py-1 rounded border border-primary/10">
-                            <div className="flex items-center gap-1.5">
-                                <div className="w-2.5 h-2.5 rounded bg-primary shadow-sm"></div>
-                                <span>Meta: <span className="text-primary font-black ml-1">{totalPlannedQQ.toLocaleString()}</span></span>
-                            </div>
-                            <Badge variant={fulfillmentPct >= 100 ? "outline" : "outline"} className={cn("text-[8px] h-3.5 px-1 font-black", fulfillmentPct >= 100 ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-primary/10 text-primary border-primary/20")}>
-                                {fulfillmentPct.toFixed(1)}% Cumplimiento
-                            </Badge>
-                        </div>
-                        <div className={cn("flex flex-col gap-1.5 px-2 py-1 rounded border ml-1", totalFamiliarQQ >= totalPlannedQQ ? "bg-emerald-500/5 border-emerald-500/10" : "bg-destructive/5 border-destructive/10")}>
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-tight">
-                                <div className={cn("w-2.5 h-2.5 rounded shadow-sm", totalFamiliarQQ >= totalPlannedQQ ? "bg-emerald-500" : "bg-destructive")}></div>
-                                <span>{totalFamiliarQQ >= totalPlannedQQ ? "Excedente" : "Diferencia"}: <span className={cn("font-black ml-1", totalFamiliarQQ >= totalPlannedQQ ? "text-emerald-700" : "text-destructive")}>{totalFamiliarQQ >= totalPlannedQQ ? "+" : ""}{(totalFamiliarQQ - totalPlannedQQ).toLocaleString()}</span></span>
-                            </div>
-                            <Badge variant="outline" className={cn("text-[8px] h-3.5 px-1 font-black", totalFamiliarQQ >= totalPlannedQQ ? "bg-emerald-100 text-emerald-700 border-emerald-200" : "bg-destructive/10 text-destructive border-destructive/20")}>
-                                {Math.abs((totalFamiliarQQ - totalPlannedQQ) / (totalPlannedQQ || 1) * 100).toFixed(1)}% {totalFamiliarQQ >= totalPlannedQQ ? "por encima" : "faltante"}
-                            </Badge>
-                        </div>
 
-                    </div>
                 </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -9711,17 +11228,47 @@ function CombinedReport({
                         </h3>
                         <div className="h-[400px] w-full">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={comparisonData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barGap={8}>
+                                <BarChart data={comparisonData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barGap={2} barCategoryGap="5%">
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                     <XAxis
                                         dataKey="name"
-                                        angle={-45}
-                                        textAnchor="end"
                                         interval={0}
-                                        height={80}
-                                        tick={{ fontSize: 10, fontWeight: 700 }}
+                                        height={60}
+                                        tick={(props: any) => {
+                                            const { x, y, payload } = props;
+                                            const label = payload.value || "";
+                                            if (label.length <= 15) {
+                                                return (
+                                                    <text x={x} y={y + 14} textAnchor="middle" fill="#64748b" fontSize={9} fontWeight={700}>
+                                                        {label}
+                                                    </text>
+                                                );
+                                            }
+                                            const words = label.split(' ');
+                                            const lines = [];
+                                            let currentLine = "";
+                                            words.forEach((w: string) => {
+                                                if ((currentLine + w).length > 16 && currentLine.length > 0) {
+                                                    lines.push(currentLine.trim());
+                                                    currentLine = w + " ";
+                                                } else {
+                                                    currentLine += w + " ";
+                                                }
+                                            });
+                                            if (currentLine.trim()) lines.push(currentLine.trim());
+
+                                            return (
+                                                <g transform={`translate(${x},${y})`}>
+                                                    {lines.map((line, i) => (
+                                                        <text key={i} x={0} y={14 + i * 12} textAnchor="middle" fill="#64748b" fontSize={9} fontWeight={700}>
+                                                            {line}
+                                                        </text>
+                                                    ))}
+                                                </g>
+                                            );
+                                        }}
                                     />
-                                    <YAxis tick={{ fontSize: 10, fontWeight: 700 }} label={{ value: 'Quintales (QQ)', angle: -90, position: 'insideLeft', style: { fontSize: 10, fontWeight: 800, fill: '#64748b' } }} />
+                                    <YAxis tick={{ fontSize: 10, fontWeight: 700 }} label={{ value: 'Quintales (QQ)', angle: -90, position: 'insideLeft', style: { fontSize: 10, fontWeight: 800, fill: '#64748b' } }} domain={[0, (dataMax: number) => (dataMax ? Math.round(dataMax * 1.15) : 1000)]} />
                                     <RechartsTooltip
                                         content={({ active, payload }) => {
                                             if (active && payload && payload.length) {
@@ -9735,11 +11282,11 @@ function CombinedReport({
                                                         <div className="space-y-1">
                                                             <div className="flex justify-between text-[11px]">
                                                                 <span className="text-muted-foreground">Proyectado:</span>
-                                                                <span className="font-black text-primary">{d.projected.toLocaleString()} QQ</span>
+                                                                <span className="font-black text-primary">{formatCustomNumber(d.projected)} QQ</span>
                                                             </div>
                                                             <div className="flex justify-between text-[11px]">
                                                                 <span className="text-muted-foreground">Planificado:</span>
-                                                                <span className="font-black text-muted-foreground">{d.planned.toLocaleString()} QQ</span>
+                                                                <span className="font-black text-muted-foreground">{formatCustomNumber(d.planned)} QQ</span>
                                                             </div>
                                                             <div className="pt-1 mt-1 border-t flex justify-between items-center">
                                                                 <span className="text-[10px] font-bold uppercase">Cumplimiento:</span>
@@ -9748,7 +11295,7 @@ function CombinedReport({
                                                             <div className="flex justify-between text-[10px]">
                                                                 <span className="text-muted-foreground">Diferencia:</span>
                                                                 <span className={cn("font-bold", d.diff >= 0 ? "text-emerald-600" : "text-destructive")}>
-                                                                    {d.diff >= 0 ? "+" : ""}{d.diff.toLocaleString()} QQ
+                                                                    {d.diff >= 0 ? "+" : ""}{formatCustomNumber(d.diff)} QQ
                                                                 </span>
                                                             </div>
                                                         </div>
@@ -9768,34 +11315,26 @@ function CombinedReport({
                                                 const { x, y, width, value, index } = props;
                                                 const d = comparisonData[index];
                                                 if (!d) return null;
+                                                const valStr = formatCustomNumber(value);
                                                 return (
                                                     <g>
                                                         <text
                                                             x={x + width / 2}
-                                                            y={y - 25}
+                                                            y={y - 24}
                                                             fill={d.color}
                                                             textAnchor="middle"
                                                             style={{ fontSize: '10px', fontWeight: '900' }}
                                                         >
                                                             {d.percentage}
                                                         </text>
-                                                        {/* Badge de resaltado para el valor QQ */}
-                                                        <rect
-                                                            x={x + width / 2 - 22}
-                                                            y={y - 17}
-                                                            width={44}
-                                                            height={12}
-                                                            rx={4}
-                                                            fill={d.color}
-                                                        />
                                                         <text
                                                             x={x + width / 2}
-                                                            y={y - 8}
-                                                            fill="#fff"
+                                                            y={y - 7}
+                                                            fill={d.color}
                                                             textAnchor="middle"
-                                                            style={{ fontSize: '9px', fontWeight: '900' }}
+                                                            style={{ fontSize: '10px', fontWeight: '900' }}
                                                         >
-                                                            {value.toLocaleString()}
+                                                            {valStr}
                                                         </text>
                                                     </g>
                                                 );
@@ -9808,24 +11347,17 @@ function CombinedReport({
                                             content={(props: any) => {
                                                 const { x, y, width, value } = props;
                                                 if (value === undefined || value === null) return null;
+                                                const valStr = value.toLocaleString();
                                                 return (
                                                     <g>
-                                                        <rect
-                                                            x={x + width / 2 - 22}
-                                                            y={y - 17}
-                                                            width={44}
-                                                            height={12}
-                                                            rx={4}
-                                                            fill="#64748b"
-                                                        />
                                                         <text
                                                             x={x + width / 2}
-                                                            y={y - 8}
-                                                            fill="#fff"
+                                                            y={y - 7}
+                                                            fill="#64748b"
                                                             textAnchor="middle"
-                                                            style={{ fontSize: '9px', fontWeight: '900' }}
+                                                            style={{ fontSize: '10px', fontWeight: '900' }}
                                                         >
-                                                            {value.toLocaleString()}
+                                                            {valStr}
                                                         </text>
                                                     </g>
                                                 );
@@ -9848,8 +11380,41 @@ function CombinedReport({
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                     <XAxis
                                         dataKey="name"
-                                        tick={{ fontSize: 10, fontWeight: 700 }}
-                                        height={80}
+                                        interval={0}
+                                        height={60}
+                                        tick={(props: any) => {
+                                            const { x, y, payload } = props;
+                                            const label = payload.value || "";
+                                            if (label.length <= 15) {
+                                                return (
+                                                    <text x={x} y={y + 14} textAnchor="middle" fill="#64748b" fontSize={9} fontWeight={700}>
+                                                        {label}
+                                                    </text>
+                                                );
+                                            }
+                                            const words = label.split(' ');
+                                            const lines = [];
+                                            let currentLine = "";
+                                            words.forEach((w: string) => {
+                                                if ((currentLine + w).length > 16 && currentLine.length > 0) {
+                                                    lines.push(currentLine.trim());
+                                                    currentLine = w + " ";
+                                                } else {
+                                                    currentLine += w + " ";
+                                                }
+                                            });
+                                            if (currentLine.trim()) lines.push(currentLine.trim());
+
+                                            return (
+                                                <g transform={`translate(${x},${y})`}>
+                                                    {lines.map((line, i) => (
+                                                        <text key={i} x={0} y={14 + i * 12} textAnchor="middle" fill="#64748b" fontSize={9} fontWeight={700}>
+                                                            {line}
+                                                        </text>
+                                                    ))}
+                                                </g>
+                                            );
+                                        }}
                                     />
                                     <YAxis tick={{ fontSize: 10, fontWeight: 700 }} />
                                     <RechartsTooltip
@@ -9858,13 +11423,30 @@ function CombinedReport({
                                             if (active && payload && payload.length) {
                                                 const d = payload[0].payload;
                                                 return (
-                                                    <div className="bg-white border shadow-xl rounded-lg p-3 space-y-1 min-w-[150px]">
-                                                        <div className="text-xs font-black uppercase text-muted-foreground">{d.name}</div>
-                                                        <div className="text-lg font-black" style={{ color: d.color }}>
-                                                            {d.value.toLocaleString()} QQ
+                                                    <div className="bg-white border shadow-xl rounded-lg p-3 space-y-2 min-w-[200px]">
+                                                        <div className="flex items-center gap-2 border-b pb-1">
+                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: d.color }}></div>
+                                                            <div className="text-xs font-black uppercase">{d.name}</div>
                                                         </div>
-                                                        <div className="text-[10px] text-muted-foreground">
-                                                            {((d.value / (totalFamiliarQQ + totalGranelQQ || 1)) * 100).toFixed(1)}% de la Producción Total
+                                                        <div className="space-y-1">
+                                                            <div className="flex justify-between text-[11px]">
+                                                                <span className="text-muted-foreground">Proyectado:</span>
+                                                                <span className="font-black text-primary">{formatCustomNumber(d.projected)} QQ</span>
+                                                            </div>
+                                                            <div className="flex justify-between text-[11px]">
+                                                                <span className="text-muted-foreground">Planificado:</span>
+                                                                <span className="font-black text-muted-foreground">{formatCustomNumber(d.planned)} QQ</span>
+                                                            </div>
+                                                            <div className="pt-1 mt-1 border-t flex justify-between items-center">
+                                                                <span className="text-[10px] font-bold uppercase">Cumplimiento:</span>
+                                                                <Badge variant={parseFloat(d.percentage.replace('+', '')) >= 100 ? "default" : "destructive"} className="text-[10px] h-5 py-0">{d.percentage}</Badge>
+                                                            </div>
+                                                            <div className="flex justify-between text-[10px]">
+                                                                <span className="text-muted-foreground">Diferencia:</span>
+                                                                <span className={cn("font-bold", d.diff >= 0 ? "text-emerald-600" : "text-destructive")}>
+                                                                    {d.diff >= 0 ? "+" : ""}{formatCustomNumber(d.diff)} QQ
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 );
@@ -9872,11 +11454,57 @@ function CombinedReport({
                                             return null;
                                         }}
                                     />
-                                    <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={60} isAnimationActive={!isPDF}>
+                                    <Bar dataKey="projected" name="Proyectado" radius={[4, 4, 0, 0]} isAnimationActive={!isPDF}>
                                         {bulkData.map((entry, index) => (
                                             <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
-                                        <LabelList dataKey="value" position="top" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#64748b' }} formatter={(val: number) => val.toLocaleString()} />
+                                        <LabelList
+                                            dataKey="projected"
+                                            content={(props: any) => {
+                                                const { x, y, width, value, index } = props;
+                                                const d = bulkData[index];
+                                                if (!d || value === 0) return null;
+                                                const valStr = formatCustomNumber(value);
+                                                return (
+                                                    <g>
+                                                        <text
+                                                            x={x + width / 2}
+                                                            y={y - 14}
+                                                            fill={d.color}
+                                                            textAnchor="middle"
+                                                            style={{ fontSize: '10px', fontWeight: '900' }}
+                                                        >
+                                                            {valStr}
+                                                        </text>
+                                                    </g>
+                                                );
+                                            }}
+                                        />
+                                    </Bar>
+                                    <Bar dataKey="planned" name="Planificado" fill="hsl(var(--primary))" fillOpacity={0.8} radius={[4, 4, 0, 0]} isAnimationActive={!isPDF}>
+                                        <LabelList
+                                            dataKey="planned"
+                                            content={(props: any) => {
+                                                const { x, y, width, value, index } = props;
+                                                const d = bulkData[index];
+                                                if (!d || value === 0) return null;
+                                                const valStr = formatCustomNumber(value);
+                                                const badgeWidth = Math.max(38, Math.ceil(valStr.length * 6.5 + 6));
+                                                return (
+                                                    <g>
+                                                        <text
+                                                            x={x + width / 2}
+                                                            y={y - 7}
+                                                            fill="hsl(var(--primary))"
+                                                            textAnchor="middle"
+                                                            style={{ fontSize: '10px', fontWeight: '900' }}
+                                                        >
+                                                            {valStr}
+                                                        </text>
+                                                    </g>
+                                                );
+                                            }}
+                                        />
                                     </Bar>
                                 </BarChart>
                             </ResponsiveContainer>

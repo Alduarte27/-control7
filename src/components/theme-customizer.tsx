@@ -15,7 +15,7 @@ import { themes, applyTheme, type CustomThemeConfig } from '@/lib/themes';
 
 
 export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean, onOpenChange: (open: boolean) => void }) {
-  const { theme: mode, setTheme } = useTheme();
+  const { theme: mode, resolvedTheme, setTheme } = useTheme();
   const [activeTheme, setActiveTheme] = useState('Violeta Profundo');
   const [activeRadius, setActiveRadius] = useState(0.5);
 
@@ -77,10 +77,10 @@ export default function ThemeCustomizer({ open, onOpenChange }: { open: boolean,
     const selectedTheme = themes.find(t => t.name === preset);
     
     if (selectedTheme) {
-        const colors = mode === 'dark' ? selectedTheme.dark : selectedTheme.light;
+        const colors = resolvedTheme === 'dark' ? selectedTheme.dark : selectedTheme.light;
         applyTheme({ colors });
     }
-  }, [mode]);
+  }, [resolvedTheme]);
 
 
   return (

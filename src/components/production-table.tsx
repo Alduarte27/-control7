@@ -16,6 +16,7 @@ type ProductionTableProps = {
   onPlannedChange: (id: string, value: number) => void;
   onActualChange: (id: string, day: keyof DailyProduction, shift: 'day' | 'night' | 'lotNumber' | 'dayNote' | 'nightNote', value: any) => void;
   currentDate: Date;
+  activeMode: 'interzafra' | 'zafra' | 'reempaque' | 'reenvase';
 };
 
 const days: (keyof DailyProduction)[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -49,44 +50,55 @@ const renderProductRow = (
     item: ProductData, 
     handlePlannedInputChange: (id: string, value: string) => void, 
     setSelectedProductForShifts: (product: ProductData) => void,
-    setSelectedProductForIncidents: (product: ProductData) => void // NUEVO
+    setSelectedProductForIncidents: (product: ProductData) => void,
+    activeMode: 'interzafra' | 'zafra' | 'reempaque' | 'reenvase'
 ) => {
-    const totalActual = Object.values(item.actual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
-    const totalQuintales = (totalActual * (item.sackWeight || 50)) / KG_PER_QUINTAL;
+    const currentActualData = activeMode === 'zafra' ? item.actualZafra : activeMode === 'reempaque' ? item.actualReempaque : activeMode === 'reenvase' ? item.actualReenvase : item.actual;
+    const currentActual = currentActualData || item.actual; // fallback
+
+    const totalActual = Object.values(currentActual).reduce((sum, val) => sum + (val.day || 0) + (val.night || 0), 0);
+    const isFardo = item.primaryPackaging === 'fardo' || !!item.bundleWeight;
+    const weightPerUnit = isFardo ? (item.bundleWeight || 12) : (item.sackWeight || item.presentationWeight || 50);
+    const totalQuintales = (totalActual * weightPerUnit) / KG_PER_QUINTAL;
     const variance = totalActual - item.planned;
     const compliance = item.planned > 0 ? (totalActual / item.planned) * 100 : 0;
     const varianceColorClass = getVarianceColorClass(variance, compliance);
     const complianceColorClass = getComplianceColorClass(compliance);
+    
+    const pallets = item.unitsPerPallet && item.unitsPerPallet > 0 
+      ? (totalActual / item.unitsPerPallet).toFixed(1).replace(/\.0$/, '') 
+      : '-';
 
-    const hasIncidents = Object.values(item.actual).some(val => val.dayNote || val.nightNote);
+    const hasIncidents = Object.values(currentActual).some(val => val.dayNote || val.nightNote);
 
     return (
       <TableRow key={item.id} className="bg-card hover:bg-muted/50">
-        <TableCell className="font-medium sticky left-0 bg-card z-10 text-[10px] py-1 px-2">
+        <TableCell className="font-medium sticky left-0 bg-card z-10 text-[10px] py-1 px-2 w-[220px]">
           <div className="flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ backgroundColor: item.color || '#ccc' }}></span>
-            <span className="truncate max-w-[120px]">{item.productName}</span>
+            <span className="truncate max-w-[190px]">{item.productName}</span>
           </div>
         </TableCell>
-        <TableCell className="py-1 px-2">
+        <TableCell className="py-1 px-2 w-[90px]">
           <Input
             type="number"
-            value={item.planned}
+            value={item.planned || ''}
             onChange={(e) => handlePlannedInputChange(item.id, e.target.value)}
-            className={cn("text-right h-7 text-[10px]", item.isSuggested && "bg-blue-100 dark:bg-blue-900/50 border-blue-500")}
+            className={cn("text-right h-7 text-[10px] px-1", item.isSuggested && "bg-blue-100 dark:bg-blue-900/50 border-blue-500")}
             min="0"
           />
         </TableCell>
         {days.map(day => {
-          const dayTotal = (item.actual[day]?.day || 0) + (item.actual[day]?.night || 0);
+          const dayTotal = (currentActual[day]?.day || 0) + (currentActual[day]?.night || 0);
           return (
-            <TableCell key={day} className="text-right">
-             {dayTotal.toLocaleString()}
+            <TableCell key={day} className="text-right py-1 px-2 text-[10px]">
+             {dayTotal > 0 ? dayTotal.toLocaleString() : ''}
             </TableCell>
           )
         })}
         <TableCell className="text-right font-medium py-1 px-2 text-[10px]">{totalActual.toLocaleString()}</TableCell>
         <TableCell className="text-right font-medium text-muted-foreground py-1 px-2 text-[10px]">{totalQuintales.toLocaleString(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1})}</TableCell>
+        <TableCell className="text-right font-medium text-muted-foreground py-1 px-2 text-[10px]">{pallets}</TableCell>
         <TableCell className="text-right py-1 px-2">
             <span className={cn("font-bold rounded-md px-1.5 py-0.5 text-[9px]", varianceColorClass)}>
                 {variance.toLocaleString()}
@@ -122,7 +134,7 @@ const renderProductRow = (
 };
 
 
-export default function ProductionTable({ data, onPlannedChange, onActualChange, currentDate }: ProductionTableProps) {
+export default function ProductionTable({ data, onPlannedChange, onActualChange, currentDate, activeMode }: ProductionTableProps) {
   const [selectedProductForShifts, setSelectedProductForShifts] = React.useState<ProductData | null>(null);
   const [selectedProductForIncidents, setSelectedProductForIncidents] = React.useState<ProductData | null>(null);
   const [openCategories, setOpenCategories] = React.useState<Record<string, boolean>>({});
@@ -183,18 +195,24 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
   };
   
   const handleShiftDataSave = (updatedProduct: ProductData) => {
+    const currentActualData = activeMode === 'zafra' ? updatedProduct.actualZafra : activeMode === 'reempaque' ? updatedProduct.actualReempaque : activeMode === 'reenvase' ? updatedProduct.actualReenvase : updatedProduct.actual;
+    const source = currentActualData || updatedProduct.actual;
+
     days.forEach(day => {
-      onActualChange(updatedProduct.id, day, 'lotNumber', updatedProduct.actual[day].lotNumber || '');
-      onActualChange(updatedProduct.id, day, 'day', updatedProduct.actual[day].day);
-      onActualChange(updatedProduct.id, day, 'night', updatedProduct.actual[day].night);
+      onActualChange(updatedProduct.id, day, 'lotNumber', source[day].lotNumber || '');
+      onActualChange(updatedProduct.id, day, 'day', source[day].day);
+      onActualChange(updatedProduct.id, day, 'night', source[day].night);
     });
     setSelectedProductForShifts(null);
   };
 
   const handleIncidentsSave = (updatedProduct: ProductData) => {
+    const currentActualData = activeMode === 'zafra' ? updatedProduct.actualZafra : activeMode === 'reempaque' ? updatedProduct.actualReempaque : activeMode === 'reenvase' ? updatedProduct.actualReenvase : updatedProduct.actual;
+    const source = currentActualData || updatedProduct.actual;
+
     days.forEach(day => {
-        onActualChange(updatedProduct.id, day, 'dayNote', updatedProduct.actual[day].dayNote || '');
-        onActualChange(updatedProduct.id, day, 'nightNote', updatedProduct.actual[day].nightNote || '');
+        onActualChange(updatedProduct.id, day, 'dayNote', source[day].dayNote || '');
+        onActualChange(updatedProduct.id, day, 'nightNote', source[day].nightNote || '');
     });
     setSelectedProductForIncidents(null);
   };
@@ -210,11 +228,12 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/50">
-                <TableHead className="min-w-[150px] sticky left-0 bg-muted/50 z-10 text-[10px] h-8 py-1 px-2">Producto</TableHead>
-                <TableHead className="text-right min-w-[80px] text-[10px] h-8 py-1 px-2">Plan (Sacos)</TableHead>
+                <TableHead className="w-[220px] sticky left-0 bg-muted/50 z-10 text-[10px] h-8 py-1 px-2">Producto</TableHead>
+                <TableHead className="text-right w-[90px] text-[10px] h-8 py-1 px-2">Planificado</TableHead>
                 {days.map(day => <TableHead key={day} className="text-right min-w-[70px] capitalize text-[10px] h-8 py-1 px-2">{dayNames[day]}</TableHead>)}
                 <TableHead className="text-right min-w-[90px] text-[10px] h-8 py-1 px-2">Total Real</TableHead>
                 <TableHead className="text-right min-w-[70px] text-[10px] h-8 py-1 px-2">QQ</TableHead>
+                <TableHead className="text-right min-w-[60px] text-[10px] h-8 py-1 px-2">Pallets</TableHead>
                 <TableHead className="text-right min-w-[85px] text-[10px] h-8 py-1 px-2">Varianza</TableHead>
                 <TableHead className="min-w-[100px] text-[10px] h-8 py-1 px-2">Cumplimiento</TableHead>
                 <TableHead className="min-w-[50px] text-[10px] h-8 py-1 px-2 text-center">Turnos</TableHead>
@@ -224,7 +243,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
             <TableBody>
               {data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={14} className="h-24 text-center">
+                    <TableCell colSpan={16} className="h-24 text-center">
                       Ningún producto coincide con tu búsqueda.
                     </TableCell>
                   </TableRow>
@@ -232,14 +251,14 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
                 categories.map(category => (
                     <React.Fragment key={category}>
                       <TableRow className="bg-muted/50 hover:bg-muted cursor-pointer" onClick={() => toggleCategory(category)}>
-                          <TableCell colSpan={14} className="font-bold text-primary sticky left-0 bg-muted/50 z-10">
+                          <TableCell colSpan={16} className="font-bold text-primary sticky left-0 bg-muted/50 z-10">
                               <div className="flex items-center gap-2">
                                   <ChevronUp className={cn("h-4 w-4 transition-transform", !openCategories[category] && "rotate-180")} />
                                   {category}
                               </div>
                           </TableCell>
                       </TableRow>
-                      {openCategories[category] && groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProductForShifts, setSelectedProductForIncidents))}
+                      {openCategories[category] && groupedData[category].map(item => renderProductRow(item, handlePlannedInputChange, setSelectedProductForShifts, setSelectedProductForIncidents, activeMode))}
                     </React.Fragment>
                 ))
               )}
@@ -253,6 +272,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
           onClose={() => setSelectedProductForShifts(null)}
           onSave={handleShiftDataSave}
           currentDate={currentDate}
+          activeMode={activeMode}
         />
       )}
       {selectedProductForIncidents && (
@@ -260,6 +280,7 @@ export default function ProductionTable({ data, onPlannedChange, onActualChange,
             product={selectedProductForIncidents}
             onClose={() => setSelectedProductForIncidents(null)}
             onSave={handleIncidentsSave}
+            activeMode={activeMode}
         />
       )}
     </>

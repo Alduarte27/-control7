@@ -2,7 +2,25 @@
 import { NextResponse } from 'next/server';
 import admin from '@/lib/firebase-admin';
 
+export const dynamic = 'force-dynamic';
+
+import { rateLimit } from '@/lib/rate-limit';
+
 export async function POST(request: Request) {
+  // Rate limiting (10 requests per minute per IP for uploads)
+  const ip = request.headers.get('x-forwarded-for') || 'anonymous';
+  const rateLimitResult = rateLimit(ip, 10, 60 * 1000); // 10 uploads per minute
+
+  if (!rateLimitResult.success) {
+    return NextResponse.json({ error: 'Demasiadas subidas. Por favor, intenta más tarde.' }, {
+      status: 429,
+      headers: {
+        'X-RateLimit-Limit': rateLimitResult.limit.toString(),
+        'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
+      },
+    });
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;

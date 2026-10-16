@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { ProductDefinition, CategoryDefinition, ProductData } from '@/lib/types';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, writeBatch, doc, query, orderBy, updateDoc, onSnapshot, addDoc, setDoc, deleteDoc } from 'firebase/firestore';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger } from '@/components/ui/dialog';
 import { Separator } from './ui/separator';
 import { Switch } from './ui/switch';
 import { cn } from '@/lib/utils';
@@ -23,7 +23,6 @@ import { Checkbox } from './ui/checkbox';
 import { QRCodeSVG } from 'qrcode.react';
 import { availableModules } from '@/lib/constants';
 import Header from '@/components/header';
-import { SidebarInset } from './ui/sidebar';
 
 // --- Access Management Types ---
 type Permissions = {
@@ -266,6 +265,7 @@ export default function AdminClient() {
   // --- States for Access Management ---
   const [accessProfiles, setAccessProfiles] = React.useState<AccessProfile[]>([]);
   const [newProfileName, setNewProfileName] = React.useState('');
+  const [isCreateProfileOpen, setIsCreateProfileOpen] = React.useState(false);
 
   React.useEffect(() => {
     const fetchInitialData = async () => {
@@ -556,7 +556,6 @@ export default function AdminClient() {
     }
   };
 
-  // --- Functions for Access Management ---
   const handleCreateProfile = async () => {
     if (!newProfileName.trim()) {
         toast({ title: 'Error', description: 'El nombre del perfil no puede estar vacío.', variant: 'destructive' });
@@ -569,6 +568,7 @@ export default function AdminClient() {
         };
         await addDoc(collection(db, 'accessProfiles'), newProfile);
         setNewProfileName('');
+        setIsCreateProfileOpen(false);
         toast({ title: 'Perfil Creado', description: `Se ha creado el perfil "${newProfileName}".` });
     } catch (error) {
         console.error("Error creating profile: ", error);
@@ -612,8 +612,8 @@ export default function AdminClient() {
 
 
   return (
-    <SidebarInset>
-      <Header title="Administración" icon={Factory} />
+    <div className="flex flex-col flex-1 min-h-screen">
+      <Header title="Configuración" icon={Factory} />
       <main className="p-3 md:p-6 lg:p-8">
         <Tabs defaultValue="catalogs">
             <TabsList className="grid w-full grid-cols-2">
@@ -696,11 +696,11 @@ export default function AdminClient() {
                                 <CardDescription className="text-xs">Sincroniza propiedades de productos hacia los planes históricos.</CardDescription>
                             </CardHeader>
                             <CardContent className="pt-4 space-y-4">
-                                <Button onClick={handleSyncHistoricalData} disabled={isSyncing} variant="outline" className="w-full justify-start text-left normal-case h-auto py-3">
+                                <Button onClick={handleSyncHistoricalData} disabled={isSyncing} variant="outline" className="w-full justify-start text-left normal-case h-auto py-3 whitespace-normal">
                                     <RefreshCw className={`mr-3 h-4 w-4 shrink-0 text-muted-foreground ${isSyncing ? 'animate-spin' : ''}`} />
                                     <div className="flex flex-col items-start gap-1">
                                         <span className="font-semibold">{isSyncing ? 'Sincronizando...' : 'Sincronizar Historiales'}</span>
-                                        <span className="text-xs font-normal text-muted-foreground">Aplica la configuración técnica actual en todas las semanas guardadas.</span>
+                                        <span className="text-xs font-normal text-muted-foreground whitespace-normal">Aplica la configuración técnica actual en todas las semanas guardadas.</span>
                                     </div>
                                 </Button>
 
@@ -794,29 +794,45 @@ export default function AdminClient() {
                 </div>
             </TabsContent>
             <TabsContent value="access" className="space-y-6 mt-6">
-                 <Card>
-                    <CardHeader>
-                        <CardTitle>Crear Nuevo Perfil de Acceso</CardTitle>
-                        <CardDescription>Define un nuevo rol, como "Operador" o "Supervisor", para asignarle permisos específicos.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex items-end gap-2">
-                            <div className="flex-grow space-y-1.5">
-                                <Label htmlFor="new-profile-name">Nombre del Perfil</Label>
-                                <Input
-                                    id="new-profile-name"
-                                    value={newProfileName}
-                                    onChange={(e) => setNewProfileName(e.target.value)}
-                                    placeholder="Ej: Operador de Planta"
-                                />
-                            </div>
-                            <Button onClick={handleCreateProfile}>
+                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                        <h2 className="text-xl font-bold tracking-tight">Perfiles de Acceso</h2>
+                        <p className="text-sm text-muted-foreground">Gestiona los roles y sus permisos.</p>
+                    </div>
+                    <Dialog open={isCreateProfileOpen} onOpenChange={setIsCreateProfileOpen}>
+                        <DialogTrigger asChild>
+                            <Button>
                                 <PlusCircle className="mr-2 h-4 w-4" />
-                                Crear Perfil
+                                Crear Nuevo Perfil
                             </Button>
-                        </div>
-                    </CardContent>
-                </Card>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Crear Nuevo Perfil de Acceso</DialogTitle>
+                                <DialogDescription>Define un nuevo rol, como "Operador" o "Supervisor", para asignarle permisos específicos.</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4 py-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="new-profile-name">Nombre del Perfil</Label>
+                                    <Input
+                                        id="new-profile-name"
+                                        value={newProfileName}
+                                        onChange={(e) => setNewProfileName(e.target.value)}
+                                        placeholder="Ej: Operador de Planta"
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <DialogClose asChild>
+                                    <Button type="button" variant="outline">Cancelar</Button>
+                                </DialogClose>
+                                <Button onClick={handleCreateProfile}>
+                                    Crear Perfil
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {accessProfiles.map(profile => (
@@ -897,6 +913,6 @@ export default function AdminClient() {
               onSave={handleSaveProduct}
           />
       )}
-    </SidebarInset>
+    </div>
   );
 }

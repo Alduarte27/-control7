@@ -9,8 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 
 type ProductionIncidentsTableProps = {
   product: ProductData;
-  onClose: () => void;
   onSave: (product: ProductData) => void;
+  activeMode: 'interzafra' | 'zafra' | 'reempaque' | 'reenvase';
 };
 
 const days: (keyof DailyProduction)[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -24,16 +24,17 @@ const dayNames: { [key in keyof DailyProduction]: string } = {
   sun: 'Domingo'
 };
 
-export default function ProductionIncidentsTable({ product, onClose, onSave }: ProductionIncidentsTableProps) {
+export default function ProductionIncidentsTable({ product, onClose, onSave, activeMode }: ProductionIncidentsTableProps) {
   const [editedProduct, setEditedProduct] = React.useState<ProductData>(() => JSON.parse(JSON.stringify(product)));
 
   const handleNoteChange = (day: keyof DailyProduction, field: 'dayNote' | 'nightNote', value: string) => {
     setEditedProduct(prev => {
-        const newActual = { ...prev.actual };
-        const dayData = { ...newActual[day] };
+        const targetField = activeMode === 'zafra' ? 'actualZafra' : activeMode === 'reempaque' ? 'actualReempaque' : activeMode === 'reenvase' ? 'actualReenvase' : 'actual';
+        const newActual = { ...(prev[targetField] || {}) } as DailyProduction;
+        const dayData = newActual[day] ? { ...newActual[day] } : { day: 0, night: 0, lotNumber: '' };
         dayData[field] = value;
         newActual[day] = dayData;
-        return { ...prev, actual: newActual };
+        return { ...prev, [targetField]: newActual };
     });
   };
   
@@ -46,7 +47,10 @@ export default function ProductionIncidentsTable({ product, onClose, onSave }: P
       <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle>Registrar Incidencias de la Semana</DialogTitle>
-          <p className="text-sm text-muted-foreground">{product.productName}</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            {product.productName}
+            <span className="ml-2 font-semibold text-primary capitalize">({activeMode})</span>
+          </p>
         </DialogHeader>
         <div className="max-h-[60vh] overflow-y-auto pr-4">
           <Table>
@@ -60,7 +64,9 @@ export default function ProductionIncidentsTable({ product, onClose, onSave }: P
             </TableHeader>
             <TableBody>
               {days.map(day => {
-                const dayData = editedProduct.actual[day] || { dayNote: '', nightNote: '', lotNumber: '' };
+                const currentActual = activeMode === 'zafra' ? editedProduct.actualZafra : activeMode === 'reempaque' ? editedProduct.actualReempaque : activeMode === 'reenvase' ? editedProduct.actualReenvase : editedProduct.actual;
+                const sourceActual = currentActual || editedProduct.actual;
+                const dayData = sourceActual[day] || { dayNote: '', nightNote: '', lotNumber: '' };
                 return (
                   <TableRow key={day}>
                     <TableCell className="font-medium align-top pt-4">{dayNames[day]}</TableCell>

@@ -14,7 +14,9 @@ import {
   ChevronRight,
   Palette,
   Info,
-  Gauge
+  Gauge,
+  HardHat,
+  Sparkles
 } from 'lucide-react';
 import { 
   Sidebar, 
@@ -35,6 +37,7 @@ import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import ThemeCustomizer from './theme-customizer';
 import InfoDialog from './info-dialog';
+import { useUnsavedChanges } from '@/components/unsaved-changes-provider';
 
 type UserPermissions = {
     [key: string]: boolean;
@@ -43,10 +46,13 @@ type UserPermissions = {
 const navModules = [
     { id: 'production', href: '/', icon: Factory, label: 'Producción' },
     { id: 'projection', href: '/ia?view=projection', icon: Target, label: 'Proyección' },
-    { id: 'ia', href: '/ia', icon: Activity, label: 'SimuladorProcess' },
+    { id: 'materials', href: '/materials', icon: Boxes, label: 'Materiales Empaque' },
+    { id: 'stops', href: '/stops', icon: HardHat, label: 'Bitácora' },
+    { id: 'ia', href: '/ia', icon: Activity, label: 'Simulador' },
 ];
 
 export function AppSidebar() {
+  const { proceedTo } = useUnsavedChanges();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -102,6 +108,22 @@ export function AppSidebar() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (!isMobile && state === 'expanded') {
+        const target = e.target as Element;
+        if (!target.closest('[data-sidebar="sidebar"]')) {
+          setOpen(false);
+        }
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMobile, state, setOpen]);
+
   const hasPermission = (moduleId: string) => {
       return permissions === null || Object.keys(permissions).length === 0 || permissions[moduleId];
   };
@@ -120,8 +142,7 @@ export function AppSidebar() {
     <Sidebar 
       collapsible="icon" 
       className="border-r sidebar-smooth"
-      onMouseEnter={() => !isMobile && state === 'collapsed' && setOpen(true)}
-      onMouseLeave={() => !isMobile && state === 'expanded' && setOpen(false)}
+      onDoubleClick={() => !isMobile && state === 'collapsed' && setOpen(true)}
     >
       <SidebarHeader className="h-16 flex items-center justify-center border-b px-4 bg-gradient-to-b from-card/50 to-transparent backdrop-blur-sm">
         <div className="flex items-center gap-3 w-full overflow-hidden">
@@ -130,7 +151,7 @@ export function AppSidebar() {
           </div>
           {!isCollapsed && (
             <span className="font-bold text-lg truncate bg-clip-text text-transparent bg-gradient-to-r from-foreground to-foreground/70 sidebar-label-enter">
-              Control 7
+              Control 7 SGP
             </span>
           )}
         </div>
@@ -151,7 +172,7 @@ export function AppSidebar() {
                 ))
               ) : (
                 navModules.map((item) => {
-                  const visible = item.id === 'projection' ? hasPermission('ia') : hasPermission(item.id);
+                  const visible = hasPermission(item.id);
                   if (!visible) return null;
                   
                   const active = isItemActive(item.href);
@@ -165,11 +186,21 @@ export function AppSidebar() {
                         className={cn(
                           "transition-all duration-300 rounded-xl mx-1 my-0.5",
                           active 
-                            ? "bg-primary shadow-md shadow-primary/20 text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground" 
+                            ? "bg-primary shadow-md shadow-primary/20 text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active-btn-pulse" 
                             : "hover:bg-primary/10 hover:text-primary"
                         )}
                       >
-                        <Link href={item.href} className="flex items-center gap-3 py-2 px-3">
+                        <Link 
+                          href={item.href} 
+                          className="flex items-center gap-3 py-2 px-3"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (item.id === 'projection') {
+                              localStorage.setItem('control7_projections_cleared', 'true');
+                            }
+                            proceedTo(item.href);
+                          }}
+                        >
                           <item.icon className={cn("h-5 w-5 shrink-0 sidebar-icon-pulse", active ? "text-primary-foreground" : "text-muted-foreground")} />
                           {!isCollapsed && (
                             <span className="font-medium sidebar-label-enter">
@@ -186,12 +217,37 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <SidebarGroup className="mt-auto pb-4">
+            <SidebarGroup className="mt-auto pb-4">
           <SidebarGroupLabel className={cn(isCollapsed && "hidden", "px-4")}>
             Herramientas
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname === '/ai'}
+                  tooltip="Asistente IA"
+                  className={cn(
+                    "rounded-xl mx-1 transition-all duration-300",
+                    pathname === '/ai'
+                      ? "bg-primary shadow-md shadow-primary/20 text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground"
+                      : "hover:bg-primary/10 hover:text-primary"
+                  )}
+                >
+                  <Link
+                    href="/ai"
+                    className="flex items-center gap-3"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      proceedTo('/ai');
+                    }}
+                  >
+                    <Sparkles className={cn("h-4 w-4 ml-1", pathname === '/ai' ? "text-primary-foreground" : "")} />
+                    <span>Asistente IA</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               {hasPermission('admin') && (
                 <SidebarMenuItem>
                   <SidebarMenuButton 
@@ -205,7 +261,14 @@ export function AppSidebar() {
                         : "hover:bg-primary/10 hover:text-primary"
                     )}
                   >
-                    <Link href="/admin" className="flex items-center gap-3">
+                    <Link 
+                      href="/admin" 
+                      className="flex items-center gap-3"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        proceedTo('/admin');
+                      }}
+                    >
                       <Settings className={cn("h-4 w-4 ml-1", pathname === '/admin' ? "text-primary-foreground" : "")} />
                       <span>Configuración</span>
                     </Link>
@@ -240,7 +303,7 @@ export function AppSidebar() {
       <SidebarFooter className="border-t p-4 bg-muted/20 backdrop-blur-sm">
         {!isCollapsed && (
           <div className="text-[10px] text-muted-foreground text-center font-medium tracking-wider uppercase">
-            v1.0.0 &copy; 2026 Control 7
+            v1.0.0 &copy; 2026 Control 7 SGP
           </div>
         )}
       </SidebarFooter>

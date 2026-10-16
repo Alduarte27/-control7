@@ -45,17 +45,30 @@ export type ProductData = ProductDefinition & {
   categoryName: string;
   categoryIsPlanned: boolean;
   planned: number;
-  actual: DailyProduction;
+  actual: DailyProduction; // represents Interzafra by default
+  actualZafra?: DailyProduction;
+  actualReempaque?: DailyProduction;
+  actualReenvase?: DailyProduction;
   isSuggested?: boolean; // To flag if the plan was AI-suggested
+  isZafra?: boolean;
 };
 
 
 // --- Production Log (Stops) Types ---
+export type StopType = {
+  id: string;
+  name: string;
+  isPlanned: boolean;
+};
+
 export type StopCause = {
   id: string;
   name: string;
   color: string;
-  type: 'planned' | 'unplanned';
+  type: 'planned' | 'unplanned' | 'observation'; // Legacy/fallback
+  typeId?: string; // New dynamic type reference
+  maintenanceType?: string; // ID of the maintenance type/category
+  description?: string; // Informative description of the cause
 };
 
 export type Operator = {
@@ -71,6 +84,7 @@ export type Supervisor = {
 export type MaintenanceType = {
   id: string;
   name: string;
+  description?: string;
 };
 
 
@@ -79,7 +93,8 @@ export type StopData = {
   startTime: string; // The time slot, e.g., "07:00"
   endTime: string;
   duration: number; // in minutes
-  type: 'planned' | 'unplanned';
+  type: 'planned' | 'unplanned' | 'observation'; // Legacy/fallback
+  typeId?: string; // New dynamic type reference
   maintenanceType?: string; // e.g., 'preventive'
   reason: string; // The selected stop cause from the catalog (e.g., "Daño Eléctrico")
   cause: string; // Specific detail (e.g., "Cable suelto")
@@ -108,26 +123,79 @@ export type TimeSlot = {
   out_gra_turb?: string;
   // Packaging
   empaque_obs?: string;
+  // Peso de la funda en gramos (Enfardadoras #1 y #2)
+  peso_funda?: string;
 };
 
+
+export type ProductChangeEvent = {
+  from: string; // Product ID anterior ('' = sin producción)
+  to: string;   // Product ID nuevo
+  at: string;   // Hora del cambio "HH:mm"
+};
 
 export type MachineLog = {
   productId: string;
   theoreticalSpeed?: number; // Theoretical speed in bags/min for the whole shift (legacy/fallback)
+  productChanges?: ProductChangeEvent[]; // Historial de cambios de presentación/producto durante el turno
 };
 
 export type DailyLog = {
   id: string; // YYYY-MM-DD_shift
   operador: string;
+  operadorGranel?: string;
   supervisor: string;
   lote: string;
   shift: 'day' | 'night';
+  shiftConfig?: { startHour: number; endHour: number };
   machines: { [machineId: string]: MachineLog };
   timeSlots: { [time: string]: Partial<TimeSlot> };
+  hiddenMachines?: string[];
+};
+
+export type QualityRange = {
+  id: string;
+  min: number;
+  max: number;
+  color: string;
+};
+
+export type QualityParams = {
+  [category: string]: QualityRange[]; // e.g. 'grasshopper_humedad', 'granel_color'
+};
+
+// Parámetros de peso por presentación y tipo de peso (Funda / Sacos / Fardos)
+export type WeightUnit = 'g' | 'kg';
+export type WeightTypeKey = 'funda' | 'sacos' | 'fardos';
+
+// Rango de peso configurable por presentación y tipo (igual que los rangos de calidad)
+export type WeightRange = {
+  id: string;
+  min: number;
+  max: number;
+  avg: number; // promedio auto-calculado (min + max) / 2
+  unit: WeightUnit;
+  color: string; // Clases Tailwind@|
+};
+
+export type QualityWeights = {
+  [productId: string]: Partial<Record<WeightTypeKey, WeightRange[]>>;
 };
 
 export type BitacoraSettings = {
   weightHeaderType: { [key: string]: string };
+  qualityParams?: QualityParams;
+  qualityWeights?: QualityWeights;
+  hiddenMachines?: string[];
+  enfardadoraConnections?: { [enfardadoraId: string]: string[] };
+  dispatchSyncActive?: boolean;
+  dispatchSyncTime?: string;
+  dispatchApiUrl?: string;
+  dispatchApiToken?: string;
+};
+
+export type ProductionSettings = {
+  isZafraGlobal?: boolean;
 };
 
 export type MachineOEE = {

@@ -10,7 +10,7 @@ export type KpiCardProps = {
   icon: LucideIcon;
   description: string;
   valueColor?: string;
-  subValue?: string;
+  subValue?: React.ReactNode;
   subValueColor?: string;
   fractionDigits?: number;
   suffix?: string;
@@ -40,28 +40,35 @@ export default function KpiCard({ title, value, icon: Icon, description, valueCo
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0.5">
-              <CardTitle className="text-[10px] font-bold uppercase text-muted-foreground">{title}</CardTitle>
-              <Icon className="h-3 w-3 text-primary" />
-            </CardHeader>
-            <CardContent className="pt-0">
-              {isClient ? (
-                <>
-                  <div className={cn("text-lg font-black tracking-tight", valueColor)}>
-                    {formattedValue}{suffix}
-                  </div>
-                  <p className={cn("text-[9px] font-bold h-[14px] mt-0.5 opacity-80", subValueColor)}>
-                    {subValue || <>&nbsp;</>}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="text-lg font-black">-</div>
-                  <p className="text-[9px] font-bold h-[14px]">&nbsp;</p>
-                </>
-              )}
-            </CardContent>
+          <Card className="p-3 pt-2.5 pb-3 flex flex-col justify-center relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:-translate-y-1 border border-border/50 bg-white dark:bg-card backdrop-blur-sm group">
+            {/* Subtle glow effect on hover */}
+            <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
+            
+            <div className="flex items-center justify-between mb-2 relative z-10">
+              <span className="text-[10px] font-bold uppercase text-muted-foreground/80 leading-none tracking-widest pr-1 line-clamp-1" title={title}>
+                {title}
+              </span>
+              <div className="p-1.5 rounded-md bg-primary/10 group-hover:bg-primary/20 transition-colors duration-300 flex-shrink-0">
+                <Icon className="h-3.5 w-3.5 text-primary" />
+              </div>
+            </div>
+            
+            {isClient ? (
+              <div className="flex flex-col relative z-10">
+                <span className={cn("text-xl font-black tracking-tight text-foreground leading-none drop-shadow-sm", valueColor)}>
+                  {formattedValue}{suffix}
+                </span>
+                {subValue && (
+                  <span className={cn("text-[10px] font-medium opacity-90 text-muted-foreground mt-1.5 leading-tight", subValueColor)}>
+                    {subValue}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col relative z-10">
+                <span className="text-xl font-black text-foreground leading-none drop-shadow-sm">-</span>
+              </div>
+            )}
           </Card>
         </TooltipTrigger>
         <TooltipContent>

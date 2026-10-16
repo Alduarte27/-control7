@@ -1,0 +1,626 @@
+
+
+'use client';
+
+import React from 'react';
+import Papa from 'papaparse';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from './ui/dialog';
+import { Button } from './ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { ArrowLeft, ArrowRight, FileUp, Loader2, Sparkles, Table, CheckCircle2, Columns, Rows, Calendar as CalendarIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import type { DailyLog, Operator, StopCause, Supervisor, TimeSlot } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
+import { format, parse, isValid, min, max } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { RadioGroup, RadioGroupItem } from './ui/radio-group';
+import { Label } from './ui/label';
+import { Calendar } from './ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import { DateRange } from 'react-day-picker';
+
+interface LogImportWizardProps {
+    isOpen: boolean;
+    onClose: () => void;
+    onImportComplete: () => void;
+    stopCauses: StopCause[];
+    operators: Operator[];
+    supervisors: Supervisor[];
+}
+
+const TARGET_FIELDS = [
+    { value: 'date', label: 'Fecha (Requerido)', example: 'yyyy-mm-dd' },
+    { value: 'time', label: 'Hora (Requerido)', example: 'HH:mm' },
+    { value: 'operator', label: 'Operador' },
+    { value: 'supervisor', label: 'Supervisor' },
+    { value: 'machine_1_weight', label: 'P/Saco (Tecnotok #1)', format: 'wide' },
+    { value: 'machine_1_bundle_weight', label: 'Peso Funda (Tecnotok #1)', format: 'wide' },
+    { value: 'machine_1_stops', label: 'Observación (Tecnotok #1)', format: 'wide' },
+    { value: 'machine_2_weight', label: 'P/Saco (Tecnotok #2)', format: 'wide' },
+    { value: 'machine_2_bundle_weight', label: 'Peso Funda (Tecnotok #2)', format: 'wide' },
+    { value: 'machine_2_stops', label: 'Observación (Tecnotok #2)', format: 'wide' },
+    { value: 'machine_3_weight', label: 'P/Saco (Tecnotok #3)', format: 'wide' },
+    { value: 'machine_3_bundle_weight', label: 'Peso Funda (Tecnotok #3)', format: 'wide' },
+    { value: 'machine_3_stops', label: 'Observación (Tecnotok #3)', format: 'wide' },
+    { value: 'machine_4_weight', label: 'P/Saco (Tecnotok #4)', format: 'wide' },
+    { value: 'machine_4_bundle_weight', label: 'Peso Funda (Tecnotok #4)', format: 'wide' },
+    { value: 'machine_4_stops', label: 'Observación (Tecnotok #4)', format: 'wide' },
+    { value: 'machine_5_weight', label: 'P/Saco (Granelera #1)', format: 'wide' },
+    { value: 'machine_5_stops', label: 'Observación (Granelera #1)', format: 'wide' },
+    { value: 'machine_6_weight', label: 'P/Saco (Granelera #2)', format: 'wide' },
+    { value: 'machine_6_stops', label: 'Observación (Granelera #2)', format: 'wide' },
+    { value: 'machine_7_weight', label: 'P/Fardo (Enfardadora #1)', format: 'wide' },
+    { value: 'machine_7_stops', label: 'Observación (Enfardadora #1)', format: 'wide' },
+    { value: 'machine_8_weight', label: 'P/Fardo (Enfardadora #2)', format: 'wide' },
+    { value: 'machine_8_stops', label: 'Observación (Enfardadora #2)', format: 'wide' },
+    { value: 'machine_id', label: 'Columna de Identificación de Máquina', format: 'long' },
+    { value: 'weight', label: 'Peso (Genérico)', format: 'long' },
+    { value: 'bundle_weight', label: 'Peso Funda (Genérico)', format: 'long' },
+    { value: 'stops', label: 'Observación/Parada (Genérico)', format: 'long' },
+    { value: 'masa', label: 'Masa' },
+    { value: 'flujo', label: 'Flujo' },
+    { value: 'ns_fam', label: 'NS-FAM' },
+    { value: 'ns_1', label: 'NS% 1' },
+    { value: 'ns_2', label: 'NS% 2' },
+    { value: 'in_color', label: 'Ingreso Color' },
+    { value: 'in_hum', label: 'Ingreso Humedad' },
+    { value: 'in_turb', label: 'Ingreso Turbidez' },
+    { value: 'in_cv', label: 'Ingreso CV' },
+    { value: 'out_fam_color', label: 'Salida Fam Color' },
+    { value: 'out_fam_hum', label: 'Salida Fam Humedad' },
+    { value: 'out_fam_turb', label: 'Salida Fam Turbidez' },
+    { value: 'out_gra_color', label: 'Salida Granel Color' },
+    { value: 'out_gra_hum', label: 'Salida Granel Humedad' },
+    { value: 'out_gra_turb', label: 'Salida Granel Turbidez' },
+    { value: 'empaque_obs', label: 'Novedades Empaque' },
+];
+
+export default function LogImportWizard({ isOpen, onClose, onImportComplete, stopCauses, operators, supervisors }: LogImportWizardProps) {
+    const [step, setStep] = React.useState(1);
+    const [file, setFile] = React.useState<File | null>(null);
+    const [fileHeaders, setFileHeaders] = React.useState<string[]>([]);
+    const [parsedData, setParsedData] = React.useState<any[]>([]);
+    const [mapping, setMapping] = React.useState<{ [key: string]: string }>({});
+    const [isProcessing, setIsProcessing] = React.useState(false);
+    const [formatType, setFormatType] = React.useState<'wide' | 'long'>('wide');
+    const [dateRange, setDateRange] = React.useState<DateRange | undefined>();
+    const [fileDateBounds, setFileDateBounds] = React.useState<{min: Date, max: Date} | null>(null);
+
+    const { toast } = useToast();
+    
+    React.useEffect(() => {
+        if (!isOpen) {
+            // Reset state on close
+            setStep(1);
+            setFile(null);
+            setFileHeaders([]);
+            setParsedData([]);
+            setMapping({});
+            setIsProcessing(false);
+            setFormatType('wide');
+            setDateRange(undefined);
+            setFileDateBounds(null);
+        }
+    }, [isOpen]);
+
+    const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        const droppedFile = e.dataTransfer.files?.[0];
+        if (droppedFile) {
+            parseFile(droppedFile);
+        }
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selectedFile = e.target.files?.[0];
+        if (selectedFile) {
+            parseFile(selectedFile);
+        }
+    };
+
+    const parseFile = (file: File) => {
+        setFile(file);
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => {
+                if (results.meta.fields) {
+                    setFileHeaders(results.meta.fields);
+                    setParsedData(results.data);
+                    setStep(2);
+                } else {
+                    toast({ title: "Error de Archivo", description: "No se pudieron leer las cabeceras del archivo CSV.", variant: "destructive" });
+                }
+            }
+        });
+    };
+
+    const autoMapHeaders = () => {
+        const newMapping: { [key: string]: string } = {};
+        const lowerCaseHeaders = fileHeaders.map(h => h.toLowerCase().trim().replace(/\s+/g, ' '));
+    
+        TARGET_FIELDS.forEach(targetField => {
+            const potentialMatches = [
+                targetField.label.toLowerCase().split('(')[0].trim(),
+                targetField.value.toLowerCase().replace(/_/g, ' ')
+            ];
+            
+            const foundIndex = lowerCaseHeaders.findIndex(h => potentialMatches.some(pm => h.includes(pm)));
+    
+            if (foundIndex > -1) {
+                newMapping[targetField.value] = fileHeaders[foundIndex];
+            }
+        });
+        setMapping(newMapping);
+        toast({ title: "Automapeo Inteligente", description: "Se han conectado las columnas que coincidían. Por favor, revisa y completa el mapeo.", duration: 5000 });
+    };
+
+    const handleMappingChange = (targetField: string, sourceHeader: string) => {
+        setMapping(prev => {
+            const newMapping = { ...prev };
+            if (sourceHeader === '_ignore_') {
+                delete newMapping[targetField];
+            } else {
+                newMapping[targetField] = sourceHeader;
+            }
+            return newMapping;
+        });
+    };
+    
+    const isMappingValid = () => {
+        if (!mapping['date'] || !mapping['time']) return false;
+        if (formatType === 'long' && !mapping['machine_id']) return false;
+        return true;
+    }
+    
+    const goToDateFilterStep = () => {
+        const dateColumn = mapping['date'];
+        if (!dateColumn) {
+            toast({title: "Falta Mapeo", description: "Debes mapear la columna de 'Fecha'.", variant: "destructive"});
+            return;
+        }
+
+        const dateFormatsToTry = ['yyyy-MM-dd', 'dd-MM-yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'];
+        
+        let validDates: Date[] = [];
+
+        for (const format of dateFormatsToTry) {
+            const dates = parsedData.map(row => parse(row[dateColumn], format, new Date())).filter(isValid);
+            if (dates.length > parsedData.length / 2) { // Heuristic: if more than half parse, it's probably the right format
+                validDates = dates;
+                break; // Found a format that works
+            }
+        }
+        
+        if (validDates.length > 0) {
+            const minDate = min(validDates);
+            const maxDate = max(validDates);
+            setFileDateBounds({ min: minDate, max: maxDate });
+            setDateRange({ from: minDate, to: maxDate });
+            setStep(3);
+        } else {
+            toast({title: "No se encontraron fechas", description: "No se pudieron encontrar fechas válidas en la columna mapeada. Asegúrate de que el formato sea consistente (ej: yyyy-MM-dd).", variant: "destructive"});
+        }
+    };
+
+
+    const processAndSaveData = async () => {
+        if (!dateRange?.from || !dateRange?.to) {
+            toast({ title: "Error de Rango", description: "Por favor, selecciona un rango de fechas válido.", variant: "destructive" });
+            return;
+        }
+
+        setIsProcessing(true);
+        const logsToSave: { [logId: string]: DailyLog } = {};
+        const stopCauseNames = new Set(stopCauses.map(sc => sc.name));
+        const operatorNames = new Set(operators.map(o => o.name));
+        const supervisorNames = new Set(supervisors.map(s => s.name));
+
+        const filteredData = parsedData.filter(row => {
+            const dateStr = row[mapping['date']];
+            if (!dateStr) return false;
+            
+            const dateFormatsToTry = ['yyyy-MM-dd', 'dd-MM-yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'];
+            let date: Date | null = null;
+            for(const format of dateFormatsToTry) {
+                const parsed = parse(dateStr, format, new Date());
+                if (isValid(parsed)) {
+                    date = parsed;
+                    break;
+                }
+            }
+            if (!date) return false;
+            
+            // Normalize dates to avoid time zone issues in comparison
+            const from = dateRange.from!;
+            const to = dateRange.to!;
+            const recordDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const fromDate = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+            const toDate = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+
+            return recordDate >= fromDate && recordDate <= toDate;
+        });
+
+        if (filteredData.length === 0) {
+            toast({title: "Sin Datos", description: "No hay filas en tu archivo que coincidan con el rango de fechas seleccionado.", variant: "destructive"});
+            setIsProcessing(false);
+            return;
+        }
+
+
+        for (const row of filteredData) {
+            const dateStr = row[mapping['date']];
+            const timeStr = row[mapping['time']];
+
+            if (!dateStr || !timeStr) continue;
+
+            const dateFormatsToTry = ['yyyy-MM-dd', 'dd-MM-yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'];
+            let date: Date | null = null;
+            for(const format of dateFormatsToTry) {
+                const parsed = parse(dateStr, format, new Date());
+                if (isValid(parsed)) {
+                    date = parsed;
+                    break;
+                }
+            }
+            if (!date) continue;
+
+            const hour = parseInt(timeStr.split(':')[0]);
+            const shift = (hour >= 7 && hour < 18) ? 'day' : 'night';
+            const logId = `${format(date, 'yyyy-MM-dd')}_${shift}`;
+
+            if (!logsToSave[logId]) {
+                const docSnap = await getDoc(doc(db, 'dailyLogs', logId));
+                if (docSnap.exists()) {
+                    logsToSave[logId] = docSnap.data() as DailyLog;
+                } else {
+                    logsToSave[logId] = {
+                        id: logId,
+                        shift,
+                        lote: String(format(date, 'd', { locale: es })),
+                        operador: '', supervisor: '',
+                        machines: { machine_1: {productId: ''}, machine_2: {productId: ''}, machine_3: {productId: ''}, machine_4: {productId: ''}, machine_5: {productId: ''}, machine_6: {productId: ''} },
+                        timeSlots: {}
+                    };
+                }
+            }
+            const log = logsToSave[logId];
+
+            if (mapping['operator'] && row[mapping['operator']] && operatorNames.has(row[mapping['operator']])) {
+                log.operador = row[mapping['operator']];
+            }
+            if (mapping['supervisor'] && row[mapping['supervisor']] && supervisorNames.has(row[mapping['supervisor']])) {
+                log.supervisor = row[mapping['supervisor']];
+            }
+
+            if (!log.timeSlots[timeStr]) log.timeSlots[timeStr] = {};
+            const slot = log.timeSlots[timeStr] as TimeSlot;
+            
+            const processField = (fieldKey: string, machineIndex: number) => {
+                const machineId = `machine_${machineIndex}`;
+                
+                let sourceColumn: string | undefined;
+                let value: any;
+
+                if (formatType === 'wide') {
+                    sourceColumn = mapping[`${fieldKey}_${machineIndex}`];
+                    if (sourceColumn) value = row[sourceColumn];
+                } else { // long
+                    const rowMachineId = row[mapping['machine_id']];
+                    if (String(rowMachineId) === String(machineIndex)) {
+                        sourceColumn = mapping[fieldKey];
+                        if (sourceColumn) value = row[sourceColumn];
+                    }
+                }
+                
+                if (value !== undefined && value !== null && String(value).trim() !== '') {
+                    if (!slot[machineId]) slot[machineId] = {};
+                    
+                    if (fieldKey === 'stops') {
+                        if (!slot[machineId]!.stops) slot[machineId]!.stops = [];
+                        const reason = stopCauseNames.has(String(value).trim()) ? String(value).trim() : 'No Planificada';
+                        const type = stopCauses.find(sc => sc.name === reason)?.type || 'unplanned';
+                        slot[machineId]!.stops!.push({
+                            id: new Date().toISOString() + Math.random(),
+                            startTime: timeStr,
+                            endTime: format(new Date(new Date().setHours(parseInt(timeStr.split(':')[0]), parseInt(timeStr.split(':')[1]) + 30)), 'HH:mm'),
+                            duration: 30,
+                            reason,
+                            type,
+                            cause: 'Importado desde Excel',
+                        });
+                    } else {
+                        (slot[machineId] as any)[fieldKey] = fieldKey === 'bundle_weight' ? Number(value) : value;
+                    }
+                }
+            }
+
+            for (let i = 1; i <= 3; i++) {
+                processField('weight', i);
+                processField('bundle_weight', i);
+                processField('stops', i);
+            }
+
+            // Process common fields
+            TARGET_FIELDS.filter(f => !f.format).forEach(field => {
+                 if (mapping[field.value] && row[mapping[field.value]]) {
+                    const value = row[mapping[field.value]];
+                     if (field.value !== 'date' && field.value !== 'time' && field.value !== 'operator' && field.value !== 'supervisor') {
+                        (slot as any)[field.value] = value;
+                    }
+                 }
+            });
+        }
+        
+        try {
+            const batch = writeBatch(db);
+            Object.values(logsToSave).forEach(log => {
+                const docRef = doc(db, 'dailyLogs', log.id);
+                batch.set(docRef, log, { merge: true });
+            });
+            await batch.commit();
+            toast({ title: "Importación Exitosa", description: `${Object.keys(logsToSave).length} bitácoras han sido creadas o actualizadas.` });
+            onImportComplete();
+        } catch (error) {
+            console.error("Error saving imported logs:", error);
+            toast({ title: "Error al Guardar", description: "No se pudieron guardar los datos importados.", variant: "destructive" });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const getPreviewData = () => {
+        if (!dateRange?.from || !dateRange?.to) return [];
+        
+        const filteredData = parsedData.filter(row => {
+            const dateStr = row[mapping['date']];
+            if (!dateStr) return false;
+            
+            const dateFormatsToTry = ['yyyy-MM-dd', 'dd-MM-yyyy', 'MM-dd-yyyy', 'dd/MM/yyyy', 'MM/dd/yyyy'];
+            let date: Date | null = null;
+            for(const format of dateFormatsToTry) {
+                const parsed = parse(dateStr, format, new Date());
+                if (isValid(parsed)) {
+                    date = parsed;
+                    break;
+                }
+            }
+            if (!date) return false;
+            
+            const from = dateRange.from!;
+            const to = dateRange.to!;
+            const recordDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+            const fromDate = new Date(from.getFullYear(), from.getMonth(), from.getDate());
+            const toDate = new Date(to.getFullYear(), to.getMonth(), to.getDate());
+
+            return recordDate >= fromDate && recordDate <= toDate;
+        });
+
+        if (filteredData.length === 0) return [];
+        
+        return filteredData.slice(0, 5).map(row => {
+            const previewRow: { [key: string]: string } = {};
+            const relevantFields = TARGET_FIELDS.filter(f => !f.format || f.format === formatType || f.value === 'date' || f.value === 'time');
+            relevantFields.forEach(field => {
+                if (mapping[field.value]) {
+                    previewRow[field.label] = row[mapping[field.value]] || '';
+                } else {
+                     previewRow[field.label] = ''
+                }
+            });
+            return previewRow;
+        });
+    };
+
+    const previewData = step === 4 ? getPreviewData() : [];
+    const visibleTargetFields = TARGET_FIELDS.filter(f => {
+        return !f.format || f.format === formatType || f.value === 'date' || f.value === 'time';
+    });
+
+    return (
+        <Dialog open={isOpen} onOpenChange={onClose}>
+            <DialogContent className="max-w-5xl h-[90vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Asistente de Importación de Bitácora</DialogTitle>
+                    <DialogDescription>
+                        Paso {step} de 4: {
+                            step === 1 ? "Cargar Archivo" :
+                            step === 2 ? "Formato y Mapeo de Columnas" :
+                            step === 3 ? "Filtrar Rango de Fechas" :
+                            "Previsualizar y Confirmar"
+                        }
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex-1 overflow-y-auto pr-2">
+                    {step === 1 && (
+                        <div 
+                            className="w-full h-full flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-8 text-center"
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={handleFileDrop}
+                        >
+                            <FileUp className="h-12 w-12 text-gray-400 mb-4" />
+                            <h3 className="text-xl font-semibold">Arrastra y suelta tu archivo CSV aquí</h3>
+                            <p className="text-muted-foreground mt-2">o</p>
+                            <Button className="mt-4" onClick={() => document.getElementById('file-upload')?.click()}>
+                                Seleccionar Archivo
+                            </Button>
+                            <input type="file" id="file-upload" className="hidden" accept=".csv" onChange={handleFileSelect} />
+                             <p className="text-xs text-muted-foreground mt-6">
+                                Asegúrate de guardar tu archivo de Excel como **CSV UTF-8 (delimitado por comas)** para una importación correcta.
+                            </p>
+                        </div>
+                    )}
+                    {step === 2 && (
+                        <div>
+                            <div className="mb-6 p-4 border rounded-lg bg-muted/30">
+                                <Label className="font-semibold text-base">Elige el formato de tu archivo</Label>
+                                <RadioGroup value={formatType} onValueChange={(v: 'wide' | 'long') => setFormatType(v)} className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Label htmlFor="format-wide" className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary">
+                                        <RadioGroupItem value="wide" id="format-wide" className="sr-only"/>
+                                        <Columns className="mb-3 h-6 w-6" />
+                                        <span className="font-bold">Ancho (Columnas por Máquina)</span>
+                                        <span className="text-sm text-muted-foreground text-center">Usa este si tienes columnas separadas como "Peso Máq. 1", "Parada Máq. 1", etc.</span>
+                                    </Label>
+                                     <Label htmlFor="format-long" className="flex flex-col items-center justify-center rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground [&:has([data-state=checked])]:border-primary">
+                                        <RadioGroupItem value="long" id="format-long" className="sr-only"/>
+                                        <Rows className="mb-3 h-6 w-6" />
+                                        <span className="font-bold">Largo (Una Columna por Máquina)</span>
+                                        <span className="text-sm text-muted-foreground text-center">Usa este si tienes una columna para "Peso", otra para "Parada", y una para identificar la máquina.</span>
+                                    </Label>
+                                </RadioGroup>
+                            </div>
+
+                            <p className="text-sm text-muted-foreground mb-4">
+                                Conecta las columnas de tu archivo CSV (izquierda) con los campos de destino en la aplicación (derecha).
+                            </p>
+                            <Button onClick={autoMapHeaders} variant="outline" size="sm" className="mb-4">
+                                <Sparkles className="mr-2 h-4 w-4"/>
+                                Intentar Mapeo Automático
+                            </Button>
+                            <div className="space-y-3 max-h-[45vh] overflow-y-auto">
+                                {visibleTargetFields.map(field => (
+                                    <div key={field.value} className="grid grid-cols-3 items-center gap-4">
+                                        <div className="col-span-1">
+                                            <p className={cn("font-medium text-sm", (field.label.includes('(Requerido)')) && 'text-primary font-bold')}>{field.label}</p>
+                                            {field.example && <p className="text-xs text-muted-foreground">Ej: {field.example}</p>}
+                                        </div>
+                                        <div className="col-span-2">
+                                            <Select
+                                                value={mapping[field.value] || ''}
+                                                onValueChange={(value) => handleMappingChange(field.value, value)}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecciona una columna de tu archivo..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="_ignore_">-- Ignorar --</SelectItem>
+                                                    {fileHeaders.map(header => (
+                                                        <SelectItem key={header} value={header}>{header}</SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {step === 3 && fileDateBounds && (
+                        <div className="flex flex-col items-center justify-center h-full">
+                            <Label className="font-semibold text-base mb-2">Selecciona el Rango de Fechas a Importar</Label>
+                             <p className="text-sm text-muted-foreground mb-4 text-center">
+                                El archivo contiene datos desde el <strong className="text-primary">{format(fileDateBounds.min, "PPP", { locale: es })}</strong> hasta el <strong className="text-primary">{format(fileDateBounds.max, "PPP", { locale: es })}</strong>.
+                                <br/>
+                                Elige el período que deseas procesar.
+                            </p>
+                             <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        id="date"
+                                        variant={"outline"}
+                                        className={cn(
+                                            "w-[300px] justify-start text-left font-normal",
+                                            !dateRange && "text-muted-foreground"
+                                        )}
+                                    >
+                                        <CalendarIcon className="mr-2 h-4 w-4" />
+                                        {dateRange?.from ? (
+                                            dateRange.to ? (
+                                                <>
+                                                    {format(dateRange.from, "LLL dd, y", { locale: es })} -{' '}
+                                                    {format(dateRange.to, "LLL dd, y", { locale: es })}
+                                                </>
+                                            ) : (
+                                                format(dateRange.from, "LLL dd, y", { locale: es })
+                                            )
+                                        ) : (
+                                            <span>Elige un rango</span>
+                                        )}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="center">
+                                    <Calendar
+                                        initialFocus
+                                        mode="range"
+                                        defaultMonth={dateRange?.from}
+                                        selected={dateRange}
+                                        onSelect={setDateRange}
+                                        numberOfMonths={2}
+                                        disabled={{ before: fileDateBounds.min, after: fileDateBounds.max }}
+                                        locale={es}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                    )}
+                     {step === 4 && (
+                        <div>
+                            <p className="text-sm text-muted-foreground mb-4">
+                                Revisa una muestra de cómo se importarán tus datos. Si todo es correcto, procede con la importación.
+                                Las paradas se crearán con una duración de 30 minutos por cada celda con texto.
+                            </p>
+                             <div className="overflow-x-auto border rounded-lg">
+                                <table className="w-full text-xs">
+                                    <thead className="bg-muted">
+                                        <tr>
+                                            {Object.keys(previewData[0] || {}).map(header => (
+                                                <th key={header} className="p-2 text-left font-semibold">{header}</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {previewData.map((row, rowIndex) => (
+                                            <tr key={rowIndex}>
+                                                {Object.values(row).map((cell, cellIndex) => (
+                                                    <td key={cellIndex} className="p-2 truncate max-w-[200px]">{cell}</td>
+                                                ))}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="ghost">Cancelar</Button></DialogClose>
+                    {step > 1 && (
+                        <Button variant="outline" onClick={() => setStep(s => s - 1)}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Atrás
+                        </Button>
+                    )}
+                    {step === 2 && (
+                        <Button onClick={goToDateFilterStep} disabled={!isMappingValid()}>
+                            Siguiente <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                    )}
+                     {step === 3 && (
+                        <Button onClick={() => setStep(4)} disabled={!dateRange}>
+                            Previsualizar <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                    )}
+                    {step === 4 && (
+                        <Button onClick={processAndSaveData} disabled={isProcessing}>
+                            {isProcessing ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Importando...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                                    Confirmar e Importar Datos
+                                </>
+                            )}
+                        </Button>
+                    )}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}

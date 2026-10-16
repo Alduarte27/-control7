@@ -1,6 +1,6 @@
 'use client';
 
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Cell } from 'recharts';
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from '@/components/ui/chart';
 import type { ProductData } from '@/lib/types';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -12,18 +12,18 @@ type WeeklySummaryProps = {
 
 const productChartConfig = {
   planned: {
-    label: 'Planificado (Sacos)',
-    color: 'hsl(var(--accent))',
+    label: 'Planificado (Unids.)',
+    color: 'hsl(var(--muted-foreground))',
   },
   actual: {
-    label: 'Real (Sacos)',
+    label: 'Real (Unids.)',
     color: 'hsl(var(--primary))',
   },
 } satisfies ChartConfig;
 
 const dailyChartConfig = {
     total: {
-        label: "Producción Total (Sacos)",
+        label: "Producción Total (Unids.)",
         color: "hsl(var(--chart-2))",
     }
 } satisfies ChartConfig;
@@ -46,10 +46,10 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
         }, {});
 
         return (
-            <div className="rounded-lg border bg-background p-2 shadow-sm text-sm max-w-xs">
+            <div className="rounded-lg border bg-background p-2 shadow-sm text-sm text-foreground max-w-xs">
                 <p className="font-bold mb-1">{label}</p>
                 <p className="text-muted-foreground text-xs mb-2">
-                  Total: <span className="font-bold text-foreground">{data.total.toLocaleString()}</span> sacos
+                  Total: <span className="font-bold text-foreground">{data.total.toLocaleString()}</span> unids.
                   (<span className="font-bold text-foreground">{quintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq</span>)
                 </p>
                 
@@ -62,7 +62,7 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
                                     {(products as any[]).map(p => (
                                         <li key={p.name} className="flex justify-between items-start">
                                             <span className="flex-1 pr-2">{p.name}</span>
-                                            <span className="font-medium ml-2">{p.value.toLocaleString()} sacos</span>
+                                            <span className="font-medium ml-2">{p.value.toLocaleString()} unids.</span>
                                         </li>
                                     ))}
                                 </ul>
@@ -81,22 +81,26 @@ const CustomDailyTooltip = ({ active, payload, label }: any) => {
 const CustomProductTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const product = payload[0].payload;
-      const plannedWeightKg = (product.planned || 0) * (product.sackWeight || 50);
-      const actualWeightKg = (product.actual || 0) * (product.sackWeight || 50);
+      const isFardo = product.primaryPackaging === 'fardo' || !!product.bundleWeight;
+      const weightPerUnit = isFardo ? (product.bundleWeight || 12) : (product.sackWeight || 50);
+      const unitName = isFardo ? 'fardos' : 'sacos';
+
+      const plannedWeightKg = (product.planned || 0) * weightPerUnit;
+      const actualWeightKg = (product.actual || 0) * weightPerUnit;
       const plannedQuintales = plannedWeightKg / KG_PER_QUINTAL;
       const actualQuintales = actualWeightKg / KG_PER_QUINTAL;
 
       return (
-        <div className="rounded-lg border bg-background p-2 shadow-sm text-sm">
+        <div className="rounded-lg border bg-background p-2 shadow-sm text-sm text-foreground">
           <p className="font-bold mb-2">{label}</p>
           <div className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-xs">
             <React.Fragment key="planned">
-              <div className="flex items-center gap-2 font-medium" style={{ color: 'hsl(var(--accent))' }}>
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'hsl(var(--accent))' }} />
+              <div className="flex items-center gap-2 font-medium" style={{ color: 'hsl(var(--muted-foreground))' }}>
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: 'hsl(var(--muted-foreground))' }} />
                 <span>Planificado:</span>
               </div>
               <span className="text-right font-mono">
-                {product.planned.toLocaleString()} sacos ({plannedQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)
+                {product.planned.toLocaleString()} {unitName} ({plannedQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)
               </span>
             </React.Fragment>
             <React.Fragment key="actual">
@@ -105,7 +109,7 @@ const CustomProductTooltip = ({ active, payload, label }: any) => {
                 <span>Real:</span>
               </div>
               <span className="text-right font-mono">
-                {product.actual.toLocaleString()} sacos ({actualQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)
+                {product.actual.toLocaleString()} {unitName} ({actualQuintales.toLocaleString(undefined, {maximumFractionDigits: 1})} qq)
               </span>
             </React.Fragment>
           </div>
@@ -113,6 +117,40 @@ const CustomProductTooltip = ({ active, payload, label }: any) => {
       );
     }
     return null;
+};
+
+
+const CustomizedAxisTick = (props: any) => {
+  const { x, y, payload } = props;
+  const words = payload.value.split(' ');
+  const lines: string[] = [];
+  let currentLine = '';
+  words.forEach((word: string) => {
+    if ((currentLine + word).length > 18) {
+      if (currentLine) lines.push(currentLine.trim());
+      currentLine = word + ' ';
+    } else {
+      currentLine += word + ' ';
+    }
+  });
+  if (currentLine) lines.push(currentLine.trim());
+  
+  const displayLines = lines.slice(0, 3);
+  if (lines.length > 3) {
+    displayLines[2] = displayLines[2].slice(0, 15) + '...';
+  }
+
+  return (
+    <g transform={`translate(${x},${y})`}>
+      <text x={0} y={0} dy={14} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize={9}>
+        {displayLines.map((line, index) => (
+          <tspan x={0} dy={index === 0 ? 0 : 10} key={index}>
+            {line}
+          </tspan>
+        ))}
+      </text>
+    </g>
+  );
 };
 
 
@@ -125,6 +163,9 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         planned: item.planned,
         actual: totalActual,
         sackWeight: item.sackWeight || 50,
+        bundleWeight: item.bundleWeight,
+        primaryPackaging: item.primaryPackaging,
+        color: item.color,
       }
     })
     .filter(item => item.planned > 0 || item.actual > 0);
@@ -151,7 +192,9 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
         const dayProduction = (product.actual[dayKey]?.day || 0) + (product.actual[dayKey]?.night || 0);
         if (dayProduction > 0) {
           dailyTotals[dayName].total += dayProduction;
-          const weight = dayProduction * (product.sackWeight || 50);
+          const isFardo = product.primaryPackaging === 'fardo' || !!product.bundleWeight;
+          const weightPerUnit = isFardo ? (product.bundleWeight || 12) : (product.sackWeight || 50);
+          const weight = dayProduction * weightPerUnit;
           dailyTotals[dayName].products.push({ 
               name: product.productName, 
               value: dayProduction,
@@ -171,7 +214,7 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-            <CardTitle className="text-sm font-bold">Producción Total por Día (Sacos)</CardTitle>
+            <CardTitle className="text-sm font-bold">Producción Total por Día (Unids.)</CardTitle>
             <CardDescription className="text-[10px]">Suma de toda la producción para cada día de la semana.</CardDescription>
         </CardHeader>
         <CardContent>
@@ -214,16 +257,18 @@ export default function WeeklySummary({ data }: WeeklySummaryProps) {
                     tickMargin={10}
                     axisLine={false}
                     interval={0}
-                    tickFormatter={(value) => value.length > 20 ? `${value.slice(0, 18)}...` : value}
-                    angle={-45}
-                    textAnchor='end'
-                    height={80}
+                    height={50}
+                    tick={<CustomizedAxisTick />}
                   />
                   <YAxis />
                   <ChartTooltip cursor={false} content={<CustomProductTooltip />} />
                   <ChartLegend verticalAlign="bottom" wrapperStyle={{ paddingTop: '30px' }} content={<ChartLegendContent />} />
                   <Bar dataKey="planned" fill="var(--color-planned)" radius={4} />
-                  <Bar dataKey="actual" fill="var(--color-actual)" radius={4} />
+                  <Bar dataKey="actual" fill="var(--color-actual)" radius={4}>
+                    {productChartData.map((entry, index) => (
+                      <Cell key={`cell-actual-${index}`} fill={entry.color || 'var(--color-actual)'} />
+                    ))}
+                  </Bar>
               </BarChart>
               </ChartContainer>
           ) : (
